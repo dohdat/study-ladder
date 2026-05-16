@@ -10,6 +10,10 @@ const HELL_DIFFICULTY_MIN = 5;
 const NORMAL_UNIQUE_BONUSES = 1;
 const NIGHTMARE_UNIQUE_BONUSES = 2;
 const HELL_UNIQUE_BONUSES = 3;
+const RATING_MIN = 1000;
+const BASE_HEALTH = 30;
+const HEALTH_PER_DIFFICULTY = 18;
+const HEALTH_RATING_DIVISOR = 25;
 
 export const UNIQUE_MONSTER_BONUSES = [
   "Aura Enchanted",
@@ -148,6 +152,10 @@ export function getUniqueMonsterBonusCount(question: Question) {
 
 export function getUniqueMonsterBonusDescription(bonus: string) {
   return UNIQUE_MONSTER_BONUS_DESCRIPTIONS[bonus as (typeof UNIQUE_MONSTER_BONUSES)[number]] || "Unique monster trait.";
+}
+
+export function getMonsterMaxHealth(question: Question) {
+  return BASE_HEALTH + question.difficulty * HEALTH_PER_DIFFICULTY + Math.round((question.rating - RATING_MIN) / HEALTH_RATING_DIVISOR);
 }
 
 function pickUniqueBonus(existing: string[], seed: string) {

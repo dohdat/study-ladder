@@ -66,8 +66,8 @@ export function PlayerStatus(props: {
           </Group>
         </Group>
         <StatBar color="red" icon={<IconHeart size={14} />} value={healthValue} text={`${props.health} / ${props.maxHealth}`} />
-        <StatBar color="yellow" icon={<IconSparkles size={14} />} value={experienceValue} text={`${props.currentExperience} / ${props.nextLevelExperience}`} />
         <StatBar color="blue" icon={<IconBolt size={14} />} value={manaValue} text={`${props.mana} / ${props.maxMana}`} />
+        <StatBar color="yellow" icon={<IconSparkles size={14} />} value={experienceValue} text={`${props.currentExperience} / ${props.nextLevelExperience}`} />
         <SimpleGrid cols={4} spacing={4} mt={4}>
           <MiniStat label="STR" value={props.stats.strength} />
           <MiniStat label="CON" value={props.stats.constitution} />

@@ -1,15 +1,10 @@
-import { useState } from "react";
+import { Badge, Box, Group, Paper, Progress, Text, Tooltip } from "@mantine/core";
 
-import { Badge, Box, Group, Paper, Progress, Text } from "@mantine/core";
-
-import { getUniqueMonsterBonusDescription, getUniqueMonsterBonuses, getUniqueMonsterName } from "../lib/monsterCore";
+import { getMonsterCurrentHealth } from "../lib/combatCore";
+import { getMonsterMaxHealth, getUniqueMonsterBonusDescription, getUniqueMonsterBonuses, getUniqueMonsterName } from "../lib/monsterCore";
 import type { Difficulty, Question, StudyState } from "../types/study";
 
-const RATING_MIN = 1000;
 const RATING_MAX = 3500;
-const BASE_HEALTH = 30;
-const HEALTH_PER_DIFFICULTY = 18;
-const HEALTH_RATING_DIVISOR = 25;
 const PERCENT_MAX = 100;
 const RED_RATING_MIN = 3000;
 const ORANGE_RATING_MIN = 2400;
@@ -21,8 +16,6 @@ const GRID_CELLS = 24;
 const PIXEL_GAP = 0;
 const AVATAR_BORDER_WIDTH = 2;
 const AVATAR_SHADOW_WIDTH = 2;
-const BONUS_TOOLTIP_WIDTH = 260;
-const BONUS_TOOLTIP_Z_INDEX = 30;
 
 type MonsterKind = "brute" | "demon" | "dragon" | "ranger" | "reaper" | "skeleton" | "slime" | "snake";
 
@@ -283,11 +276,11 @@ const MONSTERS: Record<MonsterKind, MonsterDefinition> = {
 };
 
 export function MonsterEncounter(props: { question: Question; state: StudyState }) {
-  const health = getMonsterHealth(props.question);
+  const maxHealth = getMonsterMaxHealth(props.question);
+  const health = getMonsterCurrentHealth(props.state, props.question);
   const monster = getMonsterDefinition(props.question);
   const uniqueName = getUniqueMonsterName(props.question);
   const bonuses = getUniqueMonsterBonuses(props.question);
-  const ratingColor = getRatingColor(props.question.rating);
   return (
     <Paper withBorder p="xs" mt="md" bg="dark.7" style={{ overflow: "visible" }}>
       <Group gap="sm" wrap="nowrap" align="center" style={{ overflow: "visible" }}>
@@ -296,16 +289,15 @@ export function MonsterEncounter(props: { question: Question; state: StudyState 
           <Group justify="space-between" gap="xs" mb={4}>
             <Box>
               <Text size="sm" fw={800} style={{ color: "#f1f3f5" }}>{uniqueName}</Text>
-              <Text size="xs" c="dimmed">{monster.name} - Question Rating {props.question.rating}</Text>
+              <Text size="xs" c="dimmed">{monster.name}</Text>
             </Box>
-            <Badge color={ratingColor} variant="light">{props.question.rating}</Badge>
           </Group>
-          <UniqueBonusBadges bonuses={bonuses} color={ratingColor} />
+          <UniqueBonusBadges bonuses={bonuses} color={getRatingColor(props.question.rating)} />
           <Group justify="space-between" gap="xs" mb={4}>
             <Text size="xs" c="dimmed" fw={700}>Enemy Health</Text>
-            <Text size="xs" fw={700}>{health}/{health}</Text>
+            <Text size="xs" fw={700}>{health}/{maxHealth}</Text>
           </Group>
-          <Progress value={PERCENT_MAX} color="red" size="sm" />
+          <Progress value={(health / maxHealth) * PERCENT_MAX} color="red" size="sm" />
         </Box>
       </Group>
     </Paper>
@@ -326,45 +318,13 @@ function UniqueBonusBadges(props: { bonuses: string[]; color: string }) {
 }
 
 function UniqueBonusBadge(props: { bonus: string; color: string }) {
-  const [isOpen, setIsOpen] = useState(false);
   const description = getUniqueMonsterBonusDescription(props.bonus);
   return (
-    <Box
-      component="span"
-      onBlur={() => setIsOpen(false)}
-      onFocus={() => setIsOpen(true)}
-      onMouseEnter={() => setIsOpen(true)}
-      onMouseLeave={() => setIsOpen(false)}
-      style={{ display: "inline-flex", position: "relative" }}
-      tabIndex={0}
-      title={description}
-    >
-      <Badge color={props.color} size="xs" variant="outline" style={{ cursor: "help" }}>{props.bonus}</Badge>
-      {isOpen ? <BonusTooltip description={description} /> : null}
-    </Box>
-  );
-}
-
-function BonusTooltip(props: { description: string }) {
-  return (
-    <Box
-      role="tooltip"
-      style={{
-        background: "#151515",
-        border: "1px solid #4b5563",
-        borderRadius: "6px",
-        boxShadow: "0 8px 24px rgba(0, 0, 0, 0.45)",
-        left: 0,
-        maxWidth: BONUS_TOOLTIP_WIDTH,
-        padding: "7px 9px",
-        position: "absolute",
-        top: "calc(100% + 6px)",
-        width: BONUS_TOOLTIP_WIDTH,
-        zIndex: BONUS_TOOLTIP_Z_INDEX
-      }}
-    >
-      <Text size="xs" c="gray.1">{props.description}</Text>
-    </Box>
+    <Tooltip label={description} multiline withArrow withinPortal={false}>
+      <Box component="span" style={{ display: "inline-flex" }} tabIndex={0}>
+        <Badge color={props.color} size="xs" variant="outline" style={{ cursor: "help" }}>{props.bonus}</Badge>
+      </Box>
+    </Tooltip>
   );
 }
 
@@ -421,10 +381,6 @@ function getMonsterPixels(monster: MonsterDefinition) {
 function getPixelColor(pixel: string, colors: MonsterPalette) {
   const colorKey = PIXEL_COLOR_KEYS[pixel];
   return colorKey ? colors[colorKey] : "transparent";
-}
-
-function getMonsterHealth(question: Question) {
-  return BASE_HEALTH + question.difficulty * HEALTH_PER_DIFFICULTY + Math.round((question.rating - RATING_MIN) / HEALTH_RATING_DIVISOR);
 }
 
 function getRatingColor(rating: number) {

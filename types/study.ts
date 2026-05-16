@@ -35,6 +35,7 @@ export type CardState = {
   lastResult: "pass" | "fail" | null;
   lastAttemptAt?: number;
   masteredAt?: number;
+  monsterHealth?: number;
   draft?: string;
 };
 
@@ -91,6 +92,25 @@ export type InventoryItem = {
   };
 };
 
+export type ShopConsumableType = "health" | "mana";
+
+export type ShopItem =
+  | {
+      amount: number;
+      cost: number;
+      id: string;
+      kind: "consumable";
+      name: string;
+      type: ShopConsumableType;
+    }
+  | {
+      cost: number;
+      id: string;
+      item: InventoryItem;
+      kind: "equipment";
+      name: string;
+    };
+
 export type StudyState = {
   mode: "leetcode" | "system";
   currentId: string | null;
@@ -109,6 +129,8 @@ export type StudyState = {
     stats: CharacterStats;
     inventory: InventoryItem[];
     equipment: Record<EquipmentSlot, string | null>;
+    shopLastRefreshedAt: number | null;
+    shopStock: ShopItem[];
   };
   cards: Record<string, CardState>;
 };

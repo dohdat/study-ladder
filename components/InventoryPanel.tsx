@@ -115,7 +115,7 @@ function InventoryCell(props: { canEquip: boolean; equipped: boolean; item?: Inv
   );
 }
 
-function ItemSummary(props: { compact?: boolean; item: InventoryItem }) {
+export function ItemSummary(props: { compact?: boolean; item: InventoryItem }) {
   return (
     <Box>
       <Group gap={4} wrap="nowrap">

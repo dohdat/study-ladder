@@ -17,6 +17,7 @@ import { useMonacoAssets } from "../hooks/useMonacoAssets";
 import { useStudyTimeTracker } from "../hooks/useStudyBlocker";
 import { useStudyNotifications } from "../hooks/useStudyNotifications";
 import { beautifyCode } from "../lib/codeFormat";
+import { applyPassedCombatResult } from "../lib/combatCore";
 import { getTimerDisplay } from "../lib/timerDisplay";
 import {
   HINT_COST, applyHealthPenalty, applyScheduleResult, buyHint, canBuyHint, cloneState, defaultState, getCard,
@@ -26,7 +27,6 @@ import {
 import { createHintPrompt } from "../lib/hintPrompt";
 import { createLocalHint } from "../lib/localHint";
 import { RUNNER_FRAME, STATUS_COLOR, type StatusTone } from "../lib/practiceStatus";
-import { getFailedTestsSummary } from "../lib/runStatus";
 import { migrateLocalStorageState, saveStudyState } from "../lib/studyDb";
 import type { ConsoleRunResult, Question, RunResult, StudyState } from "../types/study";
 
@@ -179,12 +179,12 @@ function expireQuestion(params: Parameters<typeof useTimerInterval>[0]) {
 }
 
 function useRunnerMessages(params: {
+  code: string;
   currentQuestion: Question | null;
   failAndAdvance: FailAndAdvance;
   showHealthLoss: (amount?: number) => void;
   showRewards: (question: Question, state: StudyState, now?: number) => void;
   state: StudyState;
-  updateSchedule: (passed: boolean, draft?: string, now?: number) => void;
   setState: React.Dispatch<React.SetStateAction<StudyState>>;
   setQuestionFinished: (finished: boolean) => void;
   setConsoleRunResult: (result: ConsoleRunResult | null) => void;
@@ -225,7 +225,6 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
     return;
   }
   if (!message.ok) {
-    const failedResults = message.results.filter((result) => !result.pass);
     const monsterDamage = getMonsterDamageRoll(question);
     const healthLoss = getHealthLoss(params.state, monsterDamage);
     params.showHealthLoss(healthLoss);
@@ -233,17 +232,23 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
     params.setResults([]);
     params.setConsoleRunResult({ ok: false, output: [], results: message.results.slice(VISIBLE_RUN_CASE_COUNT), runtimeMs: message.runtimeMs });
     params.setTone("fail");
-    params.setStatus(`${getFailedTestsSummary(failedResults)} Health -${healthLoss}. Fix this question before moving on.`);
+    params.setStatus("Wrong Answer");
     return;
   }
   const now = Date.now();
+  const combat = applyPassedCombatResult(params.state, question.id, params.code, now);
   params.setResults([]);
   params.setConsoleRunResult({ ok: true, output: [], results: message.results.slice(VISIBLE_RUN_CASE_COUNT), runtimeMs: message.runtimeMs });
-  params.showRewards(question, params.state, now);
-  params.updateSchedule(true, undefined, now);
-  params.setTone("pass");
-  params.setStatus("All tests passed. Card scheduled.");
-  params.setQuestionFinished(true);
+  params.setState(combat.state);
+  if (combat.hit?.defeated) {
+    params.showRewards(question, params.state, now);
+    params.setTone("pass");
+    params.setStatus(`Monster defeated. ${formatHitStatus(combat.hit.damage, combat.hit.critical)}`);
+    params.setQuestionFinished(true);
+    return;
+  }
+  params.setTone("default");
+  params.setStatus(`${formatHitStatus(combat.hit?.damage || 0, Boolean(combat.hit?.critical))} Enemy health ${combat.hit?.remainingHealth}/${combat.hit?.maxHealth}.`);
 }
 
 function handleCodeRunMessage(message: CodeRunMessage, params: Parameters<typeof useRunnerMessages>[0]) {
@@ -251,6 +256,10 @@ function handleCodeRunMessage(message: CodeRunMessage, params: Parameters<typeof
   params.setConsoleRunResult({ ok: message.ok, output: message.output, error: message.error, results: message.results, runtimeMs: message.runtimeMs });
   params.setTone(message.ok ? "pass" : "fail");
   params.setStatus(message.ok ? "Accepted" : "Wrong Answer");
+}
+
+function formatHitStatus(damage: number, critical: boolean) {
+  return critical ? `Critical hit for ${damage}.` : `Hit for ${damage}.`;
 }
 
 function clearRunTimer(runTimer: React.MutableRefObject<number | null>) {
@@ -287,12 +296,11 @@ function usePracticeActions(params: {
 }): PracticeActions {
   const updateDraft = useUpdateDraft(params);
   const beautifyCurrentCode = useCallback((source = params.code) => updateDraft(beautifyCode(source)), [params.code, updateDraft]);
-  const updateSchedule = useUpdateSchedule(params.currentQuestion, params.code, params.setState);
-  useRunnerMessages({ ...params, updateSchedule });
+  useRunnerMessages(params);
   const chooseQuestion = useChooseQuestion(params, updateDraft);
   const buyHintAction = useBuyHint(params);
   const startQuestion = useStartQuestion(params);
-  const submitCode = useSubmitCode({ ...params, updateDraft, updateSchedule });
+  const submitCode = useSubmitCode({ ...params, updateDraft });
   const runCode = useRunCode({ ...params, updateDraft });
   const handleEditorMount = useEditorMount(beautifyCurrentCode, submitCode);
   return { updateDraft, beautifyCurrentCode, handleEditorMount, chooseQuestion, buyHint: buyHintAction, runCode, startQuestion, submitCode };
@@ -328,14 +336,6 @@ function useEditorMount(beautifyCurrentCode: (source?: string) => void, submitCo
       run: submitCode
     });
   }, [beautifyCurrentCode, submitCode]);
-}
-
-function useUpdateSchedule(currentQuestion: Question | null, code: string, setState: React.Dispatch<React.SetStateAction<StudyState>>) {
-  return useCallback((passed: boolean, draft = code, now = Date.now()) => {
-    if (currentQuestion) {
-      setState((previous) => applyScheduleResult(previous, currentQuestion.id, passed, draft, now));
-    }
-  }, [code, currentQuestion, setState]);
 }
 
 function useChooseQuestion(params: Parameters<typeof usePracticeActions>[0], updateDraft: (code: string) => void) {
@@ -394,7 +394,6 @@ function useStartQuestion(params: Parameters<typeof usePracticeActions>[0]) {
 function useSubmitCode(params: Parameters<typeof usePracticeActions>[0] & {
   failAndAdvance: FailAndAdvance;
   updateDraft: (code: string) => void;
-  updateSchedule: (passed: boolean, draft?: string, now?: number) => void;
 }) {
   return useCallback(() => {
     if (!params.currentQuestion || !params.runnerFrame.current?.contentWindow) {

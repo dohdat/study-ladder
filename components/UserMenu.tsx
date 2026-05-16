@@ -14,12 +14,14 @@ import {
   Switch,
   Text,
   ThemeIcon,
+  Tooltip,
   Title
 } from "@mantine/core";
-import { IconBackpack, IconChartBar, IconCircleCheck, IconSettings, IconSparkles, IconTrophy, IconUser } from "@tabler/icons-react";
+import { IconBackpack, IconChartBar, IconCircleCheck, IconSettings, IconShoppingBag, IconSparkles, IconTrophy, IconUser } from "@tabler/icons-react";
 
 import { CoinAmount } from "./CoinIcon";
 import { InventoryPanel } from "./InventoryPanel";
+import { ShopPanel } from "./ShopPanel";
 import { questions } from "../data/questions";
 import { STUDY_BLOCKER_MS_PER_MINUTE, useStudyBlockerSettings } from "../hooks/useStudyBlocker";
 import {
@@ -39,6 +41,7 @@ import type { CharacterStatKey, StudyState } from "../types/study";
 
 const ICON_SIZE = 16;
 const MENU_WIDTH = 180;
+const SHOP_MODAL_SIZE = 980;
 const PROGRESS_MAX = 100;
 const STREAK_ACHIEVEMENT_COUNT = 3;
 const GEARED_UP_LEVEL = 5;
@@ -63,9 +66,16 @@ const STAT_ROWS: Array<{ key: CharacterStatKey; label: string }> = [
   { key: "perception", label: "Perception" },
   { key: "intelligence", label: "Intelligence" }
 ];
+const STAT_DESCRIPTIONS: Record<CharacterStatKey, string> = {
+  constitution: "Increases max health and defense, reducing health lost from failed submissions.",
+  intelligence: "Increases experience gains and mana rewards from completed questions.",
+  perception: "Improves gold rewards and item-drop quality from completed questions.",
+  strength: "Increases damage against monsters and raises critical strike chance."
+};
 
 const USER_MENU_ITEMS = [
   { id: "profile", icon: IconUser, label: "Profile" },
+  { id: "shop", icon: IconShoppingBag, label: "Shop" },
   { id: "inventory", icon: IconBackpack, label: "Inventory" },
   { id: "stats", icon: IconChartBar, label: "Stats" },
   { id: "achievements", icon: IconTrophy, label: "Achievements" },
@@ -90,11 +100,15 @@ export function UserMenu(props: { activeSection: UserMenuSection | null; setActi
           ))}
         </Menu.Dropdown>
       </Menu>
-      <Modal opened={Boolean(props.activeSection)} onClose={() => props.setActiveSection(null)} title={modalTitle} centered size="lg">
+      <Modal opened={Boolean(props.activeSection)} onClose={() => props.setActiveSection(null)} title={modalTitle} centered size={getModalSize(props.activeSection)}>
         <UserModalContent section={props.activeSection} state={props.state} setState={props.setState} />
       </Modal>
     </>
   );
+}
+
+function getModalSize(section: UserMenuSection | null) {
+  return section === "shop" ? SHOP_MODAL_SIZE : "lg";
 }
 
 function UserModalContent(props: { section: UserMenuSection | null; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
@@ -103,6 +117,9 @@ function UserModalContent(props: { section: UserMenuSection | null; state: Study
   }
   if (props.section === "inventory") {
     return <InventoryPanel state={props.state} setState={props.setState} />;
+  }
+  if (props.section === "shop") {
+    return <ShopPanel state={props.state} setState={props.setState} />;
   }
   if (props.section === "achievements") {
     return <AchievementsPanel state={props.state} />;
@@ -176,6 +193,7 @@ function StatsPanel(props: { state: StudyState; setState: React.Dispatch<React.S
           {STAT_ROWS.map((stat) => (
             <D2StatRow
               key={stat.key}
+              description={STAT_DESCRIPTIONS[stat.key]}
               label={stat.label}
               value={stats[stat.key]}
               canSpend={props.state.profile.statPoints > 0}
@@ -220,10 +238,14 @@ function getStatFrameColor(tone: "muted" | "red" | undefined) {
   return STAT_TEXT;
 }
 
-function D2StatRow(props: { canSpend: boolean; label: string; onSpend: () => void; value: number }) {
+function D2StatRow(props: { canSpend: boolean; description: string; label: string; onSpend: () => void; value: number }) {
   return (
     <Box style={{ display: "grid", gap: 6, gridTemplateColumns: props.canSpend ? "1fr auto" : "1fr" }}>
-      <D2ValueRow label={props.label} value={props.value} />
+      <Tooltip label={props.description} multiline withArrow withinPortal={false}>
+        <Box component="span" style={{ display: "block" }} tabIndex={0}>
+          <D2ValueRow label={props.label} value={props.value} />
+        </Box>
+      </Tooltip>
       {props.canSpend && <Button size="compact-xs" onClick={props.onSpend} style={{ alignSelf: "center", background: STAT_PLUS_BG, border: STAT_PLUS_BORDER }}>+</Button>}
     </Box>
   );

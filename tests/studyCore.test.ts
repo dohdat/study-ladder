@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
+import { applyPassedCombatResult, getMonsterCurrentHealth } from "../lib/combatCore";
 import { createDropItem, ITEM_BASE_NAME_COUNT } from "../lib/itemCore";
 import {
   DAY,
@@ -63,10 +64,11 @@ describe("studyCore", () => {
     expect(partial.profile.startedAt).toEqual(expect.any(Number));
     expect(partial.profile.health).toBe(MAX_HEALTH);
     expect(partial.profile.experience).toBe(0);
-    expect(partial.profile.mana).toBe(0);
+    expect(partial.profile.mana).toBe(getMaxMana(partial));
     expect(partial.profile.statPoints).toBe(0);
     expect(partial.profile.statPointsAwardedLevel).toBe(1);
     expect(partial.profile.stats).toMatchObject({ strength: 1, constitution: 1, perception: 1, intelligence: 1 });
+    expect(partial.profile.shopStock.length).toBeGreaterThan(0);
     expect(getCard(partial, questions[0].id).attempts).toBe(1);
   });
 
@@ -124,7 +126,7 @@ describe("studyCore", () => {
     expect(getCard(state, question.id).dueAt).toBe(1000 + DAY);
     expect(state.profile.coins).toBe(getCoinReward(question));
     expect(state.profile.experience).toBe(getExperienceReward(question));
-    expect(state.profile.mana).toBe(getManaReward(question, defaultState()));
+    expect(state.profile.mana).toBe(getMaxMana(state));
 
     state = applyScheduleResult(state, question.id, true, "draft", 2000);
     expect(getCard(state, question.id).intervalDays).toBe(3);
@@ -167,6 +169,26 @@ describe("studyCore", () => {
 
     expect(getMonsterLevel(hardQuestion)).toBeGreaterThan(getMonsterLevel(easyQuestion));
     expect(getMonsterDamageRoll(hardQuestion, 1000)).toBeGreaterThan(getMonsterDamageRoll(easyQuestion, 1000));
+  });
+
+  it("requires successful submits to reduce monster health before scheduling rewards", () => {
+    const question = questions[0];
+    let state = defaultState();
+    const firstHit = applyPassedCombatResult(state, question.id, "draft", 1000);
+
+    expect(firstHit.hit?.defeated).toBe(false);
+    expect(firstHit.state.profile.coins).toBe(0);
+    expect(getMonsterCurrentHealth(firstHit.state, question)).toBeLessThan(getMonsterCurrentHealth(state, question));
+    expect(getCard(firstHit.state, question.id).correct).toBe(0);
+
+    state = firstHit.state;
+    for (let index = 0; index < 10 && getCard(state, question.id).correct === 0; index += 1) {
+      state = applyPassedCombatResult(state, question.id, "draft", 2000 + index).state;
+    }
+
+    expect(getCard(state, question.id).correct).toBe(1);
+    expect(state.profile.coins).toBe(getCoinReward(question, state));
+    expect(getMonsterCurrentHealth(state, question)).toBeGreaterThan(0);
   });
 
   it("computes level progress from total experience", () => {

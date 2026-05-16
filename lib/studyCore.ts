@@ -1,5 +1,6 @@
 import { questions } from "../data/questions";
 import { createDropItem, EQUIPMENT_SLOTS, getActiveSetBonusesForItems, SLOT_LABELS } from "./itemCore";
+import { createShopStock, normalizeShopStock } from "./shopCore";
 import type { CardState, CharacterStatKey, CharacterStats, EquipmentSlot, InventoryItem, ItemModifierKey, Question, StudyState } from "../types/study";
 
 const HOURS_PER_DAY = 24;
@@ -57,6 +58,7 @@ const MONSTER_DAMAGE_LEVEL_DIVISOR = 5;
 const MONSTER_DAMAGE_SPREAD_DIVISOR = 8;
 const MONSTER_DAMAGE_MIN_SPREAD = 1;
 const RANDOM_INCLUSIVE_OFFSET = 1;
+const STARTER_SHOP_REFRESH_AT = 0;
 const MODIFIER_KEYS: ItemModifierKey[] = [
   "bonusXpPercent",
   "criticalChancePercent",
@@ -117,27 +119,36 @@ export const getQuestionTimeLimitMs = (question: Question) => {
   return HARD_MINUTES * SECONDS_PER_MINUTE * MS_PER_SECOND;
 };
 
-export const defaultState = (): StudyState => ({
-  mode: "leetcode",
-  currentId: null,
-  totalCorrect: 0,
-  streak: 0,
-  profile: {
-    coins: 0,
-    experience: 0,
-    health: MAX_HEALTH,
-    mana: 0,
-    statPoints: 0,
-    statPointsAwardedLevel: FIRST_STAT_LEVEL,
-    hintsBought: 0,
-    startedAt: Date.now(),
-    lastStudiedAt: null,
-    stats: { ...DEFAULT_CHARACTER_STATS },
-    inventory: [],
-    equipment: defaultEquipment()
-  },
-  cards: {}
-});
+export const defaultState = (): StudyState => {
+  const state = createDefaultStateBase();
+  return { ...state, profile: { ...state.profile, shopStock: createStarterShopStock() } };
+};
+
+function createDefaultStateBase(): StudyState {
+  return {
+    mode: "leetcode",
+    currentId: null,
+    totalCorrect: 0,
+    streak: 0,
+    profile: {
+      coins: 0,
+      experience: 0,
+      health: MAX_HEALTH,
+      mana: BASE_MANA,
+      statPoints: 0,
+      statPointsAwardedLevel: FIRST_STAT_LEVEL,
+      hintsBought: 0,
+      startedAt: Date.now(),
+      lastStudiedAt: null,
+      stats: { ...DEFAULT_CHARACTER_STATS },
+      inventory: [],
+      equipment: defaultEquipment(),
+      shopLastRefreshedAt: null,
+      shopStock: []
+    },
+    cards: {}
+  };
+}
 
 export const defaultCard = (): CardState => ({
   dueAt: 0,
@@ -155,7 +166,8 @@ export const cloneState = (state: StudyState): StudyState => ({
     ...state.profile,
     stats: { ...state.profile.stats },
     inventory: state.profile.inventory.map((item) => ({ ...item, modifiers: item.modifiers?.map((modifier) => ({ ...modifier })), stats: { ...item.stats } })),
-    equipment: { ...state.profile.equipment }
+    equipment: { ...state.profile.equipment },
+    shopStock: state.profile.shopStock.map((item) => ({ ...item }))
   },
   cards: Object.fromEntries(Object.entries(state.cards).map(([id, card]) => [id, { ...card }]))
 });
@@ -177,7 +189,9 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
       statPointsAwardedLevel: Math.max(FIRST_STAT_LEVEL, stored.profile?.statPointsAwardedLevel ?? fallback.profile.statPointsAwardedLevel),
       stats: normalizeCharacterStats(stored.profile?.stats),
       inventory: normalizeInventory(stored.profile?.inventory),
-      equipment: normalizeEquipment(stored.profile?.equipment)
+      equipment: normalizeEquipment(stored.profile?.equipment),
+      shopLastRefreshedAt: stored.profile?.shopLastRefreshedAt ?? fallback.profile.shopLastRefreshedAt,
+      shopStock: normalizeShopStock(stored.profile?.shopStock)
     },
     cards: stored.cards
   };
@@ -189,8 +203,19 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
       mana: Math.min(getMaxMana(normalized), Math.max(0, stored.profile?.mana ?? fallback.profile.mana))
     }
   };
-  return grantPendingStatPoints(bounded);
+  const stocked = {
+    ...bounded,
+    profile: {
+      ...bounded.profile,
+      shopStock: bounded.profile.shopStock.length ? bounded.profile.shopStock : createStarterShopStock()
+    }
+  };
+  return grantPendingStatPoints(stocked);
 };
+
+function createStarterShopStock() {
+  return createShopStock(questions[0], DEFAULT_CHARACTER_STATS, STARTER_SHOP_REFRESH_AT);
+}
 
 function normalizeCharacterStats(stats: Partial<CharacterStats> | undefined): CharacterStats {
   return {
@@ -578,6 +603,7 @@ function applyPassedSchedule(next: StudyState, card: CardState, questionId: stri
   next.streak += 1;
   applyQuestionRewards(next, question);
   applyQuestionDrop(next, question, state, now);
+  applyShopRefresh(next, question, now);
   card.intervalDays = getNextIntervalDays(card);
   card.ease = Math.min(MAX_EASE, card.ease + PASS_EASE_BONUS);
   card.dueAt = now + card.intervalDays * DAY;
@@ -604,6 +630,14 @@ function applyQuestionDrop(next: StudyState, question: Question | undefined, sta
   if (drop) {
     next.profile.inventory.push(drop);
   }
+}
+
+function applyShopRefresh(next: StudyState, question: Question | undefined, now: number) {
+  if (!question) {
+    return;
+  }
+  next.profile.shopStock = createShopStock(question, getEffectiveCharacterStats(next), now);
+  next.profile.shopLastRefreshedAt = now;
 }
 
 function getNextIntervalDays(card: CardState) {

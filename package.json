@@ -5,6 +5,7 @@
   "scripts": {
     "prepare:monaco": "node scripts/copy-monaco.mjs",
     "install:native-host": "node native/install-native-host.mjs",
+    "reload:extension": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/reload-extension.ps1",
     "dev": "npm run prepare:monaco && next dev --hostname 127.0.0.1 --port 3000",
     "build": "npm run prepare:monaco && next build && node scripts/extension-postbuild.mjs",
     "lint": "eslint .",
