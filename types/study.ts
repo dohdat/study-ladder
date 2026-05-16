@@ -38,6 +38,58 @@ export type CardState = {
   draft?: string;
 };
 
+export type CharacterStats = {
+  strength: number;
+  constitution: number;
+  perception: number;
+  intelligence: number;
+};
+
+export type CharacterStatKey = keyof CharacterStats;
+
+export type EquipmentSlot =
+  | "mainHand"
+  | "offHand"
+  | "headgear"
+  | "armor"
+  | "headAccessory"
+  | "eyewear"
+  | "bodyAccessory"
+  | "backAccessory";
+
+export type ItemRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+
+export type ItemModifierKey =
+  | "bonusXpPercent"
+  | "criticalChancePercent"
+  | "damageReduction"
+  | "enhancedDamagePercent"
+  | "goldFindPercent"
+  | "lifeOnKill"
+  | "magicFindPercent"
+  | "manaOnKill"
+  | "maxLife"
+  | "maxMana";
+
+export type ItemModifier = {
+  key: ItemModifierKey;
+  value: number;
+};
+
+export type InventoryItem = {
+  id: string;
+  modifiers?: ItemModifier[];
+  name: string;
+  rarity: ItemRarity;
+  setId?: string;
+  slot: EquipmentSlot;
+  stats: Partial<CharacterStats>;
+  requirements: {
+    level: number;
+    stats: Partial<CharacterStats>;
+  };
+};
+
 export type StudyState = {
   mode: "leetcode" | "system";
   currentId: string | null;
@@ -47,9 +99,15 @@ export type StudyState = {
     coins: number;
     experience: number;
     health: number;
+    mana: number;
+    statPoints: number;
+    statPointsAwardedLevel: number;
     hintsBought: number;
     startedAt: number;
     lastStudiedAt: number | null;
+    stats: CharacterStats;
+    inventory: InventoryItem[];
+    equipment: Record<EquipmentSlot, string | null>;
   };
   cards: Record<string, CardState>;
 };
@@ -60,4 +118,10 @@ export type RunResult = {
   args: string;
   expected: string;
   actual: string;
+};
+
+export type ConsoleRunResult = {
+  error?: string;
+  ok: boolean;
+  output: string[];
 };

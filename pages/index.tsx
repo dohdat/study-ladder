@@ -1,28 +1,23 @@
 import Head from "next/head";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Container,
-  Group,
-  SegmentedControl,
-  Stack
-} from "@mantine/core";
-import { loader } from "@monaco-editor/react";
+import { Container, Stack } from "@mantine/core";
 import type { OnMount } from "@monaco-editor/react";
 
+import { AppHeader } from "../components/AppHeader";
 import { PracticeArea } from "../components/PracticePanels";
 import type { PracticePanelActions } from "../components/PracticePanels";
 import { DeathResetModal } from "../components/DeathResetModal";
-import { PlayerStatus } from "../components/PlayerStatus";
 import { RewardNotifications } from "../components/RewardNotifications";
 import type { RewardNotification } from "../components/RewardNotifications";
 import { SummaryCards } from "../components/SummaryCards";
-import { UserMenu } from "../components/UserMenu";
 import { questions } from "../data/questions";
 import { useCodexHintStream } from "../hooks/useCodexHintStream";
 import { useFullscreenGuard } from "../hooks/useFullscreenGuard";
+import { useMonacoAssets } from "../hooks/useMonacoAssets";
 import { useStudyTimeTracker } from "../hooks/useStudyBlocker";
 import { useStudyNotifications } from "../hooks/useStudyNotifications";
 import { beautifyCode } from "../lib/codeFormat";
+import { getTimerDisplay } from "../lib/timerDisplay";
 import {
   applyScheduleResult,
   applyHealthPenalty,
@@ -31,8 +26,12 @@ import {
   cloneState,
   defaultState,
   getCard,
+  getEffectiveCharacterStats,
   getDueQuestions,
+  getHealthLoss,
   getLevelProgress,
+  getMaxHealth,
+  getMaxMana,
   getProfileStats,
   getQuestionTimeLimitMs,
   HINT_COST,
@@ -42,26 +41,15 @@ import {
 } from "../lib/studyCore";
 import { createHintPrompt } from "../lib/hintPrompt";
 import { createLocalHint } from "../lib/localHint";
+import { RUNNER_FRAME, STATUS_COLOR, type StatusTone } from "../lib/practiceStatus";
+import { getFailedTestsSummary } from "../lib/runStatus";
 import { migrateLocalStorageState, saveStudyState } from "../lib/studyDb";
-import type { Question, RunResult, StudyState } from "../types/study";
+import type { ConsoleRunResult, Question, RunResult, StudyState } from "../types/study";
 
-const RUN_TIMEOUT_MS = 2500;
-const SECOND_MS = 1000;
-const SECONDS_PER_MINUTE = 60;
-const MINUTE_MS = SECONDS_PER_MINUTE * SECOND_MS;
-const WARNING_MS = MINUTE_MS;
-const TIMER_PAD = 2;
-const NUMBER_BASE_HEX = 16;
-const PERCENT_MAX = 100;
-const MAX_FAILED_TESTS_IN_STATUS = 3;
-const RUNNER_FRAME = "sandbox.html";
-const STATUS_COLOR = {
-  default: "gray",
-  pass: "green",
-  fail: "red"
-} as const;
+const RUN_TIMEOUT_MS = 2500, SECOND_MS = 1000;
+const TIMER_PAD = 2, NUMBER_BASE_HEX = 16;
 
-type RunnerMessage = {
+type TestRunnerMessage = {
   type: "run-result";
   runId: string;
   ok: boolean;
@@ -69,7 +57,15 @@ type RunnerMessage = {
   results: RunResult[];
 };
 
-type StatusTone = keyof typeof STATUS_COLOR;
+type CodeRunMessage = {
+  type: "code-run-result";
+  runId: string;
+  ok: boolean;
+  error?: string;
+  output: string[];
+};
+type RunnerMessage = TestRunnerMessage | CodeRunMessage;
+
 type FailAndAdvance = (message: string, draft?: string) => void;
 
 type TimerControls = {
@@ -79,18 +75,6 @@ type TimerControls = {
 };
 
 type PracticeActions = PracticePanelActions;
-
-function useMonacoAssets() {
-  useEffect(() => {
-    const monacoBaseUrl = new URL("monaco/vs", window.location.href).toString().replace(/\/$/, "");
-    (window as typeof window & {
-      MonacoEnvironment?: { getWorkerUrl: (_workerId: string, _label: string) => string };
-    }).MonacoEnvironment = {
-      getWorkerUrl: () => `${monacoBaseUrl}/base/worker/workerMain.js`
-    };
-    loader.config({ paths: { vs: monacoBaseUrl } });
-  }, []);
-}
 
 function useHydrateStudy(setState: (state: StudyState) => void, setQuestion: (question: Question) => void, setCode: (code: string) => void) {
   const [hydrated, setHydrated] = useState(false);
@@ -142,6 +126,7 @@ function useQuestionTimer(params: {
   sessionStarted: boolean;
   mode: StudyState["mode"];
   setResults: (results: RunResult[]) => void;
+  setConsoleRunResult: (result: ConsoleRunResult | null) => void;
   setRunning: (running: boolean) => void;
   setState: React.Dispatch<React.SetStateAction<StudyState>>;
   setStatus: (status: string) => void;
@@ -207,17 +192,20 @@ function expireQuestion(params: Parameters<typeof useTimerInterval>[0]) {
   }
   params.setRunning(false);
   params.setResults([]);
+  params.setConsoleRunResult(null);
   params.failAndAdvance("Time expired. Moving to next question.", params.code);
 }
 
 function useRunnerMessages(params: {
   currentQuestion: Question | null;
   failAndAdvance: FailAndAdvance;
-  showHealthLoss: () => void;
-  showRewards: (question: Question) => void;
-  updateSchedule: (passed: boolean, draft?: string) => void;
+  showHealthLoss: (amount?: number) => void;
+  showRewards: (question: Question, state: StudyState, now?: number) => void;
+  state: StudyState;
+  updateSchedule: (passed: boolean, draft?: string, now?: number) => void;
   setState: React.Dispatch<React.SetStateAction<StudyState>>;
   setQuestionFinished: (finished: boolean) => void;
+  setConsoleRunResult: (result: ConsoleRunResult | null) => void;
   setResults: (results: RunResult[]) => void;
   setRunning: (running: boolean) => void;
   setStatus: (status: string) => void;
@@ -228,12 +216,16 @@ function useRunnerMessages(params: {
   useEffect(() => {
     function onMessage(event: MessageEvent<RunnerMessage>) {
       const message = event.data;
-      if (!message || message.type !== "run-result" || message.runId !== params.activeRunId.current || !params.currentQuestion) {
+      if (!message || message.runId !== params.activeRunId.current || !params.currentQuestion) {
         return;
       }
       clearRunTimer(params.runTimer);
       params.activeRunId.current = null;
       params.setRunning(false);
+      if (message.type === "code-run-result") {
+        handleCodeRunMessage(message, params);
+        return;
+      }
       handleRunMessage(message, params);
     }
     window.addEventListener("message", onMessage);
@@ -241,7 +233,7 @@ function useRunnerMessages(params: {
   }, [params]);
 }
 
-function handleRunMessage(message: RunnerMessage, params: Parameters<typeof useRunnerMessages>[0]) {
+function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof useRunnerMessages>[0]) {
   const question = params.currentQuestion;
   if (!question) {
     return;
@@ -252,33 +244,27 @@ function handleRunMessage(message: RunnerMessage, params: Parameters<typeof useR
   }
   if (!message.ok) {
     const failedResults = message.results.filter((result) => !result.pass);
-    params.showHealthLoss();
+    params.showHealthLoss(getHealthLoss(params.state));
     params.setState((previous) => applyHealthPenalty(previous));
     params.setResults(failedResults);
     params.setTone("fail");
-    params.setStatus(`${getFailedTestsSummary(failedResults)} Health -5. Fix this question before moving on.`);
+    params.setStatus(`${getFailedTestsSummary(failedResults)} Health -${getHealthLoss(params.state)}. Fix this question before moving on.`);
     return;
   }
+  const now = Date.now();
   params.setResults(message.results);
-  params.showRewards(question);
-  params.updateSchedule(true);
+  params.showRewards(question, params.state, now);
+  params.updateSchedule(true, undefined, now);
   params.setTone("pass");
   params.setStatus("All tests passed. Card scheduled.");
   params.setQuestionFinished(true);
 }
 
-function getFailedTestsSummary(failedResults: RunResult[]) {
-  if (failedResults.length === 0) {
-    return "Tests failed, but the runner did not return failed test details.";
-  }
-  const shown = failedResults.slice(0, MAX_FAILED_TESTS_IN_STATUS).map((result) => {
-    return `${result.name}: expected ${result.expected}, got ${result.actual}`;
-  });
-  const remaining = failedResults.length - shown.length;
-  if (remaining > 0) {
-    shown.push(`${remaining} more failed`);
-  }
-  return `Failed ${failedResults.length} test(s): ${shown.join("; ")}`;
+function handleCodeRunMessage(message: CodeRunMessage, params: Parameters<typeof useRunnerMessages>[0]) {
+  params.setResults([]);
+  params.setConsoleRunResult({ ok: message.ok, output: message.output, error: message.error });
+  params.setTone(message.ok ? "default" : "fail");
+  params.setStatus(message.ok ? "Code run completed." : "Code run failed.");
 }
 
 function clearRunTimer(runTimer: React.MutableRefObject<number | null>) {
@@ -295,6 +281,7 @@ function usePracticeActions(params: {
   setCode: (code: string) => void;
   setCurrentQuestion: (question: Question) => void;
   setQuestionFinished: (finished: boolean) => void;
+  setConsoleRunResult: (result: ConsoleRunResult | null) => void;
   setResults: (results: RunResult[]) => void;
   setRunnerReady: (ready: boolean) => void;
   setRunning: (running: boolean) => void;
@@ -309,8 +296,8 @@ function usePracticeActions(params: {
   runnerFrame: React.MutableRefObject<HTMLIFrameElement | null>;
   clearHint: () => void;
   startHint: (prompt: string, localHint?: string) => void;
-  showHealthLoss: () => void;
-  showRewards: (question: Question) => void;
+  showHealthLoss: (amount?: number) => void;
+  showRewards: (question: Question, state: StudyState, now?: number) => void;
 }): PracticeActions {
   const updateDraft = useUpdateDraft(params);
   const beautifyCurrentCode = useCallback((source = params.code) => updateDraft(beautifyCode(source)), [params.code, updateDraft]);
@@ -320,8 +307,9 @@ function usePracticeActions(params: {
   const buyHintAction = useBuyHint(params);
   const startQuestion = useStartQuestion(params);
   const submitCode = useSubmitCode({ ...params, updateDraft, updateSchedule });
+  const runCode = useRunCode({ ...params, updateDraft });
   const handleEditorMount = useEditorMount(beautifyCurrentCode, submitCode);
-  return { updateDraft, beautifyCurrentCode, handleEditorMount, chooseQuestion, buyHint: buyHintAction, startQuestion, submitCode };
+  return { updateDraft, beautifyCurrentCode, handleEditorMount, chooseQuestion, buyHint: buyHintAction, runCode, startQuestion, submitCode };
 }
 
 function useUpdateDraft(params: { currentQuestion: Question | null; setCode: (code: string) => void; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
@@ -357,9 +345,9 @@ function useEditorMount(beautifyCurrentCode: (source?: string) => void, submitCo
 }
 
 function useUpdateSchedule(currentQuestion: Question | null, code: string, setState: React.Dispatch<React.SetStateAction<StudyState>>) {
-  return useCallback((passed: boolean, draft = code) => {
+  return useCallback((passed: boolean, draft = code, now = Date.now()) => {
     if (currentQuestion) {
-      setState((previous) => applyScheduleResult(previous, currentQuestion.id, passed, draft));
+      setState((previous) => applyScheduleResult(previous, currentQuestion.id, passed, draft, now));
     }
   }, [code, currentQuestion, setState]);
 }
@@ -371,6 +359,7 @@ function useChooseQuestion(params: Parameters<typeof usePracticeActions>[0], upd
     params.setState((previous) => ({ ...previous, currentId: picked.id }));
     updateDraft(picked.starter);
     params.setResults([]);
+    params.setConsoleRunResult(null);
     params.setTone("default");
     params.setStatus("Ready");
     params.setQuestionFinished(false);
@@ -419,7 +408,7 @@ function useStartQuestion(params: Parameters<typeof usePracticeActions>[0]) {
 function useSubmitCode(params: Parameters<typeof usePracticeActions>[0] & {
   failAndAdvance: FailAndAdvance;
   updateDraft: (code: string) => void;
-  updateSchedule: (passed: boolean, draft?: string) => void;
+  updateSchedule: (passed: boolean, draft?: string, now?: number) => void;
 }) {
   return useCallback(() => {
     if (!params.currentQuestion || !params.runnerFrame.current?.contentWindow) {
@@ -439,16 +428,56 @@ function useSubmitCode(params: Parameters<typeof usePracticeActions>[0] & {
   }, [params]);
 }
 
+function useRunCode(params: Parameters<typeof usePracticeActions>[0] & {
+  updateDraft: (code: string) => void;
+}) {
+  return useCallback(() => {
+    if (!params.currentQuestion || !params.runnerFrame.current?.contentWindow) {
+      return;
+    }
+    if (!params.runnerReady) {
+      params.setTone("fail");
+      params.setStatus("Runner is still loading. Try again in a second.");
+      return;
+    }
+    const runId = `${Date.now()}-${Math.random().toString(NUMBER_BASE_HEX).slice(TIMER_PAD)}`;
+    const formattedCode = beautifyCode(params.code);
+    if (formattedCode !== params.code) {
+      params.updateDraft(formattedCode);
+    }
+    startConsoleRun(runId, formattedCode, params);
+  }, [params]);
+}
+
 function startRun(runId: string, formattedCode: string, params: Parameters<typeof useSubmitCode>[0]) {
   params.activeRunId.current = runId;
   params.setRunning(true);
   params.setTone("default");
   params.setStatus("Running tests");
   params.setResults([]);
+  params.setConsoleRunResult(null);
   clearRunTimer(params.runTimer);
   params.runTimer.current = window.setTimeout(() => handleRunTimeout(runId, formattedCode, params), RUN_TIMEOUT_MS);
   params.runnerFrame.current?.contentWindow?.postMessage({
     type: "run-tests",
+    runId,
+    code: formattedCode,
+    functionName: params.currentQuestion?.functionName,
+    tests: params.currentQuestion?.tests
+  }, "*");
+}
+
+function startConsoleRun(runId: string, formattedCode: string, params: Parameters<typeof useRunCode>[0]) {
+  params.activeRunId.current = runId;
+  params.setRunning(true);
+  params.setTone("default");
+  params.setStatus("Running code");
+  params.setResults([]);
+  params.setConsoleRunResult(null);
+  clearRunTimer(params.runTimer);
+  params.runTimer.current = window.setTimeout(() => handleConsoleRunTimeout(runId, params), RUN_TIMEOUT_MS);
+  params.runnerFrame.current?.contentWindow?.postMessage({
+    type: "run-code",
     runId,
     code: formattedCode,
     functionName: params.currentQuestion?.functionName,
@@ -461,8 +490,22 @@ function handleRunTimeout(runId: string, formattedCode: string, params: Paramete
     return;
   }
   params.activeRunId.current = null;
+  params.runTimer.current = null;
   params.setRunning(false);
   params.failAndAdvance("Timed out. Moving to next question.", formattedCode);
+  params.runnerFrame.current?.contentWindow?.postMessage({ type: "reset-runner" }, "*");
+}
+
+function handleConsoleRunTimeout(runId: string, params: Parameters<typeof useRunCode>[0]) {
+  if (params.activeRunId.current !== runId) {
+    return;
+  }
+  params.activeRunId.current = null;
+  params.runTimer.current = null;
+  params.setRunning(false);
+  params.setTone("fail");
+  params.setStatus("Run timed out.");
+  params.setConsoleRunResult({ ok: false, output: [], error: "Timed out while running code." });
   params.runnerFrame.current?.contentWindow?.postMessage({ type: "reset-runner" }, "*");
 }
 
@@ -472,6 +515,7 @@ function useFailAndAdvance(params: {
   setCode: (code: string) => void;
   setCurrentQuestion: (question: Question) => void;
   setResults: (results: RunResult[]) => void;
+  setConsoleRunResult: (result: ConsoleRunResult | null) => void;
   setRunning: (running: boolean) => void;
   setSessionStarted: (started: boolean) => void;
   setState: React.Dispatch<React.SetStateAction<StudyState>>;
@@ -481,9 +525,9 @@ function useFailAndAdvance(params: {
   activeRunId: React.MutableRefObject<string | null>;
   runTimer: React.MutableRefObject<number | null>;
   clearHint: () => void;
-  showHealthLoss: () => void;
+  showHealthLoss: (amount?: number) => void;
 }) {
-  const { activeRunId, code, currentQuestion, runTimer, setCode, setCurrentQuestion, setResults, setRunning, setSessionStarted, setState, setStatus, setTone, state } = params;
+  const { activeRunId, code, currentQuestion, runTimer, setCode, setConsoleRunResult, setCurrentQuestion, setResults, setRunning, setSessionStarted, setState, setStatus, setTone, state } = params;
   return useCallback((message: string, draft = code) => {
     if (!currentQuestion) {
       return;
@@ -493,9 +537,10 @@ function useFailAndAdvance(params: {
     const nextState = { ...scheduled, currentId: picked.id };
     activeRunId.current = null;
     clearRunTimer(runTimer);
-    params.showHealthLoss();
+    params.showHealthLoss(getHealthLoss(state));
     setRunning(false);
     setResults([]);
+    setConsoleRunResult(null);
     setTone("fail");
     setStatus(`${message} Next question loaded.`);
     setSessionStarted(false);
@@ -503,52 +548,7 @@ function useFailAndAdvance(params: {
     setCurrentQuestion(picked);
     setCode(picked.starter);
     params.clearHint();
-  }, [activeRunId, code, currentQuestion, params, runTimer, setCode, setCurrentQuestion, setResults, setRunning, setSessionStarted, setState, setStatus, setTone, state]);
-}
-
-function getTimerDisplay(currentQuestion: Question | null, timeRemainingMs: number) {
-  const totalTimeLimitMs = currentQuestion ? getQuestionTimeLimitMs(currentQuestion) : 0;
-  const timeUsedPercent = totalTimeLimitMs ? ((totalTimeLimitMs - timeRemainingMs) / totalTimeLimitMs) * PERCENT_MAX : 0;
-  const minutes = Math.floor(timeRemainingMs / MINUTE_MS);
-  const seconds = Math.floor((timeRemainingMs % MINUTE_MS) / SECOND_MS);
-  return {
-    timeUsedPercent,
-    timerLabel: `${minutes}:${String(seconds).padStart(TIMER_PAD, "0")}`,
-    timerColor: timeRemainingMs <= WARNING_MS ? "red" : "blue"
-  };
-}
-
-function AppHeader(props: {
-  coins: number;
-  currentExperience: number;
-  health: number;
-  level: number;
-  modeValue: string;
-  nextLevelExperience: number;
-  state: StudyState;
-  setState: React.Dispatch<React.SetStateAction<StudyState>>;
-}) {
-  return (
-    <Group justify="space-between" align="flex-start" wrap="wrap">
-      <Group align="flex-start" gap="md" wrap="wrap">
-        <PlayerStatus
-          coins={props.coins}
-          currentExperience={props.currentExperience}
-          health={props.health}
-          level={props.level}
-          nextLevelExperience={props.nextLevelExperience}
-        />
-      </Group>
-      <Group>
-        <SegmentedControl
-          value={props.modeValue}
-          onChange={(value) => props.setState((previous) => ({ ...previous, mode: value as StudyState["mode"] }))}
-          data={[{ label: "LeetCode", value: "leetcode" }, { label: "System Design", value: "system" }]}
-        />
-        <UserMenu state={props.state} />
-      </Group>
-    </Group>
-  );
+  }, [activeRunId, code, currentQuestion, params, runTimer, setCode, setConsoleRunResult, setCurrentQuestion, setResults, setRunning, setSessionStarted, setState, setStatus, setTone, state]);
 }
 
 export default function Home() {
@@ -558,6 +558,7 @@ export default function Home() {
   const [runStatus, setRunStatus] = useState("Ready");
   const [runTone, setRunTone] = useState<StatusTone>("default");
   const [results, setResults] = useState<RunResult[]>([]);
+  const [consoleRunResult, setConsoleRunResult] = useState<ConsoleRunResult | null>(null);
   const [running, setRunning] = useState(false);
   const [runnerReady, setRunnerReady] = useState(false);
   const [rewardNotifications, setRewardNotifications] = useState<RewardNotification[]>([]);
@@ -570,9 +571,9 @@ export default function Home() {
   useMonacoAssets();
   const hydrated = useHydrateStudy(setState, setCurrentQuestion, setCode);
   usePersistStudy(state, hydrated, setRunTone, setRunStatus);
-  const failAndAdvance = useFailAndAdvance({ code, currentQuestion, setCode, setCurrentQuestion, setResults, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, clearHint: hints.clearHint, showHealthLoss });
-  const timer = useQuestionTimer({ code, currentQuestion, failAndAdvance, sessionStarted, mode: state.mode, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer });
-  const actions = usePracticeActions({ code, currentQuestion, failAndAdvance, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setResults, setRunnerReady, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame, clearHint: hints.clearHint, startHint: hints.startHint, showHealthLoss, showRewards });
+  const failAndAdvance = useFailAndAdvance({ code, currentQuestion, setCode, setCurrentQuestion, setConsoleRunResult, setResults, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, clearHint: hints.clearHint, showHealthLoss });
+  const timer = useQuestionTimer({ code, currentQuestion, failAndAdvance, sessionStarted, mode: state.mode, setConsoleRunResult, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer });
+  const actions = usePracticeActions({ code, currentQuestion, failAndAdvance, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setConsoleRunResult, setResults, setRunnerReady, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame, clearHint: hints.clearHint, startHint: hints.startHint, showHealthLoss, showRewards });
   const resetAfterDeath = useCallback(() => {
     const freshState = defaultState();
     const picked = pickQuestion(freshState, null);
@@ -580,6 +581,7 @@ export default function Home() {
     clearRunTimer(runTimer);
     setRunning(false);
     setResults([]);
+    setConsoleRunResult(null);
     setSessionStarted(false);
     setRewardNotifications([]);
     setState({ ...freshState, currentId: picked.id });
@@ -595,6 +597,9 @@ export default function Home() {
   const profile = useMemo(() => getProfileStats(state), [state]);
   const dueCount = useMemo(() => getDueQuestions(state).length, [state]);
   const levelProgress = useMemo(() => getLevelProgress(state), [state]);
+  const characterStats = useMemo(() => getEffectiveCharacterStats(state), [state]);
+  const maxHealth = useMemo(() => getMaxHealth(state), [state]);
+  const maxMana = useMemo(() => getMaxMana(state), [state]);
   const timerDisplay = getTimerDisplay(currentQuestion, timer.timeRemainingMs);
   return (
     <>
@@ -608,13 +613,17 @@ export default function Home() {
             currentExperience={levelProgress.currentExperience}
             health={state.profile.health}
             level={levelProgress.level}
+            mana={state.profile.mana}
+            maxHealth={maxHealth}
+            maxMana={maxMana}
             modeValue={state.mode}
             nextLevelExperience={levelProgress.nextLevelExperience}
             state={state}
+            stats={characterStats}
             setState={setState}
           />
           <SummaryCards dueCount={dueCount} mastered={profile.mastered} streak={state.streak} />
-          <PracticeArea actions={actions} currentQuestion={currentQuestion} editorProps={{ canBuyHint: canBuyHint(state), code, hintCost: HINT_COST, hintError: hints.hintError, hintStreaming: hints.hintStreaming, hintText: hints.hintText, questionFinished: timer.questionFinished, results, runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} />
+          <PracticeArea actions={actions} currentQuestion={currentQuestion} editorProps={{ canBuyHint: canBuyHint(state), code, consoleRunResult, hintCost: HINT_COST, hintError: hints.hintError, hintStreaming: hints.hintStreaming, hintText: hints.hintText, questionFinished: timer.questionFinished, results, runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} state={state} />
         </Stack>
       </Container>
       <iframe ref={runnerFrame} src={RUNNER_FRAME} title="JavaScript runner" hidden onLoad={() => setRunnerReady(true)} />

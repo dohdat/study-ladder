@@ -1,8 +1,8 @@
-import { Box, Group, Paper, Progress, Text } from "@mantine/core";
-import { IconHeart, IconSparkles } from "@tabler/icons-react";
+import { Box, Group, Paper, Progress, SimpleGrid, Text } from "@mantine/core";
+import { IconBolt, IconHeart, IconSparkles } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 
-import { MAX_HEALTH } from "../lib/studyCore";
+import type { CharacterStats } from "../types/study";
 import { CoinIcon } from "./CoinIcon";
 
 const PERCENT_MAX = 100;
@@ -18,9 +18,20 @@ const GEAR_TIERS = [
   { minLevel: 1, armor: "#4dabf7", trim: "#a5d8ff", weapon: "#868e96", cape: "transparent", gem: "#dee2e6" }
 ];
 
-export function PlayerStatus(props: { coins: number; currentExperience: number; health: number; level: number; nextLevelExperience: number }) {
-  const healthValue = (props.health / MAX_HEALTH) * PERCENT_MAX;
+export function PlayerStatus(props: {
+  coins: number;
+  currentExperience: number;
+  health: number;
+  level: number;
+  mana: number;
+  maxHealth: number;
+  maxMana: number;
+  nextLevelExperience: number;
+  stats: CharacterStats;
+}) {
+  const healthValue = (props.health / props.maxHealth) * PERCENT_MAX;
   const experienceValue = (props.currentExperience / props.nextLevelExperience) * PERCENT_MAX;
+  const manaValue = props.maxMana ? (props.mana / props.maxMana) * PERCENT_MAX : 0;
   const gear = GEAR_TIERS.find((tier) => props.level >= tier.minLevel) || GEAR_TIERS[GEAR_TIERS.length - 1];
 
   return (
@@ -33,7 +44,7 @@ export function PlayerStatus(props: { coins: number; currentExperience: number; 
         display: "flex",
         gap: 12,
         minWidth: 360
-      }}
+        }}
     >
       <AvatarIllustration gear={gear} level={props.level} />
       <Box style={{ flex: 1, minWidth: 0 }}>
@@ -47,8 +58,15 @@ export function PlayerStatus(props: { coins: number; currentExperience: number; 
             <Text size="sm" fw={700} lh={1}>{props.coins}</Text>
           </Group>
         </Group>
-        <StatBar color="red" icon={<IconHeart size={14} />} value={healthValue} text={`${props.health} / ${MAX_HEALTH}`} />
+        <StatBar color="red" icon={<IconHeart size={14} />} value={healthValue} text={`${props.health} / ${props.maxHealth}`} />
         <StatBar color="yellow" icon={<IconSparkles size={14} />} value={experienceValue} text={`${props.currentExperience} / ${props.nextLevelExperience}`} />
+        <StatBar color="blue" icon={<IconBolt size={14} />} value={manaValue} text={`${props.mana} / ${props.maxMana}`} />
+        <SimpleGrid cols={4} spacing={4} mt={4}>
+          <MiniStat label="STR" value={props.stats.strength} />
+          <MiniStat label="CON" value={props.stats.constitution} />
+          <MiniStat label="PER" value={props.stats.perception} />
+          <MiniStat label="INT" value={props.stats.intelligence} />
+        </SimpleGrid>
       </Box>
     </Paper>
   );
@@ -129,6 +147,15 @@ function StatBar(props: { color: string; icon: ReactNode; text: string; value: n
       </Box>
       <Progress color={props.color} value={props.value} size="sm" radius={0} style={{ flex: 1, minWidth: 120 }} />
       <Text size="xs" c="gray.1" ta="right" style={{ minWidth: 48 }}>{props.text}</Text>
+    </Group>
+  );
+}
+
+function MiniStat(props: { label: string; value: number }) {
+  return (
+    <Group gap={4} justify="center" wrap="nowrap" style={{ background: "var(--mantine-color-dark-7)", borderRadius: 4, padding: "2px 4px" }}>
+      <Text size="10px" c="dimmed" fw={700}>{props.label}</Text>
+      <Text size="10px" c="gray.1" fw={800}>{props.value}</Text>
     </Group>
   );
 }

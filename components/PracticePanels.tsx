@@ -17,13 +17,13 @@ import {
   Tooltip,
   Title
 } from "@mantine/core";
-import { IconArrowRight, IconBulb, IconCheck, IconCode, IconLock, IconPlayerPlay, IconRefresh, IconWand } from "@tabler/icons-react";
+import { IconArrowRight, IconBulb, IconCheck, IconCode, IconLock, IconPlayerPlay, IconRefresh, IconTerminal2, IconWand } from "@tabler/icons-react";
 import type { OnMount } from "@monaco-editor/react";
 
 import { HighlightedCode } from "./HighlightedCode";
 import { MonsterEncounter } from "./MonsterEncounter";
 import { difficultyLabels } from "../lib/studyCore";
-import type { Question, RunResult, StudyState } from "../types/study";
+import type { ConsoleRunResult, Question, RunResult, StudyState } from "../types/study";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 const ICON_XS = 12;
@@ -62,12 +62,14 @@ export type PracticePanelActions = {
   handleEditorMount: OnMount;
   chooseQuestion: (preferNext: boolean) => void;
   buyHint: () => void;
+  runCode: () => void;
   startQuestion: () => void;
   submitCode: () => void;
 };
 
 type EditorProps = {
   code: string;
+  consoleRunResult: ConsoleRunResult | null;
   questionFinished: boolean;
   results: RunResult[];
   runnerReady: boolean;
@@ -91,6 +93,7 @@ export function PracticeArea(props: {
   currentQuestion: Question | null;
   editorProps: EditorProps;
   mode: StudyState["mode"];
+  state: StudyState;
 }) {
   if (props.mode === "system") {
     return (
@@ -111,6 +114,7 @@ export function PracticeArea(props: {
           currentQuestion={props.currentQuestion}
           chooseQuestion={props.actions.chooseQuestion}
           sessionStarted={props.editorProps.sessionStarted}
+          state={props.state}
         />
       </Grid.Col>
       <Grid.Col span={{ base: LAYOUT_COLUMNS, md: EDITOR_COLUMN_SPAN }}>
@@ -120,7 +124,7 @@ export function PracticeArea(props: {
   );
 }
 
-function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; chooseQuestion: (preferNext: boolean) => void; sessionStarted: boolean }) {
+function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; chooseQuestion: (preferNext: boolean) => void; sessionStarted: boolean; state: StudyState }) {
   return (
     <Card withBorder>
       <Group justify="space-between" align="flex-start">
@@ -131,7 +135,7 @@ function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; c
           </ActionIcon>
         </Tooltip>
       </Group>
-      {props.sessionStarted ? <ProblemDetails currentQuestion={props.currentQuestion} /> : <LockedProblemDetails />}
+      {props.sessionStarted ? <ProblemDetails currentQuestion={props.currentQuestion} state={props.state} /> : <LockedProblemDetails />}
     </Card>
   );
 }
@@ -160,10 +164,10 @@ function LockedProblemHeader() {
   );
 }
 
-function ProblemDetails(props: { currentQuestion: Question }) {
+function ProblemDetails(props: { currentQuestion: Question; state: StudyState }) {
   return (
     <>
-      <MonsterEncounter question={props.currentQuestion} />
+      <MonsterEncounter question={props.currentQuestion} state={props.state} />
       <Text mt="md">{props.currentQuestion.prompt}</Text>
       <Divider my="md" />
       <Title order={5}>Examples</Title>
@@ -224,6 +228,7 @@ function EditorCard(props: EditorProps & { actions: PracticePanelActions; curren
         <Text size="sm" c={`${props.statusColor}.8`} style={{ whiteSpace: "pre-wrap" }}>{props.runStatus}</Text>
       </Paper>
       <HintPanel hintError={props.hintError} hintStreaming={props.hintStreaming} hintText={props.hintText} />
+      <ConsoleOutputPanel result={props.consoleRunResult} />
       <TestResults results={props.results} />
     </Card>
   );
@@ -278,13 +283,37 @@ function EditorToolbar(props: Parameters<typeof EditorCard>[0]) {
             <Button size="xs" variant="default" leftSection={<IconBulb size={ICON_SM} />} disabled={!props.sessionStarted || !props.canBuyHint} onClick={props.actions.buyHint}>Hint</Button>
           </Box>
         </Tooltip>
-        <Tooltip label="Run code against hidden tests (Ctrl+Enter)" withArrow>
+        <Tooltip label="Run code and show console.log output" withArrow>
+          <Box component="span">
+            <Button size="xs" variant="default" leftSection={<IconTerminal2 size={ICON_SM} />} loading={props.running} disabled={!props.runnerReady || props.questionFinished || !props.sessionStarted || props.timeRemainingMs <= 0} onClick={props.actions.runCode}>Run</Button>
+          </Box>
+        </Tooltip>
+        <Tooltip label="Submit code against hidden tests (Ctrl+Enter)" withArrow>
           <Box component="span">
             <Button size="xs" leftSection={<IconCheck size={ICON_SM} />} loading={props.running} disabled={!props.runnerReady || props.questionFinished || !props.sessionStarted || props.timeRemainingMs <= 0} onClick={props.actions.submitCode}>Submit</Button>
           </Box>
         </Tooltip>
       </Group>
     </Group>
+  );
+}
+
+function ConsoleOutputPanel(props: { result: ConsoleRunResult | null }) {
+  if (!props.result) {
+    return null;
+  }
+  const output = props.result.output.length > 0 ? props.result.output.join("\n") : "(no console output)";
+  const content = props.result.error ? `${output}\nError: ${props.result.error}` : output;
+  return (
+    <Paper radius={0} p="sm" bg="dark.7">
+      <Group gap="xs" align="flex-start">
+        <IconTerminal2 size={ICON_SM} />
+        <Box flex={1}>
+          <Text size="xs" c="dimmed" fw={700}>Console</Text>
+          <Text size="sm" style={{ fontFamily: EXAMPLE_FONT_FAMILY, whiteSpace: "pre-wrap" }}>{content}</Text>
+        </Box>
+      </Group>
+    </Paper>
   );
 }
 

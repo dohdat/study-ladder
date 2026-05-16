@@ -1,5 +1,5 @@
 import { Box, Group, Paper, Stack, Text } from "@mantine/core";
-import { IconHeart, IconSparkles } from "@tabler/icons-react";
+import { IconBolt, IconHeart, IconShield, IconSparkles } from "@tabler/icons-react";
 
 import { CoinIcon } from "./CoinIcon";
 
@@ -15,9 +15,10 @@ const TOAST_ICON_SIZE = 18;
 const TOAST_ICON_GAP = 5;
 
 export type RewardNotification = {
-  amount: number;
+  amount?: number;
   id: string;
-  kind: "experience" | "gold" | "health";
+  itemName?: string;
+  kind: "experience" | "gold" | "health" | "item" | "mana";
 };
 
 export function RewardNotifications(props: { items: RewardNotification[] }) {
@@ -41,6 +42,7 @@ export function RewardNotifications(props: { items: RewardNotification[] }) {
 function RewardToast(props: { item: RewardNotification }) {
   const isHealthLoss = props.item.kind === "health";
   const label = getNotificationLabel(props.item.kind);
+  const amount = props.item.amount ?? 1;
   return (
     <Paper
       px="md"
@@ -49,10 +51,10 @@ function RewardToast(props: { item: RewardNotification }) {
       style={{ background: isHealthLoss ? HEALTH_TOAST_BG : TOAST_BG, boxShadow: TOAST_SHADOW, color: "white", minWidth: TOAST_MIN_WIDTH }}
     >
       <Group gap="xs" justify="space-between" wrap="nowrap">
-        <Text size="sm" fw={700}>You {isHealthLoss ? "lost" : "gained"} some {label}</Text>
+        <Text size="sm" fw={700}>You {isHealthLoss ? "lost" : "gained"} {props.item.kind === "item" ? props.item.itemName : `some ${label}`}</Text>
         <Group gap={TOAST_ICON_GAP} wrap="nowrap">
           <RewardIcon kind={props.item.kind} />
-          <Text size="sm" fw={800}>{isHealthLoss ? "-" : "+"} {props.item.amount}</Text>
+          {props.item.kind !== "item" && <Text size="sm" fw={800}>{isHealthLoss ? "-" : "+"} {amount}</Text>}
         </Group>
       </Group>
     </Paper>
@@ -66,6 +68,12 @@ function getNotificationLabel(kind: RewardNotification["kind"]) {
   if (kind === "health") {
     return "Health";
   }
+  if (kind === "mana") {
+    return "Mana";
+  }
+  if (kind === "item") {
+    return "Item";
+  }
   return "Experience";
 }
 
@@ -77,6 +85,20 @@ function RewardIcon(props: { kind: RewardNotification["kind"] }) {
     return (
       <Box c="red.1" style={{ alignItems: "center", display: "flex" }}>
         <IconHeart size={TOAST_ICON_SIZE} />
+      </Box>
+    );
+  }
+  if (props.kind === "mana") {
+    return (
+      <Box c="blue.2" style={{ alignItems: "center", display: "flex" }}>
+        <IconBolt size={TOAST_ICON_SIZE} />
+      </Box>
+    );
+  }
+  if (props.kind === "item") {
+    return (
+      <Box c="violet.2" style={{ alignItems: "center", display: "flex" }}>
+        <IconShield size={TOAST_ICON_SIZE} />
       </Box>
     );
   }

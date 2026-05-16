@@ -1,6 +1,6 @@
 import { Badge, Box, Group, Paper, Progress, Text } from "@mantine/core";
 
-import type { Difficulty, Question } from "../types/study";
+import type { Difficulty, Question, StudyState } from "../types/study";
 
 const RATING_MIN = 1000;
 const RATING_MAX = 3500;
@@ -277,7 +277,7 @@ const MONSTERS: Record<MonsterKind, MonsterDefinition> = {
   }
 };
 
-export function MonsterEncounter(props: { question: Question }) {
+export function MonsterEncounter(props: { question: Question; state: StudyState }) {
   const health = getMonsterHealth(props.question);
   const monster = getMonsterDefinition(props.question);
   return (

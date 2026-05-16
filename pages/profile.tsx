@@ -20,7 +20,7 @@ import { IconArrowLeft } from "@tabler/icons-react";
 
 import { CoinAmount } from "../components/CoinIcon";
 import { questions } from "../data/questions";
-import { MAX_HEALTH, defaultState, getCard, getLevelProgress, getProfileStats, getTopicStats, isMasteredCard, normalizeStudyState } from "../lib/studyCore";
+import { defaultState, getCard, getEffectiveCharacterStats, getLevelProgress, getMaxHealth, getMaxMana, getProfileStats, getTopicStats, isMasteredCard, normalizeStudyState } from "../lib/studyCore";
 import { migrateLocalStorageState } from "../lib/studyDb";
 import type { CardState, StudyState } from "../types/study";
 
@@ -38,6 +38,9 @@ export default function Profile() {
   const profile = useMemo(() => getProfileStats(state), [state]);
   const levelProgress = useMemo(() => getLevelProgress(state), [state]);
   const topics = useMemo(() => getTopicStats(state), [state]);
+  const stats = useMemo(() => getEffectiveCharacterStats(state), [state]);
+  const maxHealth = useMemo(() => getMaxHealth(state), [state]);
+  const maxMana = useMemo(() => getMaxMana(state), [state]);
   return (
     <>
       <Head>
@@ -47,7 +50,7 @@ export default function Profile() {
         <Stack gap="md">
           <ProfileHeader loaded={loaded} />
           <Box id="stats">
-            <ProfileStats attempted={profile.attempted} solved={profile.solved} mastered={profile.mastered} accuracy={profile.accuracy} coins={state.profile.coins} currentExperience={levelProgress.currentExperience} health={state.profile.health} hintsBought={state.profile.hintsBought} level={levelProgress.level} nextLevelExperience={levelProgress.nextLevelExperience} />
+            <ProfileStats attempted={profile.attempted} solved={profile.solved} mastered={profile.mastered} accuracy={profile.accuracy} coins={state.profile.coins} currentExperience={levelProgress.currentExperience} health={state.profile.health} hintsBought={state.profile.hintsBought} level={levelProgress.level} mana={state.profile.mana} maxHealth={maxHealth} maxMana={maxMana} nextLevelExperience={levelProgress.nextLevelExperience} statPoints={state.profile.statPoints} stats={stats} />
           </Box>
           <TopicMasteryCard due={profile.due} streak={state.streak} topics={topics} />
           <Box id="achievements">
@@ -112,12 +115,18 @@ function SettingsCard() {
   );
 }
 
-function ProfileStats(props: { accuracy: number; attempted: number; coins: number; currentExperience: number; health: number; hintsBought: number; level: number; mastered: number; nextLevelExperience: number; solved: number }) {
+function ProfileStats(props: { accuracy: number; attempted: number; coins: number; currentExperience: number; health: number; hintsBought: number; level: number; mana: number; mastered: number; maxHealth: number; maxMana: number; nextLevelExperience: number; solved: number; statPoints: number; stats: ReturnType<typeof getEffectiveCharacterStats> }) {
   const cards = [
     { label: "Coins", value: <CoinAmount value={props.coins} /> },
-    { label: "Health", value: `${props.health}/${MAX_HEALTH}` },
+    { label: "Health", value: `${props.health}/${props.maxHealth}` },
+    { label: "Mana", value: `${props.mana}/${props.maxMana}` },
     { label: "Level", value: props.level },
     { label: "XP", value: `${props.currentExperience}/${props.nextLevelExperience}` },
+    { label: "Strength", value: props.stats.strength },
+    { label: "Constitution", value: props.stats.constitution },
+    { label: "Perception", value: props.stats.perception },
+    { label: "Intelligence", value: props.stats.intelligence },
+    { label: "Unspent Points", value: props.statPoints },
     { label: "Hints Bought", value: props.hintsBought },
     { label: "Attempted", value: props.attempted },
     { label: "Solved", value: props.solved },

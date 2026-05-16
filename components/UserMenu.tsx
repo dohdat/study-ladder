@@ -17,13 +17,26 @@ import {
   ThemeIcon,
   Title
 } from "@mantine/core";
-import { IconChartBar, IconCircleCheck, IconSettings, IconSparkles, IconTrophy, IconUser } from "@tabler/icons-react";
+import { IconBackpack, IconChartBar, IconCircleCheck, IconSettings, IconSparkles, IconTrophy, IconUser } from "@tabler/icons-react";
 
 import { CoinAmount } from "./CoinIcon";
+import { InventoryPanel } from "./InventoryPanel";
 import { questions } from "../data/questions";
 import { STUDY_BLOCKER_MS_PER_MINUTE, useStudyBlockerSettings } from "../hooks/useStudyBlocker";
-import { EXPERIENCE_PER_LEVEL, MAX_HEALTH, getLevelProgress, getProfileStats, getTopicStats } from "../lib/studyCore";
-import type { StudyState } from "../types/study";
+import {
+  EXPERIENCE_PER_LEVEL,
+  getAttackDamage,
+  getCriticalChance,
+  getEffectiveCharacterStats,
+  getEquipmentModifierTotals,
+  getLevelProgress,
+  getMaxHealth,
+  getMaxMana,
+  getProfileStats,
+  getTopicStats,
+  spendStatPoint
+} from "../lib/studyCore";
+import type { CharacterStatKey, StudyState } from "../types/study";
 
 const ICON_SIZE = 16;
 const MENU_WIDTH = 180;
@@ -36,9 +49,16 @@ const DAILY_MINUTES_MAX = 720;
 const DAILY_MINUTES_STEP = 5;
 const MINUTES_DECIMAL_PLACES = 1;
 const SITE_TEXTAREA_MIN_ROWS = 4;
+const STAT_ROWS: Array<{ key: CharacterStatKey; label: string }> = [
+  { key: "strength", label: "Strength" },
+  { key: "constitution", label: "Constitution" },
+  { key: "perception", label: "Perception" },
+  { key: "intelligence", label: "Intelligence" }
+];
 
 const USER_MENU_ITEMS = [
   { id: "profile", icon: IconUser, label: "Profile" },
+  { id: "inventory", icon: IconBackpack, label: "Inventory" },
   { id: "stats", icon: IconChartBar, label: "Stats" },
   { id: "achievements", icon: IconTrophy, label: "Achievements" },
   { id: "settings", icon: IconSettings, label: "Settings" }
@@ -46,7 +66,7 @@ const USER_MENU_ITEMS = [
 
 type UserMenuSection = typeof USER_MENU_ITEMS[number]["id"];
 
-export function UserMenu(props: { state: StudyState }) {
+export function UserMenu(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const [activeSection, setActiveSection] = useState<UserMenuSection | null>(null);
   const modalTitle = USER_MENU_ITEMS.find((item) => item.id === activeSection)?.label || "User";
   return (
@@ -64,15 +84,18 @@ export function UserMenu(props: { state: StudyState }) {
         </Menu.Dropdown>
       </Menu>
       <Modal opened={Boolean(activeSection)} onClose={() => setActiveSection(null)} title={modalTitle} centered size="lg">
-        <UserModalContent section={activeSection} state={props.state} />
+        <UserModalContent section={activeSection} state={props.state} setState={props.setState} />
       </Modal>
     </>
   );
 }
 
-function UserModalContent(props: { section: UserMenuSection | null; state: StudyState }) {
+function UserModalContent(props: { section: UserMenuSection | null; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   if (props.section === "stats") {
     return <StatsPanel state={props.state} />;
+  }
+  if (props.section === "inventory") {
+    return <InventoryPanel state={props.state} setState={props.setState} />;
   }
   if (props.section === "achievements") {
     return <AchievementsPanel state={props.state} />;
@@ -80,11 +103,14 @@ function UserModalContent(props: { section: UserMenuSection | null; state: Study
   if (props.section === "settings") {
     return <SettingsPanel state={props.state} />;
   }
-  return <ProfilePanel state={props.state} />;
+  return <ProfilePanel state={props.state} setState={props.setState} />;
 }
 
-function ProfilePanel(props: { state: StudyState }) {
+function ProfilePanel(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const levelProgress = useMemo(() => getLevelProgress(props.state), [props.state]);
+  const stats = useMemo(() => getEffectiveCharacterStats(props.state), [props.state]);
+  const maxHealth = useMemo(() => getMaxHealth(props.state), [props.state]);
+  const maxMana = useMemo(() => getMaxMana(props.state), [props.state]);
   return (
     <Stack gap="md">
       <Group align="center" gap="md">
@@ -97,14 +123,28 @@ function ProfilePanel(props: { state: StudyState }) {
         </Box>
       </Group>
       <Stack gap="xs">
-        <ProgressRow label="Health" value={props.state.profile.health} max={MAX_HEALTH} color="red" />
+        <ProgressRow label="Health" value={props.state.profile.health} max={maxHealth} color="red" />
         <ProgressRow label="Experience" value={levelProgress.currentExperience} max={levelProgress.nextLevelExperience} color="yellow" />
+        <ProgressRow label="Mana" value={props.state.profile.mana} max={maxMana} color="blue" />
       </Stack>
       <SimpleGrid cols={{ base: 2, sm: 3 }}>
         <StatTile label="Coins" value={<CoinAmount value={props.state.profile.coins} />} />
         <StatTile label="Level XP" value={`${levelProgress.currentExperience}/${EXPERIENCE_PER_LEVEL}`} />
         <StatTile label="Hints" value={props.state.profile.hintsBought} />
       </SimpleGrid>
+      <SimpleGrid cols={{ base: 2, sm: 4 }}>
+        {STAT_ROWS.map((stat) => (
+          <StatTile
+            key={stat.key}
+            label={stat.label}
+            value={stats[stat.key]}
+            action={<Button size="compact-xs" variant="light" disabled={props.state.profile.statPoints <= 0} onClick={() => props.setState((previous) => spendStatPoint(previous, stat.key))}>Add</Button>}
+          />
+        ))}
+      </SimpleGrid>
+      <Text size="sm" c={props.state.profile.statPoints > 0 ? "yellow.4" : "dimmed"} fw={700}>
+        Unspent stat points: {props.state.profile.statPoints}
+      </Text>
     </Stack>
   );
 }
@@ -112,6 +152,9 @@ function ProfilePanel(props: { state: StudyState }) {
 function StatsPanel(props: { state: StudyState }) {
   const profile = useMemo(() => getProfileStats(props.state), [props.state]);
   const topics = useMemo(() => getTopicStats(props.state), [props.state]);
+  const sampleQuestion = questions.find((question) => question.id === props.state.currentId) || questions[0];
+  const criticalChance = Math.round(getCriticalChance(props.state) * PROGRESS_MAX);
+  const modifiers = getEquipmentModifierTotals(props.state);
   return (
     <Stack gap="md">
       <SimpleGrid cols={{ base: 2, sm: 4 }}>
@@ -119,6 +162,12 @@ function StatsPanel(props: { state: StudyState }) {
         <StatTile label="Solved" value={profile.solved} />
         <StatTile label="Mastered" value={`${profile.mastered}/${questions.length}`} />
         <StatTile label="Pass Rate" value={<NumberFormatter value={profile.accuracy} suffix="%" />} />
+        <StatTile label="Attack" value={getAttackDamage(sampleQuestion, props.state)} />
+        <StatTile label="Critical" value={`${criticalChance}%`} />
+        <StatTile label="Magic Find" value={`${modifiers.magicFindPercent}%`} />
+        <StatTile label="Gold Find" value={`${modifiers.goldFindPercent}%`} />
+        <StatTile label="Bonus XP" value={`${modifiers.bonusXpPercent}%`} />
+        <StatTile label="Damage Reduction" value={modifiers.damageReduction} />
       </SimpleGrid>
       <Stack gap="sm">
         <Text size="sm" fw={700}>Topic Mastery</Text>
@@ -255,11 +304,16 @@ function ProgressRow(props: { color: string; label: string; max: number; value: 
   );
 }
 
-function StatTile(props: { label: string; value: React.ReactNode }) {
+function StatTile(props: { action?: React.ReactNode; label: string; value: React.ReactNode }) {
   return (
     <Box p="sm" style={{ border: "1px solid var(--mantine-color-dark-4)", borderRadius: 6 }}>
-      <Text size="xs" c="dimmed">{props.label}</Text>
-      <Text fw={800}>{props.value}</Text>
+      <Group justify="space-between" gap="xs" wrap="nowrap">
+        <Box>
+          <Text size="xs" c="dimmed">{props.label}</Text>
+          <Text fw={800}>{props.value}</Text>
+        </Box>
+        {props.action}
+      </Group>
     </Box>
   );
 }

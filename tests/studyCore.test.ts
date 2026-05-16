@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
+import { ITEM_BASE_NAME_COUNT } from "../lib/itemCore";
 import {
   DAY,
   EXPERIENCE_PER_LEVEL,
@@ -11,23 +12,36 @@ import {
   applyHealthPenalty,
   buyHint,
   canBuyHint,
+  canEquipItem,
   cloneState,
   defaultCard,
   defaultState,
   difficultyLabels,
   getCard,
+  getAttackDamage,
   getCoinReward,
+  getEffectiveCharacterStats,
+  getActiveSetBonuses,
+  getCriticalChance,
   getDueQuestions,
+  getEquipmentModifierTotals,
   getExperienceReward,
+  getHealthLoss,
   getLevelProgress,
+  getManaReward,
+  getMaxHealth,
+  getMaxMana,
   getProfileStats,
   getQuestionTimeLimitMs,
+  getQuestionDrop,
   getRecommendedDifficulty,
   getTopicStats,
   isMasteredCard,
   normalizeStudyState,
   pickQuestion,
-  setCard
+  setCard,
+  equipItem,
+  spendStatPoint
 } from "../lib/studyCore";
 
 describe("studyCore", () => {
@@ -46,6 +60,10 @@ describe("studyCore", () => {
     expect(partial.profile.startedAt).toEqual(expect.any(Number));
     expect(partial.profile.health).toBe(MAX_HEALTH);
     expect(partial.profile.experience).toBe(0);
+    expect(partial.profile.mana).toBe(0);
+    expect(partial.profile.statPoints).toBe(0);
+    expect(partial.profile.statPointsAwardedLevel).toBe(1);
+    expect(partial.profile.stats).toMatchObject({ strength: 1, constitution: 1, perception: 1, intelligence: 1 });
     expect(getCard(partial, questions[0].id).attempts).toBe(1);
   });
 
@@ -103,6 +121,7 @@ describe("studyCore", () => {
     expect(getCard(state, question.id).dueAt).toBe(1000 + DAY);
     expect(state.profile.coins).toBe(getCoinReward(question));
     expect(state.profile.experience).toBe(getExperienceReward(question));
+    expect(state.profile.mana).toBe(getManaReward(question, defaultState()));
 
     state = applyScheduleResult(state, question.id, true, "draft", 2000);
     expect(getCard(state, question.id).intervalDays).toBe(3);
@@ -148,6 +167,137 @@ describe("studyCore", () => {
       currentExperience: 12,
       nextLevelExperience: EXPERIENCE_PER_LEVEL
     });
+  });
+
+  it("applies character stats to health, mana, rewards, and damage reduction", () => {
+    const state = defaultState();
+    state.profile.stats = { strength: 4, constitution: 4, perception: 4, intelligence: 4 };
+
+    expect(getEffectiveCharacterStats(state)).toMatchObject({ strength: 4, constitution: 4, perception: 4, intelligence: 4 });
+    expect(getMaxHealth(state)).toBe(65);
+    expect(getMaxMana(state)).toBe(35);
+    expect(getHealthLoss(state)).toBe(4);
+    expect(getCoinReward(questions[0], state)).toBe(11);
+    expect(getExperienceReward(questions[0], state)).toBe(17);
+  });
+
+  it("grants and spends four stat points on level up", () => {
+    const question = questions[0];
+    let state = defaultState();
+    state.profile.experience = EXPERIENCE_PER_LEVEL - getExperienceReward(question, state);
+
+    state = applyScheduleResult(state, question.id, true, "draft", 1000);
+
+    expect(getLevelProgress(state).level).toBe(2);
+    expect(state.profile.statPoints).toBe(4);
+    expect(state.profile.statPointsAwardedLevel).toBe(2);
+
+    const upgraded = spendStatPoint(state, "strength");
+    expect(upgraded.profile.statPoints).toBe(3);
+    expect(upgraded.profile.stats.strength).toBe(2);
+  });
+
+  it("drops and equips stat bonus items from solved questions", () => {
+    const question = questions.find((row) => row.difficulty === 5) || questions[0];
+    let state = defaultState();
+    state.profile.stats.perception = 40;
+    const now = 123456;
+    const drop = getQuestionDrop(question, state, now);
+
+    expect(drop).toBeTruthy();
+    const multiStatDrop = Array.from({ length: 1000 }, (_, index) => getQuestionDrop(question, state, now + index))
+      .find((item) => item && item.rarity !== "common");
+    expect(Object.values(multiStatDrop?.stats || {}).filter(Boolean).length).toBeGreaterThan(1);
+
+    state = applyScheduleResult(state, question.id, true, "draft", now);
+    expect(state.profile.inventory).toHaveLength(1);
+    state.profile.experience = EXPERIENCE_PER_LEVEL * state.profile.inventory[0].requirements.level;
+
+    const beforeStats = getEffectiveCharacterStats(state);
+    const item = state.profile.inventory[0];
+    const stat = Object.keys(item.stats)[0] as keyof typeof item.stats;
+    const equipped = equipItem(state, state.profile.inventory[0].id);
+    expect(equipped.profile.equipment[state.profile.inventory[0].slot]).toBe(state.profile.inventory[0].id);
+    expect(getEffectiveCharacterStats(equipped)[stat]).toBe(beforeStats[stat] + (item.stats[stat] || 0));
+  });
+
+  it("adds special modifiers to rarer item drops", () => {
+    const question = questions.find((row) => row.difficulty === 5) || questions[0];
+    const state = defaultState();
+    state.profile.stats.perception = 40;
+    const specialDrop = Array.from({ length: 2000 }, (_, index) => getQuestionDrop(question, state, 456000 + index))
+      .find((item) => item && item.rarity !== "common" && item.rarity !== "uncommon" && item.modifiers?.length);
+
+    expect(specialDrop?.modifiers?.length).toBeGreaterThan(0);
+  });
+
+  it("applies equipped special modifiers to rewards and combat math", () => {
+    const question = questions[0];
+    let state = defaultState();
+    state.profile.inventory.push({
+      id: "modifier-sword",
+      modifiers: [
+        { key: "bonusXpPercent", value: 20 },
+        { key: "criticalChancePercent", value: 10 },
+        { key: "damageReduction", value: 2 },
+        { key: "enhancedDamagePercent", value: 50 },
+        { key: "goldFindPercent", value: 50 },
+        { key: "lifeOnKill", value: 5 },
+        { key: "magicFindPercent", value: 50 },
+        { key: "manaOnKill", value: 3 },
+        { key: "maxLife", value: 10 },
+        { key: "maxMana", value: 10 }
+      ],
+      name: "Modifier Sword",
+      rarity: "legendary",
+      requirements: { level: 1, stats: {} },
+      slot: "mainHand",
+      stats: {}
+    });
+    state = equipItem(state, "modifier-sword");
+
+    expect(getEquipmentModifierTotals(state)).toMatchObject({ bonusXpPercent: 20, goldFindPercent: 50, lifeOnKill: 5 });
+    expect(getMaxHealth(state)).toBe(MAX_HEALTH + 10);
+    expect(getMaxMana(state)).toBe(30);
+    expect(getHealthLoss(state)).toBe(HEALTH_LOSS_PER_FAIL - 2);
+    expect(getAttackDamage(question, state)).toBeGreaterThan(getAttackDamage(question, defaultState()));
+    expect(getCriticalChance(state)).toBeGreaterThan(getCriticalChance(defaultState()));
+    expect(getCoinReward(question, state)).toBeGreaterThan(getCoinReward(question, defaultState()));
+    expect(getExperienceReward(question, state)).toBeGreaterThan(getExperienceReward(question, defaultState()));
+    expect(getManaReward(question, state)).toBeGreaterThan(getManaReward(question, defaultState()));
+  });
+
+  it("has a large Diablo-style item base name pool", () => {
+    expect(ITEM_BASE_NAME_COUNT).toBeGreaterThanOrEqual(200);
+  });
+
+  it("blocks equipping items when requirements are not met", () => {
+    const state = defaultState();
+    const lockedItem = {
+      id: "locked-helm",
+      name: "Locked Helm",
+      rarity: "rare" as const,
+      requirements: { level: 10, stats: { strength: 20 } },
+      slot: "headgear" as const,
+      stats: { strength: 3 }
+    };
+    state.profile.inventory.push(lockedItem);
+
+    expect(canEquipItem(state, lockedItem)).toBe(false);
+    expect(equipItem(state, lockedItem.id)).toBe(state);
+  });
+
+  it("applies active set bonuses from equipped set pieces", () => {
+    let state = defaultState();
+    state.profile.inventory.push(
+      { id: "sigon-a", name: "Sigon's Gage", rarity: "rare", requirements: { level: 1, stats: {} }, setId: "sigons-complete-steel", slot: "mainHand", stats: { strength: 1 } },
+      { id: "sigon-b", name: "Sigon's Guard", rarity: "rare", requirements: { level: 1, stats: {} }, setId: "sigons-complete-steel", slot: "offHand", stats: { constitution: 1 } }
+    );
+    state = equipItem(state, "sigon-a");
+    state = equipItem(state, "sigon-b");
+
+    expect(getActiveSetBonuses(state)[0]).toMatchObject({ count: 2, id: "sigons-complete-steel" });
+    expect(getEffectiveCharacterStats(state).constitution).toBeGreaterThan(defaultState().profile.stats.constitution + 1);
   });
 
   it("allows free hints for local hint testing", () => {
