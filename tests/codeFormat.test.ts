@@ -32,4 +32,23 @@ describe("beautifyCode", () => {
       ""
     ].join("\n"));
   });
+
+  it("closes simple missing parentheses and brackets", () => {
+    expect(beautifyCode("const seen = new Set(\narr.push(nums[i]")).toBe([
+      "const seen = new Set();",
+      "arr.push(nums[i]);",
+      ""
+    ].join("\n"));
+  });
+
+  it("adds missing closing braces", () => {
+    expect(beautifyCode("function test() {\nif (ok) {\nreturn true")).toBe([
+      "function test() {",
+      "  if (ok) {",
+      "    return true;",
+      "  }",
+      "}",
+      ""
+    ].join("\n"));
+  });
 });

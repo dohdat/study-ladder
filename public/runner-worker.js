@@ -44,6 +44,7 @@ async function handleRunTests(event) {
         results.push({
           name: test.name,
           pass: stableEqual(actual, test.expected),
+          args: serialize(test.args),
           expected: serialize(test.expected),
           actual: serialize(actual)
         });
@@ -51,6 +52,7 @@ async function handleRunTests(event) {
         results.push({
           name: test.name,
           pass: false,
+          args: serialize(test.args),
           expected: serialize(test.expected),
           actual: error && error.message ? error.message : String(error)
         });

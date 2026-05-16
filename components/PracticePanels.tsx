@@ -20,6 +20,7 @@ import {
 import { IconArrowRight, IconBulb, IconCheck, IconCode, IconPlayerPlay, IconRefresh, IconWand } from "@tabler/icons-react";
 import type { OnMount } from "@monaco-editor/react";
 
+import { HighlightedCode } from "./HighlightedCode";
 import { difficultyLabels } from "../lib/studyCore";
 import type { Question, RunResult, StudyState } from "../types/study";
 
@@ -34,16 +35,12 @@ const EDITOR_READ_ONLY_MESSAGE = { value: "Press Start to edit this solution." }
 const LOCKED_OVERLAY_BG = "#2b2b2b";
 const LOCKED_OVERLAY_PANEL_MAX_WIDTH = 360;
 const LOCKED_OVERLAY_Z_INDEX = 10;
-const TEST_RESULTS_MAX_HEIGHT = 150;
+const TEST_RESULTS_MAX_HEIGHT = 300;
 const TAB_SIZE = 2;
 const LAYOUT_COLUMNS = 10;
 const QUESTION_COLUMN_SPAN = 3;
 const EDITOR_COLUMN_SPAN = 7;
 const CODE_FENCE = "```";
-const HINT_CODE_BG = "#171717";
-const HINT_CODE_BORDER = "1px solid rgba(255, 255, 255, 0.12)";
-const HINT_CODE_RADIUS = 6;
-const HINT_CODE_PADDING = 12;
 const HINT_CONTENT_GAP = 10;
 
 type HintSegment = {
@@ -101,7 +98,11 @@ export function PracticeArea(props: {
   return (
     <Grid columns={LAYOUT_COLUMNS} gutter="md" align="flex-start">
       <Grid.Col span={{ base: LAYOUT_COLUMNS, md: QUESTION_COLUMN_SPAN }}>
-        <ProblemCard currentQuestion={props.currentQuestion} chooseQuestion={props.actions.chooseQuestion} />
+        <ProblemCard
+          canMoveNext={!props.editorProps.sessionStarted || props.editorProps.questionFinished}
+          currentQuestion={props.currentQuestion}
+          chooseQuestion={props.actions.chooseQuestion}
+        />
       </Grid.Col>
       <Grid.Col span={{ base: LAYOUT_COLUMNS, md: EDITOR_COLUMN_SPAN }}>
         <EditorCard {...props.editorProps} actions={props.actions} currentQuestion={props.currentQuestion} />
@@ -110,7 +111,7 @@ export function PracticeArea(props: {
   );
 }
 
-function ProblemCard(props: { currentQuestion: Question; chooseQuestion: (preferNext: boolean) => void }) {
+function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; chooseQuestion: (preferNext: boolean) => void }) {
   return (
     <Card withBorder>
       <Group justify="space-between" align="flex-start">
@@ -121,8 +122,8 @@ function ProblemCard(props: { currentQuestion: Question; chooseQuestion: (prefer
             {props.currentQuestion.topics.map((topic) => <Badge key={topic} size="sm" variant="outline">{topic}</Badge>)}
           </Group>
         </Box>
-        <Tooltip label="Move to the next question" withArrow>
-          <ActionIcon variant="light" size="lg" aria-label="Next question" onClick={() => props.chooseQuestion(true)}>
+        <Tooltip label={props.canMoveNext ? "Move to the next question" : "Pass all tests before moving on"} withArrow>
+          <ActionIcon variant="light" size="lg" aria-label="Next question" disabled={!props.canMoveNext} onClick={() => props.chooseQuestion(true)}>
             <IconArrowRight size={ICON_LG} />
           </ActionIcon>
         </Tooltip>
@@ -151,7 +152,7 @@ function EditorCard(props: EditorProps & { actions: PracticePanelActions; curren
         {!props.sessionStarted && <LockedEditorOverlay />}
       </Box>
       <Paper radius={0} p="sm" bg={`${props.statusColor}.0`}>
-        <Text size="sm" c={`${props.statusColor}.8`}>{props.runStatus}</Text>
+        <Text size="sm" c={`${props.statusColor}.8`} style={{ whiteSpace: "pre-wrap" }}>{props.runStatus}</Text>
       </Paper>
       <HintPanel hintError={props.hintError} hintStreaming={props.hintStreaming} hintText={props.hintText} />
       <TestResults results={props.results} />
@@ -194,18 +195,18 @@ function EditorToolbar(props: Parameters<typeof EditorCard>[0]) {
       <Group gap="xs">
         <Tooltip label="Start timer and enter fullscreen" withArrow>
           <Box component="span">
-            <Button size="xs" variant="default" leftSection={<IconPlayerPlay size={ICON_SM} />} disabled={props.questionFinished} onClick={props.actions.startQuestion}>Start</Button>
+            <Button size="xs" variant="default" leftSection={<IconPlayerPlay size={ICON_SM} />} disabled={props.questionFinished || props.sessionStarted} onClick={props.actions.startQuestion}>Start</Button>
           </Box>
         </Tooltip>
         <Tooltip label="Restore the starter code" withArrow>
-          <Button size="xs" variant="default" leftSection={<IconRefresh size={ICON_SM} />} onClick={() => props.actions.updateDraft(props.currentQuestion.starter)}>Reset</Button>
+          <Button size="xs" variant="default" leftSection={<IconRefresh size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.updateDraft(props.currentQuestion.starter)}>Reset</Button>
         </Tooltip>
         <Tooltip label="Format JavaScript code (Ctrl+S)" withArrow>
-          <Button size="xs" variant="default" leftSection={<IconWand size={ICON_SM} />} onClick={() => props.actions.beautifyCurrentCode()}>Beautify</Button>
+          <Button size="xs" variant="default" leftSection={<IconWand size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.beautifyCurrentCode()}>Beautify</Button>
         </Tooltip>
         <Tooltip label={`Buy one next-step hint (${props.hintCost} coins)`} withArrow>
           <Box component="span">
-            <Button size="xs" variant="default" leftSection={<IconBulb size={ICON_SM} />} disabled={!props.canBuyHint} onClick={props.actions.buyHint}>Hint</Button>
+            <Button size="xs" variant="default" leftSection={<IconBulb size={ICON_SM} />} disabled={!props.sessionStarted || !props.canBuyHint} onClick={props.actions.buyHint}>Hint</Button>
           </Box>
         </Tooltip>
         <Tooltip label="Run code against hidden tests (Ctrl+Enter)" withArrow>
@@ -246,11 +247,7 @@ function HintContent(props: { content: string }) {
 
 function HintSegmentView(props: { segment: HintSegment }) {
   if (props.segment.kind === "code") {
-    return (
-      <Box component="pre" m={0} p={HINT_CODE_PADDING} style={{ background: HINT_CODE_BG, border: HINT_CODE_BORDER, borderRadius: HINT_CODE_RADIUS, overflowX: "auto" }}>
-        <Text component="code" size="sm" c="gray.0" style={{ fontFamily: "monospace", whiteSpace: "pre" }}>{props.segment.content}</Text>
-      </Box>
-    );
+    return <HighlightedCode code={props.segment.content} />;
   }
 
   return <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>{props.segment.content}</Text>;
@@ -297,10 +294,24 @@ function TestResults(props: { results: RunResult[] }) {
       <List p="sm" size="sm" spacing={4}>
         {props.results.map((result) => (
           <List.Item key={result.name} icon={<ThemeIcon color={result.pass ? "green" : "red"} size={RESULT_ICON_SIZE} radius="xl"><IconCheck size={ICON_XS} /></ThemeIcon>}>
-            {result.pass ? `${result.name}: passed` : `${result.name}: expected ${result.expected}, got ${result.actual}`}
+            <TestResultText result={result} />
           </List.Item>
         ))}
       </List>
     </ScrollArea.Autosize>
+  );
+}
+
+function TestResultText(props: { result: RunResult }) {
+  if (props.result.pass) {
+    return <Text size="sm">{props.result.name}: passed</Text>;
+  }
+  return (
+    <Box>
+      <Text size="sm" fw={700}>{props.result.name}</Text>
+      <Text size="xs" c="dimmed">Input: {props.result.args}</Text>
+      <Text size="xs" c="dimmed">Expected: {props.result.expected}</Text>
+      <Text size="xs" c="dimmed">Actual: {props.result.actual}</Text>
+    </Box>
   );
 }

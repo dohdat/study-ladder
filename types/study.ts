@@ -52,6 +52,7 @@ export type StudyState = {
 export type RunResult = {
   name: string;
   pass: boolean;
+  args: string;
   expected: string;
   actual: string;
 };

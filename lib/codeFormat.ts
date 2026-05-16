@@ -14,6 +14,20 @@ const isSemicolonStatement = (line: string) => {
     || /^\w+(\+\+|--)$/.test(line);
 };
 
+const getInlineClosedLine = (line: string) => {
+  const closers: string[] = [];
+  for (const char of line) {
+    if (char === "(") {
+      closers.push(")");
+    } else if (char === "[") {
+      closers.push("]");
+    } else if (char === ")" || char === "]") {
+      closers.pop();
+    }
+  }
+  return `${line}${closers.reverse().join("")}`;
+};
+
 const shouldAddSemicolon = (line: string) => {
   const trimmed = line.trim();
   if (isAlreadyTerminated(trimmed)) {
@@ -42,17 +56,23 @@ export const beautifyCode = (source: string) => {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      if (line.startsWith("}") || line.startsWith("]") || line.startsWith(")")) {
+      const closedLine = getInlineClosedLine(line);
+      if (closedLine.startsWith("}") || closedLine.startsWith("]") || closedLine.startsWith(")")) {
         indent = Math.max(0, indent - 1);
       }
 
-      const formattedLine = shouldAddSemicolon(line) ? `${line};` : line;
+      const formattedLine = shouldAddSemicolon(closedLine) ? `${closedLine};` : closedLine;
       const output = `${"  ".repeat(indent)}${formattedLine}`;
-      if (line.endsWith("{")) {
+      if (closedLine.endsWith("{")) {
         indent += 1;
       }
       return output;
     });
+
+  while (indent > 0) {
+    indent -= 1;
+    lines.push(`${"  ".repeat(indent)}}`);
+  }
 
   return `${lines.join("\n")}\n`;
 };

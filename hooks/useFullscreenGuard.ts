@@ -14,9 +14,18 @@ type FullscreenGuardParams = {
 };
 
 export function useFullscreenGuard(params: FullscreenGuardParams) {
-  const { active, failQuestion, setStatus, setTone } = params;
   const graceTimer = useRef<number | null>(null);
   const countdownTimer = useRef<number | null>(null);
+  const failQuestionRef = useRef(params.failQuestion);
+  const setStatusRef = useRef(params.setStatus);
+  const setToneRef = useRef(params.setTone);
+
+  useEffect(() => {
+    failQuestionRef.current = params.failQuestion;
+    setStatusRef.current = params.setStatus;
+    setToneRef.current = params.setTone;
+  }, [params.failQuestion, params.setStatus, params.setTone]);
+
   const clearGraceTimer = useCallback(() => {
     if (graceTimer.current) {
       window.clearTimeout(graceTimer.current);
@@ -32,28 +41,28 @@ export function useFullscreenGuard(params: FullscreenGuardParams) {
       return;
     }
     let remainingSeconds = FOCUS_GRACE_SECONDS;
-    setTone("fail");
-    setStatus(getCountdownStatus(remainingSeconds));
+    setToneRef.current("fail");
+    setStatusRef.current(getCountdownStatus(remainingSeconds));
     countdownTimer.current = window.setInterval(() => {
       remainingSeconds -= 1;
-      setStatus(getCountdownStatus(remainingSeconds));
+      setStatusRef.current(getCountdownStatus(remainingSeconds));
     }, COUNTDOWN_STEP_MS);
     graceTimer.current = window.setTimeout(() => {
       graceTimer.current = null;
       clearGraceTimer();
-      failQuestion("Left fullscreen or changed focus. Card remains due soon.");
+      failQuestionRef.current("Left fullscreen or changed focus. Card remains due soon.");
     }, FOCUS_GRACE_MS);
-  }, [clearGraceTimer, failQuestion, setStatus, setTone]);
+  }, [clearGraceTimer]);
   useEffect(() => {
-    if (!active) {
+    if (!params.active) {
       clearGraceTimer();
       return undefined;
     }
     function handleGuardChange() {
       if (isFullscreenFocused()) {
         clearGraceTimer();
-        setTone("default");
-        setStatus("Keep going.");
+        setToneRef.current("default");
+        setStatusRef.current("Keep going.");
         return;
       }
       startGraceTimer();
@@ -70,7 +79,7 @@ export function useFullscreenGuard(params: FullscreenGuardParams) {
       document.removeEventListener("visibilitychange", handleGuardChange);
       document.removeEventListener("fullscreenchange", handleGuardChange);
     };
-  }, [active, clearGraceTimer, setStatus, setTone, startGraceTimer]);
+  }, [params.active, clearGraceTimer, startGraceTimer]);
 }
 
 function isFullscreenFocused() {

@@ -30,11 +30,13 @@ const createUserFunction = (code, functionName) => {
 
 const runSingleTest = async (userFunction, test) => {
   const inputArgs = JSON.parse(JSON.stringify(test.args));
+  const args = serialize(test.args);
   try {
     const actual = await userFunction(...inputArgs);
     return {
       name: test.name,
       pass: stableEqual(actual, test.expected),
+      args,
       expected: serialize(test.expected),
       actual: serialize(actual)
     };
@@ -42,6 +44,7 @@ const runSingleTest = async (userFunction, test) => {
     return {
       name: test.name,
       pass: false,
+      args,
       expected: serialize(test.expected),
       actual: error && error.message ? error.message : String(error)
     };
@@ -50,7 +53,10 @@ const runSingleTest = async (userFunction, test) => {
 
 async function handleRunTests(event) {
   const message = event.data;
-  if (!message || message.type !== "run-tests") {
+  if (!message) {
+    return;
+  }
+  if (message.type !== "run-tests") {
     return;
   }
 

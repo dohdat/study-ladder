@@ -52,6 +52,7 @@ const TIMER_PAD = 2;
 const NUMBER_BASE_HEX = 16;
 const PERCENT_MAX = 100;
 const ICON_MD = 16;
+const MAX_FAILED_TESTS_IN_STATUS = 3;
 const RUNNER_FRAME = "sandbox.html";
 const STATUS_COLOR = {
   default: "gray",
@@ -237,7 +238,10 @@ function handleRunMessage(message: RunnerMessage, params: Parameters<typeof useR
     return;
   }
   if (!message.ok) {
-    params.failAndAdvance("Some tests failed. Moving to next question.");
+    const failedResults = message.results.filter((result) => !result.pass);
+    params.setResults(failedResults);
+    params.setTone("fail");
+    params.setStatus(`${getFailedTestsSummary(failedResults)} Fix this question before moving on.`);
     return;
   }
   params.setResults(message.results);
@@ -245,6 +249,20 @@ function handleRunMessage(message: RunnerMessage, params: Parameters<typeof useR
   params.setTone("pass");
   params.setStatus("All tests passed. Card scheduled.");
   params.setQuestionFinished(true);
+}
+
+function getFailedTestsSummary(failedResults: RunResult[]) {
+  if (failedResults.length === 0) {
+    return "Tests failed, but the runner did not return failed test details.";
+  }
+  const shown = failedResults.slice(0, MAX_FAILED_TESTS_IN_STATUS).map((result) => {
+    return `${result.name}: expected ${result.expected}, got ${result.actual}`;
+  });
+  const remaining = failedResults.length - shown.length;
+  if (remaining > 0) {
+    shown.push(`${remaining} more failed`);
+  }
+  return `Failed ${failedResults.length} test(s): ${shown.join("; ")}`;
 }
 
 function clearRunTimer(runTimer: React.MutableRefObject<number | null>) {
@@ -368,18 +386,20 @@ function useBuyHint(params: Parameters<typeof usePracticeActions>[0]) {
 
 function useStartQuestion(params: Parameters<typeof usePracticeActions>[0]) {
   return useCallback(() => {
-    if (!params.currentQuestion) {
+    if (!params.currentQuestion || params.state.mode !== "leetcode") {
       return;
     }
+    params.setSessionStarted(true);
+    params.setTone("default");
+    params.setStatus("Starting fullscreen guard.");
     document.documentElement.requestFullscreen()
       .then(() => {
-        params.setSessionStarted(true);
         params.setTone("default");
-        params.setStatus("Started. Stay in fullscreen until you finish.");
+        params.setStatus("Keep going.");
       })
       .catch(() => {
         params.setTone("fail");
-        params.setStatus("Could not enter fullscreen. Allow fullscreen to start.");
+        params.setStatus("Could not enter fullscreen. Return to fullscreen or this question fails.");
       });
   }, [params]);
 }
