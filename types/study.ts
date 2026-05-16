@@ -41,6 +41,8 @@ export type StudyState = {
   totalCorrect: number;
   streak: number;
   profile: {
+    coins: number;
+    hintsBought: number;
     startedAt: number;
     lastStudiedAt: number | null;
   };

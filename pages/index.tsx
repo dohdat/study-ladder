@@ -10,6 +10,7 @@ import {
   SimpleGrid,
   Stack,
   Text,
+  Tooltip,
   Title
 } from "@mantine/core";
 import { IconUser } from "@tabler/icons-react";
@@ -19,22 +20,25 @@ import type { OnMount } from "@monaco-editor/react";
 import { PracticeArea } from "../components/PracticePanels";
 import type { PracticePanelActions } from "../components/PracticePanels";
 import { questions } from "../data/questions";
+import { useCodexHintStream } from "../hooks/useCodexHintStream";
 import { useFullscreenGuard } from "../hooks/useFullscreenGuard";
 import { beautifyCode } from "../lib/codeFormat";
 import {
   applyScheduleResult,
+  buyHint,
+  canBuyHint,
   cloneState,
   defaultState,
-  difficultyLabels,
   getCard,
   getDueQuestions,
   getProfileStats,
   getQuestionTimeLimitMs,
-  getRecommendedDifficulty,
+  HINT_COST,
   normalizeStudyState,
   pickQuestion,
   setCard
 } from "../lib/studyCore";
+import { createHintPrompt } from "../lib/hintPrompt";
 import { migrateLocalStorageState, saveStudyState } from "../lib/studyDb";
 import type { Question, RunResult, StudyState } from "../types/study";
 
@@ -63,6 +67,7 @@ type RunnerMessage = {
 };
 
 type StatusTone = keyof typeof STATUS_COLOR;
+type FailAndAdvance = (message: string, draft?: string) => void;
 
 type TimerControls = {
   timeRemainingMs: number;
@@ -89,7 +94,7 @@ function useHydrateStudy(setState: (state: StudyState) => void, setQuestion: (qu
       if (active) {
         setState(saved);
         setQuestion(initialQuestion);
-        setCode(getCard(saved, initialQuestion.id).draft || initialQuestion.starter);
+        setCode(initialQuestion.starter);
         setHydrated(true);
       }
     }
@@ -125,6 +130,7 @@ function usePersistStudy(state: StudyState, hydrated: boolean, setTone: (tone: S
 function useQuestionTimer(params: {
   code: string;
   currentQuestion: Question | null;
+  failAndAdvance: FailAndAdvance;
   sessionStarted: boolean;
   mode: StudyState["mode"];
   setResults: (results: RunResult[]) => void;
@@ -193,14 +199,12 @@ function expireQuestion(params: Parameters<typeof useTimerInterval>[0]) {
   }
   params.setRunning(false);
   params.setResults([]);
-  params.setTone("fail");
-  params.setStatus("Time expired. Card remains due soon.");
-  params.setQuestionFinished(true);
-  params.setState((previous) => applyScheduleResult(previous, question.id, false, params.code));
+  params.failAndAdvance("Time expired. Moving to next question.", params.code);
 }
 
 function useRunnerMessages(params: {
   currentQuestion: Question | null;
+  failAndAdvance: FailAndAdvance;
   updateSchedule: (passed: boolean, draft?: string) => void;
   setQuestionFinished: (finished: boolean) => void;
   setResults: (results: RunResult[]) => void;
@@ -228,19 +232,18 @@ function useRunnerMessages(params: {
 
 function handleRunMessage(message: RunnerMessage, params: Parameters<typeof useRunnerMessages>[0]) {
   if (message.error) {
-    params.updateSchedule(false);
-    params.setTone("fail");
-    params.setStatus(message.error);
-    params.setResults([]);
+    params.failAndAdvance(message.error);
+    return;
+  }
+  if (!message.ok) {
+    params.failAndAdvance("Some tests failed. Moving to next question.");
     return;
   }
   params.setResults(message.results);
-  params.updateSchedule(message.ok);
-  params.setTone(message.ok ? "pass" : "fail");
-  params.setStatus(message.ok ? "All tests passed. Card scheduled." : "Some tests failed. Card remains due soon.");
-  if (message.ok) {
-    params.setQuestionFinished(true);
-  }
+  params.updateSchedule(true);
+  params.setTone("pass");
+  params.setStatus("All tests passed. Card scheduled.");
+  params.setQuestionFinished(true);
 }
 
 function clearRunTimer(runTimer: React.MutableRefObject<number | null>) {
@@ -265,19 +268,23 @@ function usePracticeActions(params: {
   setStatus: (status: string) => void;
   setTone: (tone: StatusTone) => void;
   state: StudyState;
+  failAndAdvance: FailAndAdvance;
   activeRunId: React.MutableRefObject<string | null>;
   runTimer: React.MutableRefObject<number | null>;
   runnerFrame: React.MutableRefObject<HTMLIFrameElement | null>;
+  clearHint: () => void;
+  startHint: (prompt: string) => void;
 }): PracticeActions {
   const updateDraft = useUpdateDraft(params);
   const beautifyCurrentCode = useCallback((source = params.code) => updateDraft(beautifyCode(source)), [params.code, updateDraft]);
-  const handleEditorMount = useEditorMount(beautifyCurrentCode);
   const updateSchedule = useUpdateSchedule(params.currentQuestion, params.code, params.setState);
   useRunnerMessages({ ...params, updateSchedule });
   const chooseQuestion = useChooseQuestion(params, updateDraft);
+  const buyHintAction = useBuyHint(params);
   const startQuestion = useStartQuestion(params);
   const submitCode = useSubmitCode({ ...params, updateDraft, updateSchedule });
-  return { updateDraft, beautifyCurrentCode, handleEditorMount, chooseQuestion, startQuestion, submitCode };
+  const handleEditorMount = useEditorMount(beautifyCurrentCode, submitCode);
+  return { updateDraft, beautifyCurrentCode, handleEditorMount, chooseQuestion, buyHint: buyHintAction, startQuestion, submitCode };
 }
 
 function useUpdateDraft(params: { currentQuestion: Question | null; setCode: (code: string) => void; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
@@ -295,15 +302,21 @@ function useUpdateDraft(params: { currentQuestion: Question | null; setCode: (co
   }, [params]);
 }
 
-function useEditorMount(beautifyCurrentCode: (source?: string) => void): OnMount {
+function useEditorMount(beautifyCurrentCode: (source?: string) => void, submitCode: () => void): OnMount {
   return useCallback((editor, monaco) => {
     editor.addAction({
       id: "study-ladder-beautify",
       label: "Beautify Code",
-      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF],
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
       run: () => beautifyCurrentCode(editor.getValue())
     });
-  }, [beautifyCurrentCode]);
+    editor.addAction({
+      id: "study-ladder-submit",
+      label: "Submit Solution",
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
+      run: submitCode
+    });
+  }, [beautifyCurrentCode, submitCode]);
 }
 
 function useUpdateSchedule(currentQuestion: Question | null, code: string, setState: React.Dispatch<React.SetStateAction<StudyState>>) {
@@ -319,13 +332,37 @@ function useChooseQuestion(params: Parameters<typeof usePracticeActions>[0], upd
     const picked = pickQuestion(params.state, params.currentQuestion, preferNext);
     params.setCurrentQuestion(picked);
     params.setState((previous) => ({ ...previous, currentId: picked.id }));
-    updateDraft(getCard(params.state, picked.id).draft || picked.starter);
+    updateDraft(picked.starter);
     params.setResults([]);
     params.setTone("default");
     params.setStatus("Ready");
     params.setQuestionFinished(false);
     params.setSessionStarted(false);
+    params.clearHint();
   }, [params, updateDraft]);
+}
+
+function useBuyHint(params: Parameters<typeof usePracticeActions>[0]) {
+  return useCallback(() => {
+    const question = params.currentQuestion;
+    if (!question || !canBuyHint(params.state)) {
+      params.setTone("fail");
+      params.setStatus(`You need ${HINT_COST} coins to buy a hint.`);
+      return;
+    }
+    const prompt = createHintPrompt(question, params.code);
+    navigator.clipboard.writeText(prompt)
+      .then(() => {
+        params.setState((previous) => buyHint(previous));
+        params.setTone("default");
+        params.setStatus("Asking Codex for one next step.");
+        params.startHint(prompt);
+      })
+      .catch(() => {
+        params.setTone("fail");
+        params.setStatus("Could not copy hint prompt.");
+      });
+  }, [params]);
 }
 
 function useStartQuestion(params: Parameters<typeof usePracticeActions>[0]) {
@@ -347,6 +384,7 @@ function useStartQuestion(params: Parameters<typeof usePracticeActions>[0]) {
 }
 
 function useSubmitCode(params: Parameters<typeof usePracticeActions>[0] & {
+  failAndAdvance: FailAndAdvance;
   updateDraft: (code: string) => void;
   updateSchedule: (passed: boolean, draft?: string) => void;
 }) {
@@ -391,43 +429,49 @@ function handleRunTimeout(runId: string, formattedCode: string, params: Paramete
   }
   params.activeRunId.current = null;
   params.setRunning(false);
-  params.updateSchedule(false, formattedCode);
-  params.setTone("fail");
-  params.setStatus("Timed out. Check for infinite loops.");
+  params.failAndAdvance("Timed out. Moving to next question.", formattedCode);
   if (params.runnerFrame.current) {
     params.setRunnerReady(false);
     params.runnerFrame.current.src = RUNNER_FRAME;
   }
 }
 
-function useFailQuestion(params: {
+function useFailAndAdvance(params: {
   code: string;
   currentQuestion: Question | null;
-  setQuestionFinished: (finished: boolean) => void;
+  setCode: (code: string) => void;
+  setCurrentQuestion: (question: Question) => void;
   setResults: (results: RunResult[]) => void;
   setRunning: (running: boolean) => void;
   setSessionStarted: (started: boolean) => void;
   setState: React.Dispatch<React.SetStateAction<StudyState>>;
   setStatus: (status: string) => void;
   setTone: (tone: StatusTone) => void;
+  state: StudyState;
   activeRunId: React.MutableRefObject<string | null>;
   runTimer: React.MutableRefObject<number | null>;
+  clearHint: () => void;
 }) {
-  const { activeRunId, code, currentQuestion, runTimer, setQuestionFinished, setResults, setRunning, setSessionStarted, setState, setStatus, setTone } = params;
-  return useCallback((message: string) => {
+  const { activeRunId, code, currentQuestion, runTimer, setCode, setCurrentQuestion, setResults, setRunning, setSessionStarted, setState, setStatus, setTone, state } = params;
+  return useCallback((message: string, draft = code) => {
     if (!currentQuestion) {
       return;
     }
+    const scheduled = applyScheduleResult(state, currentQuestion.id, false, draft);
+    const picked = pickQuestion(scheduled, currentQuestion, true);
+    const nextState = { ...scheduled, currentId: picked.id };
     activeRunId.current = null;
     clearRunTimer(runTimer);
     setRunning(false);
     setResults([]);
     setTone("fail");
-    setStatus(message);
-    setQuestionFinished(true);
+    setStatus(`${message} Next question loaded.`);
     setSessionStarted(false);
-    setState((previous) => applyScheduleResult(previous, currentQuestion.id, false, code));
-  }, [activeRunId, code, currentQuestion, runTimer, setQuestionFinished, setResults, setRunning, setSessionStarted, setState, setStatus, setTone]);
+    setState(nextState);
+    setCurrentQuestion(picked);
+    setCode(picked.starter);
+    params.clearHint();
+  }, [activeRunId, code, currentQuestion, params, runTimer, setCode, setCurrentQuestion, setResults, setRunning, setSessionStarted, setState, setStatus, setTone, state]);
 }
 
 function getTimerDisplay(currentQuestion: Question | null, timeRemainingMs: number) {
@@ -455,22 +499,23 @@ function AppHeader(props: { modeValue: string; setState: React.Dispatch<React.Se
           onChange={(value) => props.setState((previous) => ({ ...previous, mode: value as StudyState["mode"] }))}
           data={[{ label: "LeetCode", value: "leetcode" }, { label: "System Design", value: "system" }]}
         />
-        <Button component="a" href="profile.html" variant="default" leftSection={<IconUser size={ICON_MD} />}>Profile</Button>
+        <Tooltip label="View mastery and topic progress" withArrow>
+          <Button component="a" href="profile.html" variant="default" leftSection={<IconUser size={ICON_MD} />}>Profile</Button>
+        </Tooltip>
       </Group>
     </Group>
   );
 }
 
-function SummaryCards(props: { dueCount: number; mastered: number; recommended: Question["difficulty"]; streak: number; timerLabel: string }) {
+function SummaryCards(props: { coins: number; dueCount: number; mastered: number; streak: number }) {
   const cards = [
+    { label: "Coins", value: props.coins },
     { label: "Due", value: props.dueCount },
     { label: "Mastered", value: `${props.mastered}/${questions.length}` },
-    { label: "Streak", value: props.streak },
-    { label: "Current", value: difficultyLabels[props.recommended] },
-    { label: "Timer", value: props.timerLabel }
+    { label: "Streak", value: props.streak }
   ];
   return (
-    <SimpleGrid cols={{ base: 2, sm: 5 }}>
+    <SimpleGrid cols={{ base: 2, sm: 4 }}>
       {cards.map((card) => (
         <Paper key={card.label} withBorder p="md">
           <Text size="xs" c="dimmed">{card.label}</Text>
@@ -494,24 +539,25 @@ export default function Home() {
   const activeRunId = useRef<string | null>(null);
   const runTimer = useRef<number | null>(null);
   const runnerFrame = useRef<HTMLIFrameElement | null>(null);
+  const hints = useCodexHintStream(setRunStatus, setRunTone);
   useMonacoAssets();
   const hydrated = useHydrateStudy(setState, setCurrentQuestion, setCode);
   usePersistStudy(state, hydrated, setRunTone, setRunStatus);
-  const timer = useQuestionTimer({ code, currentQuestion, sessionStarted, mode: state.mode, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer });
-  const actions = usePracticeActions({ code, currentQuestion, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setResults, setRunnerReady, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame });
-  const failQuestion = useFailQuestion({ code, currentQuestion, setQuestionFinished: timer.setQuestionFinished, setResults, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer });
-  useFullscreenGuard({ active: state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished, failQuestion, setStatus: setRunStatus, setTone: setRunTone });
+  const failAndAdvance = useFailAndAdvance({ code, currentQuestion, setCode, setCurrentQuestion, setResults, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, clearHint: hints.clearHint });
+  const timer = useQuestionTimer({ code, currentQuestion, failAndAdvance, sessionStarted, mode: state.mode, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer });
+  const actions = usePracticeActions({ code, currentQuestion, failAndAdvance, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setResults, setRunnerReady, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame, clearHint: hints.clearHint, startHint: hints.startHint });
+  useFullscreenGuard({ active: state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished, failQuestion: failAndAdvance, setStatus: setRunStatus, setTone: setRunTone });
   const profile = useMemo(() => getProfileStats(state), [state]);
   const dueCount = useMemo(() => getDueQuestions(state).length, [state]);
   const timerDisplay = getTimerDisplay(currentQuestion, timer.timeRemainingMs);
   return (
     <>
       <Head><title>Study Ladder</title></Head>
-      <Container fluid px="md" py="md">
+      <Container fluid px="md" py="md" w={{ base: "100%", lg: "70%" }}>
         <Stack gap="md">
           <AppHeader modeValue={state.mode} setState={setState} />
-          <SummaryCards dueCount={dueCount} mastered={profile.mastered} recommended={getRecommendedDifficulty(state)} streak={state.streak} timerLabel={timerDisplay.timerLabel} />
-          <PracticeArea actions={actions} currentQuestion={currentQuestion} editorProps={{ code, questionFinished: timer.questionFinished, results, runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} />
+          <SummaryCards coins={state.profile.coins} dueCount={dueCount} mastered={profile.mastered} streak={state.streak} />
+          <PracticeArea actions={actions} currentQuestion={currentQuestion} editorProps={{ canBuyHint: canBuyHint(state), code, hintCost: HINT_COST, hintError: hints.hintError, hintStreaming: hints.hintStreaming, hintText: hints.hintText, questionFinished: timer.questionFinished, results, runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} />
         </Stack>
       </Container>
       <iframe ref={runnerFrame} src={RUNNER_FRAME} title="JavaScript runner" hidden onLoad={() => setRunnerReady(true)} />

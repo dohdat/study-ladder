@@ -44,7 +44,7 @@ export default function Profile() {
       <Container size="xl" px="md" py="md">
         <Stack gap="md">
           <ProfileHeader loaded={loaded} />
-          <ProfileStats attempted={profile.attempted} solved={profile.solved} mastered={profile.mastered} accuracy={profile.accuracy} />
+          <ProfileStats attempted={profile.attempted} solved={profile.solved} mastered={profile.mastered} accuracy={profile.accuracy} coins={state.profile.coins} hintsBought={state.profile.hintsBought} />
           <TopicMasteryCard due={profile.due} streak={state.streak} topics={topics} />
           <QuestionHistoryCard state={state} />
         </Stack>
@@ -96,15 +96,17 @@ function ProfileHeader(props: { loaded: boolean }) {
   );
 }
 
-function ProfileStats(props: { attempted: number; solved: number; mastered: number; accuracy: number }) {
+function ProfileStats(props: { accuracy: number; attempted: number; coins: number; hintsBought: number; mastered: number; solved: number }) {
   const cards = [
+    { label: "Coins", value: props.coins },
+    { label: "Hints Bought", value: props.hintsBought },
     { label: "Attempted", value: props.attempted },
     { label: "Solved", value: props.solved },
     { label: "Mastered", value: `${props.mastered}/${questions.length}` },
     { label: "Pass Rate", value: <NumberFormatter value={props.accuracy} suffix="%" /> }
   ];
   return (
-    <SimpleGrid cols={{ base: 2, sm: 4 }}>
+    <SimpleGrid cols={{ base: 2, sm: 6 }}>
       {cards.map((card) => (
         <Paper key={card.label} withBorder p="md">
           <Text size="xs" c="dimmed">{card.label}</Text>

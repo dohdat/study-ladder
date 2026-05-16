@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "prepare:monaco": "node scripts/copy-monaco.mjs",
+    "install:native-host": "node native/install-native-host.mjs",
     "dev": "npm run prepare:monaco && next dev --hostname 127.0.0.1 --port 3000",
     "build": "npm run prepare:monaco && next build",
     "lint": "eslint .",

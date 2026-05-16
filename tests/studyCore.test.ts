@@ -3,12 +3,16 @@ import { describe, expect, it } from "vitest";
 import { questions } from "../data/questions";
 import {
   DAY,
+  HINT_COST,
   applyScheduleResult,
+  buyHint,
+  canBuyHint,
   cloneState,
   defaultCard,
   defaultState,
   difficultyLabels,
   getCard,
+  getCoinReward,
   getDueQuestions,
   getProfileStats,
   getQuestionTimeLimitMs,
@@ -89,6 +93,7 @@ describe("studyCore", () => {
       lastResult: "pass"
     });
     expect(getCard(state, question.id).dueAt).toBe(1000 + DAY);
+    expect(state.profile.coins).toBe(getCoinReward(question));
 
     state = applyScheduleResult(state, question.id, true, "draft", 2000);
     expect(getCard(state, question.id).intervalDays).toBe(3);
@@ -111,6 +116,19 @@ describe("studyCore", () => {
     expect(card.ease).toBeCloseTo(2.18);
     expect(card.dueAt).toBe(1000 + 10 * 60 * 1000);
     expect(state.streak).toBe(0);
+    expect(state.profile.coins).toBe(0);
+  });
+
+  it("allows free hints for local hint testing", () => {
+    let state = defaultState();
+
+    expect(canBuyHint(state)).toBe(true);
+    state = buyHint(state);
+
+    expect(HINT_COST).toBe(0);
+    expect(state.profile.coins).toBe(0);
+    expect(state.profile.hintsBought).toBe(1);
+    expect(canBuyHint(state)).toBe(true);
   });
 
   it("computes profile and topic stats", () => {

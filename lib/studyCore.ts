@@ -21,9 +21,11 @@ const PASS_EASE_BONUS = 0.08;
 const MIN_EASE = 1.4;
 const FAIL_EASE_PENALTY = 0.22;
 const FAIL_REVIEW_DELAY_MINUTES = 10;
+const COINS_PER_DIFFICULTY = 10;
 
 export const DAY = HOURS_PER_DAY * MINUTES_PER_HOUR * SECONDS_PER_MINUTE * MS_PER_SECOND;
 export const MASTERED_REPS = 3;
+export const HINT_COST = 0;
 
 export const difficultyLabels: Record<Question["difficulty"], string> = {
   1: "Easy",
@@ -51,6 +53,8 @@ export const defaultState = (): StudyState => ({
   totalCorrect: 0,
   streak: 0,
   profile: {
+    coins: 0,
+    hintsBought: 0,
     startedAt: Date.now(),
     lastStudiedAt: null
   },
@@ -99,6 +103,25 @@ export const setCard = (state: StudyState, questionId: string, card: CardState) 
 };
 
 export const isMasteredCard = (card: CardState) => card.correct >= MASTERED_REPS && card.reps >= MASTERED_REPS;
+
+export const getCoinReward = (question: Question) => question.difficulty * COINS_PER_DIFFICULTY;
+
+export const canBuyHint = (state: StudyState) => state.profile.coins >= HINT_COST;
+
+export const buyHint = (state: StudyState) => {
+  if (!canBuyHint(state)) {
+    return state;
+  }
+
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      coins: state.profile.coins - HINT_COST,
+      hintsBought: state.profile.hintsBought + 1
+    }
+  };
+};
 
 export const getRecommendedDifficulty = (state: StudyState) => {
   return Math.min(MAX_DIFFICULTY, 1 + Math.floor(state.totalCorrect / CORRECTS_PER_DIFFICULTY)) as Question["difficulty"];
@@ -186,10 +209,12 @@ export const applyScheduleResult = (state: StudyState, questionId: string, passe
   next.profile.lastStudiedAt = now;
 
   if (passed) {
+    const question = questions.find((row) => row.id === questionId);
     card.correct += 1;
     card.reps += 1;
     next.totalCorrect += 1;
     next.streak += 1;
+    next.profile.coins += question ? getCoinReward(question) : 0;
     if (card.reps === 1) {
       card.intervalDays = 1;
     } else if (card.reps === SECOND_REVIEW_REPS) {
