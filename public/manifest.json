@@ -15,6 +15,7 @@
     "pages": ["sandbox.html"]
   },
   "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; object-src 'self'",
     "sandbox": "sandbox allow-scripts; script-src 'self' 'unsafe-eval'; worker-src 'self'; object-src 'self'"
   }
 }

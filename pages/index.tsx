@@ -17,7 +17,7 @@ import { IconUser } from "@tabler/icons-react";
 import { loader } from "@monaco-editor/react";
 import type { OnMount } from "@monaco-editor/react";
 
-import { CoinAmount } from "../components/CoinIcon";
+import { CoinIcon } from "../components/CoinIcon";
 import { PracticeArea } from "../components/PracticePanels";
 import type { PracticePanelActions } from "../components/PracticePanels";
 import { questions } from "../data/questions";
@@ -82,6 +82,11 @@ type PracticeActions = PracticePanelActions;
 function useMonacoAssets() {
   useEffect(() => {
     const monacoBaseUrl = new URL("monaco/vs", window.location.href).toString().replace(/\/$/, "");
+    (window as typeof window & {
+      MonacoEnvironment?: { getWorkerUrl: (_workerId: string, _label: string) => string };
+    }).MonacoEnvironment = {
+      getWorkerUrl: () => `${monacoBaseUrl}/base/worker/workerMain.js`
+    };
     loader.config({ paths: { vs: monacoBaseUrl } });
   }, []);
 }
@@ -530,17 +535,35 @@ function AppHeader(props: { modeValue: string; setState: React.Dispatch<React.Se
 
 function SummaryCards(props: { coins: number; dueCount: number; mastered: number; streak: number }) {
   const cards = [
-    { label: "Coins", value: <CoinAmount value={props.coins} /> },
+    {
+      label: "Coins",
+      value: (
+        <Group gap={6} align="center" wrap="nowrap">
+          <CoinIcon size={22} />
+          <Text fw={700} size="lg" lh={1}>{props.coins}</Text>
+        </Group>
+      )
+    },
     { label: "Due", value: props.dueCount },
     { label: "Mastered", value: `${props.mastered}/${questions.length}` },
     { label: "Streak", value: props.streak }
   ];
   return (
-    <SimpleGrid cols={{ base: 2, sm: 4 }}>
+    <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="xs">
       {cards.map((card) => (
-        <Paper key={card.label} withBorder p="md">
-          <Text size="xs" c="dimmed">{card.label}</Text>
-          <Title order={3}>{card.value}</Title>
+        <Paper
+          key={card.label}
+          withBorder
+          px="sm"
+          py={7}
+          style={{ alignItems: "center", display: "flex", justifyContent: "space-between", minHeight: 42 }}
+        >
+          <Text size="xs" c="dimmed" lh={1}>{card.label}</Text>
+          {typeof card.value === "number" || typeof card.value === "string" ? (
+            <Text fw={700} size="lg" lh={1}>{card.value}</Text>
+          ) : (
+            card.value
+          )}
         </Paper>
       ))}
     </SimpleGrid>
