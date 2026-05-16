@@ -12,36 +12,282 @@ const RED_RATING_MIN = 3000;
 const ORANGE_RATING_MIN = 2400;
 const YELLOW_RATING_MIN = 1800;
 const BLUE_RATING_MIN = 1400;
-const AVATAR_SIZE = 66;
-const PIXEL_SIZE = 6;
-const GRID_CELLS = 11;
+const AVATAR_SIZE = 88;
+const PIXEL_SIZE = 3;
+const GRID_CELLS = 24;
 const PIXEL_GAP = 0;
-const ENEMY_NAMES: Record<Difficulty, string> = {
-  1: "Buglet",
-  2: "Bit Imp",
-  3: "Rune Brute",
-  4: "Abyss Knight",
-  5: "Void Dragon"
+const AVATAR_BORDER_WIDTH = 2;
+const AVATAR_SHADOW_WIDTH = 2;
+
+type MonsterKind = "brute" | "demon" | "dragon" | "ranger" | "reaper" | "skeleton" | "slime" | "snake";
+
+type MonsterPalette = {
+  accent: string;
+  light: string;
+  mid: string;
+  outline: string;
+  shade: string;
 };
 
-const ENEMY_COLORS: Record<Difficulty, { accent: string; body: string; eye: string; horn: string; shadow: string }> = {
-  1: { accent: "#8ce99a", body: "#40c057", eye: "#fff3bf", horn: "#d8f5a2", shadow: "#2b8a3e" },
-  2: { accent: "#66d9e8", body: "#1098ad", eye: "#ffd43b", horn: "#99e9f2", shadow: "#0b7285" },
-  3: { accent: "#c084fc", body: "#7e22ce", eye: "#ffec99", horn: "#e9d5ff", shadow: "#581c87" },
-  4: { accent: "#ff8787", body: "#c92a2a", eye: "#ffe066", horn: "#ffa8a8", shadow: "#801515" },
-  5: { accent: "#f06595", body: "#862e9c", eye: "#fff3bf", horn: "#ffdeeb", shadow: "#3b0a45" }
+type MonsterDefinition = {
+  form: string[];
+  name: string;
+  palette: MonsterPalette;
+};
+
+const PIXEL_COLOR_KEYS: Record<string, keyof MonsterPalette> = {
+  A: "accent",
+  L: "light",
+  M: "mid",
+  O: "outline",
+  S: "shade"
+};
+
+const QUESTION_MONSTERS: Record<string, MonsterKind> = {
+  "array-first-duplicate": "slime",
+  "array-merge-intervals": "brute",
+  "array-two-sum": "ranger",
+  "binary-search-rotated": "reaper",
+  "dp-climb-cost": "brute",
+  "dp-coin-change": "dragon",
+  "graph-shortest-path": "reaper",
+  "heap-top-k": "demon",
+  "stack-valid-brackets": "skeleton",
+  "string-longest-unique": "snake",
+  "string-valid-palindrome": "skeleton",
+  "tree-level-order": "demon"
+};
+
+const FALLBACK_MONSTERS: Record<Difficulty, MonsterKind> = {
+  1: "slime",
+  2: "ranger",
+  3: "brute",
+  4: "demon",
+  5: "dragon"
+};
+
+const MONSTERS: Record<MonsterKind, MonsterDefinition> = {
+  slime: {
+    name: "Moss Slime",
+    palette: palette("#17351f", "#225f34", "#45a54b", "#8de96f", "#7b1f32"),
+    form: frame([
+      "........OOOOOO........",
+      "......OOOLLLLOO.......",
+      ".....OOLLLLLLLOO......",
+      "....OOLLLLLLLLLLO.....",
+      "...OOLLLLLLLLLLLLO....",
+      "...OLLLLLAAALLLLLO....",
+      "..OLLLLLAAMMALLLLO....",
+      "..OLLLLLAAMMALLLLO....",
+      ".OLLLLLMMMMMSSLLLO....",
+      ".OLLLLMMMMSSSSSLLO....",
+      ".OLLLMMMSSSSSSSMO.....",
+      "..OLMMMSSSSSSMMO......",
+      "...OOMMMMMMMOOO.......",
+      ".....OOOMMMOO.........",
+      "......OO..OO..........",
+      ".....OO....OO.........",
+      "......................",
+      "......................",
+      "......................",
+      "......................"
+    ])
+  },
+  ranger: {
+    name: "Goblin Ranger",
+    palette: palette("#10251a", "#1f6a37", "#35b34a", "#79ef61", "#c46b22"),
+    form: frame([
+      "............AA........",
+      "...........AA.........",
+      ".......OOOOAA.........",
+      "......OMMOOA..........",
+      ".....OMLLMO...........",
+      "....OMLAALMO..........",
+      "....OMMMMOO....A......",
+      "...OOMMSMMOO..AA......",
+      "...OMMSSSMMOOAA.......",
+      "....OMSSSSMMOA........",
+      ".....OMMMMMOA.........",
+      "....OOOMMMOO..........",
+      "...OO..MMM..OO........",
+      ".......MSSM...........",
+      "......OO..OO..........",
+      ".....OO....OO.........",
+      "......................",
+      "......................",
+      "......................",
+      "......................"
+    ])
+  },
+  snake: {
+    name: "Coil Viper",
+    palette: palette("#2c160f", "#773a2b", "#c97848", "#ffbf87", "#ffec99"),
+    form: frame([
+      "..............OOOO....",
+      "............OOLAAO....",
+      "...........OLLLMMO....",
+      "..........OLLLSSO.....",
+      ".........OLLLSO.......",
+      "........OLLLSO........",
+      ".......OLLLSO.........",
+      "......OLLLSO..........",
+      ".....OLLLSO...........",
+      "....OLLLSOOO..........",
+      "...OLLLSOOMMOO........",
+      "..OLLLSOOMSSMMO.......",
+      "..OLLSOOMSSSSMO.......",
+      "...OOOMMSSSSMMO.......",
+      ".....OOMMMMMOO........",
+      ".......OOSSOO.........",
+      "......................",
+      "......................",
+      "......................",
+      "......................"
+    ])
+  },
+  skeleton: {
+    name: "Bone Soldier",
+    palette: palette("#191527", "#6f6680", "#b9b0a4", "#f0e8d8", "#8fb3ff"),
+    form: frame([
+      "........OOOOOO........",
+      ".......OLLLLLO........",
+      "......OLMAAMLO........",
+      "......OLMMMLOO....A...",
+      ".......OLMMO......A...",
+      ".....OOOMMMOO.....A...",
+      "....OMMOMMMOMM....A...",
+      "...OMMOOMMMOOMM...A...",
+      "..OMMO..MMM..MMO.AA...",
+      ".......OMMMO...AAA....",
+      "........MMMO..........",
+      ".......OMMMO..........",
+      "......OM...MO.........",
+      ".....OM.....MO........",
+      "....OO.......OO.......",
+      "...OO.........OO......",
+      "......................",
+      "......................",
+      "......................",
+      "......................"
+    ])
+  },
+  brute: {
+    name: "Stone Brute",
+    palette: palette("#2a2430", "#625957", "#a89a93", "#d8cec8", "#ffcf5a"),
+    form: frame([
+      ".......OOOOOOOO.......",
+      ".....OOOMMMMMMOO......",
+      "....OOMMLLLLMMMOO.....",
+      "...OMMLSSSSSLLMMO.....",
+      "..OMMMSLAAALSMMMO.....",
+      "..OMMMLLLLLLLMMMO.....",
+      ".OMMMMLSSSSSLMMMOO....",
+      ".OMMMLLLLLLLLLMMO.....",
+      "OMMMSSLLLLLLSSMMMO....",
+      "OMMS..LLLLLL..SMMO....",
+      ".OO...LSSSSL...OO.....",
+      "......LSSSSL..........",
+      ".....OMMMMMMO.........",
+      "....OO.....OO.........",
+      "...OO.......OO........",
+      "......................",
+      "......................",
+      "......................",
+      "......................",
+      "......................"
+    ])
+  },
+  demon: {
+    name: "Horned Fiend",
+    palette: palette("#24090b", "#761616", "#c92a2a", "#ff6b6b", "#ffd35a"),
+    form: frame([
+      "O....................O",
+      ".O......OOOO......O...",
+      "..O...OOMMMOO...O.....",
+      "...O.OMSSSSMO.O.......",
+      "....OMMLLLLMMO........",
+      "...OMMLAAALLMMO.......",
+      "..OMMMMMMMMMMMMO......",
+      ".OMMMMAAAAAMMMMOO.....",
+      "OMMMMLSSSSLMMMMOA.....",
+      "OMMMMMLLLLMMMMMOA.....",
+      ".OMMMMMMMMMMMMO.AA....",
+      "..OMMSSMMSSMMO.AA.....",
+      "...OOMMMMMMOO.AA......",
+      "..OO.MM..MM.OO........",
+      ".....SS..SS...........",
+      "....OO....OO..........",
+      "...OO......OO.........",
+      "......................",
+      "......................",
+      "......................"
+    ])
+  },
+  reaper: {
+    name: "Moon Reaper",
+    palette: palette("#0b0616", "#1f1238", "#4c1d95", "#8b5cf6", "#93c5fd"),
+    form: frame([
+      ".............AAAAA....",
+      "...........AALLLLA....",
+      "..........AA....LA....",
+      ".......OOOOO.....A....",
+      "......OMMMMOO....A....",
+      ".....OMMSSMMMO...A....",
+      "....OMMSAASMMOAAAA....",
+      "....OMMSSSSMMO........",
+      "...OMMSSLLSSMMO.......",
+      "...OMMLLSSLLMMO.......",
+      "....OMMMMMMMMMO.......",
+      ".....OMMSSMMMO........",
+      "......OMMMMMO.........",
+      ".....OO.MMM.OO........",
+      "....OO..SSS..OO.......",
+      "........S.S...........",
+      ".......OO.OO..........",
+      "......................",
+      "......................",
+      "......................"
+    ])
+  },
+  dragon: {
+    name: "Void Dragon",
+    palette: palette("#100318", "#3b0a45", "#862e9c", "#f06595", "#66d9e8"),
+    form: frame([
+      "O........AAA........O.",
+      ".O......ALLA......O...",
+      "..O...OALLLLAO...O....",
+      "...O.OMSSSSMMO.O......",
+      "....OMMLLLLMMO........",
+      "...OMMLAAALLMMO.......",
+      "..OMMMMMMMMMMMO.......",
+      ".OMMMMAAAAAMMMMOO.....",
+      "OMMMMLSSSSLMMMMOA.....",
+      "OMMMMMLLLLMMMMMOA.....",
+      "OMMMMMMMMMMMMMMOA.....",
+      ".OMSSSSMMSSSSMO.AA....",
+      "A.OOMMMMMMMMOO.AA.....",
+      "AAO.MMSSMMSS.OAA......",
+      ".A..MM..MM..M.A.......",
+      "....SS..SS..S.........",
+      "...OO....OO..OO.......",
+      "..OO......OO..OO......",
+      "......................",
+      "......................"
+    ])
+  }
 };
 
 export function MonsterEncounter(props: { question: Question }) {
   const health = getMonsterHealth(props.question);
+  const monster = getMonsterDefinition(props.question);
   return (
     <Paper withBorder p="xs" mt="md" bg="dark.7">
       <Group gap="sm" wrap="nowrap" align="center">
-        <MonsterAvatar difficulty={props.question.difficulty} />
+        <MonsterAvatar monster={monster} />
         <Box flex={1}>
           <Group justify="space-between" gap="xs" mb={4}>
             <Box>
-              <Text size="sm" fw={800}>{ENEMY_NAMES[props.question.difficulty]}</Text>
+              <Text size="sm" fw={800}>{monster.name}</Text>
               <Text size="xs" c="dimmed">Question Rating {props.question.rating}</Text>
             </Box>
             <Badge color={getRatingColor(props.question.rating)} variant="light">{props.question.rating}</Badge>
@@ -57,16 +303,16 @@ export function MonsterEncounter(props: { question: Question }) {
   );
 }
 
-function MonsterAvatar(props: { difficulty: Difficulty }) {
-  const colors = ENEMY_COLORS[props.difficulty];
-  const pixels = getMonsterPixels(props.difficulty);
+function MonsterAvatar(props: { monster: MonsterDefinition }) {
+  const colors = props.monster.palette;
+  const pixels = getMonsterPixels(props.monster);
   return (
     <Box
       aria-hidden
       style={{
-        background: `linear-gradient(135deg, ${colors.shadow}, ${colors.body})`,
-        border: `2px solid ${colors.accent}`,
-        boxShadow: `0 0 0 2px ${colors.shadow}`,
+        background: colors.outline,
+        border: `${AVATAR_BORDER_WIDTH}px solid ${colors.light}`,
+        boxShadow: `0 0 0 ${AVATAR_SHADOW_WIDTH}px ${colors.outline}`,
         display: "grid",
         flex: `0 0 ${AVATAR_SIZE}px`,
         gap: PIXEL_GAP,
@@ -91,94 +337,25 @@ function MonsterAvatar(props: { difficulty: Difficulty }) {
   );
 }
 
-function getMonsterPixels(difficulty: Difficulty) {
-  const forms: Record<Difficulty, string[]> = {
-    1: [
-      "...........",
-      "...........",
-      "...BBBBB...",
-      "..BBBBBBB..",
-      "..BEEBEEB..",
-      "..BBBBBBB..",
-      "...BTTTB...",
-      "..BBBBBBB..",
-      ".BB.....BB.",
-      "...........",
-      "..........."
-    ],
-    2: [
-      "...........",
-      "..H.....H..",
-      "...BBBBB...",
-      "..BBBBBBB..",
-      ".BBEBBEBB.",
-      ".BBBBBBBBB.",
-      "..BBTTTBB..",
-      "...BBBBB...",
-      "..BB...BB..",
-      ".BB.....BB.",
-      "..........."
-    ],
-    3: [
-      ".H.......H.",
-      "..H.....H..",
-      "...BBBBB...",
-      ".BBBBBBBBB.",
-      ".BBEBBEBB.",
-      "BBBBBBBBBBB",
-      "..BBTTTBB..",
-      ".BBBBBBBBB.",
-      ".BB.BBB.BB.",
-      "BB.......BB",
-      "..........."
-    ],
-    4: [
-      "H.........H",
-      ".H.......H.",
-      "..BBBBBBB..",
-      ".BBBBBBBBB.",
-      "BBBEBBBEBBB",
-      "BBBBBBBBBBB",
-      ".BBTTTTTBB.",
-      "..BBBBBBB..",
-      ".BBB.B.BBB.",
-      "BB.B...B.BB",
-      "..........."
-    ],
-    5: [
-      "H...BBB...H",
-      ".H.BBBBB.H.",
-      "H.BBBBBBB.H",
-      ".BBBBBBBBB.",
-      "BBBEBBBEBBB",
-      "BBBBBBBBBBB",
-      "BBTTTTTTTBB",
-      ".BBBBBBBBB.",
-      "BBBB.B.BBBB",
-      "BB.BB.BB.BB",
-      "W.........W"
-    ]
-  };
-  return forms[difficulty].join("").split("");
+function palette(outline: string, shade: string, mid: string, light: string, accent: string): MonsterPalette {
+  return { accent, light, mid, outline, shade };
 }
 
-function getPixelColor(pixel: string, colors: (typeof ENEMY_COLORS)[Difficulty]) {
-  if (pixel === "B") {
-    return colors.body;
-  }
-  if (pixel === "E") {
-    return colors.eye;
-  }
-  if (pixel === "H") {
-    return colors.horn;
-  }
-  if (pixel === "T") {
-    return "#f8f9fa";
-  }
-  if (pixel === "W") {
-    return colors.accent;
-  }
-  return "transparent";
+function frame(rows: string[]) {
+  return ["........................", "........................", ...rows.map((row) => `.${row}.`), "........................", "........................"];
+}
+
+function getMonsterDefinition(question: Question) {
+  return MONSTERS[QUESTION_MONSTERS[question.id] || FALLBACK_MONSTERS[question.difficulty]];
+}
+
+function getMonsterPixels(monster: MonsterDefinition) {
+  return monster.form.join("").split("");
+}
+
+function getPixelColor(pixel: string, colors: MonsterPalette) {
+  const colorKey = PIXEL_COLOR_KEYS[pixel];
+  return colorKey ? colors[colorKey] : "transparent";
 }
 
 function getMonsterHealth(question: Question) {
