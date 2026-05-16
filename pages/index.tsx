@@ -11,6 +11,7 @@ import type { OnMount } from "@monaco-editor/react";
 
 import { PracticeArea } from "../components/PracticePanels";
 import type { PracticePanelActions } from "../components/PracticePanels";
+import { DeathResetModal } from "../components/DeathResetModal";
 import { PlayerStatus } from "../components/PlayerStatus";
 import { RewardNotifications } from "../components/RewardNotifications";
 import type { RewardNotification } from "../components/RewardNotifications";
@@ -19,6 +20,7 @@ import { UserMenu } from "../components/UserMenu";
 import { questions } from "../data/questions";
 import { useCodexHintStream } from "../hooks/useCodexHintStream";
 import { useFullscreenGuard } from "../hooks/useFullscreenGuard";
+import { useStudyNotifications } from "../hooks/useStudyNotifications";
 import { beautifyCode } from "../lib/codeFormat";
 import {
   applyScheduleResult,
@@ -29,8 +31,6 @@ import {
   defaultState,
   getCard,
   getDueQuestions,
-  getCoinReward,
-  getExperienceReward,
   getLevelProgress,
   getProfileStats,
   getQuestionTimeLimitMs,
@@ -53,7 +53,6 @@ const TIMER_PAD = 2;
 const NUMBER_BASE_HEX = 16;
 const PERCENT_MAX = 100;
 const MAX_FAILED_TESTS_IN_STATUS = 3;
-const REWARD_TOAST_TIMEOUT_MS = 2400;
 const RUNNER_FRAME = "sandbox.html";
 const STATUS_COLOR = {
   default: "gray",
@@ -213,6 +212,7 @@ function expireQuestion(params: Parameters<typeof useTimerInterval>[0]) {
 function useRunnerMessages(params: {
   currentQuestion: Question | null;
   failAndAdvance: FailAndAdvance;
+  showHealthLoss: () => void;
   showRewards: (question: Question) => void;
   updateSchedule: (passed: boolean, draft?: string) => void;
   setState: React.Dispatch<React.SetStateAction<StudyState>>;
@@ -251,6 +251,7 @@ function handleRunMessage(message: RunnerMessage, params: Parameters<typeof useR
   }
   if (!message.ok) {
     const failedResults = message.results.filter((result) => !result.pass);
+    params.showHealthLoss();
     params.setState((previous) => applyHealthPenalty(previous));
     params.setResults(failedResults);
     params.setTone("fail");
@@ -307,6 +308,7 @@ function usePracticeActions(params: {
   runnerFrame: React.MutableRefObject<HTMLIFrameElement | null>;
   clearHint: () => void;
   startHint: (prompt: string, localHint?: string) => void;
+  showHealthLoss: () => void;
   showRewards: (question: Question) => void;
 }): PracticeActions {
   const updateDraft = useUpdateDraft(params);
@@ -478,6 +480,7 @@ function useFailAndAdvance(params: {
   activeRunId: React.MutableRefObject<string | null>;
   runTimer: React.MutableRefObject<number | null>;
   clearHint: () => void;
+  showHealthLoss: () => void;
 }) {
   const { activeRunId, code, currentQuestion, runTimer, setCode, setCurrentQuestion, setResults, setRunning, setSessionStarted, setState, setStatus, setTone, state } = params;
   return useCallback((message: string, draft = code) => {
@@ -489,6 +492,7 @@ function useFailAndAdvance(params: {
     const nextState = { ...scheduled, currentId: picked.id };
     activeRunId.current = null;
     clearRunTimer(runTimer);
+    params.showHealthLoss();
     setRunning(false);
     setResults([]);
     setTone("fail");
@@ -546,21 +550,6 @@ function AppHeader(props: {
   );
 }
 
-function useRewardNotifications(setRewardNotifications: React.Dispatch<React.SetStateAction<RewardNotification[]>>) {
-  return useCallback((question: Question) => {
-    const createdAt = Date.now();
-    const items: RewardNotification[] = [
-      { amount: getCoinReward(question), id: `${question.id}-gold-${createdAt}`, kind: "gold" },
-      { amount: getExperienceReward(question), id: `${question.id}-experience-${createdAt}`, kind: "experience" }
-    ];
-    const itemIds = new Set(items.map((item) => item.id));
-    setRewardNotifications((current) => [...current, ...items]);
-    window.setTimeout(() => {
-      setRewardNotifications((current) => current.filter((item) => !itemIds.has(item.id)));
-    }, REWARD_TOAST_TIMEOUT_MS);
-  }, [setRewardNotifications]);
-}
-
 export default function Home() {
   const [state, setState] = useState<StudyState>(() => defaultState());
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
@@ -576,14 +565,31 @@ export default function Home() {
   const runTimer = useRef<number | null>(null);
   const runnerFrame = useRef<HTMLIFrameElement | null>(null);
   const hints = useCodexHintStream(setRunStatus, setRunTone);
-  const showRewards = useRewardNotifications(setRewardNotifications);
+  const { showHealthLoss, showRewards } = useStudyNotifications(setRewardNotifications);
   useMonacoAssets();
   const hydrated = useHydrateStudy(setState, setCurrentQuestion, setCode);
   usePersistStudy(state, hydrated, setRunTone, setRunStatus);
-  const failAndAdvance = useFailAndAdvance({ code, currentQuestion, setCode, setCurrentQuestion, setResults, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, clearHint: hints.clearHint });
+  const failAndAdvance = useFailAndAdvance({ code, currentQuestion, setCode, setCurrentQuestion, setResults, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, clearHint: hints.clearHint, showHealthLoss });
   const timer = useQuestionTimer({ code, currentQuestion, failAndAdvance, sessionStarted, mode: state.mode, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer });
-  const actions = usePracticeActions({ code, currentQuestion, failAndAdvance, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setResults, setRunnerReady, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame, clearHint: hints.clearHint, startHint: hints.startHint, showRewards });
-  useFullscreenGuard({ active: state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished, failQuestion: failAndAdvance, setStatus: setRunStatus, setTone: setRunTone });
+  const actions = usePracticeActions({ code, currentQuestion, failAndAdvance, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setResults, setRunnerReady, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame, clearHint: hints.clearHint, startHint: hints.startHint, showHealthLoss, showRewards });
+  const resetAfterDeath = useCallback(() => {
+    const freshState = defaultState();
+    const picked = pickQuestion(freshState, null);
+    activeRunId.current = null;
+    clearRunTimer(runTimer);
+    setRunning(false);
+    setResults([]);
+    setSessionStarted(false);
+    setRewardNotifications([]);
+    setState({ ...freshState, currentId: picked.id });
+    setCurrentQuestion(picked);
+    setCode(picked.starter);
+    setRunTone("default");
+    setRunStatus("Character reset to level 1.");
+    hints.clearHint();
+  }, [hints, runTimer]);
+  const isDead = state.profile.health <= 0;
+  useFullscreenGuard({ active: state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished && !isDead, failQuestion: failAndAdvance, setStatus: setRunStatus, setTone: setRunTone });
   const profile = useMemo(() => getProfileStats(state), [state]);
   const dueCount = useMemo(() => getDueQuestions(state).length, [state]);
   const levelProgress = useMemo(() => getLevelProgress(state), [state]);
@@ -592,6 +598,7 @@ export default function Home() {
     <>
       <Head><title>Study Ladder</title></Head>
       <RewardNotifications items={rewardNotifications} />
+      <DeathResetModal opened={isDead} onReset={resetAfterDeath} />
       <Container fluid px="md" py="md" w={{ base: "100%", lg: "70%" }}>
         <Stack gap="md">
           <AppHeader
