@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { questions } from "../data/questions";
-import { createHintPrompt, requestCodexHint } from "../lib/hintPrompt";
+import { createHintPrompt, requestCodexHint, warmCodexHint } from "../lib/hintPrompt";
 
 const LONG_CODE_LENGTH = 1900;
-const TRUNCATED_PROMPT_LENGTH = 1800;
+const TRUNCATED_PROMPT_LENGTH = 900;
 
 function setChromeRuntime(runtime?: unknown) {
   Object.defineProperty(globalThis, "chrome", {
@@ -22,10 +22,9 @@ describe("hintPrompt", () => {
   it("asks Codex for one next step with partial code, not the solution", () => {
     const prompt = createHintPrompt(questions[0], "function firstDuplicate(nums) {}");
 
-    expect(prompt).toContain("Give me exactly one next-step hint with a small JavaScript code fragment.");
-    expect(prompt).toContain("must be intentionally incomplete");
-    expect(prompt).toContain("Do not include the full function");
-    expect(prompt).toContain("Use a TODO comment");
+    expect(prompt).toContain("Give one fast next-step hint");
+    expect(prompt).toContain("one incomplete JS fragment of at most 2 lines");
+    expect(prompt).toContain("Do not solve the whole problem");
     expect(prompt).toContain(questions[0].title);
     expect(prompt).toContain("function firstDuplicate");
   });
@@ -52,6 +51,14 @@ describe("hintPrompt", () => {
 
     await expect(requestCodexHint("next move")).resolves.toEqual({ ok: true });
     expect(sendMessage).toHaveBeenCalledWith({ prompt: "next move", type: "open-codex-hint" }, expect.any(Function));
+  });
+
+  it("sends warmup requests through the Chrome runtime", async () => {
+    const sendMessage = vi.fn((_message, callback) => callback({ ok: true }));
+    setChromeRuntime({ sendMessage });
+
+    await expect(warmCodexHint()).resolves.toEqual({ ok: true });
+    expect(sendMessage).toHaveBeenCalledWith({ type: "warm-codex-hint" }, expect.any(Function));
   });
 
   it("uses Chrome runtime lastError when the background does not respond", async () => {

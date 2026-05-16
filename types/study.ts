@@ -16,6 +16,7 @@ export type Question = {
   constraints: string[];
   starter: string;
   examples: Array<{
+    explanation?: string;
     input: string;
     output: string;
   }>;
@@ -42,6 +43,8 @@ export type StudyState = {
   streak: number;
   profile: {
     coins: number;
+    experience: number;
+    health: number;
     hintsBought: number;
     startedAt: number;
     lastStudiedAt: number | null;

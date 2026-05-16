@@ -13,6 +13,8 @@ const READY_ATTEMPTS = 100;
 const READY_DELAY_MS = 150;
 const TURN_TIMEOUT_MS = 120000;
 const STDERR_LIMIT = 8000;
+const HINT_EFFORT = "low";
+const DEFAULT_HINT_MODEL = "gpt-5.3-codex-spark-preview";
 const DEFAULT_NODE_PATH = "C:\\nvm4w\\nodejs\\node.exe";
 const DEFAULT_CODEX_JS_PATH = "C:\\nvm4w\\nodejs\\node_modules\\@openai\\codex\\bin\\codex.js";
 const CLIENT_INFO = { name: "study-ladder", title: "Study Ladder", version: "0.2.0" };
@@ -20,15 +22,17 @@ const HOST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.dirname(HOST_DIR);
 const DEVELOPER_INSTRUCTIONS = [
   "You are embedded in Study Ladder, a JavaScript interview-practice Chrome extension.",
-  "Give exactly one next-step hint for the current question and code.",
-  "Include up to 3 lines of partial JavaScript that show only the next useful move.",
+  "Give exactly one fast next-step hint for the current question and code.",
+  "Use one short sentence and up to 2 lines of partial JavaScript.",
   "The code must be an incomplete fragment, not a runnable implementation.",
   "Do not include the full function, a complete loop, final return path, final code, or complete algorithm.",
-  "Use a TODO comment or placeholder when the next line would finish the solution.",
-  "Keep the hint concise and actionable."
+  "Keep the whole hint under 45 words."
 ].join("\n");
 
 let pendingInput = Buffer.alloc(BUFFER_START);
+let appServerPromise = null;
+let codexSessionPromise = null;
+let hintQueue = Promise.resolve();
 
 process.stdin.on("data", handleNativeData);
 process.stdin.on("end", handleNativeEnd);
@@ -64,12 +68,19 @@ function handleNativeMessage(payload) {
     return;
   }
 
+  if (message?.type === "warm") {
+    warmCodexSession().catch((error) => {
+      sendNativeMessage({ type: "codex-hint-error", error: getErrorMessage(error) });
+    });
+    return;
+  }
+
   if (message?.type !== "hint" || typeof message.prompt !== "string") {
     sendNativeMessage({ type: "codex-hint-error", error: "Native host received an invalid hint request." });
     return;
   }
 
-  runHintRequest(message.prompt).catch((error) => {
+  hintQueue = hintQueue.then(() => runHintRequest(message.prompt)).catch((error) => {
     sendNativeMessage({ type: "codex-hint-error", error: getErrorMessage(error) });
   });
 }
@@ -87,13 +98,55 @@ async function runHintRequest(prompt) {
     throw new Error("Node WebSocket support is unavailable. Use Node 22 or newer for the native host.");
   }
 
-  const appServer = await startAppServer();
-  try {
-    const text = await streamCodexHint(appServer.port, prompt);
-    sendNativeMessage({ type: "codex-hint-done", text });
-  } finally {
-    stopAppServer(appServer);
+  const session = await warmCodexSession();
+  const text = await streamCodexHint(session, prompt);
+  sendNativeMessage({ type: "codex-hint-done", text });
+}
+
+async function warmHintServer() {
+  if (!appServerPromise) {
+    appServerPromise = startAppServer().then((appServer) => {
+      appServer.childExitPromise.catch(() => {
+        if (appServerPromise) {
+          appServerPromise = null;
+        }
+        codexSessionPromise = null;
+      });
+      return appServer;
+    }).catch((error) => {
+      appServerPromise = null;
+      throw error;
+    });
   }
+  return await appServerPromise;
+}
+
+async function warmCodexSession() {
+  if (!codexSessionPromise) {
+    codexSessionPromise = createCodexSession().catch((error) => {
+      codexSessionPromise = null;
+      throw error;
+    });
+  }
+  return await codexSessionPromise;
+}
+
+async function createCodexSession() {
+  const appServer = await warmHintServer();
+  const ws = await connectWebSocket(`ws://127.0.0.1:${appServer.port}`);
+  const state = createCodexState();
+  ws.addEventListener("close", resetCodexSession);
+  ws.addEventListener("error", resetCodexSession);
+  await sendCodexRequest(ws, state, "initialize", {
+    capabilities: { experimentalApi: true },
+    clientInfo: CLIENT_INFO
+  });
+  await startCodexThread(ws, state);
+  return { state, ws };
+}
+
+function resetCodexSession() {
+  codexSessionPromise = null;
 }
 
 async function startAppServer() {
@@ -202,27 +255,21 @@ function delay(ms) {
   });
 }
 
-async function streamCodexHint(port, prompt) {
-  const ws = await connectWebSocket(`ws://127.0.0.1:${port}`);
+async function streamCodexHint(session, prompt) {
   const turnTimeout = createTimeout(TURN_TIMEOUT_MS);
-  const state = createCodexState();
+  const { state, ws } = session;
+  resetTurnState(state);
   try {
     const turnCompletion = createTurnCompletion(ws, state);
-    await sendCodexRequest(ws, state, "initialize", {
-      capabilities: { experimentalApi: true },
-      clientInfo: CLIENT_INFO
-    });
-    await startCodexThread(ws, state);
     await sendCodexRequest(ws, state, "turn/start", {
       approvalPolicy: "never",
-      effort: "medium",
+      effort: HINT_EFFORT,
       input: [{ type: "text", text: prompt, text_elements: [] }],
       threadId: state.threadId
     });
     return await Promise.race([turnCompletion.promise, turnTimeout.promise]);
   } finally {
     turnTimeout.cancel();
-    ws.close();
   }
 }
 
@@ -237,6 +284,12 @@ function createCodexState() {
   };
 }
 
+function resetTurnState(state) {
+  state.accumulatedText = "";
+  state.fallbackText = "";
+  state.turnCompleted = false;
+}
+
 async function startCodexThread(ws, state) {
   const result = await sendCodexRequest(ws, state, "thread/start", {
     approvalPolicy: "never",
@@ -244,7 +297,7 @@ async function startCodexThread(ws, state) {
     developerInstructions: DEVELOPER_INSTRUCTIONS,
     ephemeral: true,
     experimentalRawEvents: true,
-    model: null,
+    model: process.env.CODEX_HINT_MODEL || DEFAULT_HINT_MODEL,
     persistExtendedHistory: false,
     sandbox: "read-only",
     sessionStartSource: "clear"

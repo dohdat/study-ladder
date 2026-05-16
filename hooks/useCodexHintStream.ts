@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
-import { CODEX_HINT_CHUNK, CODEX_HINT_DONE, CODEX_HINT_ERROR, requestCodexHint } from "../lib/hintPrompt";
+import { CODEX_HINT_CHUNK, CODEX_HINT_DONE, CODEX_HINT_ERROR, requestCodexHint, warmCodexHint } from "../lib/hintPrompt";
 import type { CodexHintStreamMessage } from "../lib/hintPrompt";
 
 type StatusTone = "default" | "pass" | "fail";
@@ -43,6 +43,10 @@ export function useCodexHintStream(setStatus: (status: string) => void, setTone:
     runtime.onMessage.addListener(handleRuntimeMessage);
     return () => runtime.onMessage?.removeListener(handleRuntimeMessage);
   }, [setStatus, setTone]);
+
+  useEffect(() => {
+    warmCodexHint();
+  }, []);
 
   return { clearHint, hintError, hintStreaming, hintText, startHint };
 }

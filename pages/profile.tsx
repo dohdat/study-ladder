@@ -20,7 +20,7 @@ import { IconArrowLeft } from "@tabler/icons-react";
 
 import { CoinAmount } from "../components/CoinIcon";
 import { questions } from "../data/questions";
-import { defaultState, getCard, getProfileStats, getTopicStats, isMasteredCard, normalizeStudyState } from "../lib/studyCore";
+import { MAX_HEALTH, defaultState, getCard, getLevelProgress, getProfileStats, getTopicStats, isMasteredCard, normalizeStudyState } from "../lib/studyCore";
 import { migrateLocalStorageState } from "../lib/studyDb";
 import type { CardState, StudyState } from "../types/study";
 
@@ -36,6 +36,7 @@ type QuestionStatus = {
 export default function Profile() {
   const { loaded, state } = useProfileState();
   const profile = useMemo(() => getProfileStats(state), [state]);
+  const levelProgress = useMemo(() => getLevelProgress(state), [state]);
   const topics = useMemo(() => getTopicStats(state), [state]);
   return (
     <>
@@ -45,7 +46,7 @@ export default function Profile() {
       <Container size="xl" px="md" py="md">
         <Stack gap="md">
           <ProfileHeader loaded={loaded} />
-          <ProfileStats attempted={profile.attempted} solved={profile.solved} mastered={profile.mastered} accuracy={profile.accuracy} coins={state.profile.coins} hintsBought={state.profile.hintsBought} />
+          <ProfileStats attempted={profile.attempted} solved={profile.solved} mastered={profile.mastered} accuracy={profile.accuracy} coins={state.profile.coins} currentExperience={levelProgress.currentExperience} health={state.profile.health} hintsBought={state.profile.hintsBought} level={levelProgress.level} nextLevelExperience={levelProgress.nextLevelExperience} />
           <TopicMasteryCard due={profile.due} streak={state.streak} topics={topics} />
           <QuestionHistoryCard state={state} />
         </Stack>
@@ -97,9 +98,12 @@ function ProfileHeader(props: { loaded: boolean }) {
   );
 }
 
-function ProfileStats(props: { accuracy: number; attempted: number; coins: number; hintsBought: number; mastered: number; solved: number }) {
+function ProfileStats(props: { accuracy: number; attempted: number; coins: number; currentExperience: number; health: number; hintsBought: number; level: number; mastered: number; nextLevelExperience: number; solved: number }) {
   const cards = [
     { label: "Coins", value: <CoinAmount value={props.coins} /> },
+    { label: "Health", value: `${props.health}/${MAX_HEALTH}` },
+    { label: "Level", value: props.level },
+    { label: "XP", value: `${props.currentExperience}/${props.nextLevelExperience}` },
     { label: "Hints Bought", value: props.hintsBought },
     { label: "Attempted", value: props.attempted },
     { label: "Solved", value: props.solved },
@@ -107,7 +111,7 @@ function ProfileStats(props: { accuracy: number; attempted: number; coins: numbe
     { label: "Pass Rate", value: <NumberFormatter value={props.accuracy} suffix="%" /> }
   ];
   return (
-    <SimpleGrid cols={{ base: 2, sm: 6 }}>
+    <SimpleGrid cols={{ base: 2, sm: 5 }}>
       {cards.map((card) => (
         <Paper key={card.label} withBorder p="md">
           <Text size="xs" c="dimmed">{card.label}</Text>

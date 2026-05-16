@@ -53,10 +53,7 @@ const runSingleTest = async (userFunction, test) => {
 
 async function handleRunTests(event) {
   const message = event.data;
-  if (!message) {
-    return;
-  }
-  if (message.type !== "run-tests") {
+  if (!message || message.type !== "run-tests") {
     return;
   }
 

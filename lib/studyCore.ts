@@ -22,10 +22,14 @@ const MIN_EASE = 1.4;
 const FAIL_EASE_PENALTY = 0.22;
 const FAIL_REVIEW_DELAY_MINUTES = 10;
 const COINS_PER_DIFFICULTY = 10;
+const EXPERIENCE_PER_DIFFICULTY = 15;
 
 export const DAY = HOURS_PER_DAY * MINUTES_PER_HOUR * SECONDS_PER_MINUTE * MS_PER_SECOND;
 export const MASTERED_REPS = 3;
 export const HINT_COST = 0;
+export const MAX_HEALTH = 50;
+export const HEALTH_LOSS_PER_FAIL = 5;
+export const EXPERIENCE_PER_LEVEL = 150;
 
 export const difficultyLabels: Record<Question["difficulty"], string> = {
   1: "Easy",
@@ -54,6 +58,8 @@ export const defaultState = (): StudyState => ({
   streak: 0,
   profile: {
     coins: 0,
+    experience: 0,
+    health: MAX_HEALTH,
     hintsBought: 0,
     startedAt: Date.now(),
     lastStudiedAt: null
@@ -88,7 +94,9 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
     ...stored,
     profile: {
       ...fallback.profile,
-      ...(stored.profile || {})
+      ...(stored.profile || {}),
+      health: Math.min(MAX_HEALTH, Math.max(0, stored.profile?.health ?? fallback.profile.health)),
+      experience: Math.max(0, stored.profile?.experience ?? fallback.profile.experience)
     },
     cards: stored.cards
   };
@@ -105,6 +113,23 @@ export const setCard = (state: StudyState, questionId: string, card: CardState) 
 export const isMasteredCard = (card: CardState) => card.correct >= MASTERED_REPS && card.reps >= MASTERED_REPS;
 
 export const getCoinReward = (question: Question) => question.difficulty * COINS_PER_DIFFICULTY;
+
+export const getExperienceReward = (question: Question) => question.difficulty * EXPERIENCE_PER_DIFFICULTY;
+
+export const getLevelProgress = (state: StudyState) => {
+  const totalExperience = state.profile.experience;
+  return {
+    level: Math.floor(totalExperience / EXPERIENCE_PER_LEVEL) + 1,
+    currentExperience: totalExperience % EXPERIENCE_PER_LEVEL,
+    nextLevelExperience: EXPERIENCE_PER_LEVEL
+  };
+};
+
+export const applyHealthPenalty = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL): StudyState => {
+  const next = cloneState(state);
+  next.profile.health = Math.max(0, next.profile.health - amount);
+  return next;
+};
 
 export const canBuyHint = (state: StudyState) => state.profile.coins >= HINT_COST;
 
@@ -215,6 +240,7 @@ export const applyScheduleResult = (state: StudyState, questionId: string, passe
     next.totalCorrect += 1;
     next.streak += 1;
     next.profile.coins += question ? getCoinReward(question) : 0;
+    next.profile.experience += question ? getExperienceReward(question) : 0;
     if (card.reps === 1) {
       card.intervalDays = 1;
     } else if (card.reps === SECOND_REVIEW_REPS) {
@@ -228,6 +254,7 @@ export const applyScheduleResult = (state: StudyState, questionId: string, passe
       card.masteredAt = now;
     }
   } else {
+    next.profile.health = Math.max(0, next.profile.health - HEALTH_LOSS_PER_FAIL);
     next.streak = 0;
     card.reps = Math.max(0, card.reps - 1);
     card.ease = Math.max(MIN_EASE, card.ease - FAIL_EASE_PENALTY);

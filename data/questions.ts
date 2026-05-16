@@ -11,8 +11,8 @@ export const questions: Question[] = [
     constraints: ["Input length is between 0 and 1000.", "Numbers are integers.", "Keep the original array unchanged."],
     starter: "function firstDuplicate(nums) {\n  \n}",
     examples: [
-      { input: "firstDuplicate([2, 1, 3, 5, 3, 2])", output: "3" },
-      { input: "firstDuplicate([1, 2, 3])", output: "-1" }
+      { input: "nums = [2, 1, 3, 5, 3, 2]", output: "3", explanation: "The first value whose second appearance is reached while scanning left to right is 3." },
+      { input: "nums = [1, 2, 3]", output: "-1", explanation: "No value appears more than once, so return -1." }
     ],
     tests: [
       { name: "finds first repeated scan order", args: [[2, 1, 3, 5, 3, 2]], expected: 3 },
@@ -37,8 +37,8 @@ export const questions: Question[] = [
     constraints: ["Only compare letters and digits.", "An empty cleaned string is a palindrome."],
     starter: "function isCleanPalindrome(text) {\n  \n}",
     examples: [
-      { input: "isCleanPalindrome('A man, a plan, a canal: Panama')", output: "true" },
-      { input: "isCleanPalindrome('race a car')", output: "false" }
+      { input: "text = \"A man, a plan, a canal: Panama\"", output: "true", explanation: "After removing punctuation and matching case, the cleaned text reads the same forward and backward." },
+      { input: "text = \"race a car\"", output: "false", explanation: "The cleaned text has a mismatch, so it is not a palindrome." }
     ],
     tests: [
       { name: "ignores punctuation", args: ["A man, a plan, a canal: Panama"], expected: true },
@@ -63,8 +63,8 @@ export const questions: Question[] = [
     constraints: ["Input length is between 2 and 2000.", "Do not use the same element twice.", "Return an array like [0, 2]."],
     starter: "function twoSum(nums, target) {\n  \n}",
     examples: [
-      { input: "twoSum([2, 7, 11, 15], 9)", output: "[0, 1]" },
-      { input: "twoSum([3, 2, 4], 6)", output: "[1, 2]" }
+      { input: "nums = [2, 7, 11, 15], target = 9", output: "[0, 1]", explanation: "Because nums[0] + nums[1] == 9, return [0, 1]." },
+      { input: "nums = [3, 2, 4], target = 6", output: "[1, 2]", explanation: "Because nums[1] + nums[2] == 6, return [1, 2]." }
     ],
     tests: [
       { name: "basic pair", args: [[2, 7, 11, 15], 9], expected: [0, 1] },
@@ -89,8 +89,8 @@ export const questions: Question[] = [
     constraints: ["Input length is between 0 and 5000.", "Characters are case-sensitive."],
     starter: "function longestUniqueSubstring(s) {\n  \n}",
     examples: [
-      { input: "longestUniqueSubstring('abcabcbb')", output: "3" },
-      { input: "longestUniqueSubstring('bbbbb')", output: "1" }
+      { input: "s = \"abcabcbb\"", output: "3", explanation: "The longest substring without repeated characters is \"abc\", with length 3." },
+      { input: "s = \"bbbbb\"", output: "1", explanation: "Every longer substring repeats \"b\", so the longest unique window has length 1." }
     ],
     tests: [
       { name: "shrinks repeated window", args: ["abcabcbb"], expected: 3 },
@@ -115,8 +115,8 @@ export const questions: Question[] = [
     constraints: ["Each interval is [start, end].", "Touching intervals like [1, 3] and [3, 5] should merge.", "Do not mutate the original interval arrays."],
     starter: "function mergeIntervals(intervals) {\n  \n}",
     examples: [
-      { input: "mergeIntervals([[1,3],[2,6],[8,10]])", output: "[[1,6],[8,10]]" },
-      { input: "mergeIntervals([[1,4],[4,5]])", output: "[[1,5]]" }
+      { input: "intervals = [[1,3],[2,6],[8,10]]", output: "[[1,6],[8,10]]", explanation: "[1,3] overlaps [2,6], so they merge into [1,6]." },
+      { input: "intervals = [[1,4],[4,5]]", output: "[[1,5]]", explanation: "The intervals touch at 4, so they merge into one interval." }
     ],
     tests: [
       { name: "merges overlap", args: [[[1, 3], [2, 6], [8, 10], [15, 18]]], expected: [[1, 6], [8, 10], [15, 18]] },
@@ -141,8 +141,8 @@ export const questions: Question[] = [
     constraints: ["The string contains only (), {}, and [].", "An empty string is valid."],
     starter: "function validBrackets(s) {\n  \n}",
     examples: [
-      { input: "validBrackets('()[]{}')", output: "true" },
-      { input: "validBrackets('(]')", output: "false" }
+      { input: "s = \"()[]{}\"", output: "true", explanation: "Every opening bracket closes with the same bracket type in the correct order." },
+      { input: "s = \"(]\"", output: "false", explanation: "The opening parenthesis cannot be closed by a square bracket." }
     ],
     tests: [
       { name: "valid mixed brackets", args: ["()[]{}"], expected: true },
@@ -167,8 +167,8 @@ export const questions: Question[] = [
     constraints: ["Input length is between 2 and 1000.", "Costs are non-negative integers.", "You may start on step 0 or step 1."],
     starter: "function minClimbCost(cost) {\n  \n}",
     examples: [
-      { input: "minClimbCost([10, 15, 20])", output: "15" },
-      { input: "minClimbCost([1,100,1,1,1,100,1,1,100,1])", output: "6" }
+      { input: "cost = [10, 15, 20]", output: "15", explanation: "Start at step 1, pay 15, then climb beyond the final step." },
+      { input: "cost = [1,100,1,1,1,100,1,1,100,1]", output: "6", explanation: "The cheapest route avoids the expensive 100-cost steps where possible." }
     ],
     tests: [
       { name: "short path", args: [[10, 15, 20]], expected: 15 },
@@ -193,8 +193,8 @@ export const questions: Question[] = [
     constraints: ["All numbers are unique.", "Aim for O(log n) time.", "Input length is between 0 and 5000."],
     starter: "function searchRotated(nums, target) {\n  \n}",
     examples: [
-      { input: "searchRotated([4,5,6,7,0,1,2], 0)", output: "4" },
-      { input: "searchRotated([4,5,6,7,0,1,2], 3)", output: "-1" }
+      { input: "nums = [4,5,6,7,0,1,2], target = 0", output: "4", explanation: "The target 0 appears at index 4." },
+      { input: "nums = [4,5,6,7,0,1,2], target = 3", output: "-1", explanation: "The target 3 is not present in the array." }
     ],
     tests: [
       { name: "finds in right sorted side", args: [[4, 5, 6, 7, 0, 1, 2], 0], expected: 4 },
@@ -219,7 +219,7 @@ export const questions: Question[] = [
     constraints: ["Return [] for a null root.", "Keep values left-to-right within each level."],
     starter: "function levelOrderValues(root) {\n  \n}",
     examples: [
-      { input: "levelOrderValues({ val: 1, left: { val: 2 }, right: { val: 3 } })", output: "[[1],[2,3]]" }
+      { input: "root = { val: 1, left: { val: 2 }, right: { val: 3 } }", output: "[[1],[2,3]]", explanation: "The root is level 0, and its left and right children form the next level." }
     ],
     tests: [
       { name: "balanced tree", args: [{ val: 1, left: { val: 2, left: null, right: null }, right: { val: 3, left: null, right: null } }], expected: [[1], [2, 3]] },
@@ -245,8 +245,8 @@ export const questions: Question[] = [
     constraints: ["Return the result sorted by frequency descending, then value ascending.", "Input length is between 1 and 5000."],
     starter: "function topKFrequent(nums, k) {\n  \n}",
     examples: [
-      { input: "topKFrequent([1,1,1,2,2,3], 2)", output: "[1,2]" },
-      { input: "topKFrequent([4,4,1,1,2], 2)", output: "[1,4]" }
+      { input: "nums = [1,1,1,2,2,3], k = 2", output: "[1,2]", explanation: "1 appears three times and 2 appears two times, so they are the top two values." },
+      { input: "nums = [4,4,1,1,2], k = 2", output: "[1,4]", explanation: "1 and 4 tie in frequency, so the smaller value comes first." }
     ],
     tests: [
       { name: "basic top two", args: [[1, 1, 1, 2, 2, 3], 2], expected: [1, 2] },
@@ -271,8 +271,8 @@ export const questions: Question[] = [
     constraints: ["Nodes are strings.", "Edges are unweighted.", "The graph may contain cycles."],
     starter: "function shortestPathLength(edges, start, target) {\n  \n}",
     examples: [
-      { input: "shortestPathLength([['A','B'],['B','C']], 'A', 'C')", output: "2" },
-      { input: "shortestPathLength([['A','B']], 'B', 'A')", output: "-1" }
+      { input: "edges = [[\"A\",\"B\"],[\"B\",\"C\"]], start = \"A\", target = \"C\"", output: "2", explanation: "The shortest path is A -> B -> C, which uses 2 edges." },
+      { input: "edges = [[\"A\",\"B\"]], start = \"B\", target = \"A\"", output: "-1", explanation: "There is no directed path from B back to A." }
     ],
     tests: [
       { name: "finds two-hop path", args: [[["A", "B"], ["B", "C"], ["A", "D"]], "A", "C"], expected: 2 },
@@ -297,8 +297,8 @@ export const questions: Question[] = [
     constraints: ["You may use each coin value unlimited times.", "Amount is between 0 and 10000.", "Coin values are positive integers."],
     starter: "function coinChange(coins, amount) {\n  \n}",
     examples: [
-      { input: "coinChange([1, 2, 5], 11)", output: "3" },
-      { input: "coinChange([2], 3)", output: "-1" }
+      { input: "coins = [1, 2, 5], amount = 11", output: "3", explanation: "11 can be made with 5 + 5 + 1, using 3 coins." },
+      { input: "coins = [2], amount = 3", output: "-1", explanation: "Only coin value 2 is available, so amount 3 cannot be made." }
     ],
     tests: [
       { name: "uses mixed coins", args: [[1, 2, 5], 11], expected: 3 },

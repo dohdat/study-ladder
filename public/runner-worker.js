@@ -28,6 +28,7 @@ async function handleRunTests(event) {
 
     if (typeof userFunction !== "function") {
       self.postMessage({
+        type: "run-result",
         runId,
         ok: false,
         error: `Expected a function named ${functionName}.`,
@@ -60,12 +61,14 @@ async function handleRunTests(event) {
     }
 
     self.postMessage({
+      type: "run-result",
       runId,
       ok: results.every((result) => result.pass),
       results
     });
   } catch (error) {
     self.postMessage({
+      type: "run-result",
       runId,
       ok: false,
       error: error && error.message ? error.message : String(error),

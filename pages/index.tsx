@@ -1,37 +1,39 @@
 import Head from "next/head";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Box,
   Button,
   Container,
   Group,
-  Paper,
   SegmentedControl,
-  SimpleGrid,
   Stack,
-  Text,
-  Tooltip,
-  Title
+  Tooltip
 } from "@mantine/core";
 import { IconUser } from "@tabler/icons-react";
 import { loader } from "@monaco-editor/react";
 import type { OnMount } from "@monaco-editor/react";
 
-import { CoinIcon } from "../components/CoinIcon";
 import { PracticeArea } from "../components/PracticePanels";
 import type { PracticePanelActions } from "../components/PracticePanels";
+import { PlayerStatus } from "../components/PlayerStatus";
+import { RewardNotifications } from "../components/RewardNotifications";
+import type { RewardNotification } from "../components/RewardNotifications";
+import { SummaryCards } from "../components/SummaryCards";
 import { questions } from "../data/questions";
 import { useCodexHintStream } from "../hooks/useCodexHintStream";
 import { useFullscreenGuard } from "../hooks/useFullscreenGuard";
 import { beautifyCode } from "../lib/codeFormat";
 import {
   applyScheduleResult,
+  applyHealthPenalty,
   buyHint,
   canBuyHint,
   cloneState,
   defaultState,
   getCard,
   getDueQuestions,
+  getCoinReward,
+  getExperienceReward,
+  getLevelProgress,
   getProfileStats,
   getQuestionTimeLimitMs,
   HINT_COST,
@@ -53,6 +55,7 @@ const NUMBER_BASE_HEX = 16;
 const PERCENT_MAX = 100;
 const ICON_MD = 16;
 const MAX_FAILED_TESTS_IN_STATUS = 3;
+const REWARD_TOAST_TIMEOUT_MS = 2400;
 const RUNNER_FRAME = "sandbox.html";
 const STATUS_COLOR = {
   default: "gray",
@@ -212,7 +215,9 @@ function expireQuestion(params: Parameters<typeof useTimerInterval>[0]) {
 function useRunnerMessages(params: {
   currentQuestion: Question | null;
   failAndAdvance: FailAndAdvance;
+  showRewards: (question: Question) => void;
   updateSchedule: (passed: boolean, draft?: string) => void;
+  setState: React.Dispatch<React.SetStateAction<StudyState>>;
   setQuestionFinished: (finished: boolean) => void;
   setResults: (results: RunResult[]) => void;
   setRunning: (running: boolean) => void;
@@ -238,18 +243,24 @@ function useRunnerMessages(params: {
 }
 
 function handleRunMessage(message: RunnerMessage, params: Parameters<typeof useRunnerMessages>[0]) {
+  const question = params.currentQuestion;
+  if (!question) {
+    return;
+  }
   if (message.error) {
     params.failAndAdvance(message.error);
     return;
   }
   if (!message.ok) {
     const failedResults = message.results.filter((result) => !result.pass);
+    params.setState((previous) => applyHealthPenalty(previous));
     params.setResults(failedResults);
     params.setTone("fail");
-    params.setStatus(`${getFailedTestsSummary(failedResults)} Fix this question before moving on.`);
+    params.setStatus(`${getFailedTestsSummary(failedResults)} Health -5. Fix this question before moving on.`);
     return;
   }
   params.setResults(message.results);
+  params.showRewards(question);
   params.updateSchedule(true);
   params.setTone("pass");
   params.setStatus("All tests passed. Card scheduled.");
@@ -298,6 +309,7 @@ function usePracticeActions(params: {
   runnerFrame: React.MutableRefObject<HTMLIFrameElement | null>;
   clearHint: () => void;
   startHint: (prompt: string) => void;
+  showRewards: (question: Question) => void;
 }): PracticeActions {
   const updateDraft = useUpdateDraft(params);
   const beautifyCurrentCode = useCallback((source = params.code) => updateDraft(beautifyCode(source)), [params.code, updateDraft]);
@@ -456,10 +468,7 @@ function handleRunTimeout(runId: string, formattedCode: string, params: Paramete
   params.activeRunId.current = null;
   params.setRunning(false);
   params.failAndAdvance("Timed out. Moving to next question.", formattedCode);
-  if (params.runnerFrame.current) {
-    params.setRunnerReady(false);
-    params.runnerFrame.current.src = RUNNER_FRAME;
-  }
+  params.runnerFrame.current?.contentWindow?.postMessage({ type: "reset-runner" }, "*");
 }
 
 function useFailAndAdvance(params: {
@@ -512,13 +521,26 @@ function getTimerDisplay(currentQuestion: Question | null, timeRemainingMs: numb
   };
 }
 
-function AppHeader(props: { modeValue: string; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
+function AppHeader(props: {
+  coins: number;
+  currentExperience: number;
+  health: number;
+  level: number;
+  modeValue: string;
+  nextLevelExperience: number;
+  setState: React.Dispatch<React.SetStateAction<StudyState>>;
+}) {
   return (
-    <Group justify="space-between" align="flex-start">
-      <Box>
-        <Title order={2}>Study Ladder</Title>
-        <Text c="dimmed" size="sm">JavaScript practice</Text>
-      </Box>
+    <Group justify="space-between" align="flex-start" wrap="wrap">
+      <Group align="flex-start" gap="md" wrap="wrap">
+        <PlayerStatus
+          coins={props.coins}
+          currentExperience={props.currentExperience}
+          health={props.health}
+          level={props.level}
+          nextLevelExperience={props.nextLevelExperience}
+        />
+      </Group>
       <Group>
         <SegmentedControl
           value={props.modeValue}
@@ -533,41 +555,19 @@ function AppHeader(props: { modeValue: string; setState: React.Dispatch<React.Se
   );
 }
 
-function SummaryCards(props: { coins: number; dueCount: number; mastered: number; streak: number }) {
-  const cards = [
-    {
-      label: "Coins",
-      value: (
-        <Group gap={6} align="center" wrap="nowrap">
-          <CoinIcon size={22} />
-          <Text fw={700} size="lg" lh={1}>{props.coins}</Text>
-        </Group>
-      )
-    },
-    { label: "Due", value: props.dueCount },
-    { label: "Mastered", value: `${props.mastered}/${questions.length}` },
-    { label: "Streak", value: props.streak }
-  ];
-  return (
-    <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="xs">
-      {cards.map((card) => (
-        <Paper
-          key={card.label}
-          withBorder
-          px="sm"
-          py={7}
-          style={{ alignItems: "center", display: "flex", justifyContent: "space-between", minHeight: 42 }}
-        >
-          <Text size="xs" c="dimmed" lh={1}>{card.label}</Text>
-          {typeof card.value === "number" || typeof card.value === "string" ? (
-            <Text fw={700} size="lg" lh={1}>{card.value}</Text>
-          ) : (
-            card.value
-          )}
-        </Paper>
-      ))}
-    </SimpleGrid>
-  );
+function useRewardNotifications(setRewardNotifications: React.Dispatch<React.SetStateAction<RewardNotification[]>>) {
+  return useCallback((question: Question) => {
+    const createdAt = Date.now();
+    const items: RewardNotification[] = [
+      { amount: getCoinReward(question), id: `${question.id}-gold-${createdAt}`, kind: "gold" },
+      { amount: getExperienceReward(question), id: `${question.id}-experience-${createdAt}`, kind: "experience" }
+    ];
+    const itemIds = new Set(items.map((item) => item.id));
+    setRewardNotifications((current) => [...current, ...items]);
+    window.setTimeout(() => {
+      setRewardNotifications((current) => current.filter((item) => !itemIds.has(item.id)));
+    }, REWARD_TOAST_TIMEOUT_MS);
+  }, [setRewardNotifications]);
 }
 
 export default function Home() {
@@ -579,28 +579,40 @@ export default function Home() {
   const [results, setResults] = useState<RunResult[]>([]);
   const [running, setRunning] = useState(false);
   const [runnerReady, setRunnerReady] = useState(false);
+  const [rewardNotifications, setRewardNotifications] = useState<RewardNotification[]>([]);
   const [sessionStarted, setSessionStarted] = useState(false);
   const activeRunId = useRef<string | null>(null);
   const runTimer = useRef<number | null>(null);
   const runnerFrame = useRef<HTMLIFrameElement | null>(null);
   const hints = useCodexHintStream(setRunStatus, setRunTone);
+  const showRewards = useRewardNotifications(setRewardNotifications);
   useMonacoAssets();
   const hydrated = useHydrateStudy(setState, setCurrentQuestion, setCode);
   usePersistStudy(state, hydrated, setRunTone, setRunStatus);
   const failAndAdvance = useFailAndAdvance({ code, currentQuestion, setCode, setCurrentQuestion, setResults, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, clearHint: hints.clearHint });
   const timer = useQuestionTimer({ code, currentQuestion, failAndAdvance, sessionStarted, mode: state.mode, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer });
-  const actions = usePracticeActions({ code, currentQuestion, failAndAdvance, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setResults, setRunnerReady, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame, clearHint: hints.clearHint, startHint: hints.startHint });
+  const actions = usePracticeActions({ code, currentQuestion, failAndAdvance, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setResults, setRunnerReady, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame, clearHint: hints.clearHint, startHint: hints.startHint, showRewards });
   useFullscreenGuard({ active: state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished, failQuestion: failAndAdvance, setStatus: setRunStatus, setTone: setRunTone });
   const profile = useMemo(() => getProfileStats(state), [state]);
   const dueCount = useMemo(() => getDueQuestions(state).length, [state]);
+  const levelProgress = useMemo(() => getLevelProgress(state), [state]);
   const timerDisplay = getTimerDisplay(currentQuestion, timer.timeRemainingMs);
   return (
     <>
       <Head><title>Study Ladder</title></Head>
+      <RewardNotifications items={rewardNotifications} />
       <Container fluid px="md" py="md" w={{ base: "100%", lg: "70%" }}>
         <Stack gap="md">
-          <AppHeader modeValue={state.mode} setState={setState} />
-          <SummaryCards coins={state.profile.coins} dueCount={dueCount} mastered={profile.mastered} streak={state.streak} />
+          <AppHeader
+            coins={state.profile.coins}
+            currentExperience={levelProgress.currentExperience}
+            health={state.profile.health}
+            level={levelProgress.level}
+            modeValue={state.mode}
+            nextLevelExperience={levelProgress.nextLevelExperience}
+            setState={setState}
+          />
+          <SummaryCards dueCount={dueCount} mastered={profile.mastered} streak={state.streak} />
           <PracticeArea actions={actions} currentQuestion={currentQuestion} editorProps={{ canBuyHint: canBuyHint(state), code, hintCost: HINT_COST, hintError: hints.hintError, hintStreaming: hints.hintStreaming, hintText: hints.hintText, questionFinished: timer.questionFinished, results, runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} />
         </Stack>
       </Container>

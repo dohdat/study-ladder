@@ -17,7 +17,7 @@ import {
   Tooltip,
   Title
 } from "@mantine/core";
-import { IconArrowRight, IconBulb, IconCheck, IconCode, IconPlayerPlay, IconRefresh, IconWand } from "@tabler/icons-react";
+import { IconArrowRight, IconBulb, IconCheck, IconCode, IconLock, IconPlayerPlay, IconRefresh, IconWand } from "@tabler/icons-react";
 import type { OnMount } from "@monaco-editor/react";
 
 import { HighlightedCode } from "./HighlightedCode";
@@ -42,11 +42,18 @@ const QUESTION_COLUMN_SPAN = 3;
 const EDITOR_COLUMN_SPAN = 7;
 const CODE_FENCE = "```";
 const HINT_CONTENT_GAP = 10;
+const EXAMPLE_BLOCK_GAP = 14;
+const EXAMPLE_ROW_GAP = 4;
+const EXAMPLE_BLOCK_PADDING_LEFT = 14;
+const EXAMPLE_BLOCK_BORDER = "2px solid rgba(255, 255, 255, 0.18)";
+const EXAMPLE_FONT_FAMILY = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
 
 type HintSegment = {
   content: string;
   kind: "code" | "text";
 };
+
+type QuestionExample = Question["examples"][number];
 
 export type PracticePanelActions = {
   updateDraft: (nextCode: string) => void;
@@ -102,6 +109,7 @@ export function PracticeArea(props: {
           canMoveNext={!props.editorProps.sessionStarted || props.editorProps.questionFinished}
           currentQuestion={props.currentQuestion}
           chooseQuestion={props.actions.chooseQuestion}
+          sessionStarted={props.editorProps.sessionStarted}
         />
       </Grid.Col>
       <Grid.Col span={{ base: LAYOUT_COLUMNS, md: EDITOR_COLUMN_SPAN }}>
@@ -111,34 +119,90 @@ export function PracticeArea(props: {
   );
 }
 
-function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; chooseQuestion: (preferNext: boolean) => void }) {
+function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; chooseQuestion: (preferNext: boolean) => void; sessionStarted: boolean }) {
   return (
     <Card withBorder>
       <Group justify="space-between" align="flex-start">
-        <Box>
-          <Badge variant="light">{difficultyLabels[props.currentQuestion.difficulty]}</Badge>
-          <Title order={3} mt="xs">{props.currentQuestion.title}</Title>
-          <Group gap={6} mt="xs">
-            {props.currentQuestion.topics.map((topic) => <Badge key={topic} size="sm" variant="outline">{topic}</Badge>)}
-          </Group>
-        </Box>
+        {props.sessionStarted ? <ProblemHeader currentQuestion={props.currentQuestion} /> : <LockedProblemHeader />}
         <Tooltip label={props.canMoveNext ? "Move to the next question" : "Pass all tests before moving on"} withArrow>
           <ActionIcon variant="light" size="lg" aria-label="Next question" disabled={!props.canMoveNext} onClick={() => props.chooseQuestion(true)}>
             <IconArrowRight size={ICON_LG} />
           </ActionIcon>
         </Tooltip>
       </Group>
+      {props.sessionStarted ? <ProblemDetails currentQuestion={props.currentQuestion} /> : <LockedProblemDetails />}
+    </Card>
+  );
+}
+
+function ProblemHeader(props: { currentQuestion: Question }) {
+  return (
+    <Box>
+      <Badge variant="light">{difficultyLabels[props.currentQuestion.difficulty]}</Badge>
+      <Title order={3} mt="xs">{props.currentQuestion.title}</Title>
+      <Group gap={6} mt="xs">
+        {props.currentQuestion.topics.map((topic) => <Badge key={topic} size="sm" variant="outline">{topic}</Badge>)}
+      </Group>
+    </Box>
+  );
+}
+
+function LockedProblemHeader() {
+  return (
+    <Box>
+      <Badge leftSection={<IconLock size={ICON_XS} />} variant="light">Locked</Badge>
+      <Title order={3} mt="xs">Question hidden</Title>
+    </Box>
+  );
+}
+
+function ProblemDetails(props: { currentQuestion: Question }) {
+  return (
+    <>
       <Text mt="md">{props.currentQuestion.prompt}</Text>
       <Divider my="md" />
       <Title order={5}>Examples</Title>
-      <List mt="xs" size="sm">
-        {props.currentQuestion.examples.map((example) => <List.Item key={example.input}>{example.input} =&gt; {example.output}</List.Item>)}
-      </List>
+      <Box mt="xs" style={{ display: "grid", gap: EXAMPLE_BLOCK_GAP }}>
+        {props.currentQuestion.examples.map((example, index) => <ExampleBlock key={example.input} example={example} index={index} />)}
+      </Box>
       <Title order={5} mt="md">Constraints</Title>
       <List mt="xs" size="sm">
         {props.currentQuestion.constraints.map((constraint) => <List.Item key={constraint}>{constraint}</List.Item>)}
       </List>
-    </Card>
+    </>
+  );
+}
+
+function LockedProblemDetails() {
+  return (
+    <>
+      <Divider my="md" />
+      <Group gap="xs" c="dimmed">
+        <IconPlayerPlay size={ICON_SM} />
+        <Text size="sm">Press Start to reveal the question.</Text>
+      </Group>
+    </>
+  );
+}
+
+function ExampleBlock(props: { example: QuestionExample; index: number }) {
+  return (
+    <Box>
+      <Text size="sm" fw={700}>Example {props.index + 1}:</Text>
+      <Box mt="xs" pl={EXAMPLE_BLOCK_PADDING_LEFT} style={{ borderLeft: EXAMPLE_BLOCK_BORDER, display: "grid", gap: EXAMPLE_ROW_GAP }}>
+        <ExampleRow label="Input" value={props.example.input} />
+        <ExampleRow label="Output" value={props.example.output} />
+        {props.example.explanation && <ExampleRow label="Explanation" value={props.example.explanation} />}
+      </Box>
+    </Box>
+  );
+}
+
+function ExampleRow(props: { label: string; value: string }) {
+  return (
+    <Text size="sm" style={{ fontFamily: EXAMPLE_FONT_FAMILY, whiteSpace: "pre-wrap" }}>
+      <Text span fw={700}>{props.label}:</Text> {props.value}
+    </Text>
   );
 }
 
@@ -189,7 +253,7 @@ function EditorToolbar(props: Parameters<typeof EditorCard>[0]) {
   return (
     <Group justify="space-between" p="sm">
       <Group gap="xs">
-        <Badge leftSection={<IconCode size={ICON_XS} />} variant="light">{props.currentQuestion.functionName}()</Badge>
+        <QuestionFunctionBadge currentQuestion={props.currentQuestion} sessionStarted={props.sessionStarted} />
         <Badge color={props.timerColor} variant="light">{props.timerLabel}</Badge>
       </Group>
       <Group gap="xs">
@@ -217,6 +281,13 @@ function EditorToolbar(props: Parameters<typeof EditorCard>[0]) {
       </Group>
     </Group>
   );
+}
+
+function QuestionFunctionBadge(props: { currentQuestion: Question; sessionStarted: boolean }) {
+  if (!props.sessionStarted) {
+    return <Badge leftSection={<IconLock size={ICON_XS} />} variant="light">Question locked</Badge>;
+  }
+  return <Badge leftSection={<IconCode size={ICON_XS} />} variant="light">{props.currentQuestion.functionName}()</Badge>;
 }
 
 function HintPanel(props: { hintError: string; hintStreaming: boolean; hintText: string }) {

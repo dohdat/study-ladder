@@ -3,8 +3,12 @@ import { describe, expect, it } from "vitest";
 import { questions } from "../data/questions";
 import {
   DAY,
+  EXPERIENCE_PER_LEVEL,
+  HEALTH_LOSS_PER_FAIL,
   HINT_COST,
+  MAX_HEALTH,
   applyScheduleResult,
+  applyHealthPenalty,
   buyHint,
   canBuyHint,
   cloneState,
@@ -14,6 +18,8 @@ import {
   getCard,
   getCoinReward,
   getDueQuestions,
+  getExperienceReward,
+  getLevelProgress,
   getProfileStats,
   getQuestionTimeLimitMs,
   getRecommendedDifficulty,
@@ -38,6 +44,8 @@ describe("studyCore", () => {
     });
     expect(partial.mode).toBe("system");
     expect(partial.profile.startedAt).toEqual(expect.any(Number));
+    expect(partial.profile.health).toBe(MAX_HEALTH);
+    expect(partial.profile.experience).toBe(0);
     expect(getCard(partial, questions[0].id).attempts).toBe(1);
   });
 
@@ -94,6 +102,7 @@ describe("studyCore", () => {
     });
     expect(getCard(state, question.id).dueAt).toBe(1000 + DAY);
     expect(state.profile.coins).toBe(getCoinReward(question));
+    expect(state.profile.experience).toBe(getExperienceReward(question));
 
     state = applyScheduleResult(state, question.id, true, "draft", 2000);
     expect(getCard(state, question.id).intervalDays).toBe(3);
@@ -117,6 +126,28 @@ describe("studyCore", () => {
     expect(card.dueAt).toBe(1000 + 10 * 60 * 1000);
     expect(state.streak).toBe(0);
     expect(state.profile.coins).toBe(0);
+    expect(state.profile.health).toBe(MAX_HEALTH - HEALTH_LOSS_PER_FAIL);
+  });
+
+  it("applies failed-submit health penalties without changing cards", () => {
+    const question = questions[0];
+    const state = defaultState();
+    const penalized = applyHealthPenalty(state);
+
+    expect(penalized.profile.health).toBe(MAX_HEALTH - HEALTH_LOSS_PER_FAIL);
+    expect(getCard(penalized, question.id)).toMatchObject(defaultCard());
+    expect(state.profile.health).toBe(MAX_HEALTH);
+  });
+
+  it("computes level progress from total experience", () => {
+    const state = defaultState();
+    state.profile.experience = EXPERIENCE_PER_LEVEL + 12;
+
+    expect(getLevelProgress(state)).toEqual({
+      level: 2,
+      currentExperience: 12,
+      nextLevelExperience: EXPERIENCE_PER_LEVEL
+    });
   });
 
   it("allows free hints for local hint testing", () => {

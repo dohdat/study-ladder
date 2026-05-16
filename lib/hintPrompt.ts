@@ -1,7 +1,8 @@
 import type { Question } from "../types/study";
 
-const MAX_CODE_CHARS = 1800;
+const MAX_CODE_CHARS = 900;
 const OPEN_CODEX_HINT_TYPE = "open-codex-hint";
+const WARM_CODEX_HINT_TYPE = "warm-codex-hint";
 
 export const CODEX_HINT_CHUNK = "codex-hint-chunk";
 export const CODEX_HINT_DONE = "codex-hint-done";
@@ -17,6 +18,10 @@ type CodexHintRequest = {
   prompt: string;
 };
 
+type CodexWarmRequest = {
+  type: typeof WARM_CODEX_HINT_TYPE;
+};
+
 export type CodexHintStreamMessage = {
   type: typeof CODEX_HINT_CHUNK | typeof CODEX_HINT_DONE | typeof CODEX_HINT_ERROR;
   text?: string;
@@ -27,17 +32,14 @@ type ChromeRuntime = {
   lastError?: {
     message?: string;
   };
-  sendMessage?: (message: CodexHintRequest, callback: (response?: CodexHintResponse) => void) => void;
+  sendMessage?: (message: CodexHintRequest | CodexWarmRequest, callback: (response?: CodexHintResponse) => void) => void;
 };
 
 export function createHintPrompt(question: Question, code: string) {
   return [
-    "You are helping me practice a LeetCode-style JavaScript question.",
-    "Give me exactly one next-step hint with a small JavaScript code fragment.",
-    "The fragment may be up to 3 lines and must be intentionally incomplete.",
-    "Do not include the full function, a complete loop, final return path, final code, or complete algorithm.",
-    "Use a TODO comment or placeholder when the next line would finish the solution.",
-    "Point out the smallest useful concept, edge case, or next move before the snippet.",
+    "Give one fast next-step hint for this JavaScript practice question.",
+    "Format: one short sentence, then one incomplete JS fragment of at most 2 lines.",
+    "Do not solve the whole problem or include a complete loop/final return.",
     "",
     `Question: ${question.title}`,
     `Function: ${question.functionName}`,
@@ -58,13 +60,21 @@ function truncateCode(code: string) {
 }
 
 export function requestCodexHint(prompt: string) {
+  return sendCodexHintMessage({ type: OPEN_CODEX_HINT_TYPE, prompt });
+}
+
+export function warmCodexHint() {
+  return sendCodexHintMessage({ type: WARM_CODEX_HINT_TYPE });
+}
+
+function sendCodexHintMessage(message: CodexHintRequest | CodexWarmRequest) {
   const runtime = (globalThis as typeof globalThis & { chrome?: { runtime?: ChromeRuntime } }).chrome?.runtime;
   if (!runtime?.sendMessage) {
     return Promise.resolve({ ok: false, error: "Chrome runtime is not available." });
   }
 
   return new Promise<CodexHintResponse>((resolve) => {
-    runtime.sendMessage?.({ type: OPEN_CODEX_HINT_TYPE, prompt }, (response) => {
+    runtime.sendMessage?.(message, (response) => {
       resolve(response || { ok: false, error: runtime.lastError?.message || "No response from extension background." });
     });
   });
