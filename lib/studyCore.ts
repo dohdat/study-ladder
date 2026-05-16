@@ -1,7 +1,28 @@
 import { questions } from "../data/questions";
 import type { CardState, Question, StudyState } from "../types/study";
 
-export const DAY = 24 * 60 * 60 * 1000;
+const HOURS_PER_DAY = 24;
+const MINUTES_PER_HOUR = 60;
+const SECONDS_PER_MINUTE = 60;
+const MS_PER_SECOND = 1000;
+const EASY_MAX_DIFFICULTY = 2;
+const MEDIUM_MAX_DIFFICULTY = 4;
+const EASY_MINUTES = 10;
+const MEDIUM_MINUTES = 20;
+const HARD_MINUTES = 25;
+const MAX_DIFFICULTY = 5;
+const CORRECTS_PER_DIFFICULTY = 3;
+const MISSING_INDEX = -1;
+const PERCENT = 100;
+const SECOND_REVIEW_REPS = 2;
+const SECOND_REVIEW_INTERVAL_DAYS = 3;
+const MAX_EASE = 3.2;
+const PASS_EASE_BONUS = 0.08;
+const MIN_EASE = 1.4;
+const FAIL_EASE_PENALTY = 0.22;
+const FAIL_REVIEW_DELAY_MINUTES = 10;
+
+export const DAY = HOURS_PER_DAY * MINUTES_PER_HOUR * SECONDS_PER_MINUTE * MS_PER_SECOND;
 export const MASTERED_REPS = 3;
 
 export const difficultyLabels: Record<Question["difficulty"], string> = {
@@ -13,15 +34,15 @@ export const difficultyLabels: Record<Question["difficulty"], string> = {
 };
 
 export const getQuestionTimeLimitMs = (question: Question) => {
-  if (question.difficulty <= 2) {
-    return 10 * 60 * 1000;
+  if (question.difficulty <= EASY_MAX_DIFFICULTY) {
+    return EASY_MINUTES * SECONDS_PER_MINUTE * MS_PER_SECOND;
   }
 
-  if (question.difficulty <= 4) {
-    return 20 * 60 * 1000;
+  if (question.difficulty <= MEDIUM_MAX_DIFFICULTY) {
+    return MEDIUM_MINUTES * SECONDS_PER_MINUTE * MS_PER_SECOND;
   }
 
-  return 25 * 60 * 1000;
+  return HARD_MINUTES * SECONDS_PER_MINUTE * MS_PER_SECOND;
 };
 
 export const defaultState = (): StudyState => ({
@@ -80,7 +101,7 @@ export const setCard = (state: StudyState, questionId: string, card: CardState) 
 export const isMasteredCard = (card: CardState) => card.correct >= MASTERED_REPS && card.reps >= MASTERED_REPS;
 
 export const getRecommendedDifficulty = (state: StudyState) => {
-  return Math.min(5, 1 + Math.floor(state.totalCorrect / 3)) as Question["difficulty"];
+  return Math.min(MAX_DIFFICULTY, 1 + Math.floor(state.totalCorrect / CORRECTS_PER_DIFFICULTY)) as Question["difficulty"];
 };
 
 export const getDueQuestions = (state: StudyState, now = Date.now()) => {
@@ -89,7 +110,7 @@ export const getDueQuestions = (state: StudyState, now = Date.now()) => {
 
 export const pickQuestion = (state: StudyState, currentQuestion: Question | null, preferNext = false, now = Date.now()) => {
   const recommended = getRecommendedDifficulty(state);
-  const currentIndex = currentQuestion ? questions.findIndex((question) => question.id === currentQuestion.id) : -1;
+  const currentIndex = currentQuestion ? questions.findIndex((question) => question.id === currentQuestion.id) : MISSING_INDEX;
   const sorted = [...questions].sort((a, b) => {
     const cardA = getCard(state, a.id);
     const cardB = getCard(state, b.id);
@@ -121,7 +142,7 @@ export const getProfileStats = (state: StudyState, now = Date.now()) => {
   const due = questions.filter((question) => getCard(state, question.id).dueAt <= now).length;
   const totalAttempts = questions.reduce((sum, question) => sum + getCard(state, question.id).attempts, 0);
   const totalPasses = questions.reduce((sum, question) => sum + getCard(state, question.id).correct, 0);
-  const accuracy = totalAttempts ? Math.round((totalPasses / totalAttempts) * 100) : 0;
+  const accuracy = totalAttempts ? Math.round((totalPasses / totalAttempts) * PERCENT) : 0;
 
   return { attempted, solved, mastered, due, totalAttempts, totalPasses, accuracy };
 };
@@ -171,12 +192,12 @@ export const applyScheduleResult = (state: StudyState, questionId: string, passe
     next.streak += 1;
     if (card.reps === 1) {
       card.intervalDays = 1;
-    } else if (card.reps === 2) {
-      card.intervalDays = 3;
+    } else if (card.reps === SECOND_REVIEW_REPS) {
+      card.intervalDays = SECOND_REVIEW_INTERVAL_DAYS;
     } else {
       card.intervalDays = Math.ceil(card.intervalDays * card.ease);
     }
-    card.ease = Math.min(3.2, card.ease + 0.08);
+    card.ease = Math.min(MAX_EASE, card.ease + PASS_EASE_BONUS);
     card.dueAt = now + card.intervalDays * DAY;
     if (!wasMastered && isMasteredCard(card)) {
       card.masteredAt = now;
@@ -184,9 +205,9 @@ export const applyScheduleResult = (state: StudyState, questionId: string, passe
   } else {
     next.streak = 0;
     card.reps = Math.max(0, card.reps - 1);
-    card.ease = Math.max(1.4, card.ease - 0.22);
+    card.ease = Math.max(MIN_EASE, card.ease - FAIL_EASE_PENALTY);
     card.intervalDays = 0;
-    card.dueAt = now + 10 * 60 * 1000;
+    card.dueAt = now + FAIL_REVIEW_DELAY_MINUTES * SECONDS_PER_MINUTE * MS_PER_SECOND;
   }
 
   setCard(next, questionId, card);

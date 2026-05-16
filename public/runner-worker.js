@@ -17,7 +17,7 @@ const stableEqual = (actual, expected) => {
   return JSON.stringify(actual) === JSON.stringify(expected);
 };
 
-self.addEventListener("message", async (event) => {
+async function handleRunTests(event) {
   const { runId, code, functionName, tests } = event.data;
 
   try {
@@ -70,4 +70,6 @@ self.addEventListener("message", async (event) => {
       results: []
     });
   }
-});
+}
+
+self.addEventListener("message", handleRunTests);

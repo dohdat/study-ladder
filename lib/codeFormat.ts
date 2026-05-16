@@ -1,18 +1,30 @@
+const isAlreadyTerminated = (line: string) => {
+  return !line || line.endsWith(";") || line.endsWith("{") || line.endsWith("}") || line.endsWith(",") || line.endsWith(":");
+};
+
+const isControlStatement = (line: string) => {
+  return /^(if|for|while|switch|function|class|else|try|catch|finally)\b/.test(line);
+};
+
+const isSemicolonStatement = (line: string) => {
+  return /^(return|throw|break|continue)\b/.test(line)
+    || /^(const|let|var)\s+/.test(line)
+    || /^[\w.$\]]+\s*(=|\+=|-=|\*=|\/=|%=)/.test(line)
+    || /^[\w.$]+\([^)]*\)$/.test(line)
+    || /^\w+(\+\+|--)$/.test(line);
+};
+
 const shouldAddSemicolon = (line: string) => {
   const trimmed = line.trim();
-  if (!trimmed || trimmed.endsWith(";") || trimmed.endsWith("{") || trimmed.endsWith("}") || trimmed.endsWith(",") || trimmed.endsWith(":")) {
+  if (isAlreadyTerminated(trimmed)) {
     return false;
   }
 
-  if (/^(if|for|while|switch|function|class|else|try|catch|finally)\b/.test(trimmed)) {
+  if (isControlStatement(trimmed)) {
     return false;
   }
 
-  return /^(return|throw|break|continue)\b/.test(trimmed)
-    || /^(const|let|var)\s+/.test(trimmed)
-    || /^[\w.$\]]+\s*(=|\+=|-=|\*=|\/=|%=)/.test(trimmed)
-    || /^[\w.$]+\([^)]*\)$/.test(trimmed)
-    || /^\w+(\+\+|--)$/.test(trimmed);
+  return isSemicolonStatement(trimmed);
 };
 
 export const beautifyCode = (source: string) => {
