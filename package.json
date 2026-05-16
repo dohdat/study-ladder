@@ -1,0 +1,34 @@
+{
+  "name": "study-ladder-extension",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "prepare:monaco": "node scripts/copy-monaco.mjs",
+    "dev": "npm run prepare:monaco && next dev --hostname 127.0.0.1 --port 3000",
+    "build": "npm run prepare:monaco && next build",
+    "start": "next start --hostname 127.0.0.1 --port 3000",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
+    "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@mantine/core": "^8.0.0",
+    "@mantine/hooks": "^8.0.0",
+    "@monaco-editor/react": "^4.7.0",
+    "@tabler/icons-react": "^3.31.0",
+    "monaco-editor": "^0.52.0",
+    "next": "^15.3.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitest/coverage-v8": "^4.1.6",
+    "fake-indexeddb": "^6.2.5",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.6"
+  }
+}

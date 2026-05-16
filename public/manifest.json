@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Study Ladder",
+  "description": "Spaced repetition practice for JavaScript LeetCode-style questions.",
+  "version": "0.2.0",
+  "action": {
+    "default_title": "Study Ladder"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "sandbox": {
+    "pages": ["sandbox.html"]
+  },
+  "content_security_policy": {
+    "sandbox": "sandbox allow-scripts; script-src 'self' 'unsafe-eval'; worker-src 'self'; object-src 'self'"
+  }
+}
