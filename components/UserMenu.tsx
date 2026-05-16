@@ -7,9 +7,12 @@ import {
   Menu,
   Modal,
   NumberFormatter,
+  NumberInput,
+  Textarea,
   Progress,
   SimpleGrid,
   Stack,
+  Switch,
   Text,
   ThemeIcon,
   Title
@@ -18,6 +21,7 @@ import { IconChartBar, IconCircleCheck, IconSettings, IconSparkles, IconTrophy, 
 
 import { CoinAmount } from "./CoinIcon";
 import { questions } from "../data/questions";
+import { STUDY_BLOCKER_MS_PER_MINUTE, useStudyBlockerSettings } from "../hooks/useStudyBlocker";
 import { EXPERIENCE_PER_LEVEL, MAX_HEALTH, getLevelProgress, getProfileStats, getTopicStats } from "../lib/studyCore";
 import type { StudyState } from "../types/study";
 
@@ -27,6 +31,11 @@ const PROGRESS_MAX = 100;
 const TOPIC_PREVIEW_LIMIT = 6;
 const STREAK_ACHIEVEMENT_COUNT = 3;
 const GEARED_UP_LEVEL = 5;
+const DAILY_MINUTES_MIN = 0;
+const DAILY_MINUTES_MAX = 720;
+const DAILY_MINUTES_STEP = 5;
+const MINUTES_DECIMAL_PLACES = 1;
+const SITE_TEXTAREA_MIN_ROWS = 4;
 
 const USER_MENU_ITEMS = [
   { id: "profile", icon: IconUser, label: "Profile" },
@@ -159,22 +168,79 @@ function AchievementsPanel(props: { state: StudyState }) {
 }
 
 function SettingsPanel(props: { state: StudyState }) {
+  const { progress, settings, updateSettings } = useStudyBlockerSettings();
+  const studiedMinutes = progress.studiedMs / STUDY_BLOCKER_MS_PER_MINUTE;
+  const progressValue = settings.dailyMinutes > 0 ? (studiedMinutes / settings.dailyMinutes) * PROGRESS_MAX : PROGRESS_MAX;
+  const siteText = settings.distractingSites.join("\n");
   return (
-    <Stack gap="sm">
+    <Stack gap="md">
       <Group justify="space-between">
         <Text size="sm" fw={700}>Practice Mode</Text>
         <Badge variant="light">{props.state.mode === "leetcode" ? "LeetCode" : "System Design"}</Badge>
       </Group>
-      <Group justify="space-between">
-        <Text size="sm" fw={700}>Hint Cost</Text>
-        <Text size="sm">Free while training</Text>
-      </Group>
+      <Switch
+        checked={settings.enabled}
+        label="Redirect distracting websites until daily study is complete"
+        onChange={(event) => updateSettings({ ...settings, enabled: event.currentTarget.checked })}
+      />
+      <NumberInput
+        allowDecimal={false}
+        label="Study minutes per day"
+        min={DAILY_MINUTES_MIN}
+        max={DAILY_MINUTES_MAX}
+        step={DAILY_MINUTES_STEP}
+        value={settings.dailyMinutes}
+        onChange={(value) => updateSettings({ ...settings, dailyMinutes: normalizeDailyMinutes(value) })}
+      />
+      <Box>
+        <Group justify="space-between" mb={4}>
+          <Text size="sm" fw={700}>Today</Text>
+          <Text size="sm">{studiedMinutes.toFixed(MINUTES_DECIMAL_PLACES)} / {settings.dailyMinutes} min</Text>
+        </Group>
+        <Progress value={Math.min(PROGRESS_MAX, progressValue)} />
+      </Box>
+      <Textarea
+        autosize
+        minRows={SITE_TEXTAREA_MIN_ROWS}
+        label="Distracting sites"
+        description="One domain per line, for example reddit.com or youtube.com."
+        value={siteText}
+        onChange={(event) => updateSettings({ ...settings, distractingSites: normalizeDistractingSites(event.currentTarget.value) })}
+      />
       <Group gap="xs">
         <IconSparkles size={ICON_SIZE} />
-        <Text size="sm" c="dimmed">More avatar and practice settings will appear here.</Text>
+        <Text size="sm" c="dimmed">When unfinished, those sites open Study Ladder instead.</Text>
       </Group>
     </Stack>
   );
+}
+
+function normalizeDailyMinutes(value: string | number) {
+  const numericValue = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return DAILY_MINUTES_MIN;
+  }
+  return Math.min(DAILY_MINUTES_MAX, Math.max(DAILY_MINUTES_MIN, Math.round(numericValue)));
+}
+
+function normalizeDistractingSites(value: string) {
+  return value
+    .split(/\r?\n|,/)
+    .map((site) => normalizeDomain(site))
+    .filter(Boolean);
+}
+
+function normalizeDomain(value: string) {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) {
+    return "";
+  }
+  try {
+    const parsed = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    return parsed.hostname.replace(/^www\./, "");
+  } catch {
+    return trimmed.replace(/^www\./, "").replace(/\/.*$/, "");
+  }
 }
 
 function ProgressRow(props: { color: string; label: string; max: number; value: number }) {

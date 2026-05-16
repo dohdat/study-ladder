@@ -21,6 +21,7 @@ import { IconArrowRight, IconBulb, IconCheck, IconCode, IconLock, IconPlayerPlay
 import type { OnMount } from "@monaco-editor/react";
 
 import { HighlightedCode } from "./HighlightedCode";
+import { MonsterEncounter } from "./MonsterEncounter";
 import { difficultyLabels } from "../lib/studyCore";
 import type { Question, RunResult, StudyState } from "../types/study";
 
@@ -138,7 +139,10 @@ function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; c
 function ProblemHeader(props: { currentQuestion: Question }) {
   return (
     <Box>
-      <Badge variant="light">{difficultyLabels[props.currentQuestion.difficulty]}</Badge>
+      <Group gap={6}>
+        <Badge variant="light">{difficultyLabels[props.currentQuestion.difficulty]}</Badge>
+        <Badge color="yellow" variant="light">Rating {props.currentQuestion.rating}</Badge>
+      </Group>
       <Title order={3} mt="xs">{props.currentQuestion.title}</Title>
       <Group gap={6} mt="xs">
         {props.currentQuestion.topics.map((topic) => <Badge key={topic} size="sm" variant="outline">{topic}</Badge>)}
@@ -159,6 +163,7 @@ function LockedProblemHeader() {
 function ProblemDetails(props: { currentQuestion: Question }) {
   return (
     <>
+      <MonsterEncounter question={props.currentQuestion} />
       <Text mt="md">{props.currentQuestion.prompt}</Text>
       <Divider my="md" />
       <Title order={5}>Examples</Title>

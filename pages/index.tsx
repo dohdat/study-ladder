@@ -20,6 +20,7 @@ import { UserMenu } from "../components/UserMenu";
 import { questions } from "../data/questions";
 import { useCodexHintStream } from "../hooks/useCodexHintStream";
 import { useFullscreenGuard } from "../hooks/useFullscreenGuard";
+import { useStudyTimeTracker } from "../hooks/useStudyBlocker";
 import { useStudyNotifications } from "../hooks/useStudyNotifications";
 import { beautifyCode } from "../lib/codeFormat";
 import {
@@ -589,6 +590,7 @@ export default function Home() {
     hints.clearHint();
   }, [hints, runTimer]);
   const isDead = state.profile.health <= 0;
+  useStudyTimeTracker(state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished && !isDead);
   useFullscreenGuard({ active: state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished && !isDead, failQuestion: failAndAdvance, setStatus: setRunStatus, setTone: setRunTone });
   const profile = useMemo(() => getProfileStats(state), [state]);
   const dueCount = useMemo(() => getDueQuestions(state).length, [state]);

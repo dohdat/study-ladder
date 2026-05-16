@@ -10,6 +10,7 @@ export type Question = {
   id: string;
   title: string;
   difficulty: Difficulty;
+  rating: number;
   topics: string[];
   functionName: string;
   prompt: string;
