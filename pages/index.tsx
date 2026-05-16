@@ -1,31 +1,25 @@
-import dynamic from "next/dynamic";
 import Head from "next/head";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActionIcon,
-  Badge,
   Box,
   Button,
-  Card,
   Container,
-  Divider,
   Group,
-  List,
   Paper,
-  Progress,
-  ScrollArea,
   SegmentedControl,
   SimpleGrid,
   Stack,
   Text,
-  ThemeIcon,
   Title
 } from "@mantine/core";
-import { IconArrowRight, IconCheck, IconCode, IconPlayerPlay, IconRefresh, IconUser, IconWand } from "@tabler/icons-react";
+import { IconUser } from "@tabler/icons-react";
 import { loader } from "@monaco-editor/react";
 import type { OnMount } from "@monaco-editor/react";
 
+import { PracticeArea } from "../components/PracticePanels";
+import type { PracticePanelActions } from "../components/PracticePanels";
 import { questions } from "../data/questions";
+import { useFullscreenGuard } from "../hooks/useFullscreenGuard";
 import { beautifyCode } from "../lib/codeFormat";
 import {
   applyScheduleResult,
@@ -44,7 +38,6 @@ import {
 import { migrateLocalStorageState, saveStudyState } from "../lib/studyDb";
 import type { Question, RunResult, StudyState } from "../types/study";
 
-const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 const RUN_TIMEOUT_MS = 2500;
 const SECOND_MS = 1000;
 const SECONDS_PER_MINUTE = 60;
@@ -53,12 +46,7 @@ const WARNING_MS = MINUTE_MS;
 const TIMER_PAD = 2;
 const NUMBER_BASE_HEX = 16;
 const PERCENT_MAX = 100;
-const ICON_XS = 12;
-const ICON_SM = 14;
 const ICON_MD = 16;
-const ICON_LG = 18;
-const RESULT_ICON_SIZE = 20;
-const EDITOR_FONT_SIZE = 13;
 const RUNNER_FRAME = "sandbox.html";
 const STATUS_COLOR = {
   default: "gray",
@@ -82,13 +70,7 @@ type TimerControls = {
   setQuestionFinished: (finished: boolean) => void;
 };
 
-type PracticeActions = {
-  updateDraft: (nextCode: string) => void;
-  beautifyCurrentCode: (source?: string) => void;
-  handleEditorMount: OnMount;
-  chooseQuestion: (preferNext: boolean) => void;
-  submitCode: () => void;
-};
+type PracticeActions = PracticePanelActions;
 
 function useMonacoAssets() {
   useEffect(() => {
@@ -143,6 +125,7 @@ function usePersistStudy(state: StudyState, hydrated: boolean, setTone: (tone: S
 function useQuestionTimer(params: {
   code: string;
   currentQuestion: Question | null;
+  sessionStarted: boolean;
   mode: StudyState["mode"];
   setResults: (results: RunResult[]) => void;
   setRunning: (running: boolean) => void;
@@ -175,7 +158,7 @@ function useTimerInterval(params: Parameters<typeof useQuestionTimer>[0] & {
   timedOutQuestionId: React.MutableRefObject<string | null>;
 }) {
   useEffect(() => {
-    if (!params.currentQuestion || params.mode !== "leetcode" || params.questionFinished) {
+    if (!params.currentQuestion || params.mode !== "leetcode" || params.questionFinished || !params.sessionStarted) {
       return undefined;
     }
     const timer = window.setInterval(() => {
@@ -277,6 +260,7 @@ function usePracticeActions(params: {
   setResults: (results: RunResult[]) => void;
   setRunnerReady: (ready: boolean) => void;
   setRunning: (running: boolean) => void;
+  setSessionStarted: (started: boolean) => void;
   setState: React.Dispatch<React.SetStateAction<StudyState>>;
   setStatus: (status: string) => void;
   setTone: (tone: StatusTone) => void;
@@ -291,8 +275,9 @@ function usePracticeActions(params: {
   const updateSchedule = useUpdateSchedule(params.currentQuestion, params.code, params.setState);
   useRunnerMessages({ ...params, updateSchedule });
   const chooseQuestion = useChooseQuestion(params, updateDraft);
+  const startQuestion = useStartQuestion(params);
   const submitCode = useSubmitCode({ ...params, updateDraft, updateSchedule });
-  return { updateDraft, beautifyCurrentCode, handleEditorMount, chooseQuestion, submitCode };
+  return { updateDraft, beautifyCurrentCode, handleEditorMount, chooseQuestion, startQuestion, submitCode };
 }
 
 function useUpdateDraft(params: { currentQuestion: Question | null; setCode: (code: string) => void; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
@@ -339,7 +324,26 @@ function useChooseQuestion(params: Parameters<typeof usePracticeActions>[0], upd
     params.setTone("default");
     params.setStatus("Ready");
     params.setQuestionFinished(false);
+    params.setSessionStarted(false);
   }, [params, updateDraft]);
+}
+
+function useStartQuestion(params: Parameters<typeof usePracticeActions>[0]) {
+  return useCallback(() => {
+    if (!params.currentQuestion) {
+      return;
+    }
+    document.documentElement.requestFullscreen()
+      .then(() => {
+        params.setSessionStarted(true);
+        params.setTone("default");
+        params.setStatus("Started. Stay in fullscreen until you finish.");
+      })
+      .catch(() => {
+        params.setTone("fail");
+        params.setStatus("Could not enter fullscreen. Allow fullscreen to start.");
+      });
+  }, [params]);
 }
 
 function useSubmitCode(params: Parameters<typeof usePracticeActions>[0] & {
@@ -396,6 +400,36 @@ function handleRunTimeout(runId: string, formattedCode: string, params: Paramete
   }
 }
 
+function useFailQuestion(params: {
+  code: string;
+  currentQuestion: Question | null;
+  setQuestionFinished: (finished: boolean) => void;
+  setResults: (results: RunResult[]) => void;
+  setRunning: (running: boolean) => void;
+  setSessionStarted: (started: boolean) => void;
+  setState: React.Dispatch<React.SetStateAction<StudyState>>;
+  setStatus: (status: string) => void;
+  setTone: (tone: StatusTone) => void;
+  activeRunId: React.MutableRefObject<string | null>;
+  runTimer: React.MutableRefObject<number | null>;
+}) {
+  const { activeRunId, code, currentQuestion, runTimer, setQuestionFinished, setResults, setRunning, setSessionStarted, setState, setStatus, setTone } = params;
+  return useCallback((message: string) => {
+    if (!currentQuestion) {
+      return;
+    }
+    activeRunId.current = null;
+    clearRunTimer(runTimer);
+    setRunning(false);
+    setResults([]);
+    setTone("fail");
+    setStatus(message);
+    setQuestionFinished(true);
+    setSessionStarted(false);
+    setState((previous) => applyScheduleResult(previous, currentQuestion.id, false, code));
+  }, [activeRunId, code, currentQuestion, runTimer, setQuestionFinished, setResults, setRunning, setSessionStarted, setState, setStatus, setTone]);
+}
+
 function getTimerDisplay(currentQuestion: Question | null, timeRemainingMs: number) {
   const totalTimeLimitMs = currentQuestion ? getQuestionTimeLimitMs(currentQuestion) : 0;
   const timeUsedPercent = totalTimeLimitMs ? ((totalTimeLimitMs - timeRemainingMs) / totalTimeLimitMs) * PERCENT_MAX : 0;
@@ -447,118 +481,6 @@ function SummaryCards(props: { dueCount: number; mastered: number; recommended: 
   );
 }
 
-function ProblemCard(props: { currentQuestion: Question; chooseQuestion: (preferNext: boolean) => void }) {
-  return (
-    <Card withBorder>
-      <Group justify="space-between" align="flex-start">
-        <Box>
-          <Badge variant="light">{difficultyLabels[props.currentQuestion.difficulty]}</Badge>
-          <Title order={3} mt="xs">{props.currentQuestion.title}</Title>
-          <Group gap={6} mt="xs">
-            {props.currentQuestion.topics.map((topic) => <Badge key={topic} size="sm" variant="outline">{topic}</Badge>)}
-          </Group>
-        </Box>
-        <ActionIcon variant="light" size="lg" aria-label="Next question" onClick={() => props.chooseQuestion(true)}>
-          <IconArrowRight size={ICON_LG} />
-        </ActionIcon>
-      </Group>
-      <Text mt="md">{props.currentQuestion.prompt}</Text>
-      <Divider my="md" />
-      <Title order={5}>Examples</Title>
-      <List mt="xs" size="sm">
-        {props.currentQuestion.examples.map((example) => <List.Item key={example.input}>{example.input} =&gt; {example.output}</List.Item>)}
-      </List>
-      <Title order={5} mt="md">Constraints</Title>
-      <List mt="xs" size="sm">
-        {props.currentQuestion.constraints.map((constraint) => <List.Item key={constraint}>{constraint}</List.Item>)}
-      </List>
-    </Card>
-  );
-}
-
-function EditorCard(props: {
-  actions: PracticeActions;
-  code: string;
-  currentQuestion: Question;
-  questionFinished: boolean;
-  results: RunResult[];
-  runnerReady: boolean;
-  running: boolean;
-  runStatus: string;
-  statusColor: string;
-  timeRemainingMs: number;
-  timerColor: string;
-  timerLabel: string;
-  timeUsedPercent: number;
-}) {
-  return (
-    <Card withBorder p={0}>
-      <EditorToolbar {...props} />
-      <Progress value={props.timeUsedPercent} color={props.timerColor} radius={0} />
-      <Box h={360}>
-        <MonacoEditor height="360px" language="javascript" theme="vs-dark" value={props.code} onChange={(value) => props.actions.updateDraft(value || "")} onMount={props.actions.handleEditorMount} options={{ minimap: { enabled: false }, fontSize: EDITOR_FONT_SIZE, tabSize: 2, wordWrap: "on", scrollBeyondLastLine: false, automaticLayout: true, formatOnPaste: true, formatOnType: true }} />
-      </Box>
-      <Paper radius={0} p="sm" bg={`${props.statusColor}.0`}>
-        <Text size="sm" c={`${props.statusColor}.8`}>{props.runStatus}</Text>
-      </Paper>
-      <TestResults results={props.results} />
-    </Card>
-  );
-}
-
-function EditorToolbar(props: Parameters<typeof EditorCard>[0]) {
-  return (
-    <Group justify="space-between" p="sm">
-      <Group gap="xs">
-        <Badge leftSection={<IconCode size={ICON_XS} />} variant="light">{props.currentQuestion.functionName}()</Badge>
-        <Badge color={props.timerColor} variant="light">{props.timerLabel}</Badge>
-      </Group>
-      <Group gap="xs">
-        <Button size="xs" variant="default" leftSection={<IconRefresh size={ICON_SM} />} onClick={() => props.actions.updateDraft(props.currentQuestion.starter)}>Reset</Button>
-        <Button size="xs" variant="default" leftSection={<IconWand size={ICON_SM} />} onClick={() => props.actions.beautifyCurrentCode()}>Beautify</Button>
-        <Button size="xs" leftSection={<IconPlayerPlay size={ICON_SM} />} loading={props.running} disabled={!props.runnerReady || props.questionFinished || props.timeRemainingMs <= 0} onClick={props.actions.submitCode}>Submit</Button>
-      </Group>
-    </Group>
-  );
-}
-
-function TestResults(props: { results: RunResult[] }) {
-  if (props.results.length === 0) {
-    return null;
-  }
-  return (
-    <ScrollArea.Autosize mah={150}>
-      <List p="sm" size="sm" spacing={4}>
-        {props.results.map((result) => (
-          <List.Item key={result.name} icon={<ThemeIcon color={result.pass ? "green" : "red"} size={RESULT_ICON_SIZE} radius="xl"><IconCheck size={ICON_XS} /></ThemeIcon>}>
-            {result.pass ? `${result.name}: passed` : `${result.name}: expected ${result.expected}, got ${result.actual}`}
-          </List.Item>
-        ))}
-      </List>
-    </ScrollArea.Autosize>
-  );
-}
-
-function PracticeArea(props: { actions: PracticeActions; currentQuestion: Question | null; editorProps: Omit<Parameters<typeof EditorCard>[0], "actions" | "currentQuestion">; mode: StudyState["mode"] }) {
-  if (props.mode === "system") {
-    return (
-      <Card withBorder>
-        <Title order={3}>System Design</Title>
-        <Text c="dimmed" mt="xs">Track placeholder is ready. LeetCode cards are active first.</Text>
-      </Card>
-    );
-  }
-  if (!props.currentQuestion) {
-    return null;
-  }
-  return (
-    <SimpleGrid cols={{ base: 1, md: 2 }}>
-      <ProblemCard currentQuestion={props.currentQuestion} chooseQuestion={props.actions.chooseQuestion} />
-      <EditorCard {...props.editorProps} actions={props.actions} currentQuestion={props.currentQuestion} />
-    </SimpleGrid>
-  );
-}
-
 export default function Home() {
   const [state, setState] = useState<StudyState>(() => defaultState());
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
@@ -568,25 +490,28 @@ export default function Home() {
   const [results, setResults] = useState<RunResult[]>([]);
   const [running, setRunning] = useState(false);
   const [runnerReady, setRunnerReady] = useState(false);
+  const [sessionStarted, setSessionStarted] = useState(false);
   const activeRunId = useRef<string | null>(null);
   const runTimer = useRef<number | null>(null);
   const runnerFrame = useRef<HTMLIFrameElement | null>(null);
   useMonacoAssets();
   const hydrated = useHydrateStudy(setState, setCurrentQuestion, setCode);
   usePersistStudy(state, hydrated, setRunTone, setRunStatus);
-  const timer = useQuestionTimer({ code, currentQuestion, mode: state.mode, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer });
-  const actions = usePracticeActions({ code, currentQuestion, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setResults, setRunnerReady, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame });
+  const timer = useQuestionTimer({ code, currentQuestion, sessionStarted, mode: state.mode, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer });
+  const actions = usePracticeActions({ code, currentQuestion, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setResults, setRunnerReady, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame });
+  const failQuestion = useFailQuestion({ code, currentQuestion, setQuestionFinished: timer.setQuestionFinished, setResults, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer });
+  useFullscreenGuard({ active: state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished, failQuestion, setStatus: setRunStatus, setTone: setRunTone });
   const profile = useMemo(() => getProfileStats(state), [state]);
   const dueCount = useMemo(() => getDueQuestions(state).length, [state]);
   const timerDisplay = getTimerDisplay(currentQuestion, timer.timeRemainingMs);
   return (
     <>
       <Head><title>Study Ladder</title></Head>
-      <Container size="xl" px="md" py="md">
+      <Container fluid px="md" py="md">
         <Stack gap="md">
           <AppHeader modeValue={state.mode} setState={setState} />
           <SummaryCards dueCount={dueCount} mastered={profile.mastered} recommended={getRecommendedDifficulty(state)} streak={state.streak} timerLabel={timerDisplay.timerLabel} />
-          <PracticeArea actions={actions} currentQuestion={currentQuestion} editorProps={{ code, questionFinished: timer.questionFinished, results, runnerReady, running, runStatus, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} />
+          <PracticeArea actions={actions} currentQuestion={currentQuestion} editorProps={{ code, questionFinished: timer.questionFinished, results, runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} />
         </Stack>
       </Container>
       <iframe ref={runnerFrame} src={RUNNER_FRAME} title="JavaScript runner" hidden onLoad={() => setRunnerReady(true)} />
