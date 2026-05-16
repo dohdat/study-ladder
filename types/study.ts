@@ -15,6 +15,7 @@ export type Question = {
   prompt: string;
   constraints: string[];
   starter: string;
+  hint?: string;
   examples: Array<{
     explanation?: string;
     input: string;

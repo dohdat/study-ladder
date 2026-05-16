@@ -1,14 +1,11 @@
 import Head from "next/head";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Button,
   Container,
   Group,
   SegmentedControl,
-  Stack,
-  Tooltip
+  Stack
 } from "@mantine/core";
-import { IconUser } from "@tabler/icons-react";
 import { loader } from "@monaco-editor/react";
 import type { OnMount } from "@monaco-editor/react";
 
@@ -18,6 +15,7 @@ import { PlayerStatus } from "../components/PlayerStatus";
 import { RewardNotifications } from "../components/RewardNotifications";
 import type { RewardNotification } from "../components/RewardNotifications";
 import { SummaryCards } from "../components/SummaryCards";
+import { UserMenu } from "../components/UserMenu";
 import { questions } from "../data/questions";
 import { useCodexHintStream } from "../hooks/useCodexHintStream";
 import { useFullscreenGuard } from "../hooks/useFullscreenGuard";
@@ -42,6 +40,7 @@ import {
   setCard
 } from "../lib/studyCore";
 import { createHintPrompt } from "../lib/hintPrompt";
+import { createLocalHint } from "../lib/localHint";
 import { migrateLocalStorageState, saveStudyState } from "../lib/studyDb";
 import type { Question, RunResult, StudyState } from "../types/study";
 
@@ -53,7 +52,6 @@ const WARNING_MS = MINUTE_MS;
 const TIMER_PAD = 2;
 const NUMBER_BASE_HEX = 16;
 const PERCENT_MAX = 100;
-const ICON_MD = 16;
 const MAX_FAILED_TESTS_IN_STATUS = 3;
 const REWARD_TOAST_TIMEOUT_MS = 2400;
 const RUNNER_FRAME = "sandbox.html";
@@ -308,7 +306,7 @@ function usePracticeActions(params: {
   runTimer: React.MutableRefObject<number | null>;
   runnerFrame: React.MutableRefObject<HTMLIFrameElement | null>;
   clearHint: () => void;
-  startHint: (prompt: string) => void;
+  startHint: (prompt: string, localHint?: string) => void;
   showRewards: (question: Question) => void;
 }): PracticeActions {
   const updateDraft = useUpdateDraft(params);
@@ -387,17 +385,11 @@ function useBuyHint(params: Parameters<typeof usePracticeActions>[0]) {
       return;
     }
     const prompt = createHintPrompt(question, params.code);
-    navigator.clipboard.writeText(prompt)
-      .then(() => {
-        params.setState((previous) => buyHint(previous));
-        params.setTone("default");
-        params.setStatus("Asking Codex for one next step.");
-        params.startHint(prompt);
-      })
-      .catch(() => {
-        params.setTone("fail");
-        params.setStatus("Could not copy hint prompt.");
-      });
+    params.setState((previous) => buyHint(previous));
+    params.setTone("default");
+    params.setStatus("Asking Codex for one next step.");
+    params.startHint(prompt, createLocalHint(question));
+    navigator.clipboard?.writeText(prompt).catch(() => undefined);
   }, [params]);
 }
 
@@ -547,9 +539,7 @@ function AppHeader(props: {
           onChange={(value) => props.setState((previous) => ({ ...previous, mode: value as StudyState["mode"] }))}
           data={[{ label: "LeetCode", value: "leetcode" }, { label: "System Design", value: "system" }]}
         />
-        <Tooltip label="View mastery and topic progress" withArrow>
-          <Button component="a" href="profile.html" variant="default" leftSection={<IconUser size={ICON_MD} />}>Profile</Button>
-        </Tooltip>
+        <UserMenu />
       </Group>
     </Group>
   );

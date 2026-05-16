@@ -3,7 +3,7 @@ const HINT_REQUEST_TYPE = "open-codex-hint";
 const WARM_REQUEST_TYPE = "warm-codex-hint";
 
 let hintPort = null;
-let activeHintTabId = null;
+let hintRequestActive = false;
 
 function openStudyPage() {
   chrome.tabs.create({
@@ -35,9 +35,8 @@ function warmHintHost(sendResponse) {
 }
 
 function requestHint(message, sender, sendResponse) {
-  const tabId = sender.tab?.id;
-  if (!tabId || !message.prompt) {
-    sendResponse({ ok: false, error: "Practice tab or hint prompt is missing." });
+  if (!message.prompt) {
+    sendResponse({ ok: false, error: "Hint prompt is missing." });
     return false;
   }
 
@@ -47,7 +46,7 @@ function requestHint(message, sender, sendResponse) {
     return false;
   }
 
-  activeHintTabId = tabId;
+  hintRequestActive = true;
   port.postMessage({ type: "hint", prompt: message.prompt });
   sendResponse({ ok: true });
   return false;
@@ -60,19 +59,19 @@ function ensureHintPort() {
 
   hintPort = chrome.runtime.connectNative(CODEX_HINT_HOST);
   function relayNativeMessage(nativeMessage) {
-    if (activeHintTabId) {
+    if (hintRequestActive) {
       relayHintMessage(nativeMessage);
     }
     if (nativeMessage.type === "codex-hint-done" || nativeMessage.type === "codex-hint-error") {
-      activeHintTabId = null;
+      hintRequestActive = false;
     }
   }
   function handleDisconnect() {
     const error = chrome.runtime.lastError?.message;
-    if (error && activeHintTabId) {
+    if (error && hintRequestActive) {
       relayHintMessage({ type: "codex-hint-error", error });
     }
-    activeHintTabId = null;
+    hintRequestActive = false;
     hintPort = null;
   }
 

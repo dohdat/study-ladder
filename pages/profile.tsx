@@ -46,9 +46,14 @@ export default function Profile() {
       <Container size="xl" px="md" py="md">
         <Stack gap="md">
           <ProfileHeader loaded={loaded} />
-          <ProfileStats attempted={profile.attempted} solved={profile.solved} mastered={profile.mastered} accuracy={profile.accuracy} coins={state.profile.coins} currentExperience={levelProgress.currentExperience} health={state.profile.health} hintsBought={state.profile.hintsBought} level={levelProgress.level} nextLevelExperience={levelProgress.nextLevelExperience} />
+          <Box id="stats">
+            <ProfileStats attempted={profile.attempted} solved={profile.solved} mastered={profile.mastered} accuracy={profile.accuracy} coins={state.profile.coins} currentExperience={levelProgress.currentExperience} health={state.profile.health} hintsBought={state.profile.hintsBought} level={levelProgress.level} nextLevelExperience={levelProgress.nextLevelExperience} />
+          </Box>
           <TopicMasteryCard due={profile.due} streak={state.streak} topics={topics} />
-          <QuestionHistoryCard state={state} />
+          <Box id="achievements">
+            <QuestionHistoryCard state={state} />
+          </Box>
+          <SettingsCard />
         </Stack>
       </Container>
     </>
@@ -85,7 +90,7 @@ function useProfileState() {
 function ProfileHeader(props: { loaded: boolean }) {
   return (
     <Group justify="space-between" align="flex-start">
-      <Box>
+      <Box id="profile">
         <Title order={2}>Profile</Title>
         <Text c="dimmed" size="sm">
           {props.loaded ? "Progress and topic mastery" : "Loading progress"}
@@ -95,6 +100,15 @@ function ProfileHeader(props: { loaded: boolean }) {
         Practice
       </Button>
     </Group>
+  );
+}
+
+function SettingsCard() {
+  return (
+    <Card id="settings" withBorder>
+      <Title order={4}>Settings</Title>
+      <Text c="dimmed" size="sm" mt="xs">Practice settings will appear here.</Text>
+    </Card>
   );
 }
 

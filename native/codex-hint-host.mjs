@@ -11,6 +11,7 @@ const FIRST_REQUEST_ID = 1;
 const READY_STATUS = 200;
 const READY_ATTEMPTS = 100;
 const READY_DELAY_MS = 150;
+const HINT_TOTAL_TIMEOUT_MS = 12000;
 const TURN_TIMEOUT_MS = 120000;
 const STDERR_LIMIT = 8000;
 const HINT_EFFORT = "low";
@@ -30,6 +31,7 @@ const DEVELOPER_INSTRUCTIONS = [
 ].join("\n");
 
 let pendingInput = Buffer.alloc(BUFFER_START);
+let appServerHandle = null;
 let appServerPromise = null;
 let codexSessionPromise = null;
 let hintQueue = Promise.resolve();
@@ -94,22 +96,36 @@ function sendNativeMessage(message) {
 }
 
 async function runHintRequest(prompt) {
+  const requestTimeout = createTimeout(HINT_TOTAL_TIMEOUT_MS);
+  try {
+    const text = await Promise.race([runCodexHint(prompt), requestTimeout.promise]);
+    sendNativeMessage({ type: "codex-hint-done", text });
+  } catch (error) {
+    resetCodexConnection();
+    sendNativeMessage({ type: "codex-hint-error", error: getErrorMessage(error) });
+  } finally {
+    requestTimeout.cancel();
+  }
+}
+
+async function runCodexHint(prompt) {
   if (typeof WebSocket === "undefined") {
     throw new Error("Node WebSocket support is unavailable. Use Node 22 or newer for the native host.");
   }
 
   const session = await warmCodexSession();
-  const text = await streamCodexHint(session, prompt);
-  sendNativeMessage({ type: "codex-hint-done", text });
+  return await streamCodexHint(session, prompt);
 }
 
 async function warmHintServer() {
   if (!appServerPromise) {
     appServerPromise = startAppServer().then((appServer) => {
+      appServerHandle = appServer;
       appServer.childExitPromise.catch(() => {
         if (appServerPromise) {
           appServerPromise = null;
         }
+        appServerHandle = null;
         codexSessionPromise = null;
       });
       return appServer;
@@ -197,6 +213,19 @@ function stopAppServer(appServer) {
   if (!appServer.child.killed) {
     appServer.child.kill();
   }
+}
+
+function resetCodexConnection() {
+  const currentAppServer = appServerHandle;
+  const currentAppServerPromise = appServerPromise;
+  codexSessionPromise = null;
+  appServerPromise = null;
+  appServerHandle = null;
+  if (currentAppServer) {
+    stopAppServer(currentAppServer);
+    return;
+  }
+  currentAppServerPromise?.then(stopAppServer).catch(() => undefined);
 }
 
 function resolveCodexLaunchCommand() {
