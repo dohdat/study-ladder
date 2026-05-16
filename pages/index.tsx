@@ -520,6 +520,7 @@ function AppHeader(props: {
   level: number;
   modeValue: string;
   nextLevelExperience: number;
+  state: StudyState;
   setState: React.Dispatch<React.SetStateAction<StudyState>>;
 }) {
   return (
@@ -539,7 +540,7 @@ function AppHeader(props: {
           onChange={(value) => props.setState((previous) => ({ ...previous, mode: value as StudyState["mode"] }))}
           data={[{ label: "LeetCode", value: "leetcode" }, { label: "System Design", value: "system" }]}
         />
-        <UserMenu />
+        <UserMenu state={props.state} />
       </Group>
     </Group>
   );
@@ -600,6 +601,7 @@ export default function Home() {
             level={levelProgress.level}
             modeValue={state.mode}
             nextLevelExperience={levelProgress.nextLevelExperience}
+            state={state}
             setState={setState}
           />
           <SummaryCards dueCount={dueCount} mastered={profile.mastered} streak={state.streak} />
