@@ -39,6 +39,17 @@ const TAB_SIZE = 2;
 const LAYOUT_COLUMNS = 10;
 const QUESTION_COLUMN_SPAN = 3;
 const EDITOR_COLUMN_SPAN = 7;
+const CODE_FENCE = "```";
+const HINT_CODE_BG = "#171717";
+const HINT_CODE_BORDER = "1px solid rgba(255, 255, 255, 0.12)";
+const HINT_CODE_RADIUS = 6;
+const HINT_CODE_PADDING = 12;
+const HINT_CONTENT_GAP = 10;
+
+type HintSegment = {
+  content: string;
+  kind: "code" | "text";
+};
 
 export type PracticePanelActions = {
   updateDraft: (nextCode: string) => void;
@@ -211,19 +222,70 @@ function HintPanel(props: { hintError: string; hintStreaming: boolean; hintText:
   if (!props.hintStreaming && !props.hintText && !props.hintError) {
     return null;
   }
+  const content = props.hintError || props.hintText || "Thinking...";
   return (
     <Paper radius={0} p="sm" bg="dark.6">
       <Group gap="xs" align="flex-start">
         <IconBulb size={ICON_SM} />
-        <Box>
+        <Box flex={1}>
           <Text size="xs" c="dimmed" fw={700}>Codex hint</Text>
-          <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
-            {props.hintError || props.hintText || "Thinking..."}
-          </Text>
+          <HintContent content={content} />
         </Box>
       </Group>
     </Paper>
   );
+}
+
+function HintContent(props: { content: string }) {
+  return (
+    <Box mt={4} style={{ display: "grid", gap: HINT_CONTENT_GAP }}>
+      {splitHintMarkdown(props.content).map((segment, index) => <HintSegmentView key={`${segment.kind}-${index}`} segment={segment} />)}
+    </Box>
+  );
+}
+
+function HintSegmentView(props: { segment: HintSegment }) {
+  if (props.segment.kind === "code") {
+    return (
+      <Box component="pre" m={0} p={HINT_CODE_PADDING} style={{ background: HINT_CODE_BG, border: HINT_CODE_BORDER, borderRadius: HINT_CODE_RADIUS, overflowX: "auto" }}>
+        <Text component="code" size="sm" c="gray.0" style={{ fontFamily: "monospace", whiteSpace: "pre" }}>{props.segment.content}</Text>
+      </Box>
+    );
+  }
+
+  return <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>{props.segment.content}</Text>;
+}
+
+function splitHintMarkdown(content: string) {
+  const segments: HintSegment[] = [];
+  const textLines: string[] = [];
+  const codeLines: string[] = [];
+  let inCodeBlock = false;
+
+  for (const line of content.split("\n")) {
+    if (line.trim().startsWith(CODE_FENCE)) {
+      pushHintSegment(segments, inCodeBlock ? codeLines : textLines, inCodeBlock ? "code" : "text");
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeLines.push(line);
+    } else {
+      textLines.push(line);
+    }
+  }
+
+  pushHintSegment(segments, inCodeBlock ? codeLines : textLines, inCodeBlock ? "code" : "text");
+  return segments;
+}
+
+function pushHintSegment(segments: HintSegment[], lines: string[], kind: HintSegment["kind"]) {
+  const content = lines.join("\n").trim();
+  lines.length = 0;
+  if (content) {
+    segments.push({ content, kind });
+  }
 }
 
 function TestResults(props: { results: RunResult[] }) {

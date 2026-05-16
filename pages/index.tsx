@@ -17,6 +17,7 @@ import { IconUser } from "@tabler/icons-react";
 import { loader } from "@monaco-editor/react";
 import type { OnMount } from "@monaco-editor/react";
 
+import { CoinAmount } from "../components/CoinIcon";
 import { PracticeArea } from "../components/PracticePanels";
 import type { PracticePanelActions } from "../components/PracticePanels";
 import { questions } from "../data/questions";
@@ -509,7 +510,7 @@ function AppHeader(props: { modeValue: string; setState: React.Dispatch<React.Se
 
 function SummaryCards(props: { coins: number; dueCount: number; mastered: number; streak: number }) {
   const cards = [
-    { label: "Coins", value: props.coins },
+    { label: "Coins", value: <CoinAmount value={props.coins} /> },
     { label: "Due", value: props.dueCount },
     { label: "Mastered", value: `${props.mastered}/${questions.length}` },
     { label: "Streak", value: props.streak }

@@ -18,6 +18,7 @@ import {
 } from "@mantine/core";
 import { IconArrowLeft } from "@tabler/icons-react";
 
+import { CoinAmount } from "../components/CoinIcon";
 import { questions } from "../data/questions";
 import { defaultState, getCard, getProfileStats, getTopicStats, isMasteredCard, normalizeStudyState } from "../lib/studyCore";
 import { migrateLocalStorageState } from "../lib/studyDb";
@@ -98,7 +99,7 @@ function ProfileHeader(props: { loaded: boolean }) {
 
 function ProfileStats(props: { accuracy: number; attempted: number; coins: number; hintsBought: number; mastered: number; solved: number }) {
   const cards = [
-    { label: "Coins", value: props.coins },
+    { label: "Coins", value: <CoinAmount value={props.coins} /> },
     { label: "Hints Bought", value: props.hintsBought },
     { label: "Attempted", value: props.attempted },
     { label: "Solved", value: props.solved },

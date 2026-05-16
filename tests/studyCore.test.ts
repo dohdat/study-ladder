@@ -131,6 +131,14 @@ describe("studyCore", () => {
     expect(canBuyHint(state)).toBe(true);
   });
 
+  it("does not spend coins when a state is below the hint threshold", () => {
+    const state = defaultState();
+    state.profile.coins = -1;
+
+    expect(canBuyHint(state)).toBe(false);
+    expect(buyHint(state)).toBe(state);
+  });
+
   it("computes profile and topic stats", () => {
     let state = defaultState();
     state = applyScheduleResult(state, questions[0].id, true, "", 1000);

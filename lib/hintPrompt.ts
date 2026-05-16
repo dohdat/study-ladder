@@ -33,9 +33,11 @@ type ChromeRuntime = {
 export function createHintPrompt(question: Question, code: string) {
   return [
     "You are helping me practice a LeetCode-style JavaScript question.",
-    "Give me exactly one next-step hint.",
-    "Do not provide the full solution, final code, or complete algorithm.",
-    "Point out the smallest useful concept, edge case, or next move.",
+    "Give me exactly one next-step hint with a small JavaScript code fragment.",
+    "The fragment may be up to 3 lines and must be intentionally incomplete.",
+    "Do not include the full function, a complete loop, final return path, final code, or complete algorithm.",
+    "Use a TODO comment or placeholder when the next line would finish the solution.",
+    "Point out the smallest useful concept, edge case, or next move before the snippet.",
     "",
     `Question: ${question.title}`,
     `Function: ${question.functionName}`,
