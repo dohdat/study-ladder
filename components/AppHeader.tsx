@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Group, SegmentedControl } from "@mantine/core";
 
 import { PlayerStatus } from "./PlayerStatus";
 import { UserMenu } from "./UserMenu";
+import type { UserMenuSection } from "./UserMenu";
 import type { CharacterStats, StudyState } from "../types/study";
 
 export function AppHeader(props: {
@@ -18,6 +20,7 @@ export function AppHeader(props: {
   setState: React.Dispatch<React.SetStateAction<StudyState>>;
   stats: CharacterStats;
 }) {
+  const [activeSection, setActiveSection] = useState<UserMenuSection | null>(null);
   return (
     <Group justify="space-between" align="flex-start" wrap="wrap">
       <Group align="flex-start" gap="md" wrap="wrap">
@@ -30,6 +33,7 @@ export function AppHeader(props: {
           maxHealth={props.maxHealth}
           maxMana={props.maxMana}
           nextLevelExperience={props.nextLevelExperience}
+          onOpenStats={() => setActiveSection("stats")}
           stats={props.stats}
         />
       </Group>
@@ -39,7 +43,7 @@ export function AppHeader(props: {
           onChange={(value) => props.setState((previous) => ({ ...previous, mode: value as StudyState["mode"] }))}
           data={[{ label: "LeetCode", value: "leetcode" }, { label: "System Design", value: "system" }]}
         />
-        <UserMenu state={props.state} setState={props.setState} />
+        <UserMenu activeSection={activeSection} setActiveSection={setActiveSection} state={props.state} setState={props.setState} />
       </Group>
     </Group>
   );

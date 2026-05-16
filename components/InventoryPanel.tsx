@@ -1,6 +1,6 @@
 import { Badge, Box, Button, Group, Stack, Text } from "@mantine/core";
 
-import { canEquipItem, EQUIPMENT_SLOT_LABELS, equipItem, getActiveSetBonuses, getEquipmentStats } from "../lib/studyCore";
+import { canEquipItem, EQUIPMENT_SLOT_LABELS, equipItem, getActiveSetBonuses } from "../lib/studyCore";
 import type { EquipmentSlot, InventoryItem, StudyState } from "../types/study";
 
 const STAT_LABELS = {
@@ -39,6 +39,7 @@ const EQUIPMENT_LAYOUT: Record<EquipmentSlot, { gridColumn: string; gridRow: str
   backAccessory: { gridColumn: "3 / 4", gridRow: "4 / 5", minHeight: SMALL_SLOT_HEIGHT, title: "Belt / Back" },
   bodyAccessory: { gridColumn: "1 / 2", gridRow: "4 / 5", minHeight: SMALL_SLOT_HEIGHT, title: "Hands" },
   eyewear: { gridColumn: "4 / 5", gridRow: "3 / 4", minHeight: SMALL_SLOT_HEIGHT, title: "Ring / Eye" },
+  feet: { gridColumn: "5 / 6", gridRow: "4 / 5", minHeight: SMALL_SLOT_HEIGHT, title: "Boots" },
   headAccessory: { gridColumn: "2 / 3", gridRow: "3 / 4", minHeight: SMALL_SLOT_HEIGHT, title: "Amulet" },
   headgear: { gridColumn: "3 / 4", gridRow: "1 / 2", minHeight: PAPER_DOLL_ROW_HEIGHT, title: "Helm" },
   mainHand: { gridColumn: "1 / 2", gridRow: "1 / 4", minHeight: LARGE_SLOT_HEIGHT, title: "Left Hand" },
@@ -46,19 +47,12 @@ const EQUIPMENT_LAYOUT: Record<EquipmentSlot, { gridColumn: string; gridRow: str
 };
 
 export function InventoryPanel(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
-  const equipmentStats = getEquipmentStats(props.state);
   const activeSetBonuses = getActiveSetBonuses(props.state);
   return (
     <Stack gap="sm">
       <Box p="sm" style={{ background: PANEL_BG, border: "2px solid #8a744c", boxShadow: "inset 0 0 0 2px #111" }}>
         <Text ta="center" mb="xs" size="sm" fw={800} c="#c8a96a" style={{ letterSpacing: 3 }}>INVENTORY</Text>
         <EquipmentBoard state={props.state} />
-        <Group gap="xs" mt="sm">
-          <Badge variant="outline">STR +{equipmentStats.strength}</Badge>
-          <Badge variant="outline">CON +{equipmentStats.constitution}</Badge>
-          <Badge variant="outline">PER +{equipmentStats.perception}</Badge>
-          <Badge variant="outline">INT +{equipmentStats.intelligence}</Badge>
-        </Group>
         {activeSetBonuses.length > 0 && (
           <Stack gap={2} mt="sm">
             {activeSetBonuses.map((set) => (

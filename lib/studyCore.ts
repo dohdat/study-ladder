@@ -50,6 +50,13 @@ const MODIFIER_PERCENT_BASE = 100;
 const HASH_SEED = 2166136261;
 const HASH_MULTIPLIER = 16777619;
 const HASH_DIVISOR = 4294967296;
+const MONSTER_LEVEL_RATING_FLOOR = 900;
+const MONSTER_LEVEL_RATING_STEP = 100;
+const MONSTER_DAMAGE_BASE = 2;
+const MONSTER_DAMAGE_LEVEL_DIVISOR = 5;
+const MONSTER_DAMAGE_SPREAD_DIVISOR = 8;
+const MONSTER_DAMAGE_MIN_SPREAD = 1;
+const RANDOM_INCLUSIVE_OFFSET = 1;
 const MODIFIER_KEYS: ItemModifierKey[] = [
   "bonusXpPercent",
   "criticalChancePercent",
@@ -69,6 +76,7 @@ export const HINT_COST = 0;
 export const MAX_HEALTH = 50;
 export const HEALTH_LOSS_PER_FAIL = 5;
 export const EXPERIENCE_PER_LEVEL = 150;
+export const MAX_CHARACTER_LEVEL = 100;
 export const DEFAULT_CHARACTER_STATS: CharacterStats = {
   strength: 1,
   constitution: 1,
@@ -313,6 +321,17 @@ export const getHealthLoss = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL) 
   return Math.max(1, amount - defense - modifiers.damageReduction);
 };
 
+export const getMonsterLevel = (question: Question) => {
+  return Math.max(FIRST_STAT_LEVEL, Math.ceil((question.rating - MONSTER_LEVEL_RATING_FLOOR) / MONSTER_LEVEL_RATING_STEP));
+};
+
+export const getMonsterDamageRoll = (question: Question, now = Date.now()) => {
+  const monsterLevel = getMonsterLevel(question);
+  const baseDamage = MONSTER_DAMAGE_BASE + question.difficulty + Math.ceil(monsterLevel / MONSTER_DAMAGE_LEVEL_DIVISOR);
+  const spread = Math.max(MONSTER_DAMAGE_MIN_SPREAD, Math.ceil(monsterLevel / MONSTER_DAMAGE_SPREAD_DIVISOR));
+  return baseDamage + Math.floor(getSeededRoll(`${question.id}:${now}:monster-hit`) * (spread + RANDOM_INCLUSIVE_OFFSET));
+};
+
 export const getAttackDamage = (question: Question, state: StudyState) => {
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getEquipmentModifierTotals(state);
@@ -353,9 +372,11 @@ export const getManaReward = (question: Question, state: StudyState) => {
 
 export const getLevelProgress = (state: StudyState) => {
   const totalExperience = state.profile.experience;
+  const level = Math.min(MAX_CHARACTER_LEVEL, Math.floor(totalExperience / EXPERIENCE_PER_LEVEL) + 1);
+  const isCapped = level >= MAX_CHARACTER_LEVEL;
   return {
-    level: Math.floor(totalExperience / EXPERIENCE_PER_LEVEL) + 1,
-    currentExperience: totalExperience % EXPERIENCE_PER_LEVEL,
+    level,
+    currentExperience: isCapped ? EXPERIENCE_PER_LEVEL : totalExperience % EXPERIENCE_PER_LEVEL,
     nextLevelExperience: EXPERIENCE_PER_LEVEL
   };
 };
@@ -419,8 +440,12 @@ export const getQuestionDrop = (question: Question, state: StudyState, now = Dat
 };
 
 function getDropRoll(questionId: string, now: number) {
+  return getSeededRoll(`${questionId}:${now}:drop`);
+}
+
+function getSeededRoll(seed: string) {
   let hash = HASH_SEED;
-  for (const char of `${questionId}:${now}:drop`) {
+  for (const char of seed) {
     hash ^= char.charCodeAt(0);
     hash = Math.imul(hash, HASH_MULTIPLIER);
   }
@@ -524,7 +549,7 @@ export const getTopicStats = (state: StudyState) => {
   });
 };
 
-export const applyScheduleResult = (state: StudyState, questionId: string, passed: boolean, draft: string, now = Date.now()) => {
+export const applyScheduleResult = (state: StudyState, questionId: string, passed: boolean, draft: string, now = Date.now(), failureDamage = HEALTH_LOSS_PER_FAIL) => {
   const next = cloneState(state);
   const card = { ...getCard(next, questionId) };
   const wasMastered = isMasteredCard(card);
@@ -538,7 +563,7 @@ export const applyScheduleResult = (state: StudyState, questionId: string, passe
   if (passed) {
     applyPassedSchedule(next, card, questionId, state, wasMastered, now);
   } else {
-    applyFailedSchedule(next, card, state, now);
+    applyFailedSchedule(next, card, state, now, failureDamage);
   }
 
   setCard(next, questionId, card);
@@ -591,8 +616,8 @@ function getNextIntervalDays(card: CardState) {
   return Math.ceil(card.intervalDays * card.ease);
 }
 
-function applyFailedSchedule(next: StudyState, card: CardState, state: StudyState, now: number) {
-  next.profile.health = Math.max(0, next.profile.health - getHealthLoss(state));
+function applyFailedSchedule(next: StudyState, card: CardState, state: StudyState, now: number, failureDamage: number) {
+  next.profile.health = Math.max(0, next.profile.health - getHealthLoss(state, failureDamage));
   next.streak = 0;
   card.reps = Math.max(0, card.reps - 1);
   card.ease = Math.max(MIN_EASE, card.ease - FAIL_EASE_PENALTY);

@@ -1,5 +1,8 @@
+import { useState } from "react";
+
 import { Badge, Box, Group, Paper, Progress, Text } from "@mantine/core";
 
+import { getUniqueMonsterBonusDescription, getUniqueMonsterBonuses, getUniqueMonsterName } from "../lib/monsterCore";
 import type { Difficulty, Question, StudyState } from "../types/study";
 
 const RATING_MIN = 1000;
@@ -18,6 +21,8 @@ const GRID_CELLS = 24;
 const PIXEL_GAP = 0;
 const AVATAR_BORDER_WIDTH = 2;
 const AVATAR_SHADOW_WIDTH = 2;
+const BONUS_TOOLTIP_WIDTH = 260;
+const BONUS_TOOLTIP_Z_INDEX = 30;
 
 type MonsterKind = "brute" | "demon" | "dragon" | "ranger" | "reaper" | "skeleton" | "slime" | "snake";
 
@@ -280,18 +285,22 @@ const MONSTERS: Record<MonsterKind, MonsterDefinition> = {
 export function MonsterEncounter(props: { question: Question; state: StudyState }) {
   const health = getMonsterHealth(props.question);
   const monster = getMonsterDefinition(props.question);
+  const uniqueName = getUniqueMonsterName(props.question);
+  const bonuses = getUniqueMonsterBonuses(props.question);
+  const ratingColor = getRatingColor(props.question.rating);
   return (
-    <Paper withBorder p="xs" mt="md" bg="dark.7">
-      <Group gap="sm" wrap="nowrap" align="center">
+    <Paper withBorder p="xs" mt="md" bg="dark.7" style={{ overflow: "visible" }}>
+      <Group gap="sm" wrap="nowrap" align="center" style={{ overflow: "visible" }}>
         <MonsterAvatar monster={monster} />
-        <Box flex={1}>
+        <Box flex={1} style={{ overflow: "visible" }}>
           <Group justify="space-between" gap="xs" mb={4}>
             <Box>
-              <Text size="sm" fw={800}>{monster.name}</Text>
-              <Text size="xs" c="dimmed">Question Rating {props.question.rating}</Text>
+              <Text size="sm" fw={800} style={{ color: "#f1f3f5" }}>{uniqueName}</Text>
+              <Text size="xs" c="dimmed">{monster.name} - Question Rating {props.question.rating}</Text>
             </Box>
-            <Badge color={getRatingColor(props.question.rating)} variant="light">{props.question.rating}</Badge>
+            <Badge color={ratingColor} variant="light">{props.question.rating}</Badge>
           </Group>
+          <UniqueBonusBadges bonuses={bonuses} color={ratingColor} />
           <Group justify="space-between" gap="xs" mb={4}>
             <Text size="xs" c="dimmed" fw={700}>Enemy Health</Text>
             <Text size="xs" fw={700}>{health}/{health}</Text>
@@ -300,6 +309,62 @@ export function MonsterEncounter(props: { question: Question; state: StudyState 
         </Box>
       </Group>
     </Paper>
+  );
+}
+
+function UniqueBonusBadges(props: { bonuses: string[]; color: string }) {
+  if (!props.bonuses.length) {
+    return null;
+  }
+  return (
+    <Group gap={4} mb={6} style={{ overflow: "visible" }}>
+      {props.bonuses.map((bonus) => (
+        <UniqueBonusBadge key={bonus} bonus={bonus} color={props.color} />
+      ))}
+    </Group>
+  );
+}
+
+function UniqueBonusBadge(props: { bonus: string; color: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const description = getUniqueMonsterBonusDescription(props.bonus);
+  return (
+    <Box
+      component="span"
+      onBlur={() => setIsOpen(false)}
+      onFocus={() => setIsOpen(true)}
+      onMouseEnter={() => setIsOpen(true)}
+      onMouseLeave={() => setIsOpen(false)}
+      style={{ display: "inline-flex", position: "relative" }}
+      tabIndex={0}
+      title={description}
+    >
+      <Badge color={props.color} size="xs" variant="outline" style={{ cursor: "help" }}>{props.bonus}</Badge>
+      {isOpen ? <BonusTooltip description={description} /> : null}
+    </Box>
+  );
+}
+
+function BonusTooltip(props: { description: string }) {
+  return (
+    <Box
+      role="tooltip"
+      style={{
+        background: "#151515",
+        border: "1px solid #4b5563",
+        borderRadius: "6px",
+        boxShadow: "0 8px 24px rgba(0, 0, 0, 0.45)",
+        left: 0,
+        maxWidth: BONUS_TOOLTIP_WIDTH,
+        padding: "7px 9px",
+        position: "absolute",
+        top: "calc(100% + 6px)",
+        width: BONUS_TOOLTIP_WIDTH,
+        zIndex: BONUS_TOOLTIP_Z_INDEX
+      }}
+    >
+      <Text size="xs" c="gray.1">{props.description}</Text>
+    </Box>
   );
 }
 

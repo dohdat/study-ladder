@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
-import { ITEM_BASE_NAME_COUNT } from "../lib/itemCore";
+import { createDropItem, ITEM_BASE_NAME_COUNT } from "../lib/itemCore";
 import {
   DAY,
   EXPERIENCE_PER_LEVEL,
   HEALTH_LOSS_PER_FAIL,
   HINT_COST,
+  MAX_CHARACTER_LEVEL,
   MAX_HEALTH,
   applyScheduleResult,
   applyHealthPenalty,
@@ -31,6 +32,8 @@ import {
   getManaReward,
   getMaxHealth,
   getMaxMana,
+  getMonsterDamageRoll,
+  getMonsterLevel,
   getProfileStats,
   getQuestionTimeLimitMs,
   getQuestionDrop,
@@ -158,6 +161,14 @@ describe("studyCore", () => {
     expect(state.profile.health).toBe(MAX_HEALTH);
   });
 
+  it("rolls higher health loss for higher-level monsters", () => {
+    const easyQuestion = questions[0];
+    const hardQuestion = questions[questions.length - 1];
+
+    expect(getMonsterLevel(hardQuestion)).toBeGreaterThan(getMonsterLevel(easyQuestion));
+    expect(getMonsterDamageRoll(hardQuestion, 1000)).toBeGreaterThan(getMonsterDamageRoll(easyQuestion, 1000));
+  });
+
   it("computes level progress from total experience", () => {
     const state = defaultState();
     state.profile.experience = EXPERIENCE_PER_LEVEL + 12;
@@ -165,6 +176,17 @@ describe("studyCore", () => {
     expect(getLevelProgress(state)).toEqual({
       level: 2,
       currentExperience: 12,
+      nextLevelExperience: EXPERIENCE_PER_LEVEL
+    });
+  });
+
+  it("caps character level at one hundred", () => {
+    const state = defaultState();
+    state.profile.experience = EXPERIENCE_PER_LEVEL * (MAX_CHARACTER_LEVEL + 20);
+
+    expect(getLevelProgress(state)).toEqual({
+      level: MAX_CHARACTER_LEVEL,
+      currentExperience: EXPERIENCE_PER_LEVEL,
       nextLevelExperience: EXPERIENCE_PER_LEVEL
     });
   });
@@ -229,6 +251,24 @@ describe("studyCore", () => {
       .find((item) => item && item.rarity !== "common" && item.rarity !== "uncommon" && item.modifiers?.length);
 
     expect(specialDrop?.modifiers?.length).toBeGreaterThan(0);
+  });
+
+  it("scales item requirements and bonuses by item level", () => {
+    const starterQuestion = questions[0];
+    const endgameQuestion = questions[questions.length - 1];
+    const stats = { strength: 1, constitution: 1, perception: 40, intelligence: 1 };
+    const lowLevelLegendary = Array.from({ length: 5000 }, (_, index) => createDropItem(starterQuestion, stats, 800000 + index))
+      .find((item) => item.rarity === "legendary");
+    const endgameLegendary = Array.from({ length: 5000 }, (_, index) => createDropItem(endgameQuestion, stats, 900000 + index))
+      .find((item) => item.rarity === "legendary");
+
+    expect(lowLevelLegendary).toBeTruthy();
+    expect(lowLevelLegendary?.requirements.level).toBeLessThan(30);
+    expect(Object.values(lowLevelLegendary?.stats || {}).filter(Boolean).length).toBeLessThanOrEqual(2);
+    expect(Math.max(...Object.values(lowLevelLegendary?.stats || { strength: 0 }))).toBeLessThanOrEqual(1);
+    expect(lowLevelLegendary?.modifiers?.length).toBeLessThanOrEqual(1);
+    expect(endgameLegendary?.requirements.level).toBe(MAX_CHARACTER_LEVEL);
+    expect(endgameLegendary?.modifiers?.length).toBeLessThanOrEqual(3);
   });
 
   it("applies equipped special modifiers to rewards and combat math", () => {

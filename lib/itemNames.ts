@@ -40,14 +40,19 @@ export const ITEM_BASE_NAMES: Record<EquipmentSlot, string[]> = {
   bodyAccessory: [
     "Sash", "Light Belt", "Belt", "Heavy Belt", "Plated Belt", "Demonhide Sash", "Sharkskin Belt", "Mesh Belt",
     "Battle Belt", "War Belt", "Vambraces", "Heavy Bracers", "Chain Gloves", "Light Gauntlets", "Gauntlets", "War Gauntlets",
-    "Demonhide Gloves", "Sharkskin Gloves", "Heavy Gloves", "Vampirebone Gloves", "Bramble Mitts", "Crusader Gauntlets", "Ogre Gauntlets", "Wyrmhide Gloves",
-    "Greaves", "Chain Boots", "Light Plated Boots", "War Boots", "Demonhide Boots", "Wyrmhide Boots"
+    "Demonhide Gloves", "Sharkskin Gloves", "Heavy Gloves", "Vampirebone Gloves", "Bramble Mitts", "Crusader Gauntlets", "Ogre Gauntlets", "Wyrmhide Gloves"
   ],
   backAccessory: [
     "Traveler Cloak", "Raven Cloak", "Wolf Cloak", "Serpent Cloak", "Demon Cloak", "Wraith Cloak", "Moon Cloak", "Sun Cloak",
     "Grim Cloak", "Rune Cloak", "Dragon Mantle", "Storm Mantle", "Blood Mantle", "Dread Mantle", "Ghoul Mantle", "Plague Mantle",
     "Saintly Mantle", "Eagle Mantle", "Viper Mantle", "Chaos Mantle", "Bone Mantle", "Shadow Mantle", "Abyss Mantle", "Arcane Mantle",
     "War Cape", "Great Cape", "Ancient Cape", "Mystic Cape", "Doom Cape", "Havoc Cape"
+  ],
+  feet: [
+    "Boots", "Heavy Boots", "Chain Boots", "Light Plated Boots", "Greaves", "War Boots", "Demonhide Boots", "Sharkskin Boots",
+    "Mesh Boots", "Battle Boots", "Mirrored Boots", "Wyrmhide Boots", "Scarabshell Boots", "Boneweave Boots", "Myrmidon Greaves", "Sabatons",
+    "Sigon's Sabot", "Vidala's Fetlock", "Goblin Toe", "Treads of Cthon", "Infernostride", "Waterwalk", "Silkweave", "War Traveler",
+    "Gore Rider", "Sandstorm Trek", "Marrowwalk", "Shadow Dancer", "Aldur's Advance", "Natalya's Soul"
   ]
 };
 

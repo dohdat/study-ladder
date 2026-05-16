@@ -1,4 +1,5 @@
 import dynamic from "next/dynamic";
+import { useState } from "react";
 import {
   ActionIcon,
   Badge,
@@ -17,7 +18,7 @@ import {
   Tooltip,
   Title
 } from "@mantine/core";
-import { IconArrowRight, IconBulb, IconCheck, IconCode, IconLock, IconPlayerPlay, IconRefresh, IconTerminal2, IconWand } from "@tabler/icons-react";
+import { IconArrowRight, IconBulb, IconCheck, IconCode, IconLock, IconPlayerPlay, IconRefresh, IconTerminal2, IconWand, IconX } from "@tabler/icons-react";
 import type { OnMount } from "@monaco-editor/react";
 
 import { HighlightedCode } from "./HighlightedCode";
@@ -48,6 +49,17 @@ const EXAMPLE_ROW_GAP = 4;
 const EXAMPLE_BLOCK_PADDING_LEFT = 14;
 const EXAMPLE_BLOCK_BORDER = "2px solid rgba(255, 255, 255, 0.18)";
 const EXAMPLE_FONT_FAMILY = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+const CASE_TAB_MIN_WIDTH = 92;
+const RUN_PANEL_MAX_HEIGHT = 720;
+const RUN_BLOCK_BG = "#303030";
+const RUN_SECTION_GAP = 14;
+const RUN_VALUE_PADDING = 14;
+const RUN_BLOCK_RADIUS = 8;
+const RUN_LABEL_MARGIN_BOTTOM = 6;
+const RUN_TITLE_ORDER = 3;
+const FIRST_CASE_INDEX = 0;
+const ARG_INDEX_OFFSET = 1;
+const FUNCTION_SIGNATURE_GROUP = 1;
 
 type HintSegment = {
   content: string;
@@ -221,14 +233,14 @@ function EditorCard(props: EditorProps & { actions: PracticePanelActions; curren
       <EditorToolbar {...props} />
       <Progress value={props.timeUsedPercent} color={props.timerColor} radius={0} />
       <Box h={EDITOR_HEIGHT} pos="relative">
-        <MonacoEditor height={`${EDITOR_HEIGHT}px`} language="javascript" theme="vs-dark" value={props.code} onChange={(value) => props.actions.updateDraft(value || "")} onMount={props.actions.handleEditorMount} options={{ minimap: { enabled: false }, fontSize: EDITOR_FONT_SIZE, tabSize: TAB_SIZE, wordWrap: "on", scrollBeyondLastLine: false, automaticLayout: true, formatOnPaste: true, formatOnType: true, readOnly: !props.sessionStarted, readOnlyMessage: EDITOR_READ_ONLY_MESSAGE }} />
+        <MonacoEditor height={`${EDITOR_HEIGHT}px`} language="javascript" theme="vs-dark" value={props.code} onChange={(value) => props.actions.updateDraft(value || "")} onMount={props.actions.handleEditorMount} options={{ minimap: { enabled: false }, fontSize: EDITOR_FONT_SIZE, tabSize: TAB_SIZE, wordWrap: "on", scrollBeyondLastLine: false, automaticLayout: true, formatOnPaste: true, formatOnType: true, quickSuggestions: false, suggestOnTriggerCharacters: false, parameterHints: { enabled: false }, readOnly: !props.sessionStarted, readOnlyMessage: EDITOR_READ_ONLY_MESSAGE }} />
         {!props.sessionStarted && <LockedEditorOverlay />}
       </Box>
       <Paper radius={0} p="sm" bg={`${props.statusColor}.0`}>
         <Text size="sm" c={`${props.statusColor}.8`} style={{ whiteSpace: "pre-wrap" }}>{props.runStatus}</Text>
       </Paper>
       <HintPanel hintError={props.hintError} hintStreaming={props.hintStreaming} hintText={props.hintText} />
-      <ConsoleOutputPanel result={props.consoleRunResult} />
+      <ConsoleOutputPanel currentQuestion={props.currentQuestion} result={props.consoleRunResult} />
       <TestResults results={props.results} />
     </Card>
   );
@@ -298,9 +310,12 @@ function EditorToolbar(props: Parameters<typeof EditorCard>[0]) {
   );
 }
 
-function ConsoleOutputPanel(props: { result: ConsoleRunResult | null }) {
+function ConsoleOutputPanel(props: { currentQuestion: Question; result: ConsoleRunResult | null }) {
   if (!props.result) {
     return null;
+  }
+  if (props.result.results?.length) {
+    return <RunCasePanel currentQuestion={props.currentQuestion} result={props.result} />;
   }
   const output = props.result.output.length > 0 ? props.result.output.join("\n") : "(no console output)";
   const content = props.result.error ? `${output}\nError: ${props.result.error}` : output;
@@ -315,6 +330,99 @@ function ConsoleOutputPanel(props: { result: ConsoleRunResult | null }) {
       </Group>
     </Paper>
   );
+}
+
+function RunCasePanel(props: { currentQuestion: Question; result: ConsoleRunResult }) {
+  const [activeIndex, setActiveIndex] = useState(FIRST_CASE_INDEX);
+  const results = props.result.results || [];
+  const selectedIndex = Math.min(activeIndex, results.length - ARG_INDEX_OFFSET);
+  const selected = results[selectedIndex];
+  const argNames = getArgumentNames(props.currentQuestion);
+  const tone = props.result.ok ? "green" : "red";
+  return (
+    <Paper radius={0} p="md" bg="dark.8">
+      <Group gap="sm" align="baseline" mb="md">
+        <Title order={RUN_TITLE_ORDER} c={`${tone}.5`}>{props.result.ok ? "Accepted" : "Wrong Answer"}</Title>
+        {typeof props.result.runtimeMs === "number" && <Text size="sm" c="blue.3">Runtime: {props.result.runtimeMs} ms</Text>}
+      </Group>
+      <Group gap="sm" mb="md">
+        {results.map((result, index) => (
+          <Button
+            key={`${result.name}-${index}`}
+            size="sm"
+            variant={index === selectedIndex ? "filled" : "subtle"}
+            color={result.pass ? "green" : "red"}
+            leftSection={result.pass ? <IconCheck size={ICON_XS} /> : <IconX size={ICON_XS} />}
+            miw={CASE_TAB_MIN_WIDTH}
+            onClick={() => setActiveIndex(index)}
+          >
+            {result.name}
+          </Button>
+        ))}
+      </Group>
+      <ScrollArea.Autosize mah={RUN_PANEL_MAX_HEIGHT}>
+        {selected && <RunCaseDetails argNames={argNames} result={selected} />}
+      </ScrollArea.Autosize>
+    </Paper>
+  );
+}
+
+function RunCaseDetails(props: { argNames: string[]; result: RunResult }) {
+  return (
+    <Box style={{ display: "grid", gap: RUN_SECTION_GAP }}>
+      <RunSection label="Input" value={formatRunInput(props.result.args, props.argNames)} />
+      <RunSection label="Stdout" value={formatStdout(props.result.stdout)} />
+      <RunSection color={props.result.pass ? "green.4" : "red.4"} label="Output" value={props.result.actual} />
+      <RunSection color="green.4" label="Expected" value={props.result.expected} />
+    </Box>
+  );
+}
+
+function RunSection(props: { color?: string; label: string; value: string }) {
+  return (
+    <Box>
+      <Text fw={700} c="dimmed" mb={RUN_LABEL_MARGIN_BOTTOM}>{props.label}</Text>
+      <Box p={RUN_VALUE_PADDING} style={{ background: RUN_BLOCK_BG, borderRadius: RUN_BLOCK_RADIUS }}>
+        <Text c={props.color} style={{ fontFamily: EXAMPLE_FONT_FAMILY, whiteSpace: "pre-wrap" }}>{props.value}</Text>
+      </Box>
+    </Box>
+  );
+}
+
+function formatRunInput(args: string, argNames: string[]) {
+  const parsed = parseArgs(args);
+  return parsed.map((value, index) => `${argNames[index] || `arg${index + ARG_INDEX_OFFSET}`} = ${formatRunValue(value)}`).join("\n");
+}
+
+function formatStdout(stdout: string[] | undefined) {
+  return stdout?.length ? stdout.join("\n") : "(no console output)";
+}
+
+function parseArgs(args: string) {
+  try {
+    const parsed = JSON.parse(args);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    return [args];
+  }
+}
+
+function formatRunValue(value: unknown) {
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "undefined") {
+    return "undefined";
+  }
+  return JSON.stringify(value);
+}
+
+function getArgumentNames(question: Question) {
+  const match = question.starter.match(/\(([^)]*)\)/);
+  if (!match?.[FUNCTION_SIGNATURE_GROUP]) {
+    return [];
+  }
+  return match[FUNCTION_SIGNATURE_GROUP].split(",").map((name) => name.trim()).filter(Boolean);
 }
 
 function QuestionFunctionBadge(props: { currentQuestion: Question; sessionStarted: boolean }) {

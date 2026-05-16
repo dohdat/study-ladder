@@ -19,25 +19,9 @@ import { useStudyNotifications } from "../hooks/useStudyNotifications";
 import { beautifyCode } from "../lib/codeFormat";
 import { getTimerDisplay } from "../lib/timerDisplay";
 import {
-  applyScheduleResult,
-  applyHealthPenalty,
-  buyHint,
-  canBuyHint,
-  cloneState,
-  defaultState,
-  getCard,
-  getEffectiveCharacterStats,
-  getDueQuestions,
-  getHealthLoss,
-  getLevelProgress,
-  getMaxHealth,
-  getMaxMana,
-  getProfileStats,
-  getQuestionTimeLimitMs,
-  HINT_COST,
-  normalizeStudyState,
-  pickQuestion,
-  setCard
+  HINT_COST, applyHealthPenalty, applyScheduleResult, buyHint, canBuyHint, cloneState, defaultState, getCard,
+  getDueQuestions, getEffectiveCharacterStats, getHealthLoss, getLevelProgress, getMaxHealth, getMaxMana,
+  getMonsterDamageRoll, getProfileStats, getQuestionTimeLimitMs, normalizeStudyState, pickQuestion, setCard
 } from "../lib/studyCore";
 import { createHintPrompt } from "../lib/hintPrompt";
 import { createLocalHint } from "../lib/localHint";
@@ -48,21 +32,19 @@ import type { ConsoleRunResult, Question, RunResult, StudyState } from "../types
 
 const RUN_TIMEOUT_MS = 2500, SECOND_MS = 1000;
 const TIMER_PAD = 2, NUMBER_BASE_HEX = 16;
+const VISIBLE_RUN_CASE_COUNT = 3;
 
 type TestRunnerMessage = {
-  type: "run-result";
-  runId: string;
-  ok: boolean;
+  type: "run-result"; runId: string; ok: boolean;
   error?: string;
-  results: RunResult[];
+  results: RunResult[]; runtimeMs?: number;
 };
 
 type CodeRunMessage = {
-  type: "code-run-result";
-  runId: string;
-  ok: boolean;
+  type: "code-run-result"; runId: string; ok: boolean;
   error?: string;
   output: string[];
+  results?: RunResult[]; runtimeMs?: number;
 };
 type RunnerMessage = TestRunnerMessage | CodeRunMessage;
 
@@ -244,15 +226,19 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
   }
   if (!message.ok) {
     const failedResults = message.results.filter((result) => !result.pass);
-    params.showHealthLoss(getHealthLoss(params.state));
-    params.setState((previous) => applyHealthPenalty(previous));
-    params.setResults(failedResults);
+    const monsterDamage = getMonsterDamageRoll(question);
+    const healthLoss = getHealthLoss(params.state, monsterDamage);
+    params.showHealthLoss(healthLoss);
+    params.setState((previous) => applyHealthPenalty(previous, monsterDamage));
+    params.setResults([]);
+    params.setConsoleRunResult({ ok: false, output: [], results: message.results.slice(VISIBLE_RUN_CASE_COUNT), runtimeMs: message.runtimeMs });
     params.setTone("fail");
-    params.setStatus(`${getFailedTestsSummary(failedResults)} Health -${getHealthLoss(params.state)}. Fix this question before moving on.`);
+    params.setStatus(`${getFailedTestsSummary(failedResults)} Health -${healthLoss}. Fix this question before moving on.`);
     return;
   }
   const now = Date.now();
-  params.setResults(message.results);
+  params.setResults([]);
+  params.setConsoleRunResult({ ok: true, output: [], results: message.results.slice(VISIBLE_RUN_CASE_COUNT), runtimeMs: message.runtimeMs });
   params.showRewards(question, params.state, now);
   params.updateSchedule(true, undefined, now);
   params.setTone("pass");
@@ -262,9 +248,9 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
 
 function handleCodeRunMessage(message: CodeRunMessage, params: Parameters<typeof useRunnerMessages>[0]) {
   params.setResults([]);
-  params.setConsoleRunResult({ ok: message.ok, output: message.output, error: message.error });
-  params.setTone(message.ok ? "default" : "fail");
-  params.setStatus(message.ok ? "Code run completed." : "Code run failed.");
+  params.setConsoleRunResult({ ok: message.ok, output: message.output, error: message.error, results: message.results, runtimeMs: message.runtimeMs });
+  params.setTone(message.ok ? "pass" : "fail");
+  params.setStatus(message.ok ? "Accepted" : "Wrong Answer");
 }
 
 function clearRunTimer(runTimer: React.MutableRefObject<number | null>) {
@@ -481,7 +467,7 @@ function startConsoleRun(runId: string, formattedCode: string, params: Parameter
     runId,
     code: formattedCode,
     functionName: params.currentQuestion?.functionName,
-    tests: params.currentQuestion?.tests
+    tests: params.currentQuestion?.tests.slice(0, VISIBLE_RUN_CASE_COUNT)
   }, "*");
 }
 
@@ -532,12 +518,14 @@ function useFailAndAdvance(params: {
     if (!currentQuestion) {
       return;
     }
-    const scheduled = applyScheduleResult(state, currentQuestion.id, false, draft);
+    const monsterDamage = getMonsterDamageRoll(currentQuestion);
+    const healthLoss = getHealthLoss(state, monsterDamage);
+    const scheduled = applyScheduleResult(state, currentQuestion.id, false, draft, Date.now(), monsterDamage);
     const picked = pickQuestion(scheduled, currentQuestion, true);
     const nextState = { ...scheduled, currentId: picked.id };
     activeRunId.current = null;
     clearRunTimer(runTimer);
-    params.showHealthLoss(getHealthLoss(state));
+    params.showHealthLoss(healthLoss);
     setRunning(false);
     setResults([]);
     setConsoleRunResult(null);

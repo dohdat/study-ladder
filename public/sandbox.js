@@ -36,7 +36,7 @@ const createUserFunction = (code, functionName, consoleTarget = console) => {
   return loadUserFunction(consoleTarget);
 };
 
-const runSingleTest = async (userFunction, test) => {
+const runSingleTest = async (userFunction, test, stdout = []) => {
   const inputArgs = JSON.parse(JSON.stringify(test.args));
   const args = serialize(test.args);
   try {
@@ -46,7 +46,8 @@ const runSingleTest = async (userFunction, test) => {
       pass: stableEqual(actual, test.expected),
       args,
       expected: serialize(test.expected),
-      actual: serialize(actual)
+      actual: serialize(actual),
+      stdout
     };
   } catch (error) {
     return {
@@ -54,7 +55,8 @@ const runSingleTest = async (userFunction, test) => {
       pass: false,
       args,
       expected: serialize(test.expected),
-      actual: error && error.message ? error.message : String(error)
+      actual: error && error.message ? error.message : String(error),
+      stdout
     };
   }
 };
@@ -66,9 +68,14 @@ async function handleRunTests(event) {
   }
 
   const { runId, code, functionName, tests } = message;
+  let activeOutput = [];
+  const startedAt = Date.now();
+  const sandboxConsole = {
+    log: (...args) => activeOutput.push(args.map(serializeLogPart).join(" "))
+  };
 
   try {
-    const userFunction = createUserFunction(code, functionName);
+    const userFunction = createUserFunction(code, functionName, sandboxConsole);
 
     if (typeof userFunction !== "function") {
       postResult({
@@ -76,21 +83,24 @@ async function handleRunTests(event) {
         runId,
         ok: false,
         error: `Expected a function named ${functionName}.`,
-        results: []
+        results: [],
+        runtimeMs: Date.now() - startedAt
       });
       return;
     }
 
     const results = [];
-    for (const test of tests) {
-      results.push(await runSingleTest(userFunction, test));
+    for (const [index, test] of tests.entries()) {
+      activeOutput = [];
+      results.push({ ...await runSingleTest(userFunction, test, activeOutput), name: `Case ${index + 1}` });
     }
 
     postResult({
       type: "run-result",
       runId,
       ok: results.every((result) => result.pass),
-      results
+      results,
+      runtimeMs: Date.now() - startedAt
     });
   } catch (error) {
     postResult({
@@ -98,7 +108,8 @@ async function handleRunTests(event) {
       runId,
       ok: false,
       error: error && error.message ? error.message : String(error),
-      results: []
+      results: [],
+      runtimeMs: Date.now() - startedAt
     });
   }
 }
@@ -110,8 +121,10 @@ async function handleRunCode(event) {
   }
 
   const output = [];
+  let activeOutput = output;
+  const startedAt = Date.now();
   const sandboxConsole = {
-    log: (...args) => output.push(args.map(serializeLogPart).join(" "))
+    log: (...args) => activeOutput.push(args.map(serializeLogPart).join(" "))
   };
 
   try {
@@ -123,23 +136,49 @@ async function handleRunCode(event) {
         runId: message.runId,
         ok: false,
         error: `Expected a function named ${message.functionName}.`,
-        output
+        output,
+        results: [],
+        runtimeMs: Date.now() - startedAt
       });
       return;
     }
 
+    const results = [];
     for (const [index, test] of message.tests.entries()) {
-      output.push(`Case ${index + 1}: ${test.name}`);
+      const stdout = [];
+      activeOutput = stdout;
       const inputArgs = JSON.parse(JSON.stringify(test.args));
-      const actual = await userFunction(...inputArgs);
-      output.push(`return ${serialize(actual)}`);
+      try {
+        const actual = await userFunction(...inputArgs);
+        results.push({
+          name: `Case ${index + 1}`,
+          pass: stableEqual(actual, test.expected),
+          args: serialize(test.args),
+          expected: serialize(test.expected),
+          actual: serialize(actual),
+          stdout
+        });
+      } catch (error) {
+        results.push({
+          name: `Case ${index + 1}`,
+          pass: false,
+          args: serialize(test.args),
+          expected: serialize(test.expected),
+          actual: error && error.message ? error.message : String(error),
+          stdout
+        });
+      }
+      output.push(...stdout);
     }
+    activeOutput = output;
 
     postResult({
       type: "code-run-result",
       runId: message.runId,
-      ok: true,
-      output
+      ok: results.every((result) => result.pass),
+      output,
+      results,
+      runtimeMs: Date.now() - startedAt
     });
   } catch (error) {
     postResult({
@@ -147,7 +186,9 @@ async function handleRunCode(event) {
       runId: message.runId,
       ok: false,
       error: error && error.message ? error.message : String(error),
-      output
+      output,
+      results: [],
+      runtimeMs: Date.now() - startedAt
     });
   }
 }

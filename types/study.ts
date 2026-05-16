@@ -55,7 +55,8 @@ export type EquipmentSlot =
   | "headAccessory"
   | "eyewear"
   | "bodyAccessory"
-  | "backAccessory";
+  | "backAccessory"
+  | "feet";
 
 export type ItemRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 
@@ -118,10 +119,13 @@ export type RunResult = {
   args: string;
   expected: string;
   actual: string;
+  stdout?: string[];
 };
 
 export type ConsoleRunResult = {
   error?: string;
   ok: boolean;
   output: string[];
+  results?: RunResult[];
+  runtimeMs?: number;
 };

@@ -27,6 +27,7 @@ export function PlayerStatus(props: {
   maxHealth: number;
   maxMana: number;
   nextLevelExperience: number;
+  onOpenStats?: () => void;
   stats: CharacterStats;
 }) {
   const healthValue = (props.health / props.maxHealth) * PERCENT_MAX;
@@ -37,13 +38,19 @@ export function PlayerStatus(props: {
   return (
     <Paper
       withBorder
+      component="button"
+      type="button"
+      onClick={props.onOpenStats}
       p="xs"
       style={{
         alignItems: "center",
         background: "var(--mantine-color-dark-6)",
+        color: "inherit",
+        cursor: props.onOpenStats ? "pointer" : "default",
         display: "flex",
         gap: 12,
-        minWidth: 360
+        minWidth: 360,
+        textAlign: "left"
         }}
     >
       <AvatarIllustration gear={gear} level={props.level} />

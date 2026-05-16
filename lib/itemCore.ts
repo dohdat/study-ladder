@@ -3,6 +3,16 @@ import type { CharacterStatKey, CharacterStats, EquipmentSlot, InventoryItem, It
 
 const FIRST_STAT_LEVEL = 1;
 const MAX_CRITICAL_CHANCE = 0.5;
+const MIN_ITEM_LEVEL = 1;
+const MAX_ITEM_LEVEL = 100;
+const MIN_QUESTION_RATING = 1000;
+const MAX_QUESTION_RATING = 3500;
+const STAT_REQUIREMENT_PER_POWER_TIER = 2;
+const LEVELS_PER_POWER_TIER = 20;
+const LOW_LEVEL_AFFIX_MAX_LEVEL = 20;
+const MID_LEVEL_AFFIX_MAX_LEVEL = 50;
+const LOW_LEVEL_MODIFIER_MAX_LEVEL = 30;
+const MID_LEVEL_MODIFIER_MAX_LEVEL = 70;
 const HASH_SEED = 2166136261;
 const HASH_MULTIPLIER = 16777619;
 const HASH_DIVISOR = 4294967296;
@@ -15,7 +25,7 @@ const RARE_ROLL_MAX = 0.24;
 const UNCOMMON_ROLL_MAX = 0.48;
 const RARITY_AFFIX_COUNTS: Record<ItemRarity, number> = { common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 4 };
 const RARITY_STAT_MAX: Record<ItemRarity, number> = { common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 5 };
-const RARITY_LEVEL_REQUIREMENTS: Record<ItemRarity, number> = { common: 1, uncommon: 2, rare: 4, epic: 7, legendary: 10 };
+const RARITY_LEVEL_OFFSET: Record<ItemRarity, number> = { common: 0, uncommon: 2, rare: 5, epic: 9, legendary: 14 };
 const RARITY_STAT_REQUIREMENTS: Record<ItemRarity, number> = { common: 0, uncommon: 2, rare: 4, epic: 7, legendary: 10 };
 const RARITY_MODIFIER_COUNTS: Record<ItemRarity, number> = { common: 0, uncommon: 0, rare: 1, epic: 2, legendary: 3 };
 const SET_DROP_CHANCE = 0.18;
@@ -35,12 +45,13 @@ const MODIFIER_POOLS: Array<{ key: ItemModifierKey; min: number; max: number }> 
 ];
 
 export const ITEM_BASE_NAME_COUNT = ITEM_NAME_POOL_COUNT;
-export const EQUIPMENT_SLOTS: EquipmentSlot[] = ["mainHand", "offHand", "headgear", "armor", "headAccessory", "eyewear", "bodyAccessory", "backAccessory"];
+export const EQUIPMENT_SLOTS: EquipmentSlot[] = ["mainHand", "offHand", "headgear", "armor", "headAccessory", "eyewear", "bodyAccessory", "backAccessory", "feet"];
 export const SLOT_LABELS: Record<EquipmentSlot, string> = {
   armor: "Armor",
   backAccessory: "Back Accessory",
   bodyAccessory: "Body Accessory",
   eyewear: "Eyewear",
+  feet: "Boots",
   headAccessory: "Head Accessory",
   headgear: "Headgear",
   mainHand: "Main-hand Item",
@@ -51,6 +62,7 @@ export const SLOT_STAT_BIAS: Record<EquipmentSlot, CharacterStatKey> = {
   backAccessory: "perception",
   bodyAccessory: "constitution",
   eyewear: "intelligence",
+  feet: "perception",
   headAccessory: "perception",
   headgear: "intelligence",
   mainHand: "strength",
@@ -70,15 +82,16 @@ export function createDropItem(question: Question, stats: CharacterStats, now: n
   const seed = `${question.id}:${now}`;
   const slot = pickFrom(EQUIPMENT_SLOTS, seededRandom(`${seed}:slot`));
   const rarity = getDropRarity(question, stats, seed);
-  const itemStats = rollItemStats(slot, rarity, seed);
+  const itemLevel = getItemLevelRequirement(question, rarity);
+  const itemStats = rollItemStats(slot, rarity, itemLevel, seed);
   const primaryStat = getStrongestItemStat(itemStats) || SLOT_STAT_BIAS[slot];
   const setDefinition = getDropSet(question, seed);
   const setPieceName = setDefinition ? pickFrom([...setDefinition.pieces], seededRandom(`${seed}:set-piece`)) : null;
   return {
     id: `item-${question.id}-${now}-${Math.floor(seededRandom(`${seed}:id`) * HASH_SEED).toString(ITEM_ID_RADIX)}`,
-    modifiers: rollItemModifiers(rarity, seed),
+    modifiers: rollItemModifiers(rarity, itemLevel, seed),
     name: setPieceName || createItemName(slot, rarity, primaryStat, seed),
-    requirements: rollItemRequirements(question, rarity, primaryStat, seed),
+    requirements: rollItemRequirements(rarity, primaryStat, itemLevel, seed),
     rarity,
     setId: setDefinition?.id,
     slot,
@@ -114,23 +127,31 @@ function createItemName(slot: EquipmentSlot, rarity: ItemRarity, primaryStat: Ch
   return rarity === "rare" ? `${rareName} ${baseName}` : `${rareName} ${baseName} ${pickFrom(affixes.suffixes, seededRandom(`${seed}:suffix`))}`;
 }
 
-function rollItemRequirements(question: Question, rarity: ItemRarity, primaryStat: CharacterStatKey, seed: string) {
-  const statRequirement = RARITY_STAT_REQUIREMENTS[rarity];
+function getItemLevelRequirement(question: Question, rarity: ItemRarity) {
+  const clampedRating = Math.min(MAX_QUESTION_RATING, Math.max(MIN_QUESTION_RATING, question.rating));
+  const ratingProgress = (clampedRating - MIN_QUESTION_RATING) / (MAX_QUESTION_RATING - MIN_QUESTION_RATING);
+  const ratingLevel = MIN_ITEM_LEVEL + Math.round(ratingProgress * (MAX_ITEM_LEVEL - MIN_ITEM_LEVEL));
+  return Math.min(MAX_ITEM_LEVEL, Math.max(MIN_ITEM_LEVEL, ratingLevel + RARITY_LEVEL_OFFSET[rarity]));
+}
+
+function rollItemRequirements(rarity: ItemRarity, primaryStat: CharacterStatKey, itemLevel: number, seed: string) {
+  const statRequirement = Math.min(RARITY_STAT_REQUIREMENTS[rarity], getItemPowerTier(itemLevel) * STAT_REQUIREMENT_PER_POWER_TIER);
   return {
-    level: Math.max(FIRST_STAT_LEVEL, RARITY_LEVEL_REQUIREMENTS[rarity] + question.difficulty - FIRST_STAT_LEVEL),
+    level: itemLevel,
     stats: statRequirement > 0 && seededRandom(`${seed}:requires-stat`) > MAX_CRITICAL_CHANCE ? { [primaryStat]: statRequirement } : {}
   };
 }
 
-function rollItemStats(slot: EquipmentSlot, rarity: ItemRarity, seed: string): Partial<CharacterStats> {
+function rollItemStats(slot: EquipmentSlot, rarity: ItemRarity, itemLevel: number, seed: string): Partial<CharacterStats> {
   const itemStats: Partial<CharacterStats> = {};
   const chosen = [SLOT_STAT_BIAS[slot]];
-  for (let index = FIRST_STAT_LEVEL; index < RARITY_AFFIX_COUNTS[rarity]; index += FIRST_STAT_LEVEL) {
+  const affixCount = Math.min(RARITY_AFFIX_COUNTS[rarity], getLevelAffixCap(itemLevel));
+  for (let index = FIRST_STAT_LEVEL; index < affixCount; index += FIRST_STAT_LEVEL) {
     const candidate = pickFrom(STAT_KEYS, seededRandom(`${seed}:affix:${index}`));
     chosen.push(chosen.includes(candidate) ? pickFallbackStat(chosen, index) : candidate);
   }
   for (const [index, stat] of chosen.entries()) {
-    itemStats[stat] = (itemStats[stat] || 0) + rollStatValue(rarity, `${seed}:value:${stat}:${index}`);
+    itemStats[stat] = (itemStats[stat] || 0) + rollStatValue(rarity, itemLevel, `${seed}:value:${stat}:${index}`);
   }
   return itemStats;
 }
@@ -139,12 +160,13 @@ function pickFallbackStat(chosen: CharacterStatKey[], index: number) {
   return STAT_KEYS.find((stat) => !chosen.includes(stat)) || STAT_KEYS[index % STAT_KEYS.length];
 }
 
-function rollStatValue(rarity: ItemRarity, seed: string) {
-  return FIRST_STAT_LEVEL + Math.floor(seededRandom(seed) * RARITY_STAT_MAX[rarity]);
+function rollStatValue(rarity: ItemRarity, itemLevel: number, seed: string) {
+  const statMax = Math.min(RARITY_STAT_MAX[rarity], getItemPowerTier(itemLevel));
+  return FIRST_STAT_LEVEL + Math.floor(seededRandom(seed) * statMax);
 }
 
-function rollItemModifiers(rarity: ItemRarity, seed: string) {
-  const modifierCount = RARITY_MODIFIER_COUNTS[rarity];
+function rollItemModifiers(rarity: ItemRarity, itemLevel: number, seed: string) {
+  const modifierCount = Math.min(RARITY_MODIFIER_COUNTS[rarity], getLevelModifierCap(itemLevel));
   const picked: ItemModifierKey[] = [];
   for (let index = 0; index < modifierCount; index += FIRST_STAT_LEVEL) {
     const poolItem = pickAvailableModifier(picked, `${seed}:modifier:${index}`);
@@ -152,7 +174,7 @@ function rollItemModifiers(rarity: ItemRarity, seed: string) {
   }
   return picked.map((key, index) => {
     const poolItem = MODIFIER_POOLS.find((modifier) => modifier.key === key) || MODIFIER_POOLS[0];
-    return { key, value: rollModifierValue(poolItem, `${seed}:modifier-value:${key}:${index}`) };
+    return { key, value: rollModifierValue(poolItem, itemLevel, `${seed}:modifier-value:${key}:${index}`) };
   });
 }
 
@@ -161,8 +183,40 @@ function pickAvailableModifier(picked: ItemModifierKey[], seed: string) {
   return pickFrom(available.length ? available : MODIFIER_POOLS, seededRandom(seed));
 }
 
-function rollModifierValue(poolItem: { min: number; max: number }, seed: string) {
-  return poolItem.min + Math.floor(seededRandom(seed) * (poolItem.max - poolItem.min + FIRST_STAT_LEVEL));
+function rollModifierValue(poolItem: { min: number; max: number }, itemLevel: number, seed: string) {
+  const scaledMax = Math.max(FIRST_STAT_LEVEL, Math.ceil(poolItem.max * (itemLevel / MAX_ITEM_LEVEL)));
+  const scaledMin = Math.min(poolItem.min, scaledMax);
+  return scaledMin + Math.floor(seededRandom(seed) * (scaledMax - scaledMin + FIRST_STAT_LEVEL));
+}
+
+function getItemPowerTier(itemLevel: number) {
+  return Math.max(FIRST_STAT_LEVEL, Math.ceil(itemLevel / LEVELS_PER_POWER_TIER));
+}
+
+function getLevelAffixCap(itemLevel: number) {
+  const LOW_LEVEL_AFFIX_CAP = 2;
+  const MID_LEVEL_AFFIX_CAP = 3;
+  const HIGH_LEVEL_AFFIX_CAP = 4;
+  if (itemLevel < LOW_LEVEL_AFFIX_MAX_LEVEL) {
+    return LOW_LEVEL_AFFIX_CAP;
+  }
+  if (itemLevel < MID_LEVEL_AFFIX_MAX_LEVEL) {
+    return MID_LEVEL_AFFIX_CAP;
+  }
+  return HIGH_LEVEL_AFFIX_CAP;
+}
+
+function getLevelModifierCap(itemLevel: number) {
+  const LOW_LEVEL_MODIFIER_CAP = 1;
+  const MID_LEVEL_MODIFIER_CAP = 2;
+  const HIGH_LEVEL_MODIFIER_CAP = 3;
+  if (itemLevel < LOW_LEVEL_MODIFIER_MAX_LEVEL) {
+    return LOW_LEVEL_MODIFIER_CAP;
+  }
+  if (itemLevel < MID_LEVEL_MODIFIER_MAX_LEVEL) {
+    return MID_LEVEL_MODIFIER_CAP;
+  }
+  return HIGH_LEVEL_MODIFIER_CAP;
 }
 
 function getStrongestItemStat(stats: Partial<CharacterStats>): CharacterStatKey | null {
