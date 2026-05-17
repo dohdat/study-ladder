@@ -51,8 +51,14 @@ export type CharacterStatKey = keyof CharacterStats;
 
 export type ElementalDamageType = "fire" | "cold" | "lightning" | "poison";
 
+export type ActiveWarriorSkillId = "powerStrike" | "tripleStrike" | "sureCrit" | "whirlwindAssault";
+
 export type WarriorSkillId =
+  | ActiveWarriorSkillId
+  | "arcaneFocus"
+  | "axeMastery"
   | "bash"
+  | "battleCry"
   | "battleCommand"
   | "battleOrders"
   | "concentrate"
@@ -60,11 +66,17 @@ export type WarriorSkillId =
   | "findItem"
   | "findPotion"
   | "frenzy"
+  | "goldMastery"
+  | "grimWard"
   | "howl"
   | "ironSkin"
   | "naturalResistance"
+  | "quickRecovery"
+  | "rallyingCry"
+  | "shieldMastery"
   | "shout"
   | "swordMastery"
+  | "treasureSense"
   | "taunt"
   | "warCry"
   | "whirlwind";
@@ -154,6 +166,7 @@ export type StudyState = {
     lastStudiedAt: number | null;
     stats: CharacterStats;
     skillRanks: Partial<Record<WarriorSkillId, number>>;
+    activeSkill: ActiveWarriorSkillId | null;
     inventory: InventoryItem[];
     equipment: Record<EquipmentSlot, string | null>;
     shopLastRefreshedAt: number | null;

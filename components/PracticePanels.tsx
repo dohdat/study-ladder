@@ -18,13 +18,14 @@ import {
   Tooltip,
   Title
 } from "@mantine/core";
-import { IconArrowRight, IconBulb, IconCheck, IconCode, IconLock, IconPlayerPlay, IconRefresh, IconTerminal2, IconWand, IconX } from "@tabler/icons-react";
+import { IconArrowRight, IconBolt, IconBulb, IconCheck, IconCode, IconLock, IconPlayerPlay, IconRefresh, IconTerminal2, IconWand, IconX } from "@tabler/icons-react";
 import type { OnMount } from "@monaco-editor/react";
 
 import { HighlightedCode } from "./HighlightedCode";
 import { MonsterEncounter } from "./MonsterEncounter";
 import { difficultyLabels } from "../lib/studyCore";
-import type { ConsoleRunResult, Question, RunResult, StudyState } from "../types/study";
+import { ACTIVE_WARRIOR_SKILLS, canUseActiveWarriorSkill, getActiveWarriorSkill, getWarriorSkillRank } from "../lib/skillCore";
+import type { ActiveWarriorSkillId, ConsoleRunResult, Question, RunResult, StudyState } from "../types/study";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 const ICON_XS = 12;
@@ -79,6 +80,7 @@ export type PracticePanelActions = {
   runCode: () => void;
   startQuestion: () => void;
   submitCode: () => void;
+  useActiveSkill: (skillId: ActiveWarriorSkillId) => void;
 };
 
 type EditorProps = {
@@ -132,7 +134,7 @@ export function PracticeArea(props: {
         />
       </Grid.Col>
       <Grid.Col span={{ base: LAYOUT_COLUMNS, md: EDITOR_COLUMN_SPAN }}>
-        <EditorCard {...props.editorProps} actions={props.actions} currentQuestion={props.currentQuestion} />
+        <EditorCard {...props.editorProps} actions={props.actions} currentQuestion={props.currentQuestion} state={props.state} />
       </Grid.Col>
     </Grid>
   );
@@ -229,7 +231,7 @@ function ExampleRow(props: { label: string; value: string }) {
   );
 }
 
-function EditorCard(props: EditorProps & { actions: PracticePanelActions; currentQuestion: Question }) {
+function EditorCard(props: EditorProps & { actions: PracticePanelActions; currentQuestion: Question; state: StudyState }) {
   return (
     <Card withBorder p={0}>
       <EditorToolbar {...props} />
@@ -281,34 +283,88 @@ function EditorToolbar(props: Parameters<typeof EditorCard>[0]) {
         <Badge color={props.timerColor} variant="light">{props.timerLabel}</Badge>
       </Group>
       <Group gap="xs">
-        <Tooltip label="Start timer and enter fullscreen" withArrow>
-          <Box component="span">
-            <Button size="xs" variant="default" leftSection={<IconPlayerPlay size={ICON_SM} />} disabled={props.sessionStarted} onClick={props.actions.startQuestion}>Start</Button>
-          </Box>
-        </Tooltip>
-        <Tooltip label="Restore the starter code" withArrow>
-          <Button size="xs" variant="default" leftSection={<IconRefresh size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.updateDraft(props.currentQuestion.starter)}>Reset</Button>
-        </Tooltip>
-        <Tooltip label="Format JavaScript code (Ctrl+S)" withArrow>
-          <Button size="xs" variant="default" leftSection={<IconWand size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.beautifyCurrentCode()}>Beautify</Button>
-        </Tooltip>
-        <Tooltip label={`Buy one next-step hint (${props.hintCost} coins)`} withArrow>
-          <Box component="span">
-            <Button size="xs" variant="default" leftSection={<IconBulb size={ICON_SM} />} disabled={!props.sessionStarted || !props.canBuyHint} onClick={props.actions.buyHint}>Hint</Button>
-          </Box>
-        </Tooltip>
-        <Tooltip label="Run code and show console.log output" withArrow>
-          <Box component="span">
-            <Button size="xs" variant="default" leftSection={<IconTerminal2 size={ICON_SM} />} loading={props.running} disabled={!props.runnerReady || props.questionFinished || !props.sessionStarted || props.timeRemainingMs <= 0} onClick={props.actions.runCode}>Run</Button>
-          </Box>
-        </Tooltip>
-        <Tooltip label="Submit code against hidden tests (Ctrl+Enter)" withArrow>
-          <Box component="span">
-            <Button size="xs" leftSection={<IconCheck size={ICON_SM} />} loading={props.running} disabled={!props.runnerReady || props.questionFinished || !props.sessionStarted || props.timeRemainingMs <= 0} onClick={props.actions.submitCode}>Submit</Button>
-          </Box>
-        </Tooltip>
+        <SetupToolbarActions {...props} />
+        <ActiveSkillButtons
+          disabled={!props.sessionStarted || props.questionFinished || props.running || props.timeRemainingMs <= 0}
+          state={props.state}
+          useActiveSkill={props.actions.useActiveSkill}
+        />
+        <RunToolbarActions {...props} />
       </Group>
     </Group>
+  );
+}
+
+function SetupToolbarActions(props: Parameters<typeof EditorCard>[0]) {
+  return (
+    <>
+      <Tooltip label="Start timer and enter fullscreen" withArrow>
+        <Box component="span">
+          <Button size="xs" variant="default" leftSection={<IconPlayerPlay size={ICON_SM} />} disabled={props.sessionStarted} onClick={props.actions.startQuestion}>Start</Button>
+        </Box>
+      </Tooltip>
+      <Tooltip label="Restore the starter code" withArrow>
+        <Button size="xs" variant="default" leftSection={<IconRefresh size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.updateDraft(props.currentQuestion.starter)}>Reset</Button>
+      </Tooltip>
+      <Tooltip label="Format JavaScript code (Ctrl+S)" withArrow>
+        <Button size="xs" variant="default" leftSection={<IconWand size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.beautifyCurrentCode()}>Beautify</Button>
+      </Tooltip>
+      <Tooltip label={`Buy one next-step hint (${props.hintCost} coins)`} withArrow>
+        <Box component="span">
+          <Button size="xs" variant="default" leftSection={<IconBulb size={ICON_SM} />} disabled={!props.sessionStarted || !props.canBuyHint} onClick={props.actions.buyHint}>Hint</Button>
+        </Box>
+      </Tooltip>
+    </>
+  );
+}
+
+function RunToolbarActions(props: Parameters<typeof EditorCard>[0]) {
+  const disabled = !props.runnerReady || props.questionFinished || !props.sessionStarted || props.timeRemainingMs <= 0;
+  return (
+    <>
+      <Tooltip label="Run code and show console.log output" withArrow>
+        <Box component="span">
+          <Button size="xs" variant="default" leftSection={<IconTerminal2 size={ICON_SM} />} loading={props.running} disabled={disabled} onClick={props.actions.runCode}>Run</Button>
+        </Box>
+      </Tooltip>
+      <Tooltip label="Submit code against hidden tests (Ctrl+Enter)" withArrow>
+        <Box component="span">
+          <Button size="xs" leftSection={<IconCheck size={ICON_SM} />} loading={props.running} disabled={disabled} onClick={props.actions.submitCode}>Submit</Button>
+        </Box>
+      </Tooltip>
+    </>
+  );
+}
+
+function ActiveSkillButtons(props: { disabled: boolean; state: StudyState; useActiveSkill: (skillId: ActiveWarriorSkillId) => void }) {
+  const activeSkill = getActiveWarriorSkill(props.state.profile.activeSkill);
+  return (
+    <>
+      {ACTIVE_WARRIOR_SKILLS.map((skill) => {
+        const unlocked = getWarriorSkillRank(props.state.profile.skillRanks, skill.id) > 0;
+        const canUse = canUseActiveWarriorSkill(props.state, skill.id);
+        const disabled = props.disabled || !canUse;
+        const label = unlocked
+          ? `${skill.description} Costs ${skill.cost} mana.`
+          : `Unlock ${skill.name} in the skill tree first.`;
+        return (
+          <Tooltip key={skill.id} label={activeSkill?.id === skill.id ? `${skill.name} is readied.` : label} withArrow>
+            <Box component="span">
+              <Button
+                size="xs"
+                variant={activeSkill?.id === skill.id ? "light" : "default"}
+                color={activeSkill?.id === skill.id ? "yellow" : undefined}
+                leftSection={<IconBolt size={ICON_SM} />}
+                disabled={disabled}
+                onClick={() => props.useActiveSkill(skill.id)}
+              >
+                {skill.name}
+              </Button>
+            </Box>
+          </Tooltip>
+        );
+      })}
+    </>
   );
 }
 

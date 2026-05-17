@@ -4,7 +4,7 @@ import { questions } from "../data/questions";
 import { applyPassedCombatResult, getMonsterCurrentHealth } from "../lib/combatCore";
 import { createDropItem, ITEM_BASE_NAME_COUNT } from "../lib/itemCore";
 import { getEstimatedRating } from "../lib/ratingCore";
-import { getAvailableWarriorSkillPoints, spendWarriorSkillPoint } from "../lib/skillCore";
+import { WARRIOR_SKILLS, activateWarriorSkill, canUseActiveWarriorSkill, getAvailableWarriorSkillPoints, spendWarriorSkillPoint } from "../lib/skillCore";
 import {
   EXPERIENCE_PER_LEVEL,
   HEALTH_LOSS_PER_FAIL,
@@ -49,10 +49,26 @@ import {
   pickQuestion,
   setCard,
   equipItem,
+  unequipItem,
   spendStatPoint
 } from "../lib/studyCore";
 
 describe("studyCore", () => {
+  it("keeps every question identity and prompt unique", () => {
+    expect(new Set(questions.map((question) => question.id)).size).toBe(questions.length);
+    expect(new Set(questions.map((question) => question.title)).size).toBe(questions.length);
+    expect(new Set(questions.map((question) => question.functionName)).size).toBe(questions.length);
+    expect(new Set(questions.map((question) => question.prompt)).size).toBe(questions.length);
+  });
+
+  it("keeps each warrior skill tab filled out", () => {
+    const counts = WARRIOR_SKILLS.reduce<Record<string, number>>((total, skill) => ({ ...total, [skill.branch]: (total[skill.branch] || 0) + 1 }), {});
+
+    expect(counts["Combat Skills"]).toBeGreaterThanOrEqual(8);
+    expect(counts["Combat Masteries"]).toBeGreaterThanOrEqual(8);
+    expect(counts.Warcries).toBeGreaterThanOrEqual(8);
+  });
+
   it("normalizes empty and partial persisted state", () => {
     const empty = normalizeStudyState(null);
     expect(empty.mode).toBe("leetcode");
@@ -289,6 +305,45 @@ describe("studyCore", () => {
     expect(getElementalResistances(state).fire).toBe(3);
   });
 
+  it("queues active warrior skills and consumes them on the next monster hit", () => {
+    const question = questions[0];
+    let state = defaultState();
+    state.profile.experience = EXPERIENCE_PER_LEVEL * 20;
+    state.profile.mana = getMaxMana(state);
+    state = spendWarriorSkillPoint(state, "bash", getLevelProgress(state).level);
+    state = spendWarriorSkillPoint(state, "powerStrike", getLevelProgress(state).level);
+    const manaBeforeSkill = state.profile.mana;
+
+    expect(canUseActiveWarriorSkill(state, "powerStrike")).toBe(true);
+    state = activateWarriorSkill(state, "powerStrike");
+    expect(state.profile.activeSkill).toBe("powerStrike");
+    expect(state.profile.mana).toBe(manaBeforeSkill - 5);
+
+    const normal = applyPassedCombatResult(defaultState(), question.id, "draft", 1000);
+    const powered = applyPassedCombatResult(state, question.id, "draft", 1000);
+
+    expect(powered.hit?.activeSkillName).toBe("Power Strike");
+    expect(powered.hit?.damage).toBeGreaterThan(normal.hit?.damage || 0);
+    expect(powered.state.profile.activeSkill).toBeNull();
+  });
+
+  it("applies multi-hit active warrior skills", () => {
+    const question = questions[0];
+    let state = defaultState();
+    state.profile.experience = EXPERIENCE_PER_LEVEL * 20;
+    state.profile.mana = getMaxMana(state);
+    state = spendWarriorSkillPoint(state, "bash", getLevelProgress(state).level);
+    state = spendWarriorSkillPoint(state, "doubleSwing", getLevelProgress(state).level);
+    state = spendWarriorSkillPoint(state, "tripleStrike", getLevelProgress(state).level);
+    state = activateWarriorSkill(state, "tripleStrike");
+
+    const result = applyPassedCombatResult(state, question.id, "draft", 1000);
+
+    expect(result.hit?.activeSkillName).toBe("Triple Strike");
+    expect(result.hit?.hitCount).toBe(3);
+    expect(result.hit?.damage).toBe((result.hit?.perHitDamage || 0) * 3);
+  });
+
   it("drops and equips stat bonus items from solved questions", () => {
     const question = questions.find((row) => row.difficulty === 5) || questions[0];
     let state = defaultState();
@@ -311,6 +366,9 @@ describe("studyCore", () => {
     const equipped = equipItem(state, state.profile.inventory[0].id);
     expect(equipped.profile.equipment[state.profile.inventory[0].slot]).toBe(state.profile.inventory[0].id);
     expect(getEffectiveCharacterStats(equipped)[stat]).toBe(beforeStats[stat] + (item.stats[stat] || 0));
+
+    const unequipped = unequipItem(equipped, state.profile.inventory[0].slot);
+    expect(unequipped.profile.equipment[state.profile.inventory[0].slot]).toBeNull();
   });
 
   it("adds special modifiers to rarer item drops", () => {

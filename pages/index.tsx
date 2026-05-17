@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import Head from "next/head";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Container, Stack } from "@mantine/core";
@@ -9,6 +10,7 @@ import { DeathResetModal } from "../components/DeathResetModal";
 import { RewardNotifications, type RewardNotification } from "../components/RewardNotifications";
 import { questions } from "../data/questions";
 import { useCodexHintStream } from "../hooks/useCodexHintStream";
+import { useActiveWarriorSkillAction } from "../hooks/useActiveWarriorSkillAction";
 import { useFullscreenGuard } from "../hooks/useFullscreenGuard";
 import { useHeaderStats } from "../hooks/useHeaderStats";
 import { useMonacoAssets } from "../hooks/useMonacoAssets";
@@ -247,11 +249,11 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
   params.clearHint();
   if (combat.hit?.defeated) {
     params.setTone("pass");
-    params.setStatus(`Monster defeated. ${formatHitStatus(combat.hit.damage, combat.hit.critical)} Next question loaded.`);
+    params.setStatus(`Monster defeated. ${formatHitStatus(combat.hit)} Next question loaded.`);
     return;
   }
   params.setTone("pass");
-  params.setStatus(`${formatHitStatus(combat.hit?.damage || 0, Boolean(combat.hit?.critical))} Enemy health ${combat.hit?.remainingHealth}/${combat.hit?.maxHealth}. Next question loaded.`);
+  params.setStatus(`${combat.hit ? formatHitStatus(combat.hit) : "Hit for 0."} Enemy health ${combat.hit?.remainingHealth}/${combat.hit?.maxHealth}. Next question loaded.`);
 }
 
 function handleCodeRunMessage(message: CodeRunMessage, params: Parameters<typeof useRunnerMessages>[0]) {
@@ -261,8 +263,10 @@ function handleCodeRunMessage(message: CodeRunMessage, params: Parameters<typeof
   params.setStatus(message.ok ? "Accepted" : "Wrong Answer");
 }
 
-function formatHitStatus(damage: number, critical: boolean) {
-  return critical ? `Critical hit for ${damage}.` : `Hit for ${damage}.`;
+function formatHitStatus(hit: NonNullable<ReturnType<typeof applyPassedCombatResult>["hit"]>) {
+  const skill = hit.activeSkillName ? `${hit.activeSkillName} ` : "";
+  const hitCount = hit.hitCount > 1 ? ` x${hit.hitCount}` : "";
+  return hit.critical ? `${skill}critical hit${hitCount} for ${hit.damage}.` : `${skill}hit${hitCount} for ${hit.damage}.`;
 }
 
 function getFailStatus(attack: ReturnType<typeof getMonsterAttackProfile>) {
@@ -312,8 +316,9 @@ function usePracticeActions(params: {
   const startQuestion = useStartQuestion(params);
   const submitCode = useSubmitCode({ ...params, updateDraft });
   const runCode = useRunCode({ ...params, updateDraft });
+  const useActiveSkill = useActiveWarriorSkillAction({ setState: params.setState, setStatus: params.setStatus, setTone: params.setTone, state: params.state });
   const handleEditorMount = useEditorMount(beautifyCurrentCode, submitCode);
-  return { updateDraft, beautifyCurrentCode, handleEditorMount, chooseQuestion, buyHint: buyHintAction, runCode, startQuestion, submitCode };
+  return { updateDraft, beautifyCurrentCode, handleEditorMount, chooseQuestion, buyHint: buyHintAction, runCode, startQuestion, submitCode, useActiveSkill };
 }
 
 function useUpdateDraft(params: { currentQuestion: Question | null; setCode: (code: string) => void; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {

@@ -1,4 +1,4 @@
-import type { StudyState, WarriorSkillId } from "../types/study";
+import type { ActiveWarriorSkillId, StudyState, WarriorSkillId } from "../types/study";
 
 export type WarriorSkillBranch = "Warcries" | "Combat Masteries" | "Combat Skills";
 export type WarriorSkillDefinition = {
@@ -11,6 +11,14 @@ export type WarriorSkillDefinition = {
   requires?: WarriorSkillId[];
   row: number;
   synergy?: string;
+};
+
+export type ActiveWarriorSkillDefinition = {
+  cost: number;
+  description: string;
+  id: ActiveWarriorSkillId;
+  name: string;
+  requires: WarriorSkillId;
 };
 
 export type WarriorSkillBonuses = {
@@ -40,16 +48,26 @@ const FRENZY_DAMAGE = 7;
 const WHIRLWIND_DAMAGE = 10;
 const SWORD_MASTERY_DAMAGE = 4;
 const SWORD_MASTERY_CRIT = 1;
+const AXE_MASTERY_DAMAGE = 3;
+const AXE_MASTERY_CRIT = 1;
+const SHIELD_MASTERY_REDUCTION = 1;
+const QUICK_RECOVERY_LIFE = 2;
+const ARCANE_FOCUS_MANA = 3;
+const TREASURE_SENSE_MAGIC = 3;
+const GOLD_MASTERY_GOLD = 4;
 const IRON_SKIN_REDUCTION = 1;
 const NATURAL_RESISTANCE = 3;
 const SHOUT_REDUCTION = 1;
+const BATTLE_CRY_REDUCTION = 1;
 const BATTLE_ORDERS_LIFE = 4;
 const BATTLE_ORDERS_MANA = 4;
+const RALLYING_CRY_MANA = 2;
 const BATTLE_COMMAND_XP = 3;
 const FIND_ITEM_MAGIC = 5;
 const FIND_POTION_LIFE = 1;
 const WAR_CRY_REDUCTION = 1;
 const DOUBLE_SWING_MANA = 1;
+const GRIM_WARD_MAGIC = 4;
 const TAUNT_GOLD = 3;
 const HOWL_SYNERGY = 2;
 const SHOUT_SYNERGY = 2;
@@ -58,23 +76,43 @@ const MASTERY_SYNERGY = 2;
 const ORDERS_SYNERGY = 2;
 const FIND_POTION_SYNERGY = 3;
 
+export const ACTIVE_WARRIOR_SKILLS: ActiveWarriorSkillDefinition[] = [
+  { cost: 5, description: "Queue a heavy blow: the next successful submit deals double damage.", id: "powerStrike", name: "Power Strike", requires: "bash" },
+  { cost: 8, description: "Queue a combo: the next successful submit hits the monster 3 separate times.", id: "tripleStrike", name: "Triple Strike", requires: "doubleSwing" },
+  { cost: 10, description: "Queue a focused finisher: the next successful submit is guaranteed to crit.", id: "sureCrit", name: "Sure Crit", requires: "concentrate" },
+  { cost: 14, description: "Queue a storm attack: the next successful submit hits 5 times at reduced damage per hit.", id: "whirlwindAssault", name: "Whirlwind", requires: "whirlwind" }
+];
+
 export const WARRIOR_SKILLS: WarriorSkillDefinition[] = [
-  { branch: "Warcries", description: "Unlocks shouts. +3% gold find per rank.", id: "howl", levelRequired: 1, maxRank: MAX_RANK, name: "Howl", row: 1 },
-  { branch: "Warcries", description: "Prereq shout. Synergizes Battle Cry effects.", id: "taunt", levelRequired: 6, maxRank: MAX_RANK, name: "Taunt", requires: ["howl"], row: 2 },
-  { branch: "Warcries", description: "Hardens armor. +1 defense per rank.", id: "shout", levelRequired: 6, maxRank: MAX_RANK, name: "Shout", requires: ["howl"], row: 2, synergy: "Improves Concentrate defense." },
-  { branch: "Warcries", description: "Loot cry. +5% magic find per rank.", id: "findItem", levelRequired: 12, maxRank: MAX_RANK, name: "Find Item", requires: ["findPotion"], row: 3, synergy: "Find Potion adds +3% magic find per rank." },
-  { branch: "Warcries", description: "Raises life and mana.", id: "battleOrders", levelRequired: 24, maxRank: MAX_RANK, name: "Battle Orders", requires: ["shout"], row: 5, synergy: "Shout adds +2 life and mana per rank." },
-  { branch: "Warcries", description: "Command shout. +3% bonus XP per rank.", id: "battleCommand", levelRequired: 30, maxRank: MAX_RANK, name: "Battle Command", requires: ["battleOrders"], row: 6, synergy: "Battle Orders adds +2% bonus XP per rank." },
-  { branch: "Combat Masteries", description: "Weapon training. +damage and crit.", id: "swordMastery", levelRequired: 1, maxRank: MAX_RANK, name: "Sword Mastery", row: 1 },
-  { branch: "Combat Masteries", description: "Potion discipline. +life on successful submit.", id: "findPotion", levelRequired: 1, maxRank: MAX_RANK, name: "Find Potion", row: 1 },
-  { branch: "Combat Masteries", description: "Toughened hide. Reduces failed-submit damage.", id: "ironSkin", levelRequired: 18, maxRank: MAX_RANK, name: "Iron Skin", row: 4, synergy: "Shout adds extra defense." },
-  { branch: "Combat Masteries", description: "Elemental hardening. Adds all resistances.", id: "naturalResistance", levelRequired: 30, maxRank: MAX_RANK, name: "Natural Resistance", requires: ["ironSkin"], row: 6 },
-  { branch: "Combat Skills", description: "Opening strike. +5% damage per rank.", id: "bash", levelRequired: 1, maxRank: MAX_RANK, name: "Bash", row: 1, synergy: "Strengthens Concentrate and Frenzy." },
-  { branch: "Combat Skills", description: "Fast rhythm. +mana on successful submit.", id: "doubleSwing", levelRequired: 6, maxRank: MAX_RANK, name: "Double Swing", requires: ["bash"], row: 2 },
-  { branch: "Combat Skills", description: "Focused attack. +damage and defense.", id: "concentrate", levelRequired: 18, maxRank: MAX_RANK, name: "Concentrate", requires: ["bash"], row: 4, synergy: "Bash and Shout improve it." },
-  { branch: "Combat Skills", description: "Momentum attack. +damage and crit.", id: "frenzy", levelRequired: 24, maxRank: MAX_RANK, name: "Frenzy", requires: ["doubleSwing"], row: 5, synergy: "Bash and Sword Mastery improve it." },
-  { branch: "Combat Skills", description: "Top-tier sweep. Heavy damage bonus.", id: "whirlwind", levelRequired: 30, maxRank: MAX_RANK, name: "Whirlwind", requires: ["concentrate"], row: 6, synergy: "Sword Mastery adds +2% damage per rank." },
-  { branch: "Warcries", description: "Damaging shout. Reduces incoming mistake damage.", id: "warCry", levelRequired: 30, maxRank: MAX_RANK, name: "War Cry", requires: ["battleOrders"], row: 6, synergy: "Howl and Taunt improve mitigation." }
+  { branch: "Warcries", description: "Scares loose treasure. Raises gold find per rank.", id: "howl", levelRequired: 1, maxRank: MAX_RANK, name: "Howl", row: 1 },
+  { branch: "Warcries", description: "Weakens enemies through pressure. Improves War Cry mitigation.", id: "taunt", levelRequired: 6, maxRank: MAX_RANK, name: "Taunt", requires: ["howl"], row: 2 },
+  { branch: "Warcries", description: "Hardens your stance. Reduces failed-submit damage.", id: "shout", levelRequired: 6, maxRank: MAX_RANK, name: "Shout", requires: ["howl"], row: 2, synergy: "Improves Concentrate defense and Battle Orders." },
+  { branch: "Warcries", description: "Softens enemy pressure. Reduces failed-submit damage.", id: "battleCry", levelRequired: 12, maxRank: MAX_RANK, name: "Battle Cry", requires: ["taunt"], row: 3 },
+  { branch: "Warcries", description: "Turns victories into better loot. Raises magic find.", id: "findItem", levelRequired: 12, maxRank: MAX_RANK, name: "Find Item", requires: ["findPotion"], row: 3, synergy: "Find Potion adds extra magic find." },
+  { branch: "Warcries", description: "Marks defeated enemies. Raises magic find.", id: "grimWard", levelRequired: 18, maxRank: MAX_RANK, name: "Grim Ward", requires: ["battleCry"], row: 4 },
+  { branch: "Warcries", description: "Short command chant. Raises max mana.", id: "rallyingCry", levelRequired: 18, maxRank: MAX_RANK, name: "Rallying Cry", requires: ["shout"], row: 4 },
+  { branch: "Warcries", description: "Battle chant that grows max life and max mana.", id: "battleOrders", levelRequired: 24, maxRank: MAX_RANK, name: "Battle Orders", requires: ["shout"], row: 5, synergy: "Shout adds life and mana per rank." },
+  { branch: "Warcries", description: "Veteran command that increases bonus XP.", id: "battleCommand", levelRequired: 30, maxRank: MAX_RANK, name: "Battle Command", requires: ["battleOrders"], row: 6, synergy: "Battle Orders adds more bonus XP." },
+  { branch: "Warcries", description: "Punishing shout. Reduces incoming mistake damage.", id: "warCry", levelRequired: 30, maxRank: MAX_RANK, name: "War Cry", requires: ["battleOrders"], row: 6, synergy: "Howl and Taunt improve mitigation." },
+  { branch: "Combat Masteries", description: "Weapon discipline. Adds damage and critical chance.", id: "swordMastery", levelRequired: 1, maxRank: MAX_RANK, name: "Sword Mastery", row: 1 },
+  { branch: "Combat Masteries", description: "Heavy weapon training. Adds damage and critical chance.", id: "axeMastery", levelRequired: 1, maxRank: MAX_RANK, name: "Axe Mastery", row: 1 },
+  { branch: "Combat Masteries", description: "Survival habit. Restores life on successful submissions.", id: "findPotion", levelRequired: 1, maxRank: MAX_RANK, name: "Find Potion", row: 1 },
+  { branch: "Combat Masteries", description: "Guard discipline. Reduces failed-submit damage.", id: "shieldMastery", levelRequired: 6, maxRank: MAX_RANK, name: "Shield Mastery", row: 2 },
+  { branch: "Combat Masteries", description: "Recover faster from mistakes. Raises max life.", id: "quickRecovery", levelRequired: 12, maxRank: MAX_RANK, name: "Quick Recovery", requires: ["shieldMastery"], row: 3 },
+  { branch: "Combat Masteries", description: "Toughened armor. Reduces failed-submit damage.", id: "ironSkin", levelRequired: 18, maxRank: MAX_RANK, name: "Iron Skin", row: 4, synergy: "Shout adds extra defense." },
+  { branch: "Combat Masteries", description: "Focuses resource flow. Raises max mana.", id: "arcaneFocus", levelRequired: 18, maxRank: MAX_RANK, name: "Arcane Focus", row: 4 },
+  { branch: "Combat Masteries", description: "Notices better drops. Raises magic find.", id: "treasureSense", levelRequired: 24, maxRank: MAX_RANK, name: "Treasure Sense", requires: ["findPotion"], row: 5 },
+  { branch: "Combat Masteries", description: "Squeezes more coins from rewards. Raises gold find.", id: "goldMastery", levelRequired: 24, maxRank: MAX_RANK, name: "Gold Mastery", requires: ["treasureSense"], row: 5 },
+  { branch: "Combat Masteries", description: "Elemental discipline. Adds fire, cold, lightning, and poison resistance.", id: "naturalResistance", levelRequired: 30, maxRank: MAX_RANK, name: "Natural Resistance", requires: ["ironSkin"], row: 6 },
+  { branch: "Combat Skills", description: "Foundation strike. Adds reliable damage every rank.", id: "bash", levelRequired: 1, maxRank: MAX_RANK, name: "Bash", row: 1, synergy: "Strengthens Concentrate and Frenzy." },
+  { branch: "Combat Skills", description: "Active attack. Spend mana from the toolbar to double your next successful hit.", id: "powerStrike", levelRequired: 6, maxRank: MAX_RANK, name: "Power Strike", requires: ["bash"], row: 2 },
+  { branch: "Combat Skills", description: "Rhythm training. Restores mana on successful submissions.", id: "doubleSwing", levelRequired: 6, maxRank: MAX_RANK, name: "Double Swing", requires: ["bash"], row: 2 },
+  { branch: "Combat Skills", description: "Active combo. Spend mana from the toolbar to hit 3 times on your next successful submit.", id: "tripleStrike", levelRequired: 12, maxRank: MAX_RANK, name: "Triple Strike", requires: ["doubleSwing"], row: 3 },
+  { branch: "Combat Skills", description: "Patient attack form. Adds damage and defensive scaling.", id: "concentrate", levelRequired: 18, maxRank: MAX_RANK, name: "Concentrate", requires: ["bash"], row: 4, synergy: "Bash and Shout improve it." },
+  { branch: "Combat Skills", description: "Active finisher. Spend mana from the toolbar to guarantee a crit on your next successful submit.", id: "sureCrit", levelRequired: 18, maxRank: MAX_RANK, name: "Sure Crit", requires: ["concentrate"], row: 4 },
+  { branch: "Combat Skills", description: "Momentum style. Adds damage and critical chance.", id: "frenzy", levelRequired: 24, maxRank: MAX_RANK, name: "Frenzy", requires: ["doubleSwing"], row: 5, synergy: "Bash and Sword Mastery improve it." },
+  { branch: "Combat Skills", description: "Endgame sweep. Adds the strongest passive damage bonus.", id: "whirlwind", levelRequired: 30, maxRank: MAX_RANK, name: "Whirlwind", requires: ["concentrate"], row: 6, synergy: "Sword Mastery adds damage per rank." },
+  { branch: "Combat Skills", description: "Active storm. Spend mana from the toolbar to hit 5 times at reduced damage.", id: "whirlwindAssault", levelRequired: 30, maxRank: MAX_RANK, name: "Whirlwind Assault", requires: ["whirlwind"], row: 6 }
 ];
 
 export const DEFAULT_WARRIOR_SKILL_BONUSES: WarriorSkillBonuses = {
@@ -84,15 +122,15 @@ export const DEFAULT_WARRIOR_SKILL_BONUSES: WarriorSkillBonuses = {
 export function getWarriorSkillBonuses(ranks: StudyState["profile"]["skillRanks"]) {
   const bonuses = { ...DEFAULT_WARRIOR_SKILL_BONUSES };
   const rank = (id: WarriorSkillId) => getWarriorSkillRank(ranks, id);
-  bonuses.enhancedDamagePercent += rank("bash") * BASH_DAMAGE + rank("concentrate") * CONCENTRATE_DAMAGE + rank("frenzy") * FRENZY_DAMAGE + rank("whirlwind") * WHIRLWIND_DAMAGE + rank("swordMastery") * SWORD_MASTERY_DAMAGE;
+  bonuses.enhancedDamagePercent += rank("bash") * BASH_DAMAGE + rank("concentrate") * CONCENTRATE_DAMAGE + rank("frenzy") * FRENZY_DAMAGE + rank("whirlwind") * WHIRLWIND_DAMAGE + rank("swordMastery") * SWORD_MASTERY_DAMAGE + rank("axeMastery") * AXE_MASTERY_DAMAGE;
   bonuses.enhancedDamagePercent += rank("concentrate") * rank("bash") * BASH_SYNERGY + rank("frenzy") * rank("bash") * BASH_SYNERGY + rank("frenzy") * rank("swordMastery") * MASTERY_SYNERGY + rank("whirlwind") * rank("swordMastery") * MASTERY_SYNERGY;
-  bonuses.criticalChancePercent += rank("swordMastery") * SWORD_MASTERY_CRIT + rank("frenzy");
-  bonuses.damageReduction += rank("ironSkin") * IRON_SKIN_REDUCTION + rank("shout") * SHOUT_REDUCTION + rank("warCry") * WAR_CRY_REDUCTION + rank("ironSkin") * rank("shout") * SHOUT_SYNERGY + rank("warCry") * (rank("howl") + rank("taunt")) * HOWL_SYNERGY;
-  bonuses.maxLife += rank("battleOrders") * BATTLE_ORDERS_LIFE + rank("battleOrders") * rank("shout") * SHOUT_SYNERGY;
-  bonuses.maxMana += rank("battleOrders") * BATTLE_ORDERS_MANA + rank("battleOrders") * rank("shout") * SHOUT_SYNERGY;
+  bonuses.criticalChancePercent += rank("swordMastery") * SWORD_MASTERY_CRIT + rank("axeMastery") * AXE_MASTERY_CRIT + rank("frenzy");
+  bonuses.damageReduction += rank("ironSkin") * IRON_SKIN_REDUCTION + rank("shieldMastery") * SHIELD_MASTERY_REDUCTION + rank("shout") * SHOUT_REDUCTION + rank("battleCry") * BATTLE_CRY_REDUCTION + rank("warCry") * WAR_CRY_REDUCTION + rank("ironSkin") * rank("shout") * SHOUT_SYNERGY + rank("warCry") * (rank("howl") + rank("taunt")) * HOWL_SYNERGY;
+  bonuses.maxLife += rank("quickRecovery") * QUICK_RECOVERY_LIFE + rank("battleOrders") * BATTLE_ORDERS_LIFE + rank("battleOrders") * rank("shout") * SHOUT_SYNERGY;
+  bonuses.maxMana += rank("arcaneFocus") * ARCANE_FOCUS_MANA + rank("rallyingCry") * RALLYING_CRY_MANA + rank("battleOrders") * BATTLE_ORDERS_MANA + rank("battleOrders") * rank("shout") * SHOUT_SYNERGY;
   bonuses.bonusXpPercent += rank("battleCommand") * BATTLE_COMMAND_XP + rank("battleCommand") * rank("battleOrders") * ORDERS_SYNERGY;
-  bonuses.magicFindPercent += rank("findItem") * FIND_ITEM_MAGIC + rank("findItem") * rank("findPotion") * FIND_POTION_SYNERGY;
-  bonuses.goldFindPercent += rank("howl") * TAUNT_GOLD;
+  bonuses.magicFindPercent += rank("findItem") * FIND_ITEM_MAGIC + rank("grimWard") * GRIM_WARD_MAGIC + rank("treasureSense") * TREASURE_SENSE_MAGIC + rank("findItem") * rank("findPotion") * FIND_POTION_SYNERGY;
+  bonuses.goldFindPercent += rank("howl") * TAUNT_GOLD + rank("goldMastery") * GOLD_MASTERY_GOLD;
   bonuses.lifeOnKill += rank("findPotion") * FIND_POTION_LIFE;
   bonuses.manaOnKill += rank("doubleSwing") * DOUBLE_SWING_MANA;
   addAllResistances(bonuses, rank("naturalResistance") * NATURAL_RESISTANCE);
@@ -121,6 +159,34 @@ export function spendWarriorSkillPoint(state: StudyState, skillId: WarriorSkillI
     return state;
   }
   return { ...state, profile: { ...state.profile, skillRanks: { ...state.profile.skillRanks, [skillId]: getWarriorSkillRank(state.profile.skillRanks, skillId) + 1 } } };
+}
+
+export function getActiveWarriorSkill(skillId: ActiveWarriorSkillId | null | undefined) {
+  return ACTIVE_WARRIOR_SKILLS.find((skill) => skill.id === skillId) || null;
+}
+
+export function getActiveWarriorSkillByTreeId(skillId: WarriorSkillId) {
+  return ACTIVE_WARRIOR_SKILLS.find((skill) => skill.id === skillId) || null;
+}
+
+export function canUseActiveWarriorSkill(state: StudyState, skillId: ActiveWarriorSkillId) {
+  const skill = getActiveWarriorSkill(skillId);
+  return Boolean(skill && !state.profile.activeSkill && state.profile.mana >= skill.cost && getWarriorSkillRank(state.profile.skillRanks, skill.id) > NO_POINTS);
+}
+
+export function activateWarriorSkill(state: StudyState, skillId: ActiveWarriorSkillId): StudyState {
+  if (!canUseActiveWarriorSkill(state, skillId)) {
+    return state;
+  }
+  const skill = getActiveWarriorSkill(skillId);
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      activeSkill: skillId,
+      mana: Math.max(NO_POINTS, state.profile.mana - (skill?.cost || NO_POINTS))
+    }
+  };
 }
 
 function addAllResistances(bonuses: WarriorSkillBonuses, value: number) {

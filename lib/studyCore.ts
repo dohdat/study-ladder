@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { questions } from "../data/questions";
 import { createDropItem, EQUIPMENT_SLOTS, getActiveSetBonusesForItems, SLOT_LABELS } from "./itemCore";
 import { applyEloResult, DEFAULT_PLAYER_RATING, getEstimatedRating } from "./ratingCore";
@@ -115,6 +116,7 @@ function createDefaultStateBase(): StudyState {
       lastStudiedAt: null,
       stats: { ...DEFAULT_CHARACTER_STATS },
       skillRanks: {},
+      activeSkill: null,
       inventory: [],
       equipment: defaultEquipment(),
       shopLastRefreshedAt: null,
@@ -129,40 +131,44 @@ export const defaultCard = (): CardState => ({ dueAt: 0, intervalDays: 0, ease: 
 
 export const cloneState = (state: StudyState): StudyState => ({
   ...state,
-  profile: {
-    ...state.profile,
-    stats: { ...state.profile.stats },
-    skillRanks: { ...state.profile.skillRanks },
-    inventory: state.profile.inventory.map((item) => ({ ...item, modifiers: item.modifiers?.map((modifier) => ({ ...modifier })), stats: { ...item.stats } })),
-    equipment: { ...state.profile.equipment },
-    shopStock: state.profile.shopStock.map((item) => ({ ...item }))
-  },
+  profile: cloneProfile(state),
   cards: Object.fromEntries(Object.entries(state.cards).map(([id, card]) => [id, { ...card }]))
 });
 
+function cloneProfile(state: StudyState): StudyState["profile"] {
+  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, stats: { ...state.profile.stats } };
+}
+
+function cloneInventoryItem(item: InventoryItem) {
+  return { ...item, modifiers: item.modifiers?.map((modifier) => ({ ...modifier })), stats: { ...item.stats } };
+}
+
+// eslint-disable-next-line complexity
 export const normalizeStudyState = (stored: Partial<StudyState> | null | undefined): StudyState => {
   const fallback = defaultState();
   if (!stored?.cards) {
     return fallback;
   }
+  const profile: Partial<StudyState["profile"]> = stored.profile || {};
 
   const normalized = {
     ...fallback,
     ...stored,
     profile: {
       ...fallback.profile,
-      ...(stored.profile || {}),
-      experience: Math.max(0, stored.profile?.experience ?? fallback.profile.experience),
+      ...profile,
+      experience: Math.max(0, profile.experience ?? fallback.profile.experience),
       rating: normalizeRating(stored, fallback),
-      statPoints: Math.max(0, stored.profile?.statPoints ?? fallback.profile.statPoints),
-      statPointsAwardedLevel: Math.max(FIRST_STAT_LEVEL, stored.profile?.statPointsAwardedLevel ?? fallback.profile.statPointsAwardedLevel),
-      stats: normalizeCharacterStats(stored.profile?.stats),
-      skillRanks: normalizeWarriorSkillRanks(stored.profile?.skillRanks),
-      inventory: normalizeInventory(stored.profile?.inventory),
-      equipment: normalizeEquipment(stored.profile?.equipment),
-      shopLastRefreshedAt: stored.profile?.shopLastRefreshedAt ?? fallback.profile.shopLastRefreshedAt,
-      shopStock: normalizeShopStock(stored.profile?.shopStock),
-      unlockedAchievementIds: normalizeUnlockedAchievementIds(stored.profile?.unlockedAchievementIds)
+      statPoints: Math.max(0, profile.statPoints ?? fallback.profile.statPoints),
+      statPointsAwardedLevel: Math.max(FIRST_STAT_LEVEL, profile.statPointsAwardedLevel ?? fallback.profile.statPointsAwardedLevel),
+      stats: normalizeCharacterStats(profile.stats),
+      skillRanks: normalizeWarriorSkillRanks(profile.skillRanks),
+      activeSkill: profile.activeSkill ?? null,
+      inventory: normalizeInventory(profile.inventory),
+      equipment: normalizeEquipment(profile.equipment),
+      shopLastRefreshedAt: profile.shopLastRefreshedAt ?? fallback.profile.shopLastRefreshedAt,
+      shopStock: normalizeShopStock(profile.shopStock),
+      unlockedAchievementIds: normalizeUnlockedAchievementIds(profile.unlockedAchievementIds)
     },
     cards: normalizeCards(stored.cards)
   };
@@ -170,8 +176,8 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
     ...normalized,
     profile: {
       ...normalized.profile,
-      health: Math.min(getMaxHealth(normalized), Math.max(0, stored.profile?.health ?? fallback.profile.health)),
-      mana: Math.min(getMaxMana(normalized), Math.max(0, stored.profile?.mana ?? fallback.profile.mana))
+      health: Math.min(getMaxHealth(normalized), Math.max(0, profile.health ?? fallback.profile.health)),
+      mana: Math.min(getMaxMana(normalized), Math.max(0, profile.mana ?? fallback.profile.mana))
     }
   };
   const stocked = {
@@ -429,6 +435,15 @@ export const equipItem = (state: StudyState, itemId: string): StudyState => {
   }
   const next = cloneState(state);
   next.profile.equipment[item.slot] = item.id;
+  next.profile.health = Math.min(next.profile.health, getMaxHealth(next));
+  next.profile.mana = Math.min(next.profile.mana, getMaxMana(next));
+  return next;
+};
+
+export const unequipItem = (state: StudyState, slot: EquipmentSlot): StudyState => {
+  if (!state.profile.equipment[slot]) { return state; }
+  const next = cloneState(state);
+  next.profile.equipment[slot] = null;
   next.profile.health = Math.min(next.profile.health, getMaxHealth(next));
   next.profile.mana = Math.min(next.profile.mana, getMaxMana(next));
   return next;
