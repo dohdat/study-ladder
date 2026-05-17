@@ -197,3 +197,5 @@ self.addEventListener("message", (event) => {
   handleRunTests(event);
   handleRunCode(event);
 });
+
+postResult({ type: "runner-ready" });

@@ -11,9 +11,33 @@ const NORMAL_UNIQUE_BONUSES = 1;
 const NIGHTMARE_UNIQUE_BONUSES = 2;
 const HELL_UNIQUE_BONUSES = 3;
 const RATING_MIN = 1000;
+const MAX_UNIQUE_BONUS_CHANCE = 0.9;
+const RATING_CHANCE_STEP = 0.04;
+const RATING_CHANCE_DIVISOR = 400;
 const BASE_HEALTH = 30;
 const HEALTH_PER_DIFFICULTY = 18;
 const HEALTH_RATING_DIVISOR = 25;
+const EXTRA_STRONG_DAMAGE_BONUS = 4;
+const FIRE_ENCHANTED_DAMAGE_BONUS = 3;
+const LIGHTNING_ENCHANTED_DAMAGE_BONUS = 5;
+const COLD_ENCHANTED_DAMAGE_BONUS = 2;
+const CURSED_DAMAGE_BONUS = 2;
+const AURA_ENCHANTED_DAMAGE_BONUS = 2;
+const SPECTRAL_HIT_DAMAGE_SPREAD = 4;
+const MULTI_SHOT_HIT_COUNT = 3;
+const DEFAULT_HIT_COUNT = 1;
+const EXTRA_FAST_HIT_COUNT_BONUS = 1;
+const MANA_BURN_DAMAGE_RATIO = 0.5;
+const TELEPORTING_DAMAGE_REDUCTION = 0.25;
+const STONE_SKIN_DAMAGE_REDUCTION = 0.25;
+const MAGIC_RESISTANT_DAMAGE_REDUCTION = 0.15;
+const UNIQUE_BONUS_CHANCES: Record<Question["difficulty"], number> = {
+  1: 0.22,
+  2: 0.32,
+  3: 0.48,
+  4: 0.64,
+  5: 0.78
+};
 
 export const UNIQUE_MONSTER_BONUSES = [
   "Aura Enchanted",
@@ -141,6 +165,10 @@ export function getUniqueMonsterBonuses(question: Question) {
 }
 
 export function getUniqueMonsterBonusCount(question: Question) {
+  const bonusChance = getUniqueMonsterBonusChance(question);
+  if (getSeededRoll(`${getMonsterSeed(question)}:bonus-chance`) >= bonusChance) {
+    return 0;
+  }
   if (question.difficulty >= HELL_DIFFICULTY_MIN || question.rating >= HELL_RATING_MIN) {
     return HELL_UNIQUE_BONUSES;
   }
@@ -150,12 +178,80 @@ export function getUniqueMonsterBonusCount(question: Question) {
   return NORMAL_UNIQUE_BONUSES;
 }
 
+function getUniqueMonsterBonusChance(question: Question) {
+  const ratingSteps = Math.max(0, Math.floor((question.rating - RATING_MIN) / RATING_CHANCE_DIVISOR));
+  return Math.min(MAX_UNIQUE_BONUS_CHANCE, UNIQUE_BONUS_CHANCES[question.difficulty] + ratingSteps * RATING_CHANCE_STEP);
+}
+
 export function getUniqueMonsterBonusDescription(bonus: string) {
   return UNIQUE_MONSTER_BONUS_DESCRIPTIONS[bonus as (typeof UNIQUE_MONSTER_BONUSES)[number]] || "Unique monster trait.";
 }
 
 export function getMonsterMaxHealth(question: Question) {
-  return BASE_HEALTH + question.difficulty * HEALTH_PER_DIFFICULTY + Math.round((question.rating - RATING_MIN) / HEALTH_RATING_DIVISOR);
+  const bonuses = getUniqueMonsterBonuses(question);
+  const bonusHealth = bonuses.includes("Stone Skin") || bonuses.includes("Magic Resistant") ? HEALTH_PER_DIFFICULTY : 0;
+  return BASE_HEALTH + question.difficulty * HEALTH_PER_DIFFICULTY + Math.round((question.rating - RATING_MIN) / HEALTH_RATING_DIVISOR) + bonusHealth;
+}
+
+export function getMonsterAttackProfile(question: Question, baseDamage: number, now = Date.now()) {
+  const bonuses = getUniqueMonsterBonuses(question);
+  const hitCount = (bonuses.includes("Multi-Shot") ? MULTI_SHOT_HIT_COUNT : DEFAULT_HIT_COUNT) + (bonuses.includes("Extra Fast") ? EXTRA_FAST_HIT_COUNT_BONUS : 0);
+  const perHitDamage = Math.max(DEFAULT_HIT_COUNT, baseDamage + getBonusDamage(bonuses, question, now));
+  const damage = perHitDamage * hitCount;
+  return {
+    bonuses,
+    damage,
+    hitCount,
+    manaDamage: bonuses.includes("Mana Burn") ? Math.ceil(damage * MANA_BURN_DAMAGE_RATIO) : 0,
+    perHitDamage
+  };
+}
+
+export function getMonsterPlayerDamage(question: Question, damage: number) {
+  const reduction = getUniqueMonsterBonuses(question).reduce((total, bonus) => total + getDamageReduction(bonus), 0);
+  return Math.max(DEFAULT_HIT_COUNT, Math.round(damage * (1 - Math.min(reduction, TELEPORTING_DAMAGE_REDUCTION + STONE_SKIN_DAMAGE_REDUCTION))));
+}
+
+function getBonusDamage(bonuses: string[], question: Question, now: number) {
+  return bonuses.reduce((damage, bonus) => damage + getBonusDamageAmount(bonus, question, now), 0);
+}
+
+function getBonusDamageAmount(bonus: string, question: Question, now: number) {
+  if (bonus === "Extra Strong") {
+    return EXTRA_STRONG_DAMAGE_BONUS;
+  }
+  if (bonus === "Fire Enchanted") {
+    return FIRE_ENCHANTED_DAMAGE_BONUS;
+  }
+  if (bonus === "Lightning Enchanted") {
+    return LIGHTNING_ENCHANTED_DAMAGE_BONUS;
+  }
+  if (bonus === "Cold Enchanted") {
+    return COLD_ENCHANTED_DAMAGE_BONUS;
+  }
+  if (bonus === "Cursed") {
+    return CURSED_DAMAGE_BONUS;
+  }
+  if (bonus === "Aura Enchanted") {
+    return AURA_ENCHANTED_DAMAGE_BONUS;
+  }
+  if (bonus === "Spectral Hit") {
+    return Math.floor(getSeededRoll(`${getMonsterSeed(question)}:${now}:spectral`) * SPECTRAL_HIT_DAMAGE_SPREAD);
+  }
+  return 0;
+}
+
+function getDamageReduction(bonus: string) {
+  if (bonus === "Teleporting") {
+    return TELEPORTING_DAMAGE_REDUCTION;
+  }
+  if (bonus === "Stone Skin") {
+    return STONE_SKIN_DAMAGE_REDUCTION;
+  }
+  if (bonus === "Magic Resistant") {
+    return MAGIC_RESISTANT_DAMAGE_REDUCTION;
+  }
+  return 0;
 }
 
 function pickUniqueBonus(existing: string[], seed: string) {

@@ -24,6 +24,17 @@ describe("beautifyCode", () => {
     ].join("\n"));
   });
 
+  it("keeps for loop headers on one line", () => {
+    expect(beautifyCode("function test(){\nfor(let i=0;i<nums.length;i++){\nconsole.log(nums[i])\n}\n}")).toBe([
+      "function test() {",
+      "  for (let i=0;i<nums.length;i++) {",
+      "    console.log(nums[i]);",
+      "  }",
+      "}",
+      ""
+    ].join("\n"));
+  });
+
   it("adds semicolons to calls, assignments, and updates", () => {
     expect(beautifyCode("count++\nvalue = getValue()\nsave(value)")).toBe([
       "count++;",

@@ -1,6 +1,6 @@
 import type { Question } from "../types/study";
 
-export const questions: Question[] = [
+const curatedQuestions: Question[] = [
   {
     id: "array-first-duplicate",
     title: "First Duplicate",
@@ -326,3 +326,421 @@ export const questions: Question[] = [
     ]
   }
 ];
+
+type TestInput = {
+  args: unknown[];
+  name: string;
+};
+
+type GeneratedFamily = {
+  buildCase: (variant: number, testIndex: number) => TestInput;
+  constraints: string[];
+  count: number;
+  difficulty: Question["difficulty"];
+  functionPrefix: string;
+  prompt: (variant: number) => string;
+  ratingBase: number;
+  solver: (args: unknown[], variant: number) => unknown;
+  starterArgs: string;
+  title: (variant: number) => string;
+  topics: string[];
+};
+
+const GENERATED_TEST_COUNT = 10;
+const GENERATED_FAMILY_COUNT = 10;
+const RATING_STEP = 17;
+const GENERATED_FAMILIES: GeneratedFamily[] = [
+  {
+    buildCase: (variant, index) => ({ args: [makeNumberList(variant, index)], name: `counts values at least ${variant}` }),
+    constraints: ["Return a number.", "Input values are integers.", "Do not mutate the original array."],
+    count: GENERATED_FAMILY_COUNT,
+    difficulty: 1,
+    functionPrefix: "countAtLeast",
+    prompt: (variant) => `Return how many numbers in nums are greater than or equal to ${variant}.`,
+    ratingBase: 1030,
+    solver: (args, variant) => (args[0] as number[]).filter((value) => value >= variant).length,
+    starterArgs: "nums",
+    title: (variant) => `Count At Least ${variant}`,
+    topics: ["Arrays", "Counting"]
+  },
+  {
+    buildCase: (variant, index) => ({ args: [makeNumberList(variant + 1, index)], name: `sums positives with floor ${variant}` }),
+    constraints: ["Return a number.", "Ignore negative values.", "Only include values greater than the threshold."],
+    count: GENERATED_FAMILY_COUNT,
+    difficulty: 1,
+    functionPrefix: "sumAbove",
+    prompt: (variant) => `Return the sum of all numbers in nums that are greater than ${variant}.`,
+    ratingBase: 1090,
+    solver: (args, variant) => (args[0] as number[]).filter((value) => value > variant).reduce((sum, value) => sum + value, 0),
+    starterArgs: "nums",
+    title: (variant) => `Sum Above ${variant}`,
+    topics: ["Arrays", "Math"]
+  },
+  {
+    buildCase: (variant, index) => ({ args: [makeString(variant, index)], name: `checks vowel count ${variant}` }),
+    constraints: ["Vowels are a, e, i, o, u.", "Treat uppercase and lowercase as vowels.", "Return a number."],
+    count: GENERATED_FAMILY_COUNT,
+    difficulty: 1,
+    functionPrefix: "countVowels",
+    prompt: (variant) => `Return the number of vowels in text, then add ${variant - 1}.`,
+    ratingBase: 1160,
+    solver: (args, variant) => countVowels(String(args[0])) + variant - 1,
+    starterArgs: "text",
+    title: (variant) => `Vowel Score ${variant}`,
+    topics: ["Strings", "Counting"]
+  },
+  {
+    buildCase: (variant, index) => ({ args: [makeNumberList(variant + 2, index)], name: `finds first over ${variant}` }),
+    constraints: ["Return -1 if no value qualifies.", "Scan from left to right.", "Do not sort the input."],
+    count: GENERATED_FAMILY_COUNT,
+    difficulty: 2,
+    functionPrefix: "firstGreaterThan",
+    prompt: (variant) => `Return the first number in nums that is greater than ${variant}. Return -1 if none exists.`,
+    ratingBase: 1320,
+    solver: (args, variant) => (args[0] as number[]).find((value) => value > variant) ?? -1,
+    starterArgs: "nums",
+    title: (variant) => `First Greater Than ${variant}`,
+    topics: ["Arrays", "Linear Scan"]
+  },
+  {
+    buildCase: (variant, index) => ({ args: [makeNumberList(variant + 3, index), variant], name: `counts pairs divisible by ${variant + 2}` }),
+    constraints: ["Count index pairs i < j.", "Return a number.", "Modulo arithmetic is allowed."],
+    count: GENERATED_FAMILY_COUNT,
+    difficulty: 2,
+    functionPrefix: "countModuloPairs",
+    prompt: (variant) => `Return the number of index pairs whose sum is divisible by ${variant + 2}.`,
+    ratingBase: 1480,
+    solver: (args, variant) => countModuloPairs(args[0] as number[], variant + 2),
+    starterArgs: "nums, marker",
+    title: (variant) => `Modulo Pair Count ${variant + 2}`,
+    topics: ["Arrays", "Hash Map"]
+  },
+  {
+    buildCase: (variant, index) => ({ args: [makeString(variant + 1, index)], name: `compresses text variant ${variant}` }),
+    constraints: ["Compress consecutive equal characters.", "Use the character followed by its count.", "Return a string."],
+    count: GENERATED_FAMILY_COUNT,
+    difficulty: 2,
+    functionPrefix: "runLengthEncode",
+    prompt: () => "Return a run-length encoded string where each group is the character followed by the group count.",
+    ratingBase: 1540,
+    solver: (args) => runLengthEncode(String(args[0])),
+    starterArgs: "text",
+    title: (variant) => `Run Length Encode ${variant}`,
+    topics: ["Strings", "Two Pointers"]
+  },
+  {
+    buildCase: (variant, index) => ({ args: [makeNumberList(variant + 4, index), variant + 5], name: `finds longest window sum ${variant + 5}` }),
+    constraints: ["Numbers are non-negative.", "Return a window length.", "Use any correct approach."],
+    count: GENERATED_FAMILY_COUNT,
+    difficulty: 3,
+    functionPrefix: "longestSumAtMost",
+    prompt: (variant) => `Return the length of the longest contiguous subarray whose sum is at most ${variant + 5}.`,
+    ratingBase: 1780,
+    solver: (args, variant) => longestSumAtMost(args[0] as number[], variant + 5),
+    starterArgs: "nums, limit",
+    title: (variant) => `Longest Sum At Most ${variant + 5}`,
+    topics: ["Arrays", "Sliding Window"]
+  },
+  {
+    buildCase: (variant, index) => ({ args: [makeNumberList(variant + 5, index)], name: `max gap variant ${variant}` }),
+    constraints: ["Sort a copy of the input.", "Return 0 for fewer than two numbers.", "Return the largest adjacent sorted difference."],
+    count: GENERATED_FAMILY_COUNT,
+    difficulty: 3,
+    functionPrefix: "maxSortedGap",
+    prompt: () => "Return the largest gap between adjacent values after sorting nums ascending.",
+    ratingBase: 1940,
+    solver: (args) => maxSortedGap(args[0] as number[]),
+    starterArgs: "nums",
+    title: (variant) => `Max Sorted Gap ${variant}`,
+    topics: ["Sorting", "Arrays"]
+  },
+  {
+    buildCase: (variant, index) => ({ args: [makeGrid(variant, index)], name: `counts islands variant ${variant}` }),
+    constraints: ["Grid cells are 0 or 1.", "Use four-directional adjacency.", "Do not mutate the original grid."],
+    count: GENERATED_FAMILY_COUNT,
+    difficulty: 3,
+    functionPrefix: "countIslands",
+    prompt: () => "Return the number of islands of 1s in the grid using four-directional adjacency.",
+    ratingBase: 2120,
+    solver: (args) => countIslands(args[0] as number[][]),
+    starterArgs: "grid",
+    title: (variant) => `Island Count ${variant}`,
+    topics: ["Graphs", "DFS", "Grid"]
+  },
+  {
+    buildCase: (variant, index) => ({ args: [makeNumberList(variant + 6, index)], name: `lis variant ${variant}` }),
+    constraints: ["Return a length.", "Subsequence does not need to be contiguous.", "Use strict increasing order."],
+    count: GENERATED_FAMILY_COUNT,
+    difficulty: 4,
+    functionPrefix: "lisLength",
+    prompt: () => "Return the length of the longest strictly increasing subsequence in nums.",
+    ratingBase: 2380,
+    solver: (args) => lisLength(args[0] as number[]),
+    starterArgs: "nums",
+    title: (variant) => `Increasing Subsequence ${variant}`,
+    topics: ["Dynamic Programming", "Arrays"]
+  },
+  {
+    buildCase: (variant, index) => ({ args: [makeWeightedEdges(variant, index), "A", "E"], name: `cheapest path variant ${variant}` }),
+    constraints: ["Edges are [from, to, cost].", "Return -1 when target is unreachable.", "Costs are positive integers."],
+    count: GENERATED_FAMILY_COUNT,
+    difficulty: 4,
+    functionPrefix: "cheapestPath",
+    prompt: () => "Return the cheapest path cost from start to target in a directed weighted graph.",
+    ratingBase: 2620,
+    solver: (args) => cheapestPath(args[0] as Array<[string, string, number]>, String(args[1]), String(args[2])),
+    starterArgs: "edges, start, target",
+    title: (variant) => `Cheapest Path ${variant}`,
+    topics: ["Graphs", "Dijkstra"]
+  },
+  {
+    buildCase: (variant, index) => ({ args: [makeString(variant + 2, index), makeString(variant + 3, index + 1)], name: `edit distance variant ${variant}` }),
+    constraints: ["Insert, delete, and replace each cost 1.", "Return a number.", "Strings are short lowercase words."],
+    count: GENERATED_FAMILY_COUNT,
+    difficulty: 4,
+    functionPrefix: "editDistance",
+    prompt: () => "Return the minimum edit distance between wordA and wordB.",
+    ratingBase: 2780,
+    solver: (args) => editDistance(String(args[0]), String(args[1])),
+    starterArgs: "wordA, wordB",
+    title: (variant) => `Edit Distance ${variant}`,
+    topics: ["Dynamic Programming", "Strings"]
+  },
+  {
+    buildCase: (variant, index) => ({ args: [makeNumberList(variant + 7, index), variant + 3], name: `split array variant ${variant}` }),
+    constraints: ["Preserve original order.", "Create at most k non-empty groups.", "Minimize the largest group sum."],
+    count: GENERATED_FAMILY_COUNT,
+    difficulty: 5,
+    functionPrefix: "splitArrayLargestSum",
+    prompt: () => "Split nums into at most k contiguous groups and return the minimized largest group sum.",
+    ratingBase: 3100,
+    solver: (args) => splitArrayLargestSum(args[0] as number[], Number(args[1])),
+    starterArgs: "nums, k",
+    title: (variant) => `Split Array Limit ${variant}`,
+    topics: ["Binary Search", "Dynamic Programming"]
+  },
+  {
+    buildCase: (variant, index) => ({ args: [makeNumberList(variant + 8, index)], name: `partition variant ${variant}` }),
+    constraints: ["Return true or false.", "Each number may be used once.", "The two groups must have equal sum."],
+    count: GENERATED_FAMILY_COUNT,
+    difficulty: 5,
+    functionPrefix: "canPartitionEqual",
+    prompt: () => "Return true if nums can be partitioned into two groups with equal sum.",
+    ratingBase: 3300,
+    solver: (args) => canPartitionEqual(args[0] as number[]),
+    starterArgs: "nums",
+    title: (variant) => `Equal Partition ${variant}`,
+    topics: ["Dynamic Programming", "Knapsack"]
+  }
+];
+
+const generatedQuestions = GENERATED_FAMILIES.flatMap((family) => {
+  return Array.from({ length: family.count }, (_, index) => createGeneratedQuestion(family, index + 1));
+});
+
+export const questions: Question[] = [...curatedQuestions, ...generatedQuestions];
+
+function createGeneratedQuestion(family: GeneratedFamily, variant: number): Question {
+  const tests = Array.from({ length: GENERATED_TEST_COUNT }, (_, index) => createGeneratedTest(family, variant, index));
+  return {
+    constraints: family.constraints,
+    difficulty: family.difficulty,
+    examples: [
+      { input: formatArgs(tests[0].args), output: JSON.stringify(tests[0].expected), explanation: "The expected output follows directly from the rule in the prompt." },
+      { input: formatArgs(tests[1].args), output: JSON.stringify(tests[1].expected), explanation: "This second case covers a different input shape for the same rule." }
+    ],
+    functionName: `${family.functionPrefix}${variant}`,
+    id: `generated-${family.functionPrefix}-${variant}`,
+    prompt: family.prompt(variant),
+    rating: family.ratingBase + variant * RATING_STEP,
+    starter: `function ${family.functionPrefix}${variant}(${family.starterArgs}) {\n  \n}`,
+    tests,
+    title: family.title(variant),
+    topics: family.topics
+  };
+}
+
+function createGeneratedTest(family: GeneratedFamily, variant: number, index: number) {
+  const test = family.buildCase(variant, index);
+  return { ...test, expected: family.solver(test.args, variant) };
+}
+
+function formatArgs(args: unknown[]) {
+  return args.map((arg, index) => `arg${index + 1} = ${JSON.stringify(arg)}`).join(", ");
+}
+
+function makeNumberList(seed: number, index: number) {
+  return Array.from({ length: 6 + (index % 5) }, (_, offset) => ((seed * 7 + index * 3 + offset * 5) % 19) - 6);
+}
+
+function makeString(seed: number, index: number) {
+  const alphabet = "algorithmpractice";
+  return Array.from({ length: 5 + (index % 6) }, (_, offset) => alphabet[(seed + index + offset * 3) % alphabet.length]).join("");
+}
+
+function countVowels(text: string) {
+  return [...text.toLowerCase()].filter((char) => "aeiou".includes(char)).length;
+}
+
+function countModuloPairs(nums: number[], divisor: number) {
+  let count = 0;
+  for (let left = 0; left < nums.length; left += 1) {
+    for (let right = left + 1; right < nums.length; right += 1) {
+      if ((nums[left] + nums[right]) % divisor === 0) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+function runLengthEncode(text: string) {
+  if (!text) {
+    return "";
+  }
+  let output = "";
+  let count = 1;
+  for (let index = 1; index <= text.length; index += 1) {
+    if (text[index] === text[index - 1]) {
+      count += 1;
+    } else {
+      output += `${text[index - 1]}${count}`;
+      count = 1;
+    }
+  }
+  return output;
+}
+
+function longestSumAtMost(nums: number[], limit: number) {
+  let left = 0;
+  let sum = 0;
+  let best = 0;
+  for (let right = 0; right < nums.length; right += 1) {
+    sum += Math.max(0, nums[right]);
+    while (sum > limit) {
+      sum -= Math.max(0, nums[left]);
+      left += 1;
+    }
+    best = Math.max(best, right - left + 1);
+  }
+  return best;
+}
+
+function maxSortedGap(nums: number[]) {
+  const sorted = [...nums].sort((left, right) => left - right);
+  return sorted.slice(1).reduce((best, value, index) => Math.max(best, value - sorted[index]), 0);
+}
+
+function makeGrid(seed: number, index: number) {
+  return Array.from({ length: 4 }, (_, row) => Array.from({ length: 5 }, (_, column) => Number((seed + index + row * 2 + column * 3) % 4 === 0)));
+}
+
+function countIslands(grid: number[][]) {
+  const seen = grid.map((row) => row.map(() => false));
+  let islands = 0;
+  for (let row = 0; row < grid.length; row += 1) {
+    for (let column = 0; column < grid[row].length; column += 1) {
+      if (grid[row][column] === 1 && !seen[row][column]) {
+        islands += 1;
+        flood(grid, seen, row, column);
+      }
+    }
+  }
+  return islands;
+}
+
+function flood(grid: number[][], seen: boolean[][], row: number, column: number) {
+  if (!grid[row]?.[column] || seen[row][column]) {
+    return;
+  }
+  seen[row][column] = true;
+  flood(grid, seen, row + 1, column);
+  flood(grid, seen, row - 1, column);
+  flood(grid, seen, row, column + 1);
+  flood(grid, seen, row, column - 1);
+}
+
+function lisLength(nums: number[]) {
+  const piles: number[] = [];
+  for (const value of nums) {
+    const index = piles.findIndex((pile) => pile >= value);
+    if (index === -1) {
+      piles.push(value);
+    } else {
+      piles[index] = value;
+    }
+  }
+  return piles.length;
+}
+
+function makeWeightedEdges(seed: number, index: number): Array<[string, string, number]> {
+  return [["A", "B", seed % 5 + 1], ["A", "C", index % 4 + 2], ["B", "D", seed % 7 + 2], ["C", "D", index % 6 + 1], ["D", "E", seed % 3 + index % 3 + 1]];
+}
+
+function cheapestPath(edges: Array<[string, string, number]>, start: string, target: string) {
+  const distances = new Map([[start, 0]]);
+  const queue = [start];
+  while (queue.length) {
+    const node = queue.shift() || "";
+    for (const [from, to, cost] of edges) {
+      const nextCost = (distances.get(node) || 0) + cost;
+      if (from === node && nextCost < (distances.get(to) ?? Infinity)) {
+        distances.set(to, nextCost);
+        queue.push(to);
+      }
+    }
+  }
+  return distances.get(target) ?? -1;
+}
+
+function editDistance(left: string, right: string) {
+  const dp = Array.from({ length: left.length + 1 }, (_, row) => Array.from({ length: right.length + 1 }, (_value, column) => row + column));
+  for (let row = 1; row <= left.length; row += 1) {
+    for (let column = 1; column <= right.length; column += 1) {
+      const cost = left[row - 1] === right[column - 1] ? 0 : 1;
+      dp[row][column] = Math.min(dp[row - 1][column] + 1, dp[row][column - 1] + 1, dp[row - 1][column - 1] + cost);
+    }
+  }
+  return dp[left.length][right.length];
+}
+
+function splitArrayLargestSum(nums: number[], k: number) {
+  let low = Math.max(...nums);
+  let high = nums.reduce((sum, value) => sum + value, 0);
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (canSplit(nums, k, mid)) {
+      high = mid;
+    } else {
+      low = mid + 1;
+    }
+  }
+  return low;
+}
+
+function canSplit(nums: number[], k: number, limit: number) {
+  let groups = 1;
+  let sum = 0;
+  for (const value of nums) {
+    if (sum + value > limit) {
+      groups += 1;
+      sum = 0;
+    }
+    sum += value;
+  }
+  return groups <= k;
+}
+
+function canPartitionEqual(nums: number[]) {
+  const total = nums.reduce((sum, value) => sum + Math.max(0, value), 0);
+  if (total % 2) {
+    return false;
+  }
+  const reachable = new Set([0]);
+  for (const value of nums.map((item) => Math.max(0, item))) {
+    for (const sum of [...reachable]) {
+      reachable.add(sum + value);
+    }
+  }
+  return reachable.has(total / 2);
+}

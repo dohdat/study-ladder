@@ -1,5 +1,6 @@
 import { questions } from "../data/questions";
 import { createDropItem, EQUIPMENT_SLOTS, getActiveSetBonusesForItems, SLOT_LABELS } from "./itemCore";
+import { getEstimatedRating } from "./ratingCore";
 import { createShopStock, normalizeShopStock } from "./shopCore";
 import type { CardState, CharacterStatKey, CharacterStats, EquipmentSlot, InventoryItem, ItemModifierKey, Question, StudyState } from "../types/study";
 
@@ -13,6 +14,8 @@ const EASY_MINUTES = 10;
 const MEDIUM_MINUTES = 20;
 const HARD_MINUTES = 25;
 const MAX_DIFFICULTY = 5;
+const QUESTION_RATING_BUFFER = 300;
+const NEXT_QUESTION_RATING_BUFFER = 350;
 const CORRECTS_PER_DIFFICULTY = 3;
 const MISSING_INDEX = -1;
 const PERCENT = 100;
@@ -144,7 +147,8 @@ function createDefaultStateBase(): StudyState {
       inventory: [],
       equipment: defaultEquipment(),
       shopLastRefreshedAt: null,
-      shopStock: []
+      shopStock: [],
+      unlockedAchievementIds: []
     },
     cards: {}
   };
@@ -191,7 +195,8 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
       inventory: normalizeInventory(stored.profile?.inventory),
       equipment: normalizeEquipment(stored.profile?.equipment),
       shopLastRefreshedAt: stored.profile?.shopLastRefreshedAt ?? fallback.profile.shopLastRefreshedAt,
-      shopStock: normalizeShopStock(stored.profile?.shopStock)
+      shopStock: normalizeShopStock(stored.profile?.shopStock),
+      unlockedAchievementIds: normalizeUnlockedAchievementIds(stored.profile?.unlockedAchievementIds)
     },
     cards: stored.cards
   };
@@ -234,9 +239,9 @@ function normalizeInventory(items: InventoryItem[] | undefined) {
   return (items || []).map((item) => ({ ...item, modifiers: normalizeItemModifiers(item.modifiers), requirements: item.requirements || { level: FIRST_STAT_LEVEL, stats: {} }, stats: { ...item.stats } }));
 }
 
-function normalizeEquipment(equipment: Partial<Record<EquipmentSlot, string | null>> | undefined) {
-  return { ...defaultEquipment(), ...(equipment || {}) };
-}
+function normalizeEquipment(equipment: Partial<Record<EquipmentSlot, string | null>> | undefined) { return { ...defaultEquipment(), ...(equipment || {}) }; }
+
+function normalizeUnlockedAchievementIds(ids: string[] | undefined) { return [...new Set(ids || [])]; }
 
 function normalizeStat(value: number | undefined) {
   if (!Number.isFinite(value)) {
@@ -322,7 +327,6 @@ function addModifierTotals(base: Record<ItemModifierKey, number>, modifiers: Inv
   }
   return next;
 }
-
 function applyPercentBonus(value: number, bonusPercent: number) {
   return Math.round(value * (1 + bonusPercent / MODIFIER_PERCENT_BASE));
 }
@@ -477,9 +481,10 @@ function getSeededRoll(seed: string) {
   return (hash >>> 0) / HASH_DIVISOR;
 }
 
-export const applyHealthPenalty = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL): StudyState => {
+export const applyHealthPenalty = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, manaDamage = 0): StudyState => {
   const next = cloneState(state);
   next.profile.health = Math.max(0, next.profile.health - getHealthLoss(state, amount));
+  next.profile.mana = Math.max(0, next.profile.mana - manaDamage);
   return next;
 };
 
@@ -510,6 +515,7 @@ export const getDueQuestions = (state: StudyState, now = Date.now()) => {
 
 export const pickQuestion = (state: StudyState, currentQuestion: Question | null, preferNext = false, now = Date.now()) => {
   const recommended = getRecommendedDifficulty(state);
+  const ratingLimit = getEstimatedRating(state) + (preferNext ? NEXT_QUESTION_RATING_BUFFER : QUESTION_RATING_BUFFER);
   const currentIndex = currentQuestion ? questions.findIndex((question) => question.id === currentQuestion.id) : MISSING_INDEX;
   const sorted = [...questions].sort((a, b) => {
     const cardA = getCard(state, a.id);
@@ -518,22 +524,33 @@ export const pickQuestion = (state: StudyState, currentQuestion: Question | null
   });
 
   const due = sorted.filter((question) => getCard(state, question.id).dueAt <= now);
+  const withinRatingLimit = sorted.filter((question) => question.rating <= ratingLimit);
   const unseenWithinLevel = sorted.filter((question) => {
     const card = getCard(state, question.id);
-    return card.attempts === 0 && question.difficulty <= recommended;
+    return card.attempts === 0 && isQuestionRecommended(question, recommended, ratingLimit);
   });
 
-  let picked = unseenWithinLevel[0] || due.find((question) => question.difficulty <= recommended) || due[0];
+  let picked = unseenWithinLevel[0] || due.find((question) => isQuestionRecommended(question, recommended, ratingLimit)) || due.find((question) => question.rating <= ratingLimit) || withinRatingLimit[0] || due[0];
   if (preferNext) {
     const nextInOrder = questions
       .slice(currentIndex + 1)
       .concat(questions.slice(0, Math.max(0, currentIndex + 1)))
-      .find((question) => question.id !== currentQuestion?.id && question.difficulty <= recommended + 1);
+      .find((question) => question.id !== currentQuestion?.id && isQuestionRecommended(question, (recommended + 1) as Question["difficulty"], ratingLimit));
     picked = nextInOrder || picked;
   }
 
   return picked || sorted[0];
 };
+
+export const isQuestionInRecommendedRange = (state: StudyState, question: Question, preferNext = false) => {
+  const recommended = getRecommendedDifficulty(state);
+  const ratingLimit = getEstimatedRating(state) + (preferNext ? NEXT_QUESTION_RATING_BUFFER : QUESTION_RATING_BUFFER);
+  return isQuestionRecommended(question, Math.min(MAX_DIFFICULTY, recommended + (preferNext ? 1 : 0)) as Question["difficulty"], ratingLimit);
+};
+
+function isQuestionRecommended(question: Question, maxDifficulty: Question["difficulty"], ratingLimit: number) {
+  return question.difficulty <= maxDifficulty && question.rating <= ratingLimit;
+}
 
 export const getProfileStats = (state: StudyState, now = Date.now()) => {
   const attempted = questions.filter((question) => getCard(state, question.id).attempts > 0).length;
@@ -574,7 +591,7 @@ export const getTopicStats = (state: StudyState) => {
   });
 };
 
-export const applyScheduleResult = (state: StudyState, questionId: string, passed: boolean, draft: string, now = Date.now(), failureDamage = HEALTH_LOSS_PER_FAIL) => {
+export const applyScheduleResult = (state: StudyState, questionId: string, passed: boolean, draft: string, now = Date.now(), failureDamage = HEALTH_LOSS_PER_FAIL, failureManaDamage = 0) => {
   const next = cloneState(state);
   const card = { ...getCard(next, questionId) };
   const wasMastered = isMasteredCard(card);
@@ -588,7 +605,7 @@ export const applyScheduleResult = (state: StudyState, questionId: string, passe
   if (passed) {
     applyPassedSchedule(next, card, questionId, state, wasMastered, now);
   } else {
-    applyFailedSchedule(next, card, state, now, failureDamage);
+    applyFailedSchedule(next, card, state, now, failureDamage, failureManaDamage);
   }
 
   setCard(next, questionId, card);
@@ -650,8 +667,9 @@ function getNextIntervalDays(card: CardState) {
   return Math.ceil(card.intervalDays * card.ease);
 }
 
-function applyFailedSchedule(next: StudyState, card: CardState, state: StudyState, now: number, failureDamage: number) {
+function applyFailedSchedule(next: StudyState, card: CardState, state: StudyState, now: number, failureDamage: number, failureManaDamage: number) {
   next.profile.health = Math.max(0, next.profile.health - getHealthLoss(state, failureDamage));
+  next.profile.mana = Math.max(0, next.profile.mana - failureManaDamage);
   next.streak = 0;
   card.reps = Math.max(0, card.reps - 1);
   card.ease = Math.max(MIN_EASE, card.ease - FAIL_EASE_PENALTY);

@@ -28,6 +28,7 @@ export function PlayerStatus(props: {
   maxMana: number;
   nextLevelExperience: number;
   onOpenStats?: () => void;
+  rating: number;
   stats: CharacterStats;
 }) {
   const healthValue = (props.health / props.maxHealth) * PERCENT_MAX;
@@ -59,6 +60,7 @@ export function PlayerStatus(props: {
           <Box>
             <Text size="sm" fw={700} lh={1.1}>Dat Do</Text>
             <Text size="xs" c="gray.3">Level {props.level} Warrior</Text>
+            <Text size="10px" c="yellow.4" fw={700}>Rating {props.rating}</Text>
           </Box>
           <Group gap={5} wrap="nowrap">
             <CoinIcon size={18} />

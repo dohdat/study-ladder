@@ -1,5 +1,5 @@
 import { questions } from "../data/questions";
-import { getMonsterMaxHealth } from "./monsterCore";
+import { getMonsterMaxHealth, getMonsterPlayerDamage } from "./monsterCore";
 import { applyScheduleResult, cloneState, getAttackDamage, getCard, getCriticalChance, setCard } from "./studyCore";
 import type { Question, StudyState } from "../types/study";
 
@@ -27,9 +27,10 @@ export const getMonsterCurrentHealth = (state: StudyState, question: Question) =
 export const getMonsterHit = (state: StudyState, question: Question, now = Date.now()) => {
   const critical = getSeededRoll(`${question.id}:${now}:critical`) <= getCriticalChance(state);
   const baseDamage = getAttackDamage(question, state);
+  const damage = critical ? baseDamage * CRITICAL_DAMAGE_MULTIPLIER : baseDamage;
   return {
     critical,
-    damage: critical ? baseDamage * CRITICAL_DAMAGE_MULTIPLIER : baseDamage
+    damage: getMonsterPlayerDamage(question, damage)
   };
 };
 

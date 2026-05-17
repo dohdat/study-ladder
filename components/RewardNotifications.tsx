@@ -1,5 +1,5 @@
 import { Box, Group, Paper, Stack, Text } from "@mantine/core";
-import { IconBolt, IconHeart, IconShield, IconSparkles } from "@tabler/icons-react";
+import { IconBolt, IconHeart, IconShield, IconSparkles, IconTrophy } from "@tabler/icons-react";
 
 import { CoinIcon } from "./CoinIcon";
 
@@ -11,14 +11,16 @@ const TOAST_RADIUS = 5;
 const TOAST_SHADOW = "0 10px 24px rgba(0, 0, 0, 0.28)";
 const TOAST_BG = "#20c997";
 const HEALTH_TOAST_BG = "#e03131";
+const ACHIEVEMENT_TOAST_BG = "#7b4dbb";
 const TOAST_ICON_SIZE = 18;
 const TOAST_ICON_GAP = 5;
 
 export type RewardNotification = {
   amount?: number;
+  achievementTitle?: string;
   id: string;
   itemName?: string;
-  kind: "experience" | "gold" | "health" | "item" | "mana";
+  kind: "achievement" | "experience" | "gold" | "health" | "item" | "mana";
 };
 
 export function RewardNotifications(props: { items: RewardNotification[] }) {
@@ -41,6 +43,7 @@ export function RewardNotifications(props: { items: RewardNotification[] }) {
 
 function RewardToast(props: { item: RewardNotification }) {
   const isHealthLoss = props.item.kind === "health";
+  const isAchievement = props.item.kind === "achievement";
   const label = getNotificationLabel(props.item.kind);
   const amount = props.item.amount ?? 1;
   return (
@@ -48,17 +51,34 @@ function RewardToast(props: { item: RewardNotification }) {
       px="md"
       py="xs"
       radius={TOAST_RADIUS}
-      style={{ background: isHealthLoss ? HEALTH_TOAST_BG : TOAST_BG, boxShadow: TOAST_SHADOW, color: "white", minWidth: TOAST_MIN_WIDTH }}
+      style={{ background: getToastBackground(props.item.kind), boxShadow: TOAST_SHADOW, color: "white", minWidth: TOAST_MIN_WIDTH }}
     >
       <Group gap="xs" justify="space-between" wrap="nowrap">
-        <Text size="sm" fw={700}>You {isHealthLoss ? "lost" : "gained"} {props.item.kind === "item" ? props.item.itemName : `some ${label}`}</Text>
+        <Text size="sm" fw={700}>{getToastText(props.item, isHealthLoss, label)}</Text>
         <Group gap={TOAST_ICON_GAP} wrap="nowrap">
           <RewardIcon kind={props.item.kind} />
-          {props.item.kind !== "item" && <Text size="sm" fw={800}>{isHealthLoss ? "-" : "+"} {amount}</Text>}
+          {props.item.kind !== "item" && !isAchievement && <Text size="sm" fw={800}>{isHealthLoss ? "-" : "+"} {amount}</Text>}
         </Group>
       </Group>
     </Paper>
   );
+}
+
+function getToastBackground(kind: RewardNotification["kind"]) {
+  if (kind === "health") {
+    return HEALTH_TOAST_BG;
+  }
+  if (kind === "achievement") {
+    return ACHIEVEMENT_TOAST_BG;
+  }
+  return TOAST_BG;
+}
+
+function getToastText(item: RewardNotification, isHealthLoss: boolean, label: string) {
+  if (item.kind === "achievement") {
+    return `Achievement unlocked: ${item.achievementTitle}`;
+  }
+  return `You ${isHealthLoss ? "lost" : "gained"} ${item.kind === "item" ? item.itemName : `some ${label}`}`;
 }
 
 function getNotificationLabel(kind: RewardNotification["kind"]) {
@@ -99,6 +119,13 @@ function RewardIcon(props: { kind: RewardNotification["kind"] }) {
     return (
       <Box c="violet.2" style={{ alignItems: "center", display: "flex" }}>
         <IconShield size={TOAST_ICON_SIZE} />
+      </Box>
+    );
+  }
+  if (props.kind === "achievement") {
+    return (
+      <Box c="yellow.2" style={{ alignItems: "center", display: "flex" }}>
+        <IconTrophy size={TOAST_ICON_SIZE} />
       </Box>
     );
   }

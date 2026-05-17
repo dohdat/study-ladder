@@ -56,6 +56,8 @@ const RUN_SECTION_GAP = 14;
 const RUN_VALUE_PADDING = 14;
 const RUN_BLOCK_RADIUS = 8;
 const RUN_LABEL_MARGIN_BOTTOM = 6;
+const RUN_VALUE_FONT_SIZE = "13px";
+const RUN_VALUE_LINE_HEIGHT = 1.65;
 const RUN_TITLE_ORDER = 3;
 const FIRST_CASE_INDEX = 0;
 const ARG_INDEX_OFFSET = 1;
@@ -281,7 +283,7 @@ function EditorToolbar(props: Parameters<typeof EditorCard>[0]) {
       <Group gap="xs">
         <Tooltip label="Start timer and enter fullscreen" withArrow>
           <Box component="span">
-            <Button size="xs" variant="default" leftSection={<IconPlayerPlay size={ICON_SM} />} disabled={props.questionFinished || props.sessionStarted} onClick={props.actions.startQuestion}>Start</Button>
+            <Button size="xs" variant="default" leftSection={<IconPlayerPlay size={ICON_SM} />} disabled={!props.runnerReady || props.questionFinished || props.sessionStarted} onClick={props.actions.startQuestion}>Start</Button>
           </Box>
         </Tooltip>
         <Tooltip label="Restore the starter code" withArrow>
@@ -381,9 +383,9 @@ function RunCaseDetails(props: { argNames: string[]; result: RunResult }) {
 function RunSection(props: { color?: string; label: string; value: string }) {
   return (
     <Box>
-      <Text fw={700} c="dimmed" mb={RUN_LABEL_MARGIN_BOTTOM}>{props.label}</Text>
+      <Text size="sm" fw={700} c="dimmed" mb={RUN_LABEL_MARGIN_BOTTOM}>{props.label}</Text>
       <Box p={RUN_VALUE_PADDING} style={{ background: RUN_BLOCK_BG, borderRadius: RUN_BLOCK_RADIUS }}>
-        <Text c={props.color} style={{ fontFamily: EXAMPLE_FONT_FAMILY, whiteSpace: "pre-wrap" }}>{props.value}</Text>
+        <Text c={props.color} style={{ fontFamily: EXAMPLE_FONT_FAMILY, fontSize: RUN_VALUE_FONT_SIZE, lineHeight: RUN_VALUE_LINE_HEIGHT, whiteSpace: "pre-wrap" }}>{props.value}</Text>
       </Box>
     </Box>
   );

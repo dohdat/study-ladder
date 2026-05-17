@@ -131,6 +131,7 @@ export type StudyState = {
     equipment: Record<EquipmentSlot, string | null>;
     shopLastRefreshedAt: number | null;
     shopStock: ShopItem[];
+    unlockedAchievementIds: string[];
   };
   cards: Record<string, CardState>;
 };

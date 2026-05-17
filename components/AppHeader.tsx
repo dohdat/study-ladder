@@ -16,6 +16,7 @@ export function AppHeader(props: {
   maxMana: number;
   modeValue: string;
   nextLevelExperience: number;
+  rating: number;
   state: StudyState;
   setState: React.Dispatch<React.SetStateAction<StudyState>>;
   stats: CharacterStats;
@@ -34,6 +35,7 @@ export function AppHeader(props: {
           maxMana={props.maxMana}
           nextLevelExperience={props.nextLevelExperience}
           onOpenStats={() => setActiveSection("stats")}
+          rating={props.rating}
           stats={props.stats}
         />
       </Group>

@@ -2,6 +2,8 @@ const isAlreadyTerminated = (line: string) => {
   return !line || line.endsWith(";") || line.endsWith("{") || line.endsWith("}") || line.endsWith(",") || line.endsWith(":");
 };
 
+const FOR_HEADER_SEMICOLON = "__STUDY_LADDER_FOR_SEMICOLON__";
+
 const isControlStatement = (line: string) => {
   return /^(if|for|while|switch|function|class|else|try|catch|finally)\b/.test(line);
 };
@@ -41,8 +43,18 @@ const shouldAddSemicolon = (line: string) => {
   return isSemicolonStatement(trimmed);
 };
 
+const protectForHeaderSemicolons = (source: string) => {
+  return source.replace(/\bfor\s*\(([^)]*)\)/g, (_match, header: string) => {
+    return `for (${header.replace(/;/g, FOR_HEADER_SEMICOLON)})`;
+  });
+};
+
+const restoreForHeaderSemicolons = (line: string) => {
+  return line.replace(new RegExp(FOR_HEADER_SEMICOLON, "g"), ";");
+};
+
 export const beautifyCode = (source: string) => {
-  const compact = source
+  const compact = protectForHeaderSemicolons(source)
     .replace(/\r\n/g, "\n")
     .replace(/[ \t]+$/gm, "")
     .replace(/[ \t]*([{};])[ \t]*/g, "$1\n")
@@ -56,7 +68,7 @@ export const beautifyCode = (source: string) => {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const closedLine = getInlineClosedLine(line);
+      const closedLine = restoreForHeaderSemicolons(getInlineClosedLine(line));
       if (closedLine.startsWith("}") || closedLine.startsWith("]") || closedLine.startsWith(")")) {
         indent = Math.max(0, indent - 1);
       }

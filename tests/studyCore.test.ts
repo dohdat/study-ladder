@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { questions } from "../data/questions";
 import { applyPassedCombatResult, getMonsterCurrentHealth } from "../lib/combatCore";
 import { createDropItem, ITEM_BASE_NAME_COUNT } from "../lib/itemCore";
+import { getEstimatedRating } from "../lib/ratingCore";
 import {
   DAY,
   EXPERIENCE_PER_LEVEL,
@@ -40,6 +41,7 @@ import {
   getQuestionDrop,
   getRecommendedDifficulty,
   getTopicStats,
+  isQuestionInRecommendedRange,
   isMasteredCard,
   normalizeStudyState,
   pickQuestion,
@@ -106,8 +108,23 @@ describe("studyCore", () => {
     for (const question of questions) {
       setCard(state, question.id, { ...defaultCard(), attempts: 1, dueAt: 5000 });
     }
-    setCard(state, questions[3].id, { ...defaultCard(), attempts: 1, dueAt: 1000 });
-    expect(pickQuestion(state, null, false, 1000).id).toBe(questions[3].id);
+    setCard(state, questions[2].id, { ...defaultCard(), attempts: 1, dueAt: 1000 });
+    expect(pickQuestion(state, null, false, 1000).id).toBe(questions[2].id);
+  });
+
+  it("keeps question picks near the player rating", () => {
+    const state = defaultState();
+    const highRatedQuestion = questions.find((question) => question.rating > 1600);
+    expect(highRatedQuestion).toBeTruthy();
+
+    for (const question of questions) {
+      setCard(state, question.id, { ...defaultCard(), attempts: 1, dueAt: 5000 });
+    }
+    setCard(state, highRatedQuestion?.id || questions[0].id, { ...defaultCard(), attempts: 1, dueAt: 1000 });
+
+    const picked = pickQuestion(state, null, false, 1000);
+    expect(picked.rating).toBeLessThanOrEqual(1300);
+    expect(isQuestionInRecommendedRange(state, highRatedQuestion || questions[0], true)).toBe(false);
   });
 
   it("applies pass schedule intervals and marks cards mastered", () => {
@@ -156,9 +173,10 @@ describe("studyCore", () => {
   it("applies failed-submit health penalties without changing cards", () => {
     const question = questions[0];
     const state = defaultState();
-    const penalized = applyHealthPenalty(state);
+    const penalized = applyHealthPenalty(state, HEALTH_LOSS_PER_FAIL, 3);
 
     expect(penalized.profile.health).toBe(MAX_HEALTH - HEALTH_LOSS_PER_FAIL);
+    expect(penalized.profile.mana).toBe(getMaxMana(state) - 3);
     expect(getCard(penalized, question.id)).toMatchObject(defaultCard());
     expect(state.profile.health).toBe(MAX_HEALTH);
   });
@@ -402,6 +420,18 @@ describe("studyCore", () => {
     const topics = getTopicStats(state);
     expect(topics.find((topic) => topic.topic === "Arrays")).toMatchObject({ mastered: 1 });
     expect(topics.find((topic) => topic.topic === "Strings")).toMatchObject({ attempted: 1, solved: 0 });
+  });
+
+  it("estimates player rating from solved question difficulty", () => {
+    let state = defaultState();
+    expect(getEstimatedRating(state)).toBe(1000);
+
+    state = applyScheduleResult(state, questions[0].id, true, "", 1000);
+    const firstRating = getEstimatedRating(state);
+    state = applyScheduleResult(state, questions[questions.length - 1].id, true, "", 2000);
+
+    expect(firstRating).toBeGreaterThan(1000);
+    expect(getEstimatedRating(state)).toBeGreaterThan(firstRating);
   });
 
   it("exports difficulty labels for UI display", () => {

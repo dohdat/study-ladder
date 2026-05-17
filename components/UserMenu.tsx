@@ -17,8 +17,9 @@ import {
   Tooltip,
   Title
 } from "@mantine/core";
-import { IconBackpack, IconChartBar, IconCircleCheck, IconSettings, IconShoppingBag, IconSparkles, IconTrophy, IconUser } from "@tabler/icons-react";
+import { IconBackpack, IconChartBar, IconSettings, IconShoppingBag, IconSparkles, IconTrophy, IconUser } from "@tabler/icons-react";
 
+import { AchievementsPanel } from "./AchievementsPanel";
 import { CoinAmount } from "./CoinIcon";
 import { InventoryPanel } from "./InventoryPanel";
 import { ShopPanel } from "./ShopPanel";
@@ -34,7 +35,6 @@ import {
   getLevelProgress,
   getMaxHealth,
   getMaxMana,
-  getProfileStats,
   spendStatPoint
 } from "../lib/studyCore";
 import type { CharacterStatKey, StudyState } from "../types/study";
@@ -42,9 +42,9 @@ import type { CharacterStatKey, StudyState } from "../types/study";
 const ICON_SIZE = 16;
 const MENU_WIDTH = 180;
 const SHOP_MODAL_SIZE = 980;
+const ACHIEVEMENTS_MODAL_SIZE = 920;
+const MODAL_TRANSITION_DURATION = 0;
 const PROGRESS_MAX = 100;
-const STREAK_ACHIEVEMENT_COUNT = 3;
-const GEARED_UP_LEVEL = 5;
 const DAILY_MINUTES_MIN = 0;
 const DAILY_MINUTES_MAX = 720;
 const DAILY_MINUTES_STEP = 5;
@@ -100,7 +100,15 @@ export function UserMenu(props: { activeSection: UserMenuSection | null; setActi
           ))}
         </Menu.Dropdown>
       </Menu>
-      <Modal opened={Boolean(props.activeSection)} onClose={() => props.setActiveSection(null)} title={modalTitle} centered size={getModalSize(props.activeSection)}>
+      <Modal
+        opened={Boolean(props.activeSection)}
+        onClose={() => props.setActiveSection(null)}
+        title={modalTitle}
+        centered
+        keepMounted
+        size={getModalSize(props.activeSection)}
+        transitionProps={{ duration: MODAL_TRANSITION_DURATION }}
+      >
         <UserModalContent section={props.activeSection} state={props.state} setState={props.setState} />
       </Modal>
     </>
@@ -108,7 +116,13 @@ export function UserMenu(props: { activeSection: UserMenuSection | null; setActi
 }
 
 function getModalSize(section: UserMenuSection | null) {
-  return section === "shop" ? SHOP_MODAL_SIZE : "lg";
+  if (section === "shop") {
+    return SHOP_MODAL_SIZE;
+  }
+  if (section === "achievements") {
+    return ACHIEVEMENTS_MODAL_SIZE;
+  }
+  return "lg";
 }
 
 function UserModalContent(props: { section: UserMenuSection | null; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
@@ -257,37 +271,6 @@ function D2ValueRow(props: { label: string; value: React.ReactNode }) {
       <Text size="xs" fw={800} c={STAT_GOLD}>{props.label}</Text>
       <Text size="sm" fw={800} c={STAT_TEXT}>{props.value}</Text>
     </Group>
-  );
-}
-
-function AchievementsPanel(props: { state: StudyState }) {
-  const profile = useMemo(() => getProfileStats(props.state), [props.state]);
-  const levelProgress = useMemo(() => getLevelProgress(props.state), [props.state]);
-  const achievements = [
-    { earned: profile.solved > 0, label: "First Clear", detail: "Solve one practice question." },
-    { earned: props.state.streak >= STREAK_ACHIEVEMENT_COUNT, label: "Hot Streak", detail: "Pass three questions in a row." },
-    { earned: profile.mastered > 0, label: "Mastery Mark", detail: "Master one question through review." },
-    { earned: levelProgress.level >= GEARED_UP_LEVEL, label: "Geared Up", detail: "Reach level 5." }
-  ];
-  return (
-    <Stack gap="sm">
-      {achievements.map((achievement) => (
-        <Group key={achievement.label} gap="sm" wrap="nowrap">
-          <ThemeIcon color={achievement.earned ? "yellow" : "gray"} variant={achievement.earned ? "filled" : "light"}>
-            {achievement.earned ? <IconTrophy size={ICON_SIZE} /> : <IconCircleCheck size={ICON_SIZE} />}
-          </ThemeIcon>
-          <Box flex={1}>
-            <Group gap="xs">
-              <Text size="sm" fw={700}>{achievement.label}</Text>
-              <Badge size="xs" variant="light" color={achievement.earned ? "green" : "gray"}>
-                {achievement.earned ? "Unlocked" : "Locked"}
-              </Badge>
-            </Group>
-            <Text size="xs" c="dimmed">{achievement.detail}</Text>
-          </Box>
-        </Group>
-      ))}
-    </Stack>
   );
 }
 
