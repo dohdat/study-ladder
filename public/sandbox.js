@@ -194,6 +194,10 @@ async function handleRunCode(event) {
 }
 
 self.addEventListener("message", (event) => {
+  if (event.data?.type === "runner-ping") {
+    postResult({ type: "runner-ready" });
+    return;
+  }
   handleRunTests(event);
   handleRunCode(event);
 });

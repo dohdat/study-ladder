@@ -12,19 +12,21 @@ const FIRST_HIT_INDEX = 0;
 
 export function useStudyNotifications(state: StudyState, hydrated: boolean, setRewardNotifications: Dispatch<SetStateAction<RewardNotification[]>>) {
   const unlockedAchievementIds = useRef<Set<string> | null>(null);
+  const hydratedOnce = useRef(false);
   const pushNotifications = usePushNotifications(setRewardNotifications);
 
   useEffect(() => {
-    const unlocked = new Set(getAchievements(state).filter((achievement) => achievement.unlocked).map((achievement) => achievement.id));
     if (!hydrated) {
+      hydratedOnce.current = false;
+      return;
+    }
+    const unlocked = new Set(getAchievements(state).filter((achievement) => achievement.unlocked).map((achievement) => achievement.id));
+    if (!hydratedOnce.current) {
+      hydratedOnce.current = true;
       unlockedAchievementIds.current = unlocked;
       return;
     }
-    if (!unlockedAchievementIds.current) {
-      unlockedAchievementIds.current = unlocked;
-      return;
-    }
-    const previous = unlockedAchievementIds.current;
+    const previous = unlockedAchievementIds.current || unlocked;
     const newAchievements = getAchievements(state).filter((achievement) => achievement.unlocked && !previous.has(achievement.id));
     unlockedAchievementIds.current = unlocked;
     if (newAchievements.length) {

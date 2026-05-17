@@ -31,8 +31,8 @@ const ICON_XS = 12;
 const ICON_SM = 14;
 const ICON_LG = 18;
 const RESULT_ICON_SIZE = 20;
-const EDITOR_FONT_SIZE = 13;
-const EDITOR_HEIGHT = 360;
+const EDITOR_FONT_SIZE = 16;
+const EDITOR_HEIGHT = 560;
 const EDITOR_READ_ONLY_MESSAGE = { value: "Press Start to edit this solution." };
 const LOCKED_OVERLAY_BG = "#2b2b2b";
 const LOCKED_OVERLAY_PANEL_MAX_WIDTH = 360;
@@ -283,7 +283,7 @@ function EditorToolbar(props: Parameters<typeof EditorCard>[0]) {
       <Group gap="xs">
         <Tooltip label="Start timer and enter fullscreen" withArrow>
           <Box component="span">
-            <Button size="xs" variant="default" leftSection={<IconPlayerPlay size={ICON_SM} />} disabled={!props.runnerReady || props.questionFinished || props.sessionStarted} onClick={props.actions.startQuestion}>Start</Button>
+            <Button size="xs" variant="default" leftSection={<IconPlayerPlay size={ICON_SM} />} disabled={props.sessionStarted} onClick={props.actions.startQuestion}>Start</Button>
           </Box>
         </Tooltip>
         <Tooltip label="Restore the starter code" withArrow>

@@ -4,8 +4,8 @@ import { questions } from "../data/questions";
 import { applyPassedCombatResult, getMonsterCurrentHealth } from "../lib/combatCore";
 import { createDropItem, ITEM_BASE_NAME_COUNT } from "../lib/itemCore";
 import { getEstimatedRating } from "../lib/ratingCore";
+import { getAvailableWarriorSkillPoints, spendWarriorSkillPoint } from "../lib/skillCore";
 import {
-  DAY,
   EXPERIENCE_PER_LEVEL,
   HEALTH_LOSS_PER_FAIL,
   HINT_COST,
@@ -27,6 +27,7 @@ import {
   getActiveSetBonuses,
   getCriticalChance,
   getDueQuestions,
+  getElementalResistances,
   getEquipmentModifierTotals,
   getExperienceReward,
   getHealthLoss,
@@ -41,6 +42,7 @@ import {
   getQuestionDrop,
   getRecommendedDifficulty,
   getTopicStats,
+  getWarriorSkillBonusTotals,
   isQuestionInRecommendedRange,
   isMasteredCard,
   normalizeStudyState,
@@ -69,6 +71,7 @@ describe("studyCore", () => {
     expect(partial.profile.mana).toBe(getMaxMana(partial));
     expect(partial.profile.statPoints).toBe(0);
     expect(partial.profile.statPointsAwardedLevel).toBe(1);
+    expect(partial.profile.skillRanks).toMatchObject({});
     expect(partial.profile.stats).toMatchObject({ strength: 1, constitution: 1, perception: 1, intelligence: 1 });
     expect(partial.profile.shopStock.length).toBeGreaterThan(0);
     expect(getCard(partial, questions[0].id).attempts).toBe(1);
@@ -86,18 +89,15 @@ describe("studyCore", () => {
     expect(getCard(state, "missing")).toMatchObject(defaultCard());
   });
 
-  it("computes recommended difficulty and due questions", () => {
+  it("computes recommended difficulty from Elo rating and has no due queue", () => {
     const state = defaultState();
     expect(getRecommendedDifficulty(state)).toBe(1);
-    state.totalCorrect = 12;
+    state.profile.rating = 3000;
     expect(getRecommendedDifficulty(state)).toBe(5);
-
-    const now = 1000;
-    setCard(state, questions[0].id, { ...defaultCard(), dueAt: now + DAY });
-    expect(getDueQuestions(state, now).some((question) => question.id === questions[0].id)).toBe(false);
+    expect(getDueQuestions(state, 1000)).toEqual([]);
   });
 
-  it("picks unseen due questions and supports next-question navigation", () => {
+  it("picks unseen rating-fit questions and supports next-question navigation", () => {
     const state = defaultState();
     const first = pickQuestion(state, null, false, 1000);
     expect(first.id).toBe(questions[0].id);
@@ -106,9 +106,9 @@ describe("studyCore", () => {
     expect(next.id).toBe(questions[1].id);
 
     for (const question of questions) {
-      setCard(state, question.id, { ...defaultCard(), attempts: 1, dueAt: 5000 });
+      setCard(state, question.id, { ...defaultCard(), attempts: 1 });
     }
-    setCard(state, questions[2].id, { ...defaultCard(), attempts: 1, dueAt: 1000 });
+    setCard(state, questions[2].id, { ...defaultCard(), attempts: 0 });
     expect(pickQuestion(state, null, false, 1000).id).toBe(questions[2].id);
   });
 
@@ -118,16 +118,16 @@ describe("studyCore", () => {
     expect(highRatedQuestion).toBeTruthy();
 
     for (const question of questions) {
-      setCard(state, question.id, { ...defaultCard(), attempts: 1, dueAt: 5000 });
+      setCard(state, question.id, { ...defaultCard(), attempts: 1 });
     }
-    setCard(state, highRatedQuestion?.id || questions[0].id, { ...defaultCard(), attempts: 1, dueAt: 1000 });
+    setCard(state, highRatedQuestion?.id || questions[0].id, { ...defaultCard(), attempts: 0 });
 
     const picked = pickQuestion(state, null, false, 1000);
     expect(picked.rating).toBeLessThanOrEqual(1300);
     expect(isQuestionInRecommendedRange(state, highRatedQuestion || questions[0], true)).toBe(false);
   });
 
-  it("applies pass schedule intervals and marks cards mastered", () => {
+  it("applies passed results without spaced-repetition scheduling", () => {
     const question = questions[0];
     let state = defaultState();
 
@@ -136,24 +136,19 @@ describe("studyCore", () => {
       attempts: 1,
       correct: 1,
       reps: 1,
-      intervalDays: 1,
+      intervalDays: 0,
       draft: "draft",
       lastResult: "pass"
     });
-    expect(getCard(state, question.id).dueAt).toBe(1000 + DAY);
+    expect(getCard(state, question.id).dueAt).toBe(0);
     expect(state.profile.coins).toBe(getCoinReward(question));
     expect(state.profile.experience).toBe(getExperienceReward(question));
     expect(state.profile.mana).toBe(getMaxMana(state));
-
-    state = applyScheduleResult(state, question.id, true, "draft", 2000);
-    expect(getCard(state, question.id).intervalDays).toBe(3);
-
-    state = applyScheduleResult(state, question.id, true, "draft", 3000);
     expect(isMasteredCard(getCard(state, question.id))).toBe(true);
-    expect(getCard(state, question.id).masteredAt).toBe(3000);
+    expect(getCard(state, question.id).masteredAt).toBe(1000);
   });
 
-  it("applies fail schedule and lowers reps/ease", () => {
+  it("applies failed results without spaced-repetition scheduling", () => {
     const question = questions[0];
     let state = defaultState();
     setCard(state, question.id, { ...defaultCard(), reps: 2, ease: 2.4, correct: 1 });
@@ -162,9 +157,9 @@ describe("studyCore", () => {
     const card = getCard(state, question.id);
 
     expect(card.lastResult).toBe("fail");
-    expect(card.reps).toBe(1);
-    expect(card.ease).toBeCloseTo(2.18);
-    expect(card.dueAt).toBe(1000 + 10 * 60 * 1000);
+    expect(card.reps).toBe(2);
+    expect(card.failedSubmissions).toBe(1);
+    expect(card.dueAt).toBe(0);
     expect(state.streak).toBe(0);
     expect(state.profile.coins).toBe(0);
     expect(state.profile.health).toBe(MAX_HEALTH - HEALTH_LOSS_PER_FAIL);
@@ -181,6 +176,18 @@ describe("studyCore", () => {
     expect(state.profile.health).toBe(MAX_HEALTH);
   });
 
+  it("counts failed submissions against Elo rating", () => {
+    const question = questions[2];
+    const state = defaultState();
+    state.profile.rating = 1300;
+
+    const penalized = applyHealthPenalty(state, HEALTH_LOSS_PER_FAIL, 0, question.id, "bad", 1000);
+
+    expect(getCard(penalized, question.id).failedSubmissions).toBe(1);
+    expect(getCard(penalized, question.id).attempts).toBe(1);
+    expect(getEstimatedRating(penalized)).toBeLessThan(1300);
+  });
+
   it("rolls higher health loss for higher-level monsters", () => {
     const easyQuestion = questions[0];
     const hardQuestion = questions[questions.length - 1];
@@ -189,13 +196,14 @@ describe("studyCore", () => {
     expect(getMonsterDamageRoll(hardQuestion, 1000)).toBeGreaterThan(getMonsterDamageRoll(easyQuestion, 1000));
   });
 
-  it("requires successful submits to reduce monster health before scheduling rewards", () => {
+  it("rewards every successful submit while only mastering on monster defeat", () => {
     const question = questions[0];
     let state = defaultState();
     const firstHit = applyPassedCombatResult(state, question.id, "draft", 1000);
 
     expect(firstHit.hit?.defeated).toBe(false);
-    expect(firstHit.state.profile.coins).toBe(0);
+    expect(firstHit.state.profile.coins).toBeGreaterThan(0);
+    expect(firstHit.state.profile.experience).toBeGreaterThan(0);
     expect(getMonsterCurrentHealth(firstHit.state, question)).toBeLessThan(getMonsterCurrentHealth(state, question));
     expect(getCard(firstHit.state, question.id).correct).toBe(0);
 
@@ -205,7 +213,7 @@ describe("studyCore", () => {
     }
 
     expect(getCard(state, question.id).correct).toBe(1);
-    expect(state.profile.coins).toBe(getCoinReward(question, state));
+    expect(state.profile.coins).toBeGreaterThan(firstHit.state.profile.coins);
     expect(getMonsterCurrentHealth(state, question)).toBeGreaterThan(0);
   });
 
@@ -257,6 +265,28 @@ describe("studyCore", () => {
     const upgraded = spendStatPoint(state, "strength");
     expect(upgraded.profile.statPoints).toBe(3);
     expect(upgraded.profile.stats.strength).toBe(2);
+  });
+
+  it("spends Barbarian-style skill points with prerequisites and synergies", () => {
+    const question = questions[0];
+    let state = defaultState();
+    state.profile.experience = EXPERIENCE_PER_LEVEL * 30;
+
+    expect(getAvailableWarriorSkillPoints(state, getLevelProgress(state).level)).toBe(30);
+    state = spendWarriorSkillPoint(state, "swordMastery", getLevelProgress(state).level);
+    state = spendWarriorSkillPoint(state, "swordMastery", getLevelProgress(state).level);
+    state = spendWarriorSkillPoint(state, "bash", getLevelProgress(state).level);
+    state = spendWarriorSkillPoint(state, "bash", getLevelProgress(state).level);
+    state = spendWarriorSkillPoint(state, "concentrate", getLevelProgress(state).level);
+    state = spendWarriorSkillPoint(state, "ironSkin", getLevelProgress(state).level);
+    state = spendWarriorSkillPoint(state, "naturalResistance", getLevelProgress(state).level);
+
+    expect(getAvailableWarriorSkillPoints(state, getLevelProgress(state).level)).toBe(23);
+    expect(getWarriorSkillBonusTotals(state)).toMatchObject({ coldResistPercent: 3, criticalChancePercent: 2, damageReduction: 1 });
+    expect(getAttackDamage(question, state)).toBeGreaterThan(getAttackDamage(question, defaultState()));
+    expect(getCriticalChance(state)).toBeGreaterThan(getCriticalChance(defaultState()));
+    expect(getHealthLoss(state)).toBeLessThan(getHealthLoss(defaultState()));
+    expect(getElementalResistances(state).fire).toBe(3);
   });
 
   it("drops and equips stat bonus items from solved questions", () => {
@@ -318,11 +348,13 @@ describe("studyCore", () => {
       id: "modifier-sword",
       modifiers: [
         { key: "bonusXpPercent", value: 20 },
+        { key: "fireResistPercent", value: 25 },
         { key: "criticalChancePercent", value: 10 },
         { key: "damageReduction", value: 2 },
         { key: "enhancedDamagePercent", value: 50 },
         { key: "goldFindPercent", value: 50 },
         { key: "lifeOnKill", value: 5 },
+        { key: "lightningResistPercent", value: 90 },
         { key: "magicFindPercent", value: 50 },
         { key: "manaOnKill", value: 3 },
         { key: "maxLife", value: 10 },
@@ -337,9 +369,11 @@ describe("studyCore", () => {
     state = equipItem(state, "modifier-sword");
 
     expect(getEquipmentModifierTotals(state)).toMatchObject({ bonusXpPercent: 20, goldFindPercent: 50, lifeOnKill: 5 });
+    expect(getElementalResistances(state)).toMatchObject({ fire: 25, lightning: 75 });
     expect(getMaxHealth(state)).toBe(MAX_HEALTH + 10);
     expect(getMaxMana(state)).toBe(30);
     expect(getHealthLoss(state)).toBe(HEALTH_LOSS_PER_FAIL - 2);
+    expect(getHealthLoss(state, 20, "fire")).toBeLessThan(getHealthLoss(state, 20));
     expect(getAttackDamage(question, state)).toBeGreaterThan(getAttackDamage(question, defaultState()));
     expect(getCriticalChance(state)).toBeGreaterThan(getCriticalChance(defaultState()));
     expect(getCoinReward(question, state)).toBeGreaterThan(getCoinReward(question, defaultState()));

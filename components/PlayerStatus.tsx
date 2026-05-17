@@ -6,6 +6,11 @@ import type { CharacterStats } from "../types/study";
 import { CoinIcon } from "./CoinIcon";
 
 const PERCENT_MAX = 100;
+const RATING_MAX = 3500;
+const RED_RATING_MIN = 3000;
+const ORANGE_RATING_MIN = 2400;
+const YELLOW_RATING_MIN = 1800;
+const BLUE_RATING_MIN = 1400;
 const AVATAR_SIZE = 58;
 const SPRITE_SIZE = 16;
 const BRONZE_GEAR_LEVEL = 3;
@@ -35,6 +40,7 @@ export function PlayerStatus(props: {
   const experienceValue = (props.currentExperience / props.nextLevelExperience) * PERCENT_MAX;
   const manaValue = props.maxMana ? (props.mana / props.maxMana) * PERCENT_MAX : 0;
   const gear = GEAR_TIERS.find((tier) => props.level >= tier.minLevel) || GEAR_TIERS[GEAR_TIERS.length - 1];
+  const ratingColor = getRatingColor(props.rating);
 
   return (
     <Paper
@@ -60,12 +66,14 @@ export function PlayerStatus(props: {
           <Box>
             <Text size="sm" fw={700} lh={1.1}>Dat Do</Text>
             <Text size="xs" c="gray.3">Level {props.level} Warrior</Text>
-            <Text size="10px" c="yellow.4" fw={700}>Rating {props.rating}</Text>
           </Box>
-          <Group gap={5} wrap="nowrap">
-            <CoinIcon size={18} />
-            <Text size="sm" fw={700} lh={1}>{props.coins}</Text>
-          </Group>
+          <Box ta="right">
+            <Group gap={5} wrap="nowrap" justify="flex-end">
+              <CoinIcon size={18} />
+              <Text size="sm" fw={700} lh={1}>{props.coins}</Text>
+            </Group>
+            <Text size="10px" c={`${ratingColor}.4`} fw={800} lh={1.2}>Rating {props.rating}</Text>
+          </Box>
         </Group>
         <StatBar color="red" icon={<IconHeart size={14} />} value={healthValue} text={`${props.health} / ${props.maxHealth}`} />
         <StatBar color="blue" icon={<IconBolt size={14} />} value={manaValue} text={`${props.mana} / ${props.maxMana}`} />
@@ -79,6 +87,25 @@ export function PlayerStatus(props: {
       </Box>
     </Paper>
   );
+}
+
+function getRatingColor(rating: number) {
+  if (rating >= RATING_MAX) {
+    return "grape";
+  }
+  if (rating >= RED_RATING_MIN) {
+    return "red";
+  }
+  if (rating >= ORANGE_RATING_MIN) {
+    return "orange";
+  }
+  if (rating >= YELLOW_RATING_MIN) {
+    return "yellow";
+  }
+  if (rating >= BLUE_RATING_MIN) {
+    return "blue";
+  }
+  return "green";
 }
 
 function AvatarIllustration(props: { gear: (typeof GEAR_TIERS)[number]; level: number }) {

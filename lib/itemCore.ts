@@ -33,15 +33,19 @@ const MIN_SET_DIFFICULTY: Question["difficulty"] = 2;
 const STAT_KEYS: CharacterStatKey[] = ["strength", "constitution", "perception", "intelligence"];
 const MODIFIER_POOLS: Array<{ key: ItemModifierKey; min: number; max: number }> = [
   { key: "bonusXpPercent", min: 5, max: 20 },
+  { key: "coldResistPercent", min: 5, max: 30 },
   { key: "criticalChancePercent", min: 2, max: 8 },
   { key: "damageReduction", min: 1, max: 4 },
   { key: "enhancedDamagePercent", min: 8, max: 30 },
+  { key: "fireResistPercent", min: 5, max: 30 },
   { key: "goldFindPercent", min: 8, max: 35 },
   { key: "lifeOnKill", min: 2, max: 8 },
+  { key: "lightningResistPercent", min: 5, max: 30 },
   { key: "magicFindPercent", min: 5, max: 25 },
   { key: "manaOnKill", min: 2, max: 8 },
   { key: "maxLife", min: 5, max: 20 },
-  { key: "maxMana", min: 5, max: 20 }
+  { key: "maxMana", min: 5, max: 20 },
+  { key: "poisonResistPercent", min: 5, max: 30 }
 ];
 
 export const ITEM_BASE_NAME_COUNT = ITEM_NAME_POOL_COUNT;

@@ -1,31 +1,21 @@
 import { questions } from "../data/questions";
 import { createDropItem, EQUIPMENT_SLOTS, getActiveSetBonusesForItems, SLOT_LABELS } from "./itemCore";
-import { getEstimatedRating } from "./ratingCore";
+import { applyEloResult, DEFAULT_PLAYER_RATING, getEstimatedRating } from "./ratingCore";
+import { applyElementalResistance, getResistancesFromModifiers } from "./resistanceCore";
+import { getWarriorSkillBonuses, normalizeWarriorSkillRanks } from "./skillCore";
 import { createShopStock, normalizeShopStock } from "./shopCore";
-import type { CardState, CharacterStatKey, CharacterStats, EquipmentSlot, InventoryItem, ItemModifierKey, Question, StudyState } from "../types/study";
+import type { CardState, CharacterStatKey, CharacterStats, ElementalDamageType, EquipmentSlot, InventoryItem, ItemModifierKey, Question, StudyState } from "../types/study";
 
-const HOURS_PER_DAY = 24;
-const MINUTES_PER_HOUR = 60;
-const SECONDS_PER_MINUTE = 60;
-const MS_PER_SECOND = 1000;
-const EASY_MAX_DIFFICULTY = 2;
-const MEDIUM_MAX_DIFFICULTY = 4;
+const MS_PER_MINUTE = 60000;
 const EASY_MINUTES = 10;
 const MEDIUM_MINUTES = 20;
 const HARD_MINUTES = 25;
+const QUESTION_TIME_LIMIT_MINUTES: Record<Question["difficulty"], number> = { 1: EASY_MINUTES, 2: EASY_MINUTES, 3: MEDIUM_MINUTES, 4: MEDIUM_MINUTES, 5: HARD_MINUTES };
 const MAX_DIFFICULTY = 5;
 const QUESTION_RATING_BUFFER = 300;
 const NEXT_QUESTION_RATING_BUFFER = 350;
-const CORRECTS_PER_DIFFICULTY = 3;
 const MISSING_INDEX = -1;
 const PERCENT = 100;
-const SECOND_REVIEW_REPS = 2;
-const SECOND_REVIEW_INTERVAL_DAYS = 3;
-const MAX_EASE = 3.2;
-const PASS_EASE_BONUS = 0.08;
-const MIN_EASE = 1.4;
-const FAIL_EASE_PENALTY = 0.22;
-const FAIL_REVIEW_DELAY_MINUTES = 10;
 const COINS_PER_DIFFICULTY = 10;
 const EXPERIENCE_PER_DIFFICULTY = 15;
 const BASE_MANA = 20;
@@ -62,21 +52,25 @@ const MONSTER_DAMAGE_SPREAD_DIVISOR = 8;
 const MONSTER_DAMAGE_MIN_SPREAD = 1;
 const RANDOM_INCLUSIVE_OFFSET = 1;
 const STARTER_SHOP_REFRESH_AT = 0;
+const DIFFICULTY_RATING_STEP = 500;
+const RATING_TARGET_OFFSET = 100;
 const MODIFIER_KEYS: ItemModifierKey[] = [
   "bonusXpPercent",
+  "coldResistPercent",
   "criticalChancePercent",
   "damageReduction",
   "enhancedDamagePercent",
+  "fireResistPercent",
   "goldFindPercent",
   "lifeOnKill",
+  "lightningResistPercent",
   "magicFindPercent",
   "manaOnKill",
   "maxLife",
-  "maxMana"
+  "maxMana",
+  "poisonResistPercent"
 ];
 
-export const DAY = HOURS_PER_DAY * MINUTES_PER_HOUR * SECONDS_PER_MINUTE * MS_PER_SECOND;
-export const MASTERED_REPS = 3;
 export const HINT_COST = 0;
 export const MAX_HEALTH = 50;
 export const HEALTH_LOSS_PER_FAIL = 5;
@@ -89,37 +83,12 @@ export const DEFAULT_CHARACTER_STATS: CharacterStats = {
   intelligence: 1
 };
 export const EQUIPMENT_SLOT_LABELS = SLOT_LABELS;
-export const DEFAULT_ITEM_MODIFIERS: Record<ItemModifierKey, number> = {
-  bonusXpPercent: 0,
-  criticalChancePercent: 0,
-  damageReduction: 0,
-  enhancedDamagePercent: 0,
-  goldFindPercent: 0,
-  lifeOnKill: 0,
-  magicFindPercent: 0,
-  manaOnKill: 0,
-  maxLife: 0,
-  maxMana: 0
-};
+export const DEFAULT_ITEM_MODIFIERS = Object.fromEntries(MODIFIER_KEYS.map((key) => [key, 0])) as Record<ItemModifierKey, number>;
 
-export const difficultyLabels: Record<Question["difficulty"], string> = {
-  1: "Easy",
-  2: "Easy+",
-  3: "Medium",
-  4: "Medium+",
-  5: "Hard"
-};
+export const difficultyLabels: Record<Question["difficulty"], string> = { 1: "Easy", 2: "Easy+", 3: "Medium", 4: "Medium+", 5: "Hard" };
 
 export const getQuestionTimeLimitMs = (question: Question) => {
-  if (question.difficulty <= EASY_MAX_DIFFICULTY) {
-    return EASY_MINUTES * SECONDS_PER_MINUTE * MS_PER_SECOND;
-  }
-
-  if (question.difficulty <= MEDIUM_MAX_DIFFICULTY) {
-    return MEDIUM_MINUTES * SECONDS_PER_MINUTE * MS_PER_SECOND;
-  }
-
-  return HARD_MINUTES * SECONDS_PER_MINUTE * MS_PER_SECOND;
+  return QUESTION_TIME_LIMIT_MINUTES[question.difficulty] * MS_PER_MINUTE;
 };
 
 export const defaultState = (): StudyState => {
@@ -138,12 +107,14 @@ function createDefaultStateBase(): StudyState {
       experience: 0,
       health: MAX_HEALTH,
       mana: BASE_MANA,
+      rating: DEFAULT_PLAYER_RATING,
       statPoints: 0,
       statPointsAwardedLevel: FIRST_STAT_LEVEL,
       hintsBought: 0,
       startedAt: Date.now(),
       lastStudiedAt: null,
       stats: { ...DEFAULT_CHARACTER_STATS },
+      skillRanks: {},
       inventory: [],
       equipment: defaultEquipment(),
       shopLastRefreshedAt: null,
@@ -154,21 +125,14 @@ function createDefaultStateBase(): StudyState {
   };
 }
 
-export const defaultCard = (): CardState => ({
-  dueAt: 0,
-  intervalDays: 0,
-  ease: 2.4,
-  reps: 0,
-  attempts: 0,
-  correct: 0,
-  lastResult: null
-});
+export const defaultCard = (): CardState => ({ dueAt: 0, intervalDays: 0, ease: 2.4, reps: 0, attempts: 0, correct: 0, failedSubmissions: 0, lastResult: null });
 
 export const cloneState = (state: StudyState): StudyState => ({
   ...state,
   profile: {
     ...state.profile,
     stats: { ...state.profile.stats },
+    skillRanks: { ...state.profile.skillRanks },
     inventory: state.profile.inventory.map((item) => ({ ...item, modifiers: item.modifiers?.map((modifier) => ({ ...modifier })), stats: { ...item.stats } })),
     equipment: { ...state.profile.equipment },
     shopStock: state.profile.shopStock.map((item) => ({ ...item }))
@@ -189,16 +153,18 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
       ...fallback.profile,
       ...(stored.profile || {}),
       experience: Math.max(0, stored.profile?.experience ?? fallback.profile.experience),
+      rating: normalizeRating(stored, fallback),
       statPoints: Math.max(0, stored.profile?.statPoints ?? fallback.profile.statPoints),
       statPointsAwardedLevel: Math.max(FIRST_STAT_LEVEL, stored.profile?.statPointsAwardedLevel ?? fallback.profile.statPointsAwardedLevel),
       stats: normalizeCharacterStats(stored.profile?.stats),
+      skillRanks: normalizeWarriorSkillRanks(stored.profile?.skillRanks),
       inventory: normalizeInventory(stored.profile?.inventory),
       equipment: normalizeEquipment(stored.profile?.equipment),
       shopLastRefreshedAt: stored.profile?.shopLastRefreshedAt ?? fallback.profile.shopLastRefreshedAt,
       shopStock: normalizeShopStock(stored.profile?.shopStock),
       unlockedAchievementIds: normalizeUnlockedAchievementIds(stored.profile?.unlockedAchievementIds)
     },
-    cards: stored.cards
+    cards: normalizeCards(stored.cards)
   };
   const bounded = {
     ...normalized,
@@ -222,18 +188,9 @@ function createStarterShopStock() {
   return createShopStock(questions[0], DEFAULT_CHARACTER_STATS, STARTER_SHOP_REFRESH_AT);
 }
 
-function normalizeCharacterStats(stats: Partial<CharacterStats> | undefined): CharacterStats {
-  return {
-    strength: normalizeStat(stats?.strength),
-    constitution: normalizeStat(stats?.constitution),
-    perception: normalizeStat(stats?.perception),
-    intelligence: normalizeStat(stats?.intelligence)
-  };
-}
+function normalizeCharacterStats(stats: Partial<CharacterStats> | undefined): CharacterStats { return { strength: normalizeStat(stats?.strength), constitution: normalizeStat(stats?.constitution), perception: normalizeStat(stats?.perception), intelligence: normalizeStat(stats?.intelligence) }; }
 
-function defaultEquipment(): Record<EquipmentSlot, string | null> {
-  return Object.fromEntries(EQUIPMENT_SLOTS.map((slot) => [slot, null])) as Record<EquipmentSlot, string | null>;
-}
+function defaultEquipment(): Record<EquipmentSlot, string | null> { return Object.fromEntries(EQUIPMENT_SLOTS.map((slot) => [slot, null])) as Record<EquipmentSlot, string | null>; }
 
 function normalizeInventory(items: InventoryItem[] | undefined) {
   return (items || []).map((item) => ({ ...item, modifiers: normalizeItemModifiers(item.modifiers), requirements: item.requirements || { level: FIRST_STAT_LEVEL, stats: {} }, stats: { ...item.stats } }));
@@ -242,6 +199,10 @@ function normalizeInventory(items: InventoryItem[] | undefined) {
 function normalizeEquipment(equipment: Partial<Record<EquipmentSlot, string | null>> | undefined) { return { ...defaultEquipment(), ...(equipment || {}) }; }
 
 function normalizeUnlockedAchievementIds(ids: string[] | undefined) { return [...new Set(ids || [])]; }
+
+function normalizeRating(stored: Partial<StudyState>, fallback: StudyState) {
+  return Number.isFinite(stored.profile?.rating) ? Math.max(DEFAULT_PLAYER_RATING, Math.round(stored.profile?.rating || DEFAULT_PLAYER_RATING)) : getEstimatedRating({ ...fallback, ...stored, profile: { ...fallback.profile, ...(stored.profile || {}) }, cards: stored.cards || {} });
+}
 
 function normalizeStat(value: number | undefined) {
   if (!Number.isFinite(value)) {
@@ -254,6 +215,10 @@ function normalizeItemModifiers(modifiers: InventoryItem["modifiers"] | undefine
   return (modifiers || []).filter((modifier) => MODIFIER_KEYS.includes(modifier.key) && Number.isFinite(modifier.value));
 }
 
+function normalizeCards(cards: StudyState["cards"] | undefined) {
+  return Object.fromEntries(Object.entries(cards || {}).map(([id, card]) => [id, { ...defaultCard(), ...card, failedSubmissions: Math.max(0, card.failedSubmissions || 0) }]));
+}
+
 export const getCard = (state: StudyState, questionId: string): CardState => {
   return state.cards[questionId] || defaultCard();
 };
@@ -262,7 +227,7 @@ export const setCard = (state: StudyState, questionId: string, card: CardState) 
   state.cards[questionId] = card;
 };
 
-export const isMasteredCard = (card: CardState) => card.correct >= MASTERED_REPS && card.reps >= MASTERED_REPS;
+export const isMasteredCard = (card: CardState) => card.correct > 0;
 
 export const getEffectiveCharacterStats = (state: StudyState): CharacterStats => {
   const levelBonus = getLevelProgress(state).level - FIRST_STAT_LEVEL;
@@ -286,6 +251,10 @@ export const getEquipmentStats = (state: StudyState): CharacterStats => {
 export const getEquipmentModifierTotals = (state: StudyState) => {
   return getEquippedItems(state).reduce((totals, item) => addModifierTotals(totals, item.modifiers), { ...DEFAULT_ITEM_MODIFIERS });
 };
+
+export const getElementalResistances = (state: StudyState) => getResistancesFromModifiers(addSkillResistances(getEquipmentModifierTotals(state), getWarriorSkillBonusTotals(state)));
+
+export const getWarriorSkillBonusTotals = (state: StudyState) => getWarriorSkillBonuses(state.profile.skillRanks);
 
 function getEquippedItemStats(state: StudyState): CharacterStats {
   return getEquippedItems(state).reduce((stats, item) => addStats(stats, item.stats), { strength: 0, constitution: 0, perception: 0, intelligence: 0 });
@@ -327,6 +296,16 @@ function addModifierTotals(base: Record<ItemModifierKey, number>, modifiers: Inv
   }
   return next;
 }
+
+function addSkillResistances(modifiers: Record<ItemModifierKey, number>, skills: ReturnType<typeof getWarriorSkillBonusTotals>) {
+  return {
+    ...modifiers,
+    coldResistPercent: modifiers.coldResistPercent + skills.coldResistPercent,
+    fireResistPercent: modifiers.fireResistPercent + skills.fireResistPercent,
+    lightningResistPercent: modifiers.lightningResistPercent + skills.lightningResistPercent,
+    poisonResistPercent: modifiers.poisonResistPercent + skills.poisonResistPercent
+  };
+}
 function applyPercentBonus(value: number, bonusPercent: number) {
   return Math.round(value * (1 + bonusPercent / MODIFIER_PERCENT_BASE));
 }
@@ -334,20 +313,24 @@ function applyPercentBonus(value: number, bonusPercent: number) {
 export const getMaxHealth = (state: StudyState) => {
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getEquipmentModifierTotals(state);
-  return MAX_HEALTH + (stats.constitution - FIRST_STAT_LEVEL) * HEALTH_PER_CONSTITUTION + modifiers.maxLife;
+  const skills = getWarriorSkillBonusTotals(state);
+  return MAX_HEALTH + (stats.constitution - FIRST_STAT_LEVEL) * HEALTH_PER_CONSTITUTION + modifiers.maxLife + skills.maxLife;
 };
 
 export const getMaxMana = (state: StudyState) => {
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getEquipmentModifierTotals(state);
-  return BASE_MANA + (stats.intelligence - FIRST_STAT_LEVEL) * MANA_PER_INTELLIGENCE + modifiers.maxMana;
+  const skills = getWarriorSkillBonusTotals(state);
+  return BASE_MANA + (stats.intelligence - FIRST_STAT_LEVEL) * MANA_PER_INTELLIGENCE + modifiers.maxMana + skills.maxMana;
 };
 
-export const getHealthLoss = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL) => {
+export const getHealthLoss = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, element?: ElementalDamageType | null) => {
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getEquipmentModifierTotals(state);
+  const skills = getWarriorSkillBonusTotals(state);
+  const resistedAmount = applyElementalResistance(amount, element, getResistancesFromModifiers(addSkillResistances(modifiers, skills)));
   const defense = Math.floor(stats.constitution / CONSTITUTION_LEVEL_INTERVAL) * DEFENSE_PER_THREE_CONSTITUTION;
-  return Math.max(1, amount - defense - modifiers.damageReduction);
+  return Math.max(1, resistedAmount - defense - modifiers.damageReduction - skills.damageReduction);
 };
 
 export const getMonsterLevel = (question: Question) => {
@@ -364,13 +347,15 @@ export const getMonsterDamageRoll = (question: Question, now = Date.now()) => {
 export const getAttackDamage = (question: Question, state: StudyState) => {
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getEquipmentModifierTotals(state);
-  return applyPercentBonus(question.difficulty * DAMAGE_PER_DIFFICULTY + stats.strength * DAMAGE_PER_STRENGTH, modifiers.enhancedDamagePercent);
+  const skills = getWarriorSkillBonusTotals(state);
+  return applyPercentBonus(question.difficulty * DAMAGE_PER_DIFFICULTY + stats.strength * DAMAGE_PER_STRENGTH, modifiers.enhancedDamagePercent + skills.enhancedDamagePercent);
 };
 
 export const getCriticalChance = (state: StudyState) => {
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getEquipmentModifierTotals(state);
-  return Math.min(MAX_CRITICAL_CHANCE, BASE_CRITICAL_CHANCE + stats.strength * CRITICAL_CHANCE_PER_STRENGTH + modifiers.criticalChancePercent / MODIFIER_PERCENT_BASE);
+  const skills = getWarriorSkillBonusTotals(state);
+  return Math.min(MAX_CRITICAL_CHANCE, BASE_CRITICAL_CHANCE + stats.strength * CRITICAL_CHANCE_PER_STRENGTH + (modifiers.criticalChancePercent + skills.criticalChancePercent) / MODIFIER_PERCENT_BASE);
 };
 
 export const getCoinReward = (question: Question, state?: StudyState) => {
@@ -380,7 +365,8 @@ export const getCoinReward = (question: Question, state?: StudyState) => {
   }
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getEquipmentModifierTotals(state);
-  return applyPercentBonus(Math.round(baseReward * (1 + (stats.perception - FIRST_STAT_LEVEL) * GOLD_BONUS_PER_PERCEPTION)), modifiers.goldFindPercent);
+  const skills = getWarriorSkillBonusTotals(state);
+  return applyPercentBonus(Math.round(baseReward * (1 + (stats.perception - FIRST_STAT_LEVEL) * GOLD_BONUS_PER_PERCEPTION)), modifiers.goldFindPercent + skills.goldFindPercent);
 };
 
 export const getExperienceReward = (question: Question, state?: StudyState) => {
@@ -390,13 +376,15 @@ export const getExperienceReward = (question: Question, state?: StudyState) => {
   }
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getEquipmentModifierTotals(state);
-  return applyPercentBonus(Math.round(baseReward * (1 + (stats.intelligence - FIRST_STAT_LEVEL) * EXPERIENCE_BONUS_PER_INTELLIGENCE)), modifiers.bonusXpPercent);
+  const skills = getWarriorSkillBonusTotals(state);
+  return applyPercentBonus(Math.round(baseReward * (1 + (stats.intelligence - FIRST_STAT_LEVEL) * EXPERIENCE_BONUS_PER_INTELLIGENCE)), modifiers.bonusXpPercent + skills.bonusXpPercent);
 };
 
 export const getManaReward = (question: Question, state: StudyState) => {
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getEquipmentModifierTotals(state);
-  return question.difficulty * MANA_PER_DIFFICULTY + Math.floor(stats.intelligence / MANA_BONUS_PER_INTELLIGENCE) + modifiers.manaOnKill;
+  const skills = getWarriorSkillBonusTotals(state);
+  return question.difficulty * MANA_PER_DIFFICULTY + Math.floor(stats.intelligence / MANA_BONUS_PER_INTELLIGENCE) + modifiers.manaOnKill + skills.manaOnKill;
 };
 
 export const getLevelProgress = (state: StudyState) => {
@@ -459,8 +447,9 @@ export const canEquipItem = (state: StudyState, item: InventoryItem) => {
 export const getQuestionDrop = (question: Question, state: StudyState, now = Date.now()) => {
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getEquipmentModifierTotals(state);
+  const skills = getWarriorSkillBonusTotals(state);
   const baseChance = DROP_CHANCES[question.difficulty] + (stats.perception - FIRST_STAT_LEVEL) * DROP_PERCEPTION_BONUS;
-  const chance = Math.min(MAX_DROP_CHANCE, baseChance * (1 + modifiers.magicFindPercent / MODIFIER_PERCENT_BASE));
+  const chance = Math.min(MAX_DROP_CHANCE, baseChance * (1 + (modifiers.magicFindPercent + skills.magicFindPercent) / MODIFIER_PERCENT_BASE));
   const roll = getDropRoll(question.id, now);
   if (roll > chance) {
     return null;
@@ -481,10 +470,13 @@ function getSeededRoll(seed: string) {
   return (hash >>> 0) / HASH_DIVISOR;
 }
 
-export const applyHealthPenalty = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, manaDamage = 0): StudyState => {
+export const applyHealthPenalty = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, manaDamage = 0, questionId?: string, draft?: string, now = Date.now(), element?: ElementalDamageType | null): StudyState => {
   const next = cloneState(state);
-  next.profile.health = Math.max(0, next.profile.health - getHealthLoss(state, amount));
+  next.profile.health = Math.max(0, next.profile.health - getHealthLoss(state, amount, element));
   next.profile.mana = Math.max(0, next.profile.mana - manaDamage);
+  if (questionId) {
+    applyFailedRating(next, questionId, draft, now);
+  }
   return next;
 };
 
@@ -506,31 +498,23 @@ export const buyHint = (state: StudyState) => {
 };
 
 export const getRecommendedDifficulty = (state: StudyState) => {
-  return Math.min(MAX_DIFFICULTY, 1 + Math.floor(state.totalCorrect / CORRECTS_PER_DIFFICULTY)) as Question["difficulty"];
+  return Math.min(MAX_DIFFICULTY, Math.max(1, Math.floor((getEstimatedRating(state) - DEFAULT_PLAYER_RATING) / DIFFICULTY_RATING_STEP) + 1)) as Question["difficulty"];
 };
 
-export const getDueQuestions = (state: StudyState, now = Date.now()) => {
-  return questions.filter((question) => getCard(state, question.id).dueAt <= now);
-};
+export const getDueQuestions = (_state: StudyState, _now = Date.now()) => [] as Question[];
 
-export const pickQuestion = (state: StudyState, currentQuestion: Question | null, preferNext = false, now = Date.now()) => {
+export const pickQuestion = (state: StudyState, currentQuestion: Question | null, preferNext = false, _now = Date.now()) => {
   const recommended = getRecommendedDifficulty(state);
   const ratingLimit = getEstimatedRating(state) + (preferNext ? NEXT_QUESTION_RATING_BUFFER : QUESTION_RATING_BUFFER);
   const currentIndex = currentQuestion ? questions.findIndex((question) => question.id === currentQuestion.id) : MISSING_INDEX;
-  const sorted = [...questions].sort((a, b) => {
-    const cardA = getCard(state, a.id);
-    const cardB = getCard(state, b.id);
-    return cardA.dueAt - cardB.dueAt || a.difficulty - b.difficulty;
-  });
-
-  const due = sorted.filter((question) => getCard(state, question.id).dueAt <= now);
+  const sorted = getRatingSortedQuestions(state);
   const withinRatingLimit = sorted.filter((question) => question.rating <= ratingLimit);
-  const unseenWithinLevel = sorted.filter((question) => {
+  const unseenWithinLevel = questions.filter((question) => {
     const card = getCard(state, question.id);
     return card.attempts === 0 && isQuestionRecommended(question, recommended, ratingLimit);
   });
 
-  let picked = unseenWithinLevel[0] || due.find((question) => isQuestionRecommended(question, recommended, ratingLimit)) || due.find((question) => question.rating <= ratingLimit) || withinRatingLimit[0] || due[0];
+  let picked = unseenWithinLevel[0] || withinRatingLimit[0] || sorted[0];
   if (preferNext) {
     const nextInOrder = questions
       .slice(currentIndex + 1)
@@ -541,6 +525,15 @@ export const pickQuestion = (state: StudyState, currentQuestion: Question | null
 
   return picked || sorted[0];
 };
+
+function getRatingSortedQuestions(state: StudyState) {
+  const targetRating = getEstimatedRating(state) + RATING_TARGET_OFFSET;
+  return [...questions].sort((a, b) => {
+    const cardA = getCard(state, a.id);
+    const cardB = getCard(state, b.id);
+    return cardA.correct - cardB.correct || Math.abs(a.rating - targetRating) - Math.abs(b.rating - targetRating) || a.rating - b.rating;
+  });
+}
 
 export const isQuestionInRecommendedRange = (state: StudyState, question: Question, preferNext = false) => {
   const recommended = getRecommendedDifficulty(state);
@@ -556,7 +549,7 @@ export const getProfileStats = (state: StudyState, now = Date.now()) => {
   const attempted = questions.filter((question) => getCard(state, question.id).attempts > 0).length;
   const solved = questions.filter((question) => getCard(state, question.id).correct > 0).length;
   const mastered = questions.filter((question) => isMasteredCard(getCard(state, question.id))).length;
-  const due = questions.filter((question) => getCard(state, question.id).dueAt <= now).length;
+  const due = getDueQuestions(state, now).length;
   const totalAttempts = questions.reduce((sum, question) => sum + getCard(state, question.id).attempts, 0);
   const totalPasses = questions.reduce((sum, question) => sum + getCard(state, question.id).correct, 0);
   const accuracy = totalAttempts ? Math.round((totalPasses / totalAttempts) * PERCENT) : 0;
@@ -591,7 +584,7 @@ export const getTopicStats = (state: StudyState) => {
   });
 };
 
-export const applyScheduleResult = (state: StudyState, questionId: string, passed: boolean, draft: string, now = Date.now(), failureDamage = HEALTH_LOSS_PER_FAIL, failureManaDamage = 0) => {
+export const applyScheduleResult = (state: StudyState, questionId: string, passed: boolean, draft: string, now = Date.now(), failureDamage = HEALTH_LOSS_PER_FAIL, failureManaDamage = 0, failureElement?: ElementalDamageType | null) => {
   const next = cloneState(state);
   const card = { ...getCard(next, questionId) };
   const wasMastered = isMasteredCard(card);
@@ -605,7 +598,7 @@ export const applyScheduleResult = (state: StudyState, questionId: string, passe
   if (passed) {
     applyPassedSchedule(next, card, questionId, state, wasMastered, now);
   } else {
-    applyFailedSchedule(next, card, state, now, failureDamage, failureManaDamage);
+    applyFailedSchedule(next, card, questionId, state, now, failureDamage, failureManaDamage, failureElement);
   }
 
   setCard(next, questionId, card);
@@ -618,12 +611,14 @@ function applyPassedSchedule(next: StudyState, card: CardState, questionId: stri
   card.reps += 1;
   next.totalCorrect += 1;
   next.streak += 1;
+  if (question) {
+    next.profile.rating = applyEloResult(getEstimatedRating(next), question.rating, true, card.failedSubmissions);
+  }
   applyQuestionRewards(next, question);
   applyQuestionDrop(next, question, state, now);
   applyShopRefresh(next, question, now);
-  card.intervalDays = getNextIntervalDays(card);
-  card.ease = Math.min(MAX_EASE, card.ease + PASS_EASE_BONUS);
-  card.dueAt = now + card.intervalDays * DAY;
+  card.intervalDays = 0;
+  card.dueAt = 0;
   if (!wasMastered && isMasteredCard(card)) {
     card.masteredAt = now;
   }
@@ -639,7 +634,7 @@ function applyQuestionRewards(next: StudyState, question: Question | undefined) 
   next.profile.statPoints = leveled.profile.statPoints;
   next.profile.statPointsAwardedLevel = leveled.profile.statPointsAwardedLevel;
   next.profile.mana = Math.min(getMaxMana(next), next.profile.mana + getManaReward(question, next));
-  next.profile.health = Math.min(getMaxHealth(next), next.profile.health + getEquipmentModifierTotals(next).lifeOnKill);
+  next.profile.health = Math.min(getMaxHealth(next), next.profile.health + getEquipmentModifierTotals(next).lifeOnKill + getWarriorSkillBonusTotals(next).lifeOnKill);
 }
 
 function applyQuestionDrop(next: StudyState, question: Question | undefined, state: StudyState, now: number) {
@@ -657,22 +652,30 @@ function applyShopRefresh(next: StudyState, question: Question | undefined, now:
   next.profile.shopLastRefreshedAt = now;
 }
 
-function getNextIntervalDays(card: CardState) {
-  if (card.reps === 1) {
-    return 1;
-  }
-  if (card.reps === SECOND_REVIEW_REPS) {
-    return SECOND_REVIEW_INTERVAL_DAYS;
-  }
-  return Math.ceil(card.intervalDays * card.ease);
-}
-
-function applyFailedSchedule(next: StudyState, card: CardState, state: StudyState, now: number, failureDamage: number, failureManaDamage: number) {
-  next.profile.health = Math.max(0, next.profile.health - getHealthLoss(state, failureDamage));
+function applyFailedSchedule(next: StudyState, card: CardState, questionId: string, state: StudyState, now: number, failureDamage: number, failureManaDamage: number, failureElement?: ElementalDamageType | null) {
+  next.profile.health = Math.max(0, next.profile.health - getHealthLoss(state, failureDamage, failureElement));
   next.profile.mana = Math.max(0, next.profile.mana - failureManaDamage);
   next.streak = 0;
-  card.reps = Math.max(0, card.reps - 1);
-  card.ease = Math.max(MIN_EASE, card.ease - FAIL_EASE_PENALTY);
+  card.failedSubmissions += 1;
   card.intervalDays = 0;
-  card.dueAt = now + FAIL_REVIEW_DELAY_MINUTES * SECONDS_PER_MINUTE * MS_PER_SECOND;
+  card.dueAt = 0;
+  next.profile.rating = getFailedQuestionRating(next, questionId, card);
+}
+
+function applyFailedRating(next: StudyState, questionId: string, draft: string | undefined, now: number) {
+  const card = { ...getCard(next, questionId) };
+  card.attempts += 1;
+  card.failedSubmissions += 1;
+  card.lastResult = "fail";
+  card.lastAttemptAt = now;
+  card.draft = draft ?? card.draft;
+  next.streak = 0;
+  next.profile.lastStudiedAt = now;
+  next.profile.rating = getFailedQuestionRating(next, questionId, card);
+  setCard(next, questionId, card);
+}
+
+function getFailedQuestionRating(next: StudyState, questionId: string, card: CardState) {
+  const question = questions.find((row) => row.id === questionId);
+  return question ? applyEloResult(getEstimatedRating(next), question.rating, false, card.failedSubmissions) : next.profile.rating;
 }

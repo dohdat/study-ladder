@@ -1,71 +1,45 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
-const FOCUS_GRACE_MS = 5000;
-const FOCUS_GRACE_SECONDS = 5;
-const COUNTDOWN_STEP_MS = 1000;
+const STARTUP_GRACE_MS = 750;
 
 type GuardTone = "default" | "pass" | "fail";
 
 type FullscreenGuardParams = {
   active: boolean;
-  failQuestion: (message: string) => void;
+  pauseQuestion: () => void;
   setStatus: (status: string) => void;
   setTone: (tone: GuardTone) => void;
 };
 
 export function useFullscreenGuard(params: FullscreenGuardParams) {
-  const graceTimer = useRef<number | null>(null);
-  const countdownTimer = useRef<number | null>(null);
-  const failQuestionRef = useRef(params.failQuestion);
+  const activatedAtRef = useRef(0);
+  const pauseQuestionRef = useRef(params.pauseQuestion);
   const setStatusRef = useRef(params.setStatus);
   const setToneRef = useRef(params.setTone);
 
   useEffect(() => {
-    failQuestionRef.current = params.failQuestion;
+    pauseQuestionRef.current = params.pauseQuestion;
     setStatusRef.current = params.setStatus;
     setToneRef.current = params.setTone;
-  }, [params.failQuestion, params.setStatus, params.setTone]);
+  }, [params.pauseQuestion, params.setStatus, params.setTone]);
 
-  const clearGraceTimer = useCallback(() => {
-    if (graceTimer.current) {
-      window.clearTimeout(graceTimer.current);
-      graceTimer.current = null;
-    }
-    if (countdownTimer.current) {
-      window.clearInterval(countdownTimer.current);
-      countdownTimer.current = null;
-    }
-  }, []);
-  const startGraceTimer = useCallback(() => {
-    if (graceTimer.current) {
-      return;
-    }
-    let remainingSeconds = FOCUS_GRACE_SECONDS;
-    setToneRef.current("fail");
-    setStatusRef.current(getCountdownStatus(remainingSeconds));
-    countdownTimer.current = window.setInterval(() => {
-      remainingSeconds -= 1;
-      setStatusRef.current(getCountdownStatus(remainingSeconds));
-    }, COUNTDOWN_STEP_MS);
-    graceTimer.current = window.setTimeout(() => {
-      graceTimer.current = null;
-      clearGraceTimer();
-      failQuestionRef.current("Left fullscreen or changed focus. Card remains due soon.");
-    }, FOCUS_GRACE_MS);
-  }, [clearGraceTimer]);
   useEffect(() => {
     if (!params.active) {
-      clearGraceTimer();
       return undefined;
     }
+    activatedAtRef.current = Date.now();
     function handleGuardChange() {
       if (isFullscreenFocused()) {
-        clearGraceTimer();
         setToneRef.current("default");
         setStatusRef.current("Keep going.");
         return;
       }
-      startGraceTimer();
+      if (Date.now() - activatedAtRef.current < STARTUP_GRACE_MS) {
+        return;
+      }
+      setToneRef.current("fail");
+      setStatusRef.current("Focus lost. Press Start to resume this question.");
+      pauseQuestionRef.current();
     }
     window.addEventListener("blur", handleGuardChange);
     window.addEventListener("focus", handleGuardChange);
@@ -73,19 +47,14 @@ export function useFullscreenGuard(params: FullscreenGuardParams) {
     document.addEventListener("fullscreenchange", handleGuardChange);
     handleGuardChange();
     return () => {
-      clearGraceTimer();
       window.removeEventListener("blur", handleGuardChange);
       window.removeEventListener("focus", handleGuardChange);
       document.removeEventListener("visibilitychange", handleGuardChange);
       document.removeEventListener("fullscreenchange", handleGuardChange);
     };
-  }, [params.active, clearGraceTimer, startGraceTimer]);
+  }, [params.active]);
 }
 
 function isFullscreenFocused() {
   return Boolean(document.fullscreenElement) && document.visibilityState === "visible" && document.hasFocus();
-}
-
-function getCountdownStatus(remainingSeconds: number) {
-  return `Return to fullscreen in ${remainingSeconds} seconds or this question fails.`;
 }

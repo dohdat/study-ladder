@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { getMonsterAttackProfile, getMonsterMaxHealth, getMonsterPlayerDamage, getUniqueMonsterBonusCount, getUniqueMonsterBonuses, getUniqueMonsterName, UNIQUE_MONSTER_BONUSES } from "../lib/monsterCore";
+import { ELEMENTAL_DAMAGE_TYPES } from "../lib/resistanceCore";
 import type { Difficulty, Question } from "../types/study";
 
 describe("monsterCore", () => {
@@ -45,7 +46,23 @@ describe("monsterCore", () => {
     expect(getMonsterMaxHealth(stoneSkin)).toBeGreaterThan(getMonsterMaxHealth(plainHealth));
     expect(getMonsterPlayerDamage(stoneSkin, 40)).toBeLessThan(40);
   });
+
+  it("rolls elemental attacks more often on higher-rated monsters", () => {
+    const low = countElementalAttacks(1, 1000);
+    const high = countElementalAttacks(5, 3400);
+
+    expect(low).toBeLessThan(40);
+    expect(high).toBeGreaterThan(low);
+    const rolledElements = Array.from({ length: 20 }, (_, index) => getMonsterAttackProfile({ ...makeQuestion(5, 3400), id: `element-kind-${index}` }, 8, 1000).element).filter(Boolean);
+    expect(rolledElements.every((element) => ELEMENTAL_DAMAGE_TYPES.includes(element as (typeof ELEMENTAL_DAMAGE_TYPES)[number]))).toBe(true);
+  });
 });
+
+function countElementalAttacks(difficulty: Difficulty, rating: number) {
+  return Array.from({ length: 80 }, (_, index) => {
+    return getMonsterAttackProfile({ ...makeQuestion(difficulty, rating), id: `element-${difficulty}-${rating}-${index}` }, 6, 1000).element;
+  }).filter(Boolean).length;
+}
 
 function findQuestion(predicate: (bonuses: string[]) => boolean) {
   for (let index = 0; index < 1000; index += 1) {

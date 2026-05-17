@@ -1,10 +1,15 @@
 import { useState } from "react";
-import { Group, SegmentedControl } from "@mantine/core";
+import { Box, Group, Progress, SegmentedControl, Text } from "@mantine/core";
 
 import { PlayerStatus } from "./PlayerStatus";
 import { UserMenu } from "./UserMenu";
 import type { UserMenuSection } from "./UserMenu";
+import { STUDY_BLOCKER_MS_PER_MINUTE, useStudyBlockerSettings } from "../hooks/useStudyBlocker";
 import type { CharacterStats, StudyState } from "../types/study";
+
+const PROGRESS_MAX = 100;
+const MINUTES_DECIMAL_PLACES = 1;
+const TODAY_PROGRESS_WIDTH = 360;
 
 export function AppHeader(props: {
   coins: number;
@@ -38,6 +43,7 @@ export function AppHeader(props: {
           rating={props.rating}
           stats={props.stats}
         />
+        <TodayProgress />
       </Group>
       <Group>
         <SegmentedControl
@@ -48,5 +54,20 @@ export function AppHeader(props: {
         <UserMenu activeSection={activeSection} setActiveSection={setActiveSection} state={props.state} setState={props.setState} />
       </Group>
     </Group>
+  );
+}
+
+function TodayProgress() {
+  const { progress, settings } = useStudyBlockerSettings();
+  const studiedMinutes = progress.studiedMs / STUDY_BLOCKER_MS_PER_MINUTE;
+  const progressValue = settings.dailyMinutes > 0 ? (studiedMinutes / settings.dailyMinutes) * PROGRESS_MAX : PROGRESS_MAX;
+  return (
+    <Box p="sm" style={{ background: "var(--mantine-color-dark-6)", border: "1px solid var(--mantine-color-dark-4)", borderRadius: 6, minWidth: TODAY_PROGRESS_WIDTH }}>
+      <Group justify="space-between" mb={4}>
+        <Text size="sm" fw={700}>Today</Text>
+        <Text size="sm">{studiedMinutes.toFixed(MINUTES_DECIMAL_PLACES)} / {settings.dailyMinutes} min</Text>
+      </Group>
+      <Progress value={Math.min(PROGRESS_MAX, progressValue)} />
+    </Box>
   );
 }

@@ -17,24 +17,27 @@ import {
   Tooltip,
   Title
 } from "@mantine/core";
-import { IconBackpack, IconChartBar, IconSettings, IconShoppingBag, IconSparkles, IconTrophy, IconUser } from "@tabler/icons-react";
+import { IconBackpack, IconChartBar, IconSettings, IconShoppingBag, IconSparkles, IconSword, IconTrophy, IconUser } from "@tabler/icons-react";
 
 import { AchievementsPanel } from "./AchievementsPanel";
 import { CoinAmount } from "./CoinIcon";
 import { InventoryPanel } from "./InventoryPanel";
 import { ShopPanel } from "./ShopPanel";
+import { WarriorSkillTree } from "./WarriorSkillTree";
 import { questions } from "../data/questions";
-import { STUDY_BLOCKER_MS_PER_MINUTE, useStudyBlockerSettings } from "../hooks/useStudyBlocker";
+import { useStudyBlockerSettings } from "../hooks/useStudyBlocker";
 import {
   EXPERIENCE_PER_LEVEL,
   getAttackDamage,
   getCriticalChance,
   getEffectiveCharacterStats,
+  getElementalResistances,
   getEquipmentModifierTotals,
   getHealthLoss,
   getLevelProgress,
   getMaxHealth,
   getMaxMana,
+  getWarriorSkillBonusTotals,
   spendStatPoint
 } from "../lib/studyCore";
 import type { CharacterStatKey, StudyState } from "../types/study";
@@ -43,12 +46,12 @@ const ICON_SIZE = 16;
 const MENU_WIDTH = 180;
 const SHOP_MODAL_SIZE = 980;
 const ACHIEVEMENTS_MODAL_SIZE = 920;
+const SKILLS_MODAL_SIZE = 920;
 const MODAL_TRANSITION_DURATION = 0;
 const PROGRESS_MAX = 100;
 const DAILY_MINUTES_MIN = 0;
 const DAILY_MINUTES_MAX = 720;
 const DAILY_MINUTES_STEP = 5;
-const MINUTES_DECIMAL_PLACES = 1;
 const SITE_TEXTAREA_MIN_ROWS = 4;
 const STAT_SHEET_BG = "radial-gradient(circle at 48% 16%, #45423a 0%, #292722 42%, #11100e 100%)";
 const STAT_SHEET_BORDER = "2px solid #9b8656";
@@ -77,6 +80,7 @@ const USER_MENU_ITEMS = [
   { id: "profile", icon: IconUser, label: "Profile" },
   { id: "shop", icon: IconShoppingBag, label: "Shop" },
   { id: "inventory", icon: IconBackpack, label: "Inventory" },
+  { id: "skills", icon: IconSword, label: "Skills" },
   { id: "stats", icon: IconChartBar, label: "Stats" },
   { id: "achievements", icon: IconTrophy, label: "Achievements" },
   { id: "settings", icon: IconSettings, label: "Settings" }
@@ -122,6 +126,9 @@ function getModalSize(section: UserMenuSection | null) {
   if (section === "achievements") {
     return ACHIEVEMENTS_MODAL_SIZE;
   }
+  if (section === "skills") {
+    return SKILLS_MODAL_SIZE;
+  }
   return "lg";
 }
 
@@ -134,6 +141,9 @@ function UserModalContent(props: { section: UserMenuSection | null; state: Study
   }
   if (props.section === "shop") {
     return <ShopPanel state={props.state} setState={props.setState} />;
+  }
+  if (props.section === "skills") {
+    return <WarriorSkillTree state={props.state} setState={props.setState} />;
   }
   if (props.section === "achievements") {
     return <AchievementsPanel state={props.state} />;
@@ -193,6 +203,8 @@ function StatsPanel(props: { state: StudyState; setState: React.Dispatch<React.S
   const sampleQuestion = questions.find((question) => question.id === props.state.currentId) || questions[0];
   const criticalChance = Math.round(getCriticalChance(props.state) * PROGRESS_MAX);
   const modifiers = getEquipmentModifierTotals(props.state);
+  const skillBonuses = getWarriorSkillBonusTotals(props.state);
+  const resistances = getElementalResistances(props.state);
   const maxHealth = getMaxHealth(props.state);
   const maxMana = getMaxMana(props.state);
   return (
@@ -220,12 +232,16 @@ function StatsPanel(props: { state: StudyState; setState: React.Dispatch<React.S
           <D2ValueRow label="Attack Damage" value={getAttackDamage(sampleQuestion, props.state)} />
           <D2ValueRow label="Critical Strike" value={`${criticalChance}%`} />
           <D2ValueRow label="Fail Damage" value={getHealthLoss(props.state)} />
-          <D2ValueRow label="Defense" value={modifiers.damageReduction} />
+          <D2ValueRow label="Defense" value={modifiers.damageReduction + skillBonuses.damageReduction} />
           <D2ValueRow label="Life" value={`${props.state.profile.health} / ${maxHealth}`} />
           <D2ValueRow label="Mana" value={`${props.state.profile.mana} / ${maxMana}`} />
-          <D2ValueRow label="Magic Find" value={`${modifiers.magicFindPercent}%`} />
-          <D2ValueRow label="Gold Find" value={`${modifiers.goldFindPercent}%`} />
-          <D2ValueRow label="Bonus XP" value={`${modifiers.bonusXpPercent}%`} />
+          <D2ValueRow label="Fire Resist" value={`${resistances.fire}%`} />
+          <D2ValueRow label="Cold Resist" value={`${resistances.cold}%`} />
+          <D2ValueRow label="Lightning Resist" value={`${resistances.lightning}%`} />
+          <D2ValueRow label="Poison Resist" value={`${resistances.poison}%`} />
+          <D2ValueRow label="Magic Find" value={`${modifiers.magicFindPercent + skillBonuses.magicFindPercent}%`} />
+          <D2ValueRow label="Gold Find" value={`${modifiers.goldFindPercent + skillBonuses.goldFindPercent}%`} />
+          <D2ValueRow label="Bonus XP" value={`${modifiers.bonusXpPercent + skillBonuses.bonusXpPercent}%`} />
         </Stack>
       </Box>
     </Box>
@@ -275,9 +291,7 @@ function D2ValueRow(props: { label: string; value: React.ReactNode }) {
 }
 
 function SettingsPanel(props: { state: StudyState }) {
-  const { progress, settings, updateSettings } = useStudyBlockerSettings();
-  const studiedMinutes = progress.studiedMs / STUDY_BLOCKER_MS_PER_MINUTE;
-  const progressValue = settings.dailyMinutes > 0 ? (studiedMinutes / settings.dailyMinutes) * PROGRESS_MAX : PROGRESS_MAX;
+  const { settings, updateSettings } = useStudyBlockerSettings();
   const siteText = settings.distractingSites.join("\n");
   return (
     <Stack gap="md">
@@ -299,13 +313,6 @@ function SettingsPanel(props: { state: StudyState }) {
         value={settings.dailyMinutes}
         onChange={(value) => updateSettings({ ...settings, dailyMinutes: normalizeDailyMinutes(value) })}
       />
-      <Box>
-        <Group justify="space-between" mb={4}>
-          <Text size="sm" fw={700}>Today</Text>
-          <Text size="sm">{studiedMinutes.toFixed(MINUTES_DECIMAL_PLACES)} / {settings.dailyMinutes} min</Text>
-        </Group>
-        <Progress value={Math.min(PROGRESS_MAX, progressValue)} />
-      </Box>
       <Textarea
         autosize
         minRows={SITE_TEXTAREA_MIN_ROWS}

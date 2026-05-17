@@ -32,6 +32,7 @@ export type CardState = {
   reps: number;
   attempts: number;
   correct: number;
+  failedSubmissions: number;
   lastResult: "pass" | "fail" | null;
   lastAttemptAt?: number;
   masteredAt?: number;
@@ -48,6 +49,26 @@ export type CharacterStats = {
 
 export type CharacterStatKey = keyof CharacterStats;
 
+export type ElementalDamageType = "fire" | "cold" | "lightning" | "poison";
+
+export type WarriorSkillId =
+  | "bash"
+  | "battleCommand"
+  | "battleOrders"
+  | "concentrate"
+  | "doubleSwing"
+  | "findItem"
+  | "findPotion"
+  | "frenzy"
+  | "howl"
+  | "ironSkin"
+  | "naturalResistance"
+  | "shout"
+  | "swordMastery"
+  | "taunt"
+  | "warCry"
+  | "whirlwind";
+
 export type EquipmentSlot =
   | "mainHand"
   | "offHand"
@@ -63,15 +84,19 @@ export type ItemRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 
 export type ItemModifierKey =
   | "bonusXpPercent"
+  | "coldResistPercent"
   | "criticalChancePercent"
   | "damageReduction"
   | "enhancedDamagePercent"
+  | "fireResistPercent"
   | "goldFindPercent"
   | "lifeOnKill"
+  | "lightningResistPercent"
   | "magicFindPercent"
   | "manaOnKill"
   | "maxLife"
-  | "maxMana";
+  | "maxMana"
+  | "poisonResistPercent";
 
 export type ItemModifier = {
   key: ItemModifierKey;
@@ -121,12 +146,14 @@ export type StudyState = {
     experience: number;
     health: number;
     mana: number;
+    rating: number;
     statPoints: number;
     statPointsAwardedLevel: number;
     hintsBought: number;
     startedAt: number;
     lastStudiedAt: number | null;
     stats: CharacterStats;
+    skillRanks: Partial<Record<WarriorSkillId, number>>;
     inventory: InventoryItem[];
     equipment: Record<EquipmentSlot, string | null>;
     shopLastRefreshedAt: number | null;

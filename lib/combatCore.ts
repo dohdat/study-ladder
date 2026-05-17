@@ -1,6 +1,9 @@
 import { questions } from "../data/questions";
 import { getMonsterMaxHealth, getMonsterPlayerDamage } from "./monsterCore";
-import { applyScheduleResult, cloneState, getAttackDamage, getCard, getCriticalChance, setCard } from "./studyCore";
+import {
+  applyScheduleResult, cloneState, getAttackDamage, getCard, getCoinReward, getCriticalChance, getEquipmentModifierTotals,
+  getExperienceReward, getManaReward, getMaxHealth, getMaxMana, getQuestionDrop, getWarriorSkillBonusTotals, grantPendingStatPoints, setCard
+} from "./studyCore";
 import type { Question, StudyState } from "../types/study";
 
 const CRITICAL_DAMAGE_MULTIPLIER = 2;
@@ -61,7 +64,25 @@ function applyPartialMonsterHit(state: StudyState, questionId: string, draft: st
   card.monsterHealth = hit.remainingHealth;
   next.profile.lastStudiedAt = now;
   setCard(next, questionId, card);
+  applyPartialRewards(next, questions.find((row) => row.id === questionId), state, now);
   return { hit, state: next };
+}
+
+function applyPartialRewards(next: StudyState, question: Question | undefined, rewardState: StudyState, now: number) {
+  if (!question) {
+    return;
+  }
+  next.profile.coins += getCoinReward(question, next);
+  next.profile.experience += getExperienceReward(question, next);
+  const leveled = grantPendingStatPoints(next);
+  next.profile.statPoints = leveled.profile.statPoints;
+  next.profile.statPointsAwardedLevel = leveled.profile.statPointsAwardedLevel;
+  next.profile.mana = Math.min(getMaxMana(next), next.profile.mana + getManaReward(question, next));
+  next.profile.health = Math.min(getMaxHealth(next), next.profile.health + getEquipmentModifierTotals(next).lifeOnKill + getWarriorSkillBonusTotals(next).lifeOnKill);
+  const drop = getQuestionDrop(question, rewardState, now);
+  if (drop) {
+    next.profile.inventory.push(drop);
+  }
 }
 
 function getSeededRoll(seed: string) {

@@ -4,6 +4,7 @@ const GET_BLOCKER_STATE_TYPE = "study-blocker-get-state";
 const SAVE_BLOCKER_SETTINGS_TYPE = "study-blocker-save-settings";
 const ADD_STUDY_TIME_TYPE = "study-blocker-add-study-ms";
 const TRACK_INTERVAL_MS = 1000;
+const REFRESH_INTERVAL_MS = 5000;
 
 export const STUDY_BLOCKER_MS_PER_MINUTE = 60000;
 
@@ -57,6 +58,11 @@ export function useStudyBlockerSettings() {
 
   useEffect(() => {
     refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    const timer = window.setInterval(refresh, REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
   }, [refresh]);
 
   return { progress, refresh, settings, updateSettings };

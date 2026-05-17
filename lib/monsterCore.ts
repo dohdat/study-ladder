@@ -1,4 +1,5 @@
-import type { Question } from "../types/study";
+import { ELEMENTAL_DAMAGE_TYPES } from "./resistanceCore";
+import type { ElementalDamageType, Question } from "../types/study";
 
 const HASH_OFFSET = 2166136261;
 const HASH_PRIME = 16777619;
@@ -31,12 +32,22 @@ const MANA_BURN_DAMAGE_RATIO = 0.5;
 const TELEPORTING_DAMAGE_REDUCTION = 0.25;
 const STONE_SKIN_DAMAGE_REDUCTION = 0.25;
 const MAGIC_RESISTANT_DAMAGE_REDUCTION = 0.15;
+const MAX_ELEMENTAL_ATTACK_CHANCE = 0.74;
+const ELEMENTAL_RATING_CHANCE_STEP = 0.04;
+const ELEMENTAL_RATING_CHANCE_DIVISOR = 400;
 const UNIQUE_BONUS_CHANCES: Record<Question["difficulty"], number> = {
   1: 0.22,
   2: 0.32,
   3: 0.48,
   4: 0.64,
   5: 0.78
+};
+const ELEMENTAL_ATTACK_CHANCES: Record<Question["difficulty"], number> = {
+  1: 0.1,
+  2: 0.16,
+  3: 0.25,
+  4: 0.38,
+  5: 0.52
 };
 
 export const UNIQUE_MONSTER_BONUSES = [
@@ -195,12 +206,14 @@ export function getMonsterMaxHealth(question: Question) {
 
 export function getMonsterAttackProfile(question: Question, baseDamage: number, now = Date.now()) {
   const bonuses = getUniqueMonsterBonuses(question);
+  const element = getMonsterAttackElement(question, bonuses, now);
   const hitCount = (bonuses.includes("Multi-Shot") ? MULTI_SHOT_HIT_COUNT : DEFAULT_HIT_COUNT) + (bonuses.includes("Extra Fast") ? EXTRA_FAST_HIT_COUNT_BONUS : 0);
   const perHitDamage = Math.max(DEFAULT_HIT_COUNT, baseDamage + getBonusDamage(bonuses, question, now));
   const damage = perHitDamage * hitCount;
   return {
     bonuses,
     damage,
+    element,
     hitCount,
     manaDamage: bonuses.includes("Mana Burn") ? Math.ceil(damage * MANA_BURN_DAMAGE_RATIO) : 0,
     perHitDamage
@@ -239,6 +252,35 @@ function getBonusDamageAmount(bonus: string, question: Question, now: number) {
     return Math.floor(getSeededRoll(`${getMonsterSeed(question)}:${now}:spectral`) * SPECTRAL_HIT_DAMAGE_SPREAD);
   }
   return 0;
+}
+
+function getMonsterAttackElement(question: Question, bonuses: string[], now: number): ElementalDamageType | null {
+  const forced = getForcedElement(bonuses, question, now);
+  if (forced) {
+    return forced;
+  }
+  const ratingSteps = Math.max(0, Math.floor((question.rating - RATING_MIN) / ELEMENTAL_RATING_CHANCE_DIVISOR));
+  const chance = Math.min(MAX_ELEMENTAL_ATTACK_CHANCE, ELEMENTAL_ATTACK_CHANCES[question.difficulty] + ratingSteps * ELEMENTAL_RATING_CHANCE_STEP);
+  if (getSeededRoll(`${getMonsterSeed(question)}:${now}:elemental-chance`) >= chance) {
+    return null;
+  }
+  return pickSeeded(ELEMENTAL_DAMAGE_TYPES, `${getMonsterSeed(question)}:${now}:elemental-type`);
+}
+
+function getForcedElement(bonuses: string[], question: Question, now: number): ElementalDamageType | null {
+  if (bonuses.includes("Fire Enchanted")) {
+    return "fire";
+  }
+  if (bonuses.includes("Cold Enchanted")) {
+    return "cold";
+  }
+  if (bonuses.includes("Lightning Enchanted")) {
+    return "lightning";
+  }
+  if (bonuses.includes("Spectral Hit")) {
+    return pickSeeded(ELEMENTAL_DAMAGE_TYPES, `${getMonsterSeed(question)}:${now}:spectral-element`);
+  }
+  return null;
 }
 
 function getDamageReduction(bonus: string) {

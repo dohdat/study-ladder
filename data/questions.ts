@@ -332,6 +332,12 @@ type TestInput = {
   name: string;
 };
 
+type TreeNode = {
+  left?: TreeNode | null;
+  right?: TreeNode | null;
+  val: number;
+};
+
 type GeneratedFamily = {
   buildCase: (variant: number, testIndex: number) => TestInput;
   constraints: string[];
@@ -351,17 +357,407 @@ const GENERATED_FAMILY_COUNT = 10;
 const RATING_STEP = 17;
 const GENERATED_FAMILIES: GeneratedFamily[] = [
   {
-    buildCase: (variant, index) => ({ args: [makeNumberList(variant, index)], name: `counts values at least ${variant}` }),
+    buildCase: (_variant, index) => ({ args: [makeNumberList(2, index)], name: "counts even numbers" }),
     constraints: ["Return a number.", "Input values are integers.", "Do not mutate the original array."],
-    count: GENERATED_FAMILY_COUNT,
+    count: 1,
     difficulty: 1,
-    functionPrefix: "countAtLeast",
-    prompt: (variant) => `Return how many numbers in nums are greater than or equal to ${variant}.`,
+    functionPrefix: "countEvenNumbers",
+    prompt: () => "Return how many numbers in nums are even.",
     ratingBase: 1030,
-    solver: (args, variant) => (args[0] as number[]).filter((value) => value >= variant).length,
+    solver: (args) => (args[0] as number[]).filter((value) => value % 2 === 0).length,
     starterArgs: "nums",
-    title: (variant) => `Count At Least ${variant}`,
+    title: () => "Count Even Numbers",
     topics: ["Arrays", "Counting"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeNumberList(3, index)], name: "finds largest number" }),
+    constraints: ["Return a number.", "Input contains at least one value.", "Do not sort the input."],
+    count: 1,
+    difficulty: 1,
+    functionPrefix: "largestNumber",
+    prompt: () => "Return the largest number in nums.",
+    ratingBase: 1050,
+    solver: (args) => Math.max(...(args[0] as number[])),
+    starterArgs: "nums",
+    title: () => "Largest Number",
+    topics: ["Arrays", "Linear Scan"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeNumberList(4, index)], name: "sums odd numbers" }),
+    constraints: ["Return a number.", "Ignore even values.", "Negative odd numbers count toward the sum."],
+    count: 1,
+    difficulty: 1,
+    functionPrefix: "sumOddNumbers",
+    prompt: () => "Return the sum of all odd numbers in nums.",
+    ratingBase: 1070,
+    solver: (args) => (args[0] as number[]).filter((value) => Math.abs(value % 2) === 1).reduce((sum, value) => sum + value, 0),
+    starterArgs: "nums",
+    title: () => "Sum Odd Numbers",
+    topics: ["Arrays", "Math"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeString(2, index)], name: "reverses text" }),
+    constraints: ["Return a string.", "Preserve casing.", "Spaces and punctuation should stay as characters."],
+    count: 1,
+    difficulty: 1,
+    functionPrefix: "reverseText",
+    prompt: () => "Return text with its characters in reverse order.",
+    ratingBase: 1080,
+    solver: (args) => [...String(args[0])].reverse().join(""),
+    starterArgs: "text",
+    title: () => "Reverse Text",
+    topics: ["Strings", "Two Pointers"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeString(3, index)], name: "removes vowels" }),
+    constraints: ["Return a string.", "Vowels are a, e, i, o, u.", "Remove uppercase and lowercase vowels."],
+    count: 1,
+    difficulty: 1,
+    functionPrefix: "removeVowels",
+    prompt: () => "Return text after removing every vowel.",
+    ratingBase: 1100,
+    solver: (args) => String(args[0]).replace(/[aeiou]/gi, ""),
+    starterArgs: "text",
+    title: () => "Remove Vowels",
+    topics: ["Strings", "Filtering"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeNumberList(5, index)], name: "builds running sums" }),
+    constraints: ["Return an array.", "Each output value is the sum from index 0 through that index.", "Do not mutate the input."],
+    count: 1,
+    difficulty: 1,
+    functionPrefix: "runningSum",
+    prompt: () => "Return an array where each position contains the running sum of nums up to that position.",
+    ratingBase: 1110,
+    solver: (args) => runningSum(args[0] as number[]),
+    starterArgs: "nums",
+    title: () => "Running Sum",
+    topics: ["Arrays", "Prefix Sum"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeNumberList(6, index)], name: "keeps positive numbers" }),
+    constraints: ["Return an array.", "Keep the original order.", "Zero is not positive."],
+    count: 1,
+    difficulty: 1,
+    functionPrefix: "filterPositive",
+    prompt: () => "Return a new array containing only the positive numbers from nums.",
+    ratingBase: 1130,
+    solver: (args) => (args[0] as number[]).filter((value) => value > 0),
+    starterArgs: "nums",
+    title: () => "Filter Positive Numbers",
+    topics: ["Arrays", "Filtering"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeString(4, index)], name: "finds most frequent character" }),
+    constraints: ["Return a string.", "When tied, return the character that appears first in text.", "Input contains at least one character."],
+    count: 1,
+    difficulty: 1,
+    functionPrefix: "mostFrequentChar",
+    prompt: () => "Return the character that appears most often in text. If there is a tie, return the one that appears first.",
+    ratingBase: 1140,
+    solver: (args) => mostFrequentChar(String(args[0])),
+    starterArgs: "text",
+    title: () => "Most Frequent Character",
+    topics: ["Strings", "Hash Map"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeNumberList(7, index)], name: "removes duplicate numbers" }),
+    constraints: ["Return an array.", "Keep the first occurrence of each number.", "Preserve original order."],
+    count: 1,
+    difficulty: 1,
+    functionPrefix: "uniqueNumbers",
+    prompt: () => "Return a new array with duplicate numbers removed, keeping the first occurrence of each value.",
+    ratingBase: 1150,
+    solver: (args) => uniqueNumbers(args[0] as number[]),
+    starterArgs: "nums",
+    title: () => "Unique Numbers",
+    topics: ["Arrays", "Hash Set"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeString(5, index)], name: "checks balanced vowels" }),
+    constraints: ["Return true or false.", "Compare the first half and second half of the string.", "For odd lengths, ignore the middle character."],
+    count: 1,
+    difficulty: 1,
+    functionPrefix: "hasBalancedVowels",
+    prompt: () => "Return true if the first half and second half of text contain the same number of vowels.",
+    ratingBase: 1170,
+    solver: (args) => hasBalancedVowels(String(args[0])),
+    starterArgs: "text",
+    title: () => "Balanced Vowels",
+    topics: ["Strings", "Counting"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeProductList(index)], name: "builds products of other values" }),
+    constraints: ["Return an array.", "Do not use division.", "Handle zero values correctly."],
+    count: 1,
+    difficulty: 2,
+    functionPrefix: "productOfOthers",
+    prompt: () => "Return an array where each index contains the product of every number in nums except the number at that index.",
+    ratingBase: 1450,
+    solver: (args) => productOfOthers(args[0] as number[]),
+    starterArgs: "nums",
+    title: () => "Product Of Other Slots",
+    topics: ["Arrays", "Prefix Product"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeBinaryList(index)], name: "finds longest balanced binary span" }),
+    constraints: ["The input contains only 0 and 1.", "Return a length.", "The subarray must be contiguous."],
+    count: 1,
+    difficulty: 2,
+    functionPrefix: "longestBalancedBinarySpan",
+    prompt: () => "Return the length of the longest contiguous subarray with the same number of 0s and 1s.",
+    ratingBase: 1630,
+    solver: (args) => longestBalancedBinarySpan(args[0] as number[]),
+    starterArgs: "bits",
+    title: () => "Balanced Binary Span",
+    topics: ["Arrays", "Hash Map", "Prefix Sum"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeTemperatureList(index)], name: "computes warmer-day waits" }),
+    constraints: ["Return an array of wait counts.", "Use 0 when no warmer future value exists.", "Input values are integers."],
+    count: 1,
+    difficulty: 2,
+    functionPrefix: "nextWarmerWaits",
+    prompt: () => "For each temperature, return how many positions you must wait to see a warmer temperature. Return 0 if none appears later.",
+    ratingBase: 1710,
+    solver: (args) => nextWarmerWaits(args[0] as number[]),
+    starterArgs: "temps",
+    title: () => "Next Warmer Waits",
+    topics: ["Stacks", "Arrays"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeRotatedSorted(index)], name: "finds rotated minimum" }),
+    constraints: ["Values are unique.", "The array was sorted ascending before rotation.", "Return the minimum number."],
+    count: 1,
+    difficulty: 2,
+    functionPrefix: "rotatedMinimum",
+    prompt: () => "Return the minimum value in a sorted array that may have been rotated.",
+    ratingBase: 1740,
+    solver: (args) => Math.min(...(args[0] as number[])),
+    starterArgs: "nums",
+    title: () => "Rotated Minimum",
+    topics: ["Binary Search", "Arrays"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makePeakList(index)], name: "finds any peak index" }),
+    constraints: ["Return an index.", "A peak is greater than its immediate neighbors.", "Treat missing neighbors as negative infinity."],
+    count: 1,
+    difficulty: 2,
+    functionPrefix: "findPeakIndex",
+    prompt: () => "Return the index of any peak value. A peak is greater than the value immediately before and after it.",
+    ratingBase: 1580,
+    solver: (args) => findPeakIndex(args[0] as number[]),
+    starterArgs: "nums",
+    title: () => "Find A Peak",
+    topics: ["Binary Search", "Arrays"]
+  },
+  {
+    buildCase: (_variant, index) => makeCoursePlan(index),
+    constraints: ["Courses are numbered from 0 to courseCount - 1.", "Each pair is [course, prerequisite].", "Return false when prerequisites contain a cycle."],
+    count: 1,
+    difficulty: 3,
+    functionPrefix: "canFinishPlan",
+    prompt: () => "Return true if every course can be completed given prerequisite pairs.",
+    ratingBase: 2110,
+    solver: (args) => canFinishPlan(Number(args[0]), args[1] as Array<[number, number]>),
+    starterArgs: "courseCount, prerequisites",
+    title: () => "Course Plan Possible",
+    topics: ["Graphs", "Topological Sort"]
+  },
+  {
+    buildCase: (_variant, index) => makeComponentGraph(index),
+    constraints: ["Nodes are numbered from 0 to n - 1.", "Edges are undirected.", "Return a number."],
+    count: 1,
+    difficulty: 3,
+    functionPrefix: "connectedGroupCount",
+    prompt: () => "Return how many connected groups exist in an undirected graph.",
+    ratingBase: 1990,
+    solver: (args) => connectedGroupCount(Number(args[0]), args[1] as Array<[number, number]>),
+    starterArgs: "n, edges",
+    title: () => "Connected Group Count",
+    topics: ["Graphs", "DFS"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeGrid(index + 2, index)], name: "measures largest island" }),
+    constraints: ["Grid cells are 0 or 1.", "Use four-directional adjacency.", "Do not mutate the original grid."],
+    count: 1,
+    difficulty: 3,
+    functionPrefix: "largestIslandArea",
+    prompt: () => "Return the size of the largest island of 1s in the grid.",
+    ratingBase: 2030,
+    solver: (args) => largestIslandArea(args[0] as number[][]),
+    starterArgs: "grid",
+    title: () => "Largest Island Area",
+    topics: ["Graphs", "DFS", "Grid"]
+  },
+  {
+    buildCase: (_variant, index) => makeWordBreakCase(index),
+    constraints: ["Words may be reused.", "Return true or false.", "Dictionary entries are lowercase strings."],
+    count: 1,
+    difficulty: 3,
+    functionPrefix: "canSegmentText",
+    prompt: () => "Return true if text can be split into one or more dictionary words.",
+    ratingBase: 2190,
+    solver: (args) => canSegmentText(String(args[0]), args[1] as string[]),
+    starterArgs: "text, dictionary",
+    title: () => "Segment Text",
+    topics: ["Dynamic Programming", "Strings"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeNonAdjacentRewards(index)], name: "maximizes non-adjacent rewards" }),
+    constraints: ["Return a number.", "You may not choose adjacent values.", "Values are non-negative integers."],
+    count: 1,
+    difficulty: 2,
+    functionPrefix: "maxNonAdjacentReward",
+    prompt: () => "Return the largest sum you can collect when you cannot take adjacent numbers.",
+    ratingBase: 1810,
+    solver: (args) => maxNonAdjacentReward(args[0] as number[]),
+    starterArgs: "rewards",
+    title: () => "Non Adjacent Reward",
+    topics: ["Dynamic Programming", "Arrays"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeDecodeString(index)], name: "counts message decodings" }),
+    constraints: ["Digits map 1 through 26 to letters.", "0 cannot stand alone.", "Return a number."],
+    count: 1,
+    difficulty: 3,
+    functionPrefix: "decodeMessageCount",
+    prompt: () => "Return how many ways the digit string can be decoded when 1 maps to A and 26 maps to Z.",
+    ratingBase: 2170,
+    solver: (args) => decodeMessageCount(String(args[0])),
+    starterArgs: "digits",
+    title: () => "Decode Message Count",
+    topics: ["Dynamic Programming", "Strings"]
+  },
+  {
+    buildCase: (_variant, index) => makeMeetingCase(index),
+    constraints: ["Each interval is [start, end].", "End time is exclusive.", "Return the minimum number of rooms."],
+    count: 1,
+    difficulty: 3,
+    functionPrefix: "minimumRoomsNeeded",
+    prompt: () => "Return the minimum number of rooms required to host all intervals.",
+    ratingBase: 2070,
+    solver: (args) => minimumRoomsNeeded(args[0] as number[][]),
+    starterArgs: "intervals",
+    title: () => "Minimum Rooms Needed",
+    topics: ["Intervals", "Sorting", "Heap"]
+  },
+  {
+    buildCase: (_variant, index) => makeOverlapCase(index),
+    constraints: ["Each interval is [start, end].", "Touching intervals do not overlap.", "Return a number."],
+    count: 1,
+    difficulty: 3,
+    functionPrefix: "removeOverlapCount",
+    prompt: () => "Return the minimum number of intervals to remove so the remaining intervals do not overlap.",
+    ratingBase: 1930,
+    solver: (args) => removeOverlapCount(args[0] as number[][]),
+    starterArgs: "intervals",
+    title: () => "Remove Overlaps",
+    topics: ["Intervals", "Greedy"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [index + 5], name: "counts set bits up to n" }),
+    constraints: ["Return an array of length n + 1.", "The value at index i is the count of 1 bits in i.", "n is non-negative."],
+    count: 1,
+    difficulty: 1,
+    functionPrefix: "bitCountsUpTo",
+    prompt: () => "Return an array where result[i] is the number of 1 bits in the binary form of i for every value from 0 through n.",
+    ratingBase: 1330,
+    solver: (args) => bitCountsUpTo(Number(args[0])),
+    starterArgs: "n",
+    title: () => "Bit Counts Up To N",
+    topics: ["Bit Manipulation", "Dynamic Programming"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeSingleNumberList(index)], name: "finds lone unpaired value" }),
+    constraints: ["Every number appears exactly twice except one.", "Return the unpaired number.", "Use any correct approach."],
+    count: 1,
+    difficulty: 1,
+    functionPrefix: "loneUnpairedNumber",
+    prompt: () => "Return the one number that does not have a duplicate pair.",
+    ratingBase: 1350,
+    solver: (args) => loneUnpairedNumber(args[0] as number[]),
+    starterArgs: "nums",
+    title: () => "Lone Unpaired Number",
+    topics: ["Bit Manipulation", "Arrays"]
+  },
+  {
+    buildCase: (_variant, index) => makePrefixCase(index),
+    constraints: ["Return a number.", "Prefix comparison is case-sensitive.", "Words are strings."],
+    count: 1,
+    difficulty: 2,
+    functionPrefix: "prefixMatchCount",
+    prompt: () => "Return how many words start with the given prefix.",
+    ratingBase: 1510,
+    solver: (args) => prefixMatchCount(args[0] as string[], String(args[1])),
+    starterArgs: "words, prefix",
+    title: () => "Prefix Match Count",
+    topics: ["Tries", "Strings"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeSmallUniqueList(index)], name: "creates all subsets" }),
+    constraints: ["Return an array of arrays.", "Input values are unique.", "Order subsets by length, then lexicographically."],
+    count: 1,
+    difficulty: 3,
+    functionPrefix: "orderedSubsets",
+    prompt: () => "Return every subset of nums, sorted by subset length and then lexicographically.",
+    ratingBase: 2250,
+    solver: (args) => orderedSubsets(args[0] as number[]),
+    starterArgs: "nums",
+    title: () => "Ordered Subsets",
+    topics: ["Backtracking", "Arrays"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeTree(index)], name: "checks tree height balance" }),
+    constraints: ["A null tree is balanced.", "Each node has val, left, and right.", "Return true or false."],
+    count: 1,
+    difficulty: 2,
+    functionPrefix: "isHeightBalanced",
+    prompt: () => "Return true if every node's left and right subtree heights differ by at most one.",
+    ratingBase: 1660,
+    solver: (args) => isHeightBalanced(args[0] as TreeNode | null),
+    starterArgs: "root",
+    title: () => "Height Balanced Tree",
+    topics: ["Trees", "DFS"]
+  },
+  {
+    buildCase: (_variant, index) => ({ args: [makeTree(index + 3)], name: "reads visible right side" }),
+    constraints: ["Return an array of node values.", "Look at the tree one level at a time.", "Use the rightmost node on each level."],
+    count: 1,
+    difficulty: 2,
+    functionPrefix: "rightSideValues",
+    prompt: () => "Return the values visible when looking at the binary tree from the right side.",
+    ratingBase: 1690,
+    solver: (args) => rightSideValues(args[0] as TreeNode | null),
+    starterArgs: "root",
+    title: () => "Right Side Values",
+    topics: ["Trees", "BFS"]
+  },
+  {
+    buildCase: (_variant, index) => makeKthCase(index),
+    constraints: ["Return a number.", "k is 1-based.", "Duplicates count as separate values."],
+    count: 1,
+    difficulty: 3,
+    functionPrefix: "kthLargestScore",
+    prompt: () => "Return the kth largest score from the list.",
+    ratingBase: 1890,
+    solver: (args) => kthLargestScore(args[0] as number[], Number(args[1])),
+    starterArgs: "scores, k",
+    title: () => "Kth Largest Score",
+    topics: ["Heap", "Sorting"]
+  },
+  {
+    buildCase: (_variant, index) => makeTargetSumCase(index),
+    constraints: ["Each number may receive a plus or minus sign.", "Return the number of sign assignments.", "Input values are non-negative."],
+    count: 1,
+    difficulty: 4,
+    functionPrefix: "targetExpressionCount",
+    prompt: () => "Return how many ways to place plus or minus signs before each number so the expression equals target.",
+    ratingBase: 2440,
+    solver: (args) => targetExpressionCount(args[0] as number[], Number(args[1])),
+    starterArgs: "nums, target",
+    title: () => "Target Expression Count",
+    topics: ["Dynamic Programming", "Backtracking"]
   },
   {
     buildCase: (variant, index) => ({ args: [makeNumberList(variant + 1, index)], name: `sums positives with floor ${variant}` }),
@@ -534,14 +930,13 @@ const GENERATED_FAMILIES: GeneratedFamily[] = [
   }
 ];
 
-const generatedQuestions = GENERATED_FAMILIES.flatMap((family) => {
-  return Array.from({ length: family.count }, (_, index) => createGeneratedQuestion(family, index + 1));
-});
+const generatedQuestions = createGeneratedQuestions();
 
 export const questions: Question[] = [...curatedQuestions, ...generatedQuestions];
 
 function createGeneratedQuestion(family: GeneratedFamily, variant: number): Question {
   const tests = Array.from({ length: GENERATED_TEST_COUNT }, (_, index) => createGeneratedTest(family, variant, index));
+  const functionName = getGeneratedFunctionName(family, variant);
   return {
     constraints: family.constraints,
     difficulty: family.difficulty,
@@ -549,15 +944,25 @@ function createGeneratedQuestion(family: GeneratedFamily, variant: number): Ques
       { input: formatArgs(tests[0].args), output: JSON.stringify(tests[0].expected), explanation: "The expected output follows directly from the rule in the prompt." },
       { input: formatArgs(tests[1].args), output: JSON.stringify(tests[1].expected), explanation: "This second case covers a different input shape for the same rule." }
     ],
-    functionName: `${family.functionPrefix}${variant}`,
-    id: `generated-${family.functionPrefix}-${variant}`,
+    functionName,
+    id: family.count === 1 ? `generated-${family.functionPrefix}` : `generated-${family.functionPrefix}-${variant}`,
     prompt: family.prompt(variant),
     rating: family.ratingBase + variant * RATING_STEP,
-    starter: `function ${family.functionPrefix}${variant}(${family.starterArgs}) {\n  \n}`,
+    starter: `function ${functionName}(${family.starterArgs}) {\n  \n}`,
     tests,
     title: family.title(variant),
     topics: family.topics
   };
+}
+
+function getGeneratedFunctionName(family: GeneratedFamily, variant: number) {
+  return family.count === 1 ? family.functionPrefix : `${family.functionPrefix}${variant}`;
+}
+
+function createGeneratedQuestions() {
+  const maxCount = Math.max(...GENERATED_FAMILIES.map((family) => family.count));
+  return Array.from({ length: maxCount }, (_row, index) => index + 1)
+    .flatMap((variant) => GENERATED_FAMILIES.filter((family) => variant <= family.count).map((family) => createGeneratedQuestion(family, variant)));
 }
 
 function createGeneratedTest(family: GeneratedFamily, variant: number, index: number) {
@@ -578,8 +983,400 @@ function makeString(seed: number, index: number) {
   return Array.from({ length: 5 + (index % 6) }, (_, offset) => alphabet[(seed + index + offset * 3) % alphabet.length]).join("");
 }
 
+function makeProductList(index: number) {
+  const base = makeNumberList(8, index).slice(0, 5).map((value) => Math.abs(value % 5));
+  return index % 3 === 0 ? base : base.map((value) => value || 1);
+}
+
+function makeBinaryList(index: number) {
+  return Array.from({ length: 8 + (index % 5) }, (_value, offset) => (index + offset * 2 + Math.floor(offset / 2)) % 2);
+}
+
+function makeTemperatureList(index: number) {
+  return Array.from({ length: 7 + (index % 4) }, (_value, offset) => 55 + ((index * 3 + offset * offset + offset) % 24));
+}
+
+function makeRotatedSorted(index: number) {
+  const sorted = Array.from({ length: 6 + (index % 4) }, (_value, offset) => index + offset * 3 + 1);
+  const pivot = index % sorted.length;
+  return sorted.slice(pivot).concat(sorted.slice(0, pivot));
+}
+
+function makePeakList(index: number) {
+  const peak = 20 + index;
+  return [index, index + 3, peak, index + 2, index + 1, index - 1];
+}
+
+function makeCoursePlan(index: number): TestInput {
+  const courseCount = 4 + (index % 3);
+  const acyclic: Array<[number, number]> = [[1, 0], [2, 1], [3, 1]];
+  const cyclic: Array<[number, number]> = [[1, 0], [2, 1], [0, 2]];
+  return { args: [courseCount, index % 4 === 0 ? cyclic : acyclic], name: "checks course plan feasibility" };
+}
+
+function makeComponentGraph(index: number): TestInput {
+  const n = 6 + (index % 3);
+  const edges: Array<[number, number]> = [[0, 1], [1, 2], [3, 4]];
+  if (index % 2 === 0) {
+    edges.push([4, 5]);
+  }
+  return { args: [n, edges], name: "counts graph components" };
+}
+
+function makeWordBreakCase(index: number): TestInput {
+  const cases: Array<[string, string[]]> = [
+    ["codepath", ["code", "path", "pat", "h"]],
+    ["applepenapple", ["apple", "pen"]],
+    ["catsandog", ["cats", "dog", "sand", "and", "cat"]],
+    ["aaaaaaa", ["aaaa", "aaa"]]
+  ];
+  const [text, dictionary] = cases[index % cases.length];
+  return { args: [text, dictionary], name: "checks word segmentation" };
+}
+
+function makeNonAdjacentRewards(index: number) {
+  return Array.from({ length: 6 + (index % 5) }, (_value, offset) => Math.abs((index * 5 + offset * 7) % 16));
+}
+
+function makeDecodeString(index: number) {
+  const cases = ["12", "226", "06", "11106", "2611055971756562", "27", "2101", "101"];
+  return cases[index % cases.length];
+}
+
+function makeMeetingCase(index: number): TestInput {
+  const intervals = [[0, 30], [5, 10], [15, 20], [25, 35 + index % 5], [40, 50]];
+  return { args: [index % 2 ? intervals.slice(1) : intervals], name: "computes meeting rooms" };
+}
+
+function makeOverlapCase(index: number): TestInput {
+  const intervals = [[1, 3], [2, 4], [4, 6], [5, 7], [8, 9 + index % 4]];
+  return { args: [index % 2 ? intervals.reverse() : intervals], name: "removes overlapping intervals" };
+}
+
+function makeSingleNumberList(index: number) {
+  const lone = 20 + index;
+  return [4, lone, 7, 4, 9, 7, 9, 3, 3];
+}
+
+function makePrefixCase(index: number): TestInput {
+  const words = ["stone", "storm", "story", "stack", "graph", "grid", "greedy"];
+  const prefixes = ["sto", "gr", "sta", "z"];
+  return { args: [words, prefixes[index % prefixes.length]], name: "counts matching prefixes" };
+}
+
+function makeSmallUniqueList(index: number) {
+  return [index % 4, (index % 4) + 2, (index % 4) + 5];
+}
+
+function makeTree(index: number): TreeNode | null {
+  if (index % 6 === 0) {
+    return null;
+  }
+  const leftChain = index % 4 === 0 ? { val: index + 4, left: { val: index + 5, left: null, right: null }, right: null } : { val: index + 2, left: null, right: null };
+  return {
+    val: index + 1,
+    left: leftChain,
+    right: { val: index + 3, left: index % 3 === 0 ? { val: index + 6, left: null, right: null } : null, right: { val: index + 7, left: null, right: null } }
+  };
+}
+
+function makeKthCase(index: number): TestInput {
+  const scores = makeNumberList(12, index).map((value) => value + 20);
+  return { args: [scores, (index % 3) + 1], name: "finds kth largest score" };
+}
+
+function makeTargetSumCase(index: number): TestInput {
+  const nums = [1, 1, 2 + (index % 3), 3, 1];
+  return { args: [nums, index % 2 ? 2 : 4], name: "counts target expressions" };
+}
+
 function countVowels(text: string) {
   return [...text.toLowerCase()].filter((char) => "aeiou".includes(char)).length;
+}
+
+function productOfOthers(nums: number[]) {
+  return nums.map((_value, index) => nums.reduce((product, value, innerIndex) => innerIndex === index ? product : product * value, 1));
+}
+
+function longestBalancedBinarySpan(bits: number[]) {
+  const firstSeen = new Map([[0, -1]]);
+  let balance = 0;
+  let best = 0;
+  for (let index = 0; index < bits.length; index += 1) {
+    balance += bits[index] === 1 ? 1 : -1;
+    if (firstSeen.has(balance)) {
+      best = Math.max(best, index - (firstSeen.get(balance) ?? index));
+    } else {
+      firstSeen.set(balance, index);
+    }
+  }
+  return best;
+}
+
+function nextWarmerWaits(temps: number[]) {
+  return temps.map((temp, index) => {
+    const next = temps.findIndex((candidate, nextIndex) => nextIndex > index && candidate > temp);
+    return next === -1 ? 0 : next - index;
+  });
+}
+
+function findPeakIndex(nums: number[]) {
+  return nums.findIndex((value, index) => value > (nums[index - 1] ?? -Infinity) && value > (nums[index + 1] ?? -Infinity));
+}
+
+function canFinishPlan(courseCount: number, prerequisites: Array<[number, number]>) {
+  const graph = Array.from({ length: courseCount }, () => [] as number[]);
+  const indegree = Array.from({ length: courseCount }, () => 0);
+  for (const [course, prerequisite] of prerequisites) {
+    graph[prerequisite].push(course);
+    indegree[course] += 1;
+  }
+  const queue = indegree.flatMap((count, course) => count === 0 ? [course] : []);
+  let visited = 0;
+  while (queue.length) {
+    const course = queue.shift() ?? 0;
+    visited += 1;
+    for (const next of graph[course]) {
+      indegree[next] -= 1;
+      if (indegree[next] === 0) {
+        queue.push(next);
+      }
+    }
+  }
+  return visited === courseCount;
+}
+
+function connectedGroupCount(n: number, edges: Array<[number, number]>) {
+  const graph = Array.from({ length: n }, () => [] as number[]);
+  for (const [left, right] of edges) {
+    graph[left].push(right);
+    graph[right].push(left);
+  }
+  const seen = new Set<number>();
+  let groups = 0;
+  for (let node = 0; node < n; node += 1) {
+    if (!seen.has(node)) {
+      groups += 1;
+      visitComponent(node, graph, seen);
+    }
+  }
+  return groups;
+}
+
+function visitComponent(node: number, graph: number[][], seen: Set<number>) {
+  if (seen.has(node)) {
+    return;
+  }
+  seen.add(node);
+  for (const next of graph[node]) {
+    visitComponent(next, graph, seen);
+  }
+}
+
+function largestIslandArea(grid: number[][]) {
+  const seen = grid.map((row) => row.map(() => false));
+  let best = 0;
+  for (let row = 0; row < grid.length; row += 1) {
+    for (let column = 0; column < grid[row].length; column += 1) {
+      best = Math.max(best, islandArea(grid, seen, row, column));
+    }
+  }
+  return best;
+}
+
+function islandArea(grid: number[][], seen: boolean[][], row: number, column: number): number {
+  if (!grid[row]?.[column] || seen[row][column]) {
+    return 0;
+  }
+  seen[row][column] = true;
+  return 1 + islandArea(grid, seen, row + 1, column) + islandArea(grid, seen, row - 1, column) + islandArea(grid, seen, row, column + 1) + islandArea(grid, seen, row, column - 1);
+}
+
+function canSegmentText(text: string, dictionary: string[]) {
+  const words = new Set(dictionary);
+  const possible = Array.from({ length: text.length + 1 }, () => false);
+  possible[0] = true;
+  for (let end = 1; end <= text.length; end += 1) {
+    for (let start = 0; start < end; start += 1) {
+      possible[end] ||= possible[start] && words.has(text.slice(start, end));
+    }
+  }
+  return possible[text.length];
+}
+
+function maxNonAdjacentReward(rewards: number[]) {
+  let take = 0;
+  let skip = 0;
+  for (const reward of rewards) {
+    [take, skip] = [skip + reward, Math.max(skip, take)];
+  }
+  return Math.max(take, skip);
+}
+
+function decodeMessageCount(digits: string) {
+  const ways = Array.from({ length: digits.length + 1 }, () => 0);
+  ways[0] = 1;
+  for (let index = 1; index <= digits.length; index += 1) {
+    if (digits[index - 1] !== "0") {
+      ways[index] += ways[index - 1];
+    }
+    const pair = Number(digits.slice(index - 2, index));
+    if (index > 1 && pair >= 10 && pair <= 26) {
+      ways[index] += ways[index - 2];
+    }
+  }
+  return ways[digits.length];
+}
+
+function minimumRoomsNeeded(intervals: number[][]) {
+  const events = intervals.flatMap(([start, end]) => [[start, 1], [end, -1]]);
+  events.sort((left, right) => left[0] - right[0] || left[1] - right[1]);
+  let active = 0;
+  let best = 0;
+  for (const [, delta] of events) {
+    active += delta;
+    best = Math.max(best, active);
+  }
+  return best;
+}
+
+function removeOverlapCount(intervals: number[][]) {
+  const sorted = [...intervals].sort((left, right) => left[1] - right[1]);
+  let removals = 0;
+  let end = -Infinity;
+  for (const [start, finish] of sorted) {
+    if (start < end) {
+      removals += 1;
+    } else {
+      end = finish;
+    }
+  }
+  return removals;
+}
+
+function bitCountsUpTo(n: number) {
+  return Array.from({ length: n + 1 }, (_value, index) => index.toString(2).replace(/0/g, "").length);
+}
+
+function loneUnpairedNumber(nums: number[]) {
+  return nums.reduce((xor, value) => xor ^ value, 0);
+}
+
+function prefixMatchCount(words: string[], prefix: string) {
+  return words.filter((word) => word.startsWith(prefix)).length;
+}
+
+function orderedSubsets(nums: number[]) {
+  const subsets = nums.reduce<number[][]>((sets, value) => sets.concat(sets.map((set) => [...set, value])), [[]]);
+  return subsets.map((set) => [...set].sort((left, right) => left - right)).sort(compareNumberArrays);
+}
+
+function compareNumberArrays(left: number[], right: number[]) {
+  if (left.length !== right.length) {
+    return left.length - right.length;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return left[index] - right[index];
+    }
+  }
+  return 0;
+}
+
+function isHeightBalanced(root: TreeNode | null) {
+  return getBalancedHeight(root) >= 0;
+}
+
+function getBalancedHeight(root: TreeNode | null | undefined): number {
+  if (!root) {
+    return 0;
+  }
+  const left = getBalancedHeight(root.left);
+  const right = getBalancedHeight(root.right);
+  if (left < 0 || right < 0 || Math.abs(left - right) > 1) {
+    return -1;
+  }
+  return Math.max(left, right) + 1;
+}
+
+function rightSideValues(root: TreeNode | null) {
+  const values: number[] = [];
+  const queue = root ? [root] : [];
+  while (queue.length) {
+    const levelSize = queue.length;
+    for (let index = 0; index < levelSize; index += 1) {
+      const node = queue.shift();
+      if (!node) {
+        continue;
+      }
+      if (index === levelSize - 1) {
+        values.push(node.val);
+      }
+      if (node.left) {
+        queue.push(node.left);
+      }
+      if (node.right) {
+        queue.push(node.right);
+      }
+    }
+  }
+  return values;
+}
+
+function kthLargestScore(scores: number[], k: number) {
+  return [...scores].sort((left, right) => right - left)[k - 1];
+}
+
+function targetExpressionCount(nums: number[], target: number) {
+  let counts = new Map([[0, 1]]);
+  for (const num of nums) {
+    const next = new Map<number, number>();
+    for (const [sum, count] of counts) {
+      next.set(sum + num, (next.get(sum + num) || 0) + count);
+      next.set(sum - num, (next.get(sum - num) || 0) + count);
+    }
+    counts = next;
+  }
+  return counts.get(target) || 0;
+}
+
+function runningSum(nums: number[]) {
+  let total = 0;
+  return nums.map((value) => {
+    total += value;
+    return total;
+  });
+}
+
+function mostFrequentChar(text: string) {
+  const counts = new Map<string, number>();
+  let best = text[0] || "";
+  for (const char of text) {
+    const count = (counts.get(char) || 0) + 1;
+    counts.set(char, count);
+    if (count > (counts.get(best) || 0)) {
+      best = char;
+    }
+  }
+  return best;
+}
+
+function uniqueNumbers(nums: number[]) {
+  const seen = new Set<number>();
+  return nums.filter((value) => {
+    if (seen.has(value)) {
+      return false;
+    }
+    seen.add(value);
+    return true;
+  });
+}
+
+function hasBalancedVowels(text: string) {
+  const midpoint = Math.floor(text.length / 2);
+  const left = text.slice(0, midpoint);
+  const right = text.slice(text.length - midpoint);
+  return countVowels(left) === countVowels(right);
 }
 
 function countModuloPairs(nums: number[], divisor: number) {

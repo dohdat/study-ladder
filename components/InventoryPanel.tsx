@@ -1,7 +1,7 @@
 import { Badge, Box, Button, Group, Stack, Text } from "@mantine/core";
 
 import { canEquipItem, EQUIPMENT_SLOT_LABELS, equipItem, getActiveSetBonuses } from "../lib/studyCore";
-import type { EquipmentSlot, InventoryItem, StudyState } from "../types/study";
+import type { EquipmentSlot, InventoryItem, ItemModifierKey, StudyState } from "../types/study";
 
 const STAT_LABELS = {
   constitution: "CON",
@@ -17,6 +17,22 @@ const RARITY_COLORS = {
   rare: "#5fa8ff",
   uncommon: "#40c057"
 } as const;
+const MODIFIER_FORMATTERS: Record<ItemModifierKey, (value: number) => string> = {
+  bonusXpPercent: (value) => `+${value}% XP`,
+  coldResistPercent: (value) => `+${value}% Cold Res`,
+  criticalChancePercent: (value) => `+${value}% Crit`,
+  damageReduction: (value) => `Damage -${value}`,
+  enhancedDamagePercent: (value) => `+${value}% Damage`,
+  fireResistPercent: (value) => `+${value}% Fire Res`,
+  goldFindPercent: (value) => `+${value}% Gold`,
+  lifeOnKill: (value) => `+${value} Life/Sub`,
+  lightningResistPercent: (value) => `+${value}% Lightning Res`,
+  magicFindPercent: (value) => `+${value}% Magic Find`,
+  manaOnKill: (value) => `+${value} Mana/Sub`,
+  maxLife: (value) => `+${value} Max Life`,
+  maxMana: (value) => `+${value} Max Mana`,
+  poisonResistPercent: (value) => `+${value}% Poison Res`
+};
 
 const INVENTORY_CELL_COUNT = 40;
 const COMPACT_NAME_LINES = 2;
@@ -142,36 +158,7 @@ function formatItemStats(item: InventoryItem) {
 }
 
 function formatItemModifiers(item: InventoryItem) {
-  return (item.modifiers || []).map((modifier) => {
-    if (modifier.key === "bonusXpPercent") {
-      return `+${modifier.value}% XP`;
-    }
-    if (modifier.key === "criticalChancePercent") {
-      return `+${modifier.value}% Crit`;
-    }
-    if (modifier.key === "damageReduction") {
-      return `Damage -${modifier.value}`;
-    }
-    if (modifier.key === "enhancedDamagePercent") {
-      return `+${modifier.value}% Damage`;
-    }
-    if (modifier.key === "goldFindPercent") {
-      return `+${modifier.value}% Gold`;
-    }
-    if (modifier.key === "lifeOnKill") {
-      return `+${modifier.value} Life/Sub`;
-    }
-    if (modifier.key === "magicFindPercent") {
-      return `+${modifier.value}% Magic Find`;
-    }
-    if (modifier.key === "manaOnKill") {
-      return `+${modifier.value} Mana/Sub`;
-    }
-    if (modifier.key === "maxLife") {
-      return `+${modifier.value} Max Life`;
-    }
-    return `+${modifier.value} Max Mana`;
-  }).join(", ");
+  return (item.modifiers || []).map((modifier) => MODIFIER_FORMATTERS[modifier.key](modifier.value)).join(", ");
 }
 
 function formatStats(stats: InventoryItem["stats"]) {

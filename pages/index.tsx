@@ -4,11 +4,9 @@ import { Container, Stack } from "@mantine/core";
 import type { OnMount } from "@monaco-editor/react";
 
 import { AppHeader } from "../components/AppHeader";
-import { PracticeArea } from "../components/PracticePanels";
-import type { PracticePanelActions } from "../components/PracticePanels";
+import { PracticeArea, type PracticePanelActions } from "../components/PracticePanels";
 import { DeathResetModal } from "../components/DeathResetModal";
-import { RewardNotifications } from "../components/RewardNotifications";
-import type { RewardNotification } from "../components/RewardNotifications";
+import { RewardNotifications, type RewardNotification } from "../components/RewardNotifications";
 import { questions } from "../data/questions";
 import { useCodexHintStream } from "../hooks/useCodexHintStream";
 import { useFullscreenGuard } from "../hooks/useFullscreenGuard";
@@ -172,18 +170,22 @@ function useRunnerMessages(params: {
   currentQuestion: Question | null;
   failAndAdvance: FailAndAdvance;
   showHealthLoss: (amount?: number, hitCount?: number) => void;
-  showRewards: (question: Question, state: StudyState, now?: number) => void;
+  showRewards: (question: Question, state: StudyState, now?: number) => void; runnerReady: boolean; runnerFrame: React.MutableRefObject<HTMLIFrameElement | null>;
   state: StudyState;
   setState: React.Dispatch<React.SetStateAction<StudyState>>;
   setQuestionFinished: (finished: boolean) => void;
+  setCode: (code: string) => void;
+  setCurrentQuestion: (question: Question) => void;
   setConsoleRunResult: (result: ConsoleRunResult | null) => void;
   setResults: (results: RunResult[]) => void;
   setRunning: (running: boolean) => void;
   setRunnerReady: (ready: boolean) => void;
+  setSessionStarted: (started: boolean) => void;
   setStatus: (status: string) => void;
   setTone: (tone: StatusTone) => void;
   activeRunId: React.MutableRefObject<string | null>;
   runTimer: React.MutableRefObject<number | null>;
+  clearHint: () => void;
 }) {
   useEffect(() => {
     function onMessage(event: MessageEvent<RunnerMessage>) {
@@ -207,6 +209,7 @@ function useRunnerMessages(params: {
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
   }, [params]);
+  useEffect(() => { if (params.runnerReady) { return undefined; } const timer = window.setInterval(() => params.runnerFrame.current?.contentWindow?.postMessage({ type: "runner-ping" }, "*"), SECOND_MS); return () => window.clearInterval(timer); }, [params]);
 }
 
 function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof useRunnerMessages>[0]) {
@@ -220,9 +223,9 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
   }
   if (!message.ok) {
     const attack = getMonsterAttackProfile(question, getMonsterDamageRoll(question));
-    const healthLoss = getHealthLoss(params.state, attack.damage);
+    const healthLoss = getHealthLoss(params.state, attack.damage, attack.element);
     params.showHealthLoss(healthLoss, attack.hitCount);
-    params.setState((previous) => applyHealthPenalty(previous, attack.damage, attack.manaDamage));
+    params.setState((previous) => applyHealthPenalty(previous, attack.damage, attack.manaDamage, question.id, params.code, Date.now(), attack.element));
     params.setResults([]);
     params.setConsoleRunResult({ ok: false, output: [], results: message.results.slice(VISIBLE_RUN_CASE_COUNT), runtimeMs: message.runtimeMs });
     params.setTone("fail");
@@ -231,18 +234,24 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
   }
   const now = Date.now();
   const combat = applyPassedCombatResult(params.state, question.id, params.code, now);
+  const picked = pickQuestion(combat.state, question, true);
+  const nextState = { ...combat.state, currentId: picked.id };
+  params.showRewards(question, params.state, now);
   params.setResults([]);
-  params.setConsoleRunResult({ ok: true, output: [], results: message.results.slice(VISIBLE_RUN_CASE_COUNT), runtimeMs: message.runtimeMs });
-  params.setState(combat.state);
+  params.setConsoleRunResult(null);
+  params.setState(nextState);
+  params.setCurrentQuestion(picked);
+  params.setCode(picked.starter);
+  params.setSessionStarted(false);
+  params.setQuestionFinished(false);
+  params.clearHint();
   if (combat.hit?.defeated) {
-    params.showRewards(question, params.state, now);
     params.setTone("pass");
-    params.setStatus(`Monster defeated. ${formatHitStatus(combat.hit.damage, combat.hit.critical)}`);
-    params.setQuestionFinished(true);
+    params.setStatus(`Monster defeated. ${formatHitStatus(combat.hit.damage, combat.hit.critical)} Next question loaded.`);
     return;
   }
-  params.setTone("default");
-  params.setStatus(`${formatHitStatus(combat.hit?.damage || 0, Boolean(combat.hit?.critical))} Enemy health ${combat.hit?.remainingHealth}/${combat.hit?.maxHealth}.`);
+  params.setTone("pass");
+  params.setStatus(`${formatHitStatus(combat.hit?.damage || 0, Boolean(combat.hit?.critical))} Enemy health ${combat.hit?.remainingHealth}/${combat.hit?.maxHealth}. Next question loaded.`);
 }
 
 function handleCodeRunMessage(message: CodeRunMessage, params: Parameters<typeof useRunnerMessages>[0]) {
@@ -258,8 +267,9 @@ function formatHitStatus(damage: number, critical: boolean) {
 
 function getFailStatus(attack: ReturnType<typeof getMonsterAttackProfile>) {
   const prefix = attack.hitCount > 1 ? `Multi-Shot hit ${attack.hitCount} times` : "Monster hit";
+  const element = attack.element ? ` ${attack.element[0].toUpperCase()}${attack.element.slice(1)}` : "";
   const manaBurn = attack.manaDamage ? ` Mana Burn drained ${attack.manaDamage}.` : "";
-  return `${prefix} for ${attack.damage}.${manaBurn} Wrong Answer`;
+  return `${prefix} for ${attack.damage}${element} damage.${manaBurn} Wrong Answer`;
 }
 
 function clearRunTimer(runTimer: React.MutableRefObject<number | null>) {
@@ -376,11 +386,8 @@ function useStartQuestion(params: Parameters<typeof usePracticeActions>[0]) {
     if (!params.currentQuestion || params.state.mode !== "leetcode") {
       return;
     }
-    if (!params.runnerReady) {
-      params.setTone("fail");
-      params.setStatus("Runner is still loading. Try again in a second.");
-      return;
-    }
+    params.runnerFrame.current?.contentWindow?.postMessage({ type: "runner-ping" }, "*");
+    params.setQuestionFinished(false);
     params.setSessionStarted(true);
     params.setTone("default");
     params.setStatus("Starting fullscreen guard.");
@@ -524,8 +531,8 @@ function useFailAndAdvance(params: {
     }
     const monsterDamage = getMonsterDamageRoll(currentQuestion);
     const attack = getMonsterAttackProfile(currentQuestion, monsterDamage);
-    const healthLoss = getHealthLoss(state, attack.damage);
-    const scheduled = applyScheduleResult(state, currentQuestion.id, false, draft, Date.now(), attack.damage, attack.manaDamage);
+    const healthLoss = getHealthLoss(state, attack.damage, attack.element);
+    const scheduled = applyScheduleResult(state, currentQuestion.id, false, draft, Date.now(), attack.damage, attack.manaDamage, attack.element);
     const picked = pickQuestion(scheduled, currentQuestion, true);
     const nextState = { ...scheduled, currentId: picked.id };
     activeRunId.current = null;
@@ -586,9 +593,10 @@ export default function Home() {
     setRunStatus("Character reset to level 1.");
     hints.clearHint();
   }, [hints, runTimer, state.profile.unlockedAchievementIds]);
+  const pauseQuestionForFocusLoss = useCallback(() => { activeRunId.current = null; clearRunTimer(runTimer); setRunning(false); setResults([]); setConsoleRunResult(null); setSessionStarted(false); hints.clearHint(); }, [hints, runTimer]);
   const isDead = state.profile.health <= 0;
   useStudyTimeTracker(state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished && !isDead);
-  useFullscreenGuard({ active: state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished && !isDead, failQuestion: failAndAdvance, setStatus: setRunStatus, setTone: setRunTone });
+  useFullscreenGuard({ active: state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished && !isDead, pauseQuestion: pauseQuestionForFocusLoss, setStatus: setRunStatus, setTone: setRunTone });
   const headerStats = useHeaderStats(state);
   const timerDisplay = getTimerDisplay(currentQuestion, timer.timeRemainingMs);
   return (

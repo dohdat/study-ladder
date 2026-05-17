@@ -20,6 +20,7 @@ import { IconArrowLeft } from "@tabler/icons-react";
 
 import { CoinAmount } from "../components/CoinIcon";
 import { questions } from "../data/questions";
+import { getEstimatedRating } from "../lib/ratingCore";
 import { defaultState, getCard, getEffectiveCharacterStats, getLevelProgress, getMaxHealth, getMaxMana, getProfileStats, getTopicStats, isMasteredCard, normalizeStudyState } from "../lib/studyCore";
 import { migrateLocalStorageState } from "../lib/studyDb";
 import type { CardState, StudyState } from "../types/study";
@@ -39,6 +40,7 @@ export default function Profile() {
   const levelProgress = useMemo(() => getLevelProgress(state), [state]);
   const topics = useMemo(() => getTopicStats(state), [state]);
   const stats = useMemo(() => getEffectiveCharacterStats(state), [state]);
+  const rating = useMemo(() => getEstimatedRating(state), [state]);
   const maxHealth = useMemo(() => getMaxHealth(state), [state]);
   const maxMana = useMemo(() => getMaxMana(state), [state]);
   return (
@@ -50,9 +52,9 @@ export default function Profile() {
         <Stack gap="md">
           <ProfileHeader loaded={loaded} />
           <Box id="stats">
-            <ProfileStats attempted={profile.attempted} solved={profile.solved} mastered={profile.mastered} accuracy={profile.accuracy} coins={state.profile.coins} currentExperience={levelProgress.currentExperience} health={state.profile.health} hintsBought={state.profile.hintsBought} level={levelProgress.level} mana={state.profile.mana} maxHealth={maxHealth} maxMana={maxMana} nextLevelExperience={levelProgress.nextLevelExperience} statPoints={state.profile.statPoints} stats={stats} />
+            <ProfileStats attempted={profile.attempted} solved={profile.solved} mastered={profile.mastered} accuracy={profile.accuracy} coins={state.profile.coins} currentExperience={levelProgress.currentExperience} health={state.profile.health} hintsBought={state.profile.hintsBought} level={levelProgress.level} mana={state.profile.mana} maxHealth={maxHealth} maxMana={maxMana} nextLevelExperience={levelProgress.nextLevelExperience} rating={rating} statPoints={state.profile.statPoints} stats={stats} />
           </Box>
-          <TopicMasteryCard due={profile.due} streak={state.streak} topics={topics} />
+          <TopicMasteryCard streak={state.streak} topics={topics} />
           <Box id="achievements">
             <QuestionHistoryCard state={state} />
           </Box>
@@ -115,9 +117,10 @@ function SettingsCard() {
   );
 }
 
-function ProfileStats(props: { accuracy: number; attempted: number; coins: number; currentExperience: number; health: number; hintsBought: number; level: number; mana: number; mastered: number; maxHealth: number; maxMana: number; nextLevelExperience: number; solved: number; statPoints: number; stats: ReturnType<typeof getEffectiveCharacterStats> }) {
+function ProfileStats(props: { accuracy: number; attempted: number; coins: number; currentExperience: number; health: number; hintsBought: number; level: number; mana: number; mastered: number; maxHealth: number; maxMana: number; nextLevelExperience: number; rating: number; solved: number; statPoints: number; stats: ReturnType<typeof getEffectiveCharacterStats> }) {
   const cards = [
     { label: "Coins", value: <CoinAmount value={props.coins} /> },
+    { label: "Rating", value: props.rating },
     { label: "Health", value: `${props.health}/${props.maxHealth}` },
     { label: "Mana", value: `${props.mana}/${props.maxMana}` },
     { label: "Level", value: props.level },
@@ -145,13 +148,13 @@ function ProfileStats(props: { accuracy: number; attempted: number; coins: numbe
   );
 }
 
-function TopicMasteryCard(props: { due: number; streak: number; topics: ReturnType<typeof getTopicStats> }) {
+function TopicMasteryCard(props: { streak: number; topics: ReturnType<typeof getTopicStats> }) {
   return (
     <Card withBorder>
       <Group justify="space-between" mb="md">
         <Box>
-          <Title order={4}>Topic Mastery</Title>
-          <Text c="dimmed" size="sm">{props.due} questions due for review</Text>
+          <Title order={4}>Topic Progress</Title>
+          <Text c="dimmed" size="sm">Progress is rating based, with failed submissions counted.</Text>
         </Box>
         <Badge variant="light">{props.streak} streak</Badge>
       </Group>
