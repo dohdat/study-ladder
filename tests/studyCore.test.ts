@@ -344,6 +344,33 @@ describe("studyCore", () => {
     expect(result.hit?.damage).toBe((result.hit?.perHitDamage || 0) * 3);
   });
 
+  it("applies execute and blood active warrior effects", () => {
+    const question = questions[0];
+    let state = defaultState();
+    state.profile.experience = EXPERIENCE_PER_LEVEL * 35;
+    state.profile.mana = getMaxMana(state);
+    state = spendWarriorSkillPoint(state, "bash", getLevelProgress(state).level);
+    state = spendWarriorSkillPoint(state, "doubleSwing", getLevelProgress(state).level);
+    state = spendWarriorSkillPoint(state, "frenzy", getLevelProgress(state).level);
+    state = spendWarriorSkillPoint(state, "bloodlust", getLevelProgress(state).level);
+    state = spendWarriorSkillPoint(state, "execute", getLevelProgress(state).level);
+    setCard(state, question.id, { ...defaultCard(), monsterHealth: 5 });
+    const normal = applyPassedCombatResult(defaultState(), question.id, "draft", 1000);
+    const executed = applyPassedCombatResult(activateWarriorSkill(state, "execute"), question.id, "draft", 1000);
+
+    expect(executed.hit?.effects).toContain("Execute");
+    expect(executed.hit?.damage).toBeGreaterThan(normal.hit?.damage || 0);
+
+    state = spendWarriorSkillPoint(state, "bloodForBlood", getLevelProgress(state).level);
+    state.profile.health = Math.floor(getMaxHealth(state) / 2);
+    const healthBefore = state.profile.health;
+    const bloodied = applyPassedCombatResult(activateWarriorSkill(state, "bloodForBlood"), question.id, "draft", 2000);
+
+    expect(bloodied.hit?.effects).toContain("Life steal");
+    expect(bloodied.hit?.lifeRestored).toBeGreaterThan(0);
+    expect(bloodied.state.profile.health).toBeGreaterThan(healthBefore - 4);
+  });
+
   it("drops and equips stat bonus items from solved questions", () => {
     const question = questions.find((row) => row.difficulty === 5) || questions[0];
     let state = defaultState();

@@ -51,7 +51,14 @@ export type CharacterStatKey = keyof CharacterStats;
 
 export type ElementalDamageType = "fire" | "cold" | "lightning" | "poison";
 
-export type ActiveWarriorSkillId = "powerStrike" | "tripleStrike" | "sureCrit" | "whirlwindAssault";
+export type ActiveWarriorSkillId =
+  | "bloodForBlood"
+  | "cleave"
+  | "execute"
+  | "powerStrike"
+  | "sureCrit"
+  | "tripleStrike"
+  | "whirlwindAssault";
 
 export type WarriorSkillId =
   | ActiveWarriorSkillId
@@ -61,8 +68,12 @@ export type WarriorSkillId =
   | "battleCry"
   | "battleCommand"
   | "battleOrders"
+  | "battleTrance"
+  | "bloodlust"
+  | "burningPact"
   | "concentrate"
   | "doubleSwing"
+  | "demonForm"
   | "findItem"
   | "findPotion"
   | "frenzy"
@@ -74,6 +85,7 @@ export type WarriorSkillId =
   | "quickRecovery"
   | "rallyingCry"
   | "shieldMastery"
+  | "shockwave"
   | "shout"
   | "swordMastery"
   | "treasureSense"

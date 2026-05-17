@@ -25,6 +25,11 @@ export function useActiveWarriorSkillAction(params: {
       params.setStatus(`${skill.name} needs ${skill.cost} mana.`);
       return;
     }
+    if (skill.healthCost && params.state.profile.health <= skill.healthCost) {
+      params.setTone("fail");
+      params.setStatus(`${skill.name} needs more health.`);
+      return;
+    }
     if (!canUseActiveWarriorSkill(params.state, skillId)) {
       params.setTone("fail");
       params.setStatus(`${skill.name} is not unlocked yet.`);

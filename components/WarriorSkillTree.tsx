@@ -24,9 +24,9 @@ const TOOLTIP_BORDER = "1px solid #8a744c";
 const TOOLTIP_TEXT = "#f3ead7";
 const SKILL_BRANCHES = ["Combat Skills", "Combat Masteries", "Warcries"] as const;
 const PROGRESS_MAX = 100;
-const TREE_ROWS = 5;
+const TREE_ROWS = 6;
 const TREE_COLUMNS = 4;
-const TREE_HEIGHT = 560;
+const TREE_HEIGHT = 600;
 const TREE_X_GUTTER_PERCENT = 14;
 const TREE_Y_GUTTER_PERCENT = 8;
 const SKILL_NODE_WIDTH = 118;
@@ -59,24 +59,30 @@ const SKILL_LAYOUTS: Record<WarriorSkillBranch, Partial<Record<WarriorSkillId, S
     bash: { column: 2.5, row: 1 },
     powerStrike: { column: 1.25, row: 2 },
     doubleSwing: { column: 2.5, row: 2 },
-    concentrate: { column: 3.75, row: 2 },
+    cleave: { column: 1.25, row: 3 },
     tripleStrike: { column: 2.5, row: 3 },
-    sureCrit: { column: 3.75, row: 3 },
+    concentrate: { column: 3.75, row: 3 },
     frenzy: { column: 1.25, row: 4 },
-    whirlwind: { column: 3.75, row: 4 },
-    whirlwindAssault: { column: 3.75, row: 5 }
+    sureCrit: { column: 3.75, row: 4 },
+    bloodlust: { column: 1.25, row: 5 },
+    whirlwind: { column: 3.75, row: 5 },
+    execute: { column: 1, row: 6 },
+    bloodForBlood: { column: 2, row: 6 },
+    whirlwindAssault: { column: 3.75, row: 6 }
   },
   "Combat Masteries": {
     swordMastery: { column: 1, row: 1 },
     axeMastery: { column: 2, row: 1 },
     findPotion: { column: 4, row: 1 },
     shieldMastery: { column: 1, row: 2 },
+    arcaneFocus: { column: 3, row: 2 },
     quickRecovery: { column: 1, row: 3 },
-    ironSkin: { column: 2.5, row: 3 },
-    arcaneFocus: { column: 4, row: 3 },
-    treasureSense: { column: 3.25, row: 4 },
-    goldMastery: { column: 4, row: 5 },
-    naturalResistance: { column: 2.5, row: 5 }
+    battleTrance: { column: 3, row: 3 },
+    treasureSense: { column: 4, row: 3 },
+    ironSkin: { column: 1.5, row: 4 },
+    burningPact: { column: 3, row: 5 },
+    demonForm: { column: 3, row: 6 },
+    naturalResistance: { column: 1.5, row: 6 }
   },
   Warcries: {
     howl: { column: 2.5, row: 1 },
@@ -84,8 +90,8 @@ const SKILL_LAYOUTS: Record<WarriorSkillBranch, Partial<Record<WarriorSkillId, S
     shout: { column: 4, row: 2 },
     battleCry: { column: 1, row: 3 },
     findItem: { column: 2, row: 3 },
-    grimWard: { column: 1, row: 4 },
-    rallyingCry: { column: 4, row: 4 },
+    shockwave: { column: 1, row: 4 },
+    grimWard: { column: 2, row: 4 },
     battleOrders: { column: 3.25, row: 4 },
     battleCommand: { column: 2.5, row: 5 },
     warCry: { column: 4, row: 5 }
@@ -99,8 +105,15 @@ const SKILL_PIXEL_ART: Record<WarriorSkillId, SkillPixelArt> = {
   battleCry: { colors: { a: "#7c2d12", b: "#fb923c", c: "#ffedd5" }, pixels: [".a..a...", "abccba..", ".bbbb...", "..aa....", ".abba...", "a....a..", "........", "........"] },
   battleCommand: { colors: { a: "#78350f", b: "#facc15", c: "#fef3c7" }, pixels: ["..aaaa..", ".abbbb..", "abccba..", ".abbbb..", "..aaaa..", "...aa...", "..abba..", ".a....a."] },
   battleOrders: { colors: { a: "#1d4ed8", b: "#60a5fa", c: "#dbeafe" }, pixels: ["..aa....", ".abbba..", "abcccba.", ".abbba..", "..aa....", ".a..a...", "a....a..", "........"] },
+  battleTrance: { colors: { a: "#1e3a8a", b: "#38bdf8", c: "#e0f2fe" }, pixels: ["...aa...", "..abba..", ".abccba.", "abbbbbba", ".abccba.", "..abba..", "...aa...", "........"] },
+  bloodForBlood: { colors: { a: "#450a0a", b: "#dc2626", c: "#fecaca" }, pixels: ["a....a..", "ba..ab..", ".baab...", "..cc....", ".baab...", "ba..ab..", "a....a..", "........"] },
+  bloodlust: { colors: { a: "#450a0a", b: "#ef4444", c: "#fee2e2" }, pixels: ["..aa....", ".abba...", "abccba..", ".abbb...", "..bb....", ".abba...", "a....a..", "........"] },
+  burningPact: { colors: { a: "#7f1d1d", b: "#f97316", c: "#fde68a" }, pixels: ["...a....", "..aba...", ".abbba..", ".bbccb..", "abccba..", ".abba...", "..aa....", "........"] },
+  cleave: { colors: { a: "#713f12", b: "#f59e0b", c: "#fef3c7" }, pixels: ["....a...", "...ab...", "..abb...", ".abbc...", "abbc....", ".bb.....", "b.......", "........"] },
   concentrate: { colors: { a: "#4c1d95", b: "#a78bfa", c: "#f5f3ff" }, pixels: ["...aa...", "..abba..", ".abccba.", ".abccba.", "..abba..", "...aa...", "..a..a..", ".a....a."] },
+  demonForm: { colors: { a: "#4c0519", b: "#be123c", c: "#fda4af" }, pixels: ["a....a..", "ba..ab..", ".bbbb...", "abccba..", ".bbbb...", "..bb....", ".b..b...", "a....a.."] },
   doubleSwing: { colors: { a: "#0f766e", b: "#5eead4", c: "#ccfbf1" }, pixels: [".a....a.", ".ba..ab.", "..babb..", "...cc...", "..babb..", ".ab..ba.", ".a....a.", "........"] },
+  execute: { colors: { a: "#111827", b: "#ef4444", c: "#fef2f2" }, pixels: ["...c....", "..bcb...", ".bbbbb..", "..bbb...", ".bbbbb..", "b..b....", "a..a....", "........"] },
   findItem: { colors: { a: "#713f12", b: "#eab308", c: "#fef08a" }, pixels: ["..aaaa..", ".abbbba.", "abcccba.", "abcbcba.", ".abbba..", "..aa....", ".a..a...", "........"] },
   findPotion: { colors: { a: "#7f1d1d", b: "#ef4444", c: "#fecaca" }, pixels: ["...aa...", "..abba..", "..abba..", ".abccba.", ".abccba.", "..abba..", "...aa...", "........"] },
   frenzy: { colors: { a: "#991b1b", b: "#fb7185", c: "#ffe4e6" }, pixels: ["a.....a.", "ba...ab.", ".ba.ab..", "..bcb...", ".ab.ba..", "ab...ba.", "a.....a.", "........"] },
@@ -113,6 +126,7 @@ const SKILL_PIXEL_ART: Record<WarriorSkillId, SkillPixelArt> = {
   quickRecovery: { colors: { a: "#064e3b", b: "#34d399", c: "#d1fae5" }, pixels: ["..aa....", ".abbba..", "abccba..", ".abbba..", "..aa....", ".a..a...", "a....a..", "........"] },
   rallyingCry: { colors: { a: "#1e3a8a", b: "#93c5fd", c: "#eff6ff" }, pixels: ["..aa....", ".abbb...", "abccba..", ".abbb...", "..aa....", "..a.a...", ".a...a..", "........"] },
   shieldMastery: { colors: { a: "#1f2937", b: "#64748b", c: "#f8fafc" }, pixels: ["..aaaa..", ".abbbba.", "abcccba.", "abcccba.", ".abbbba.", "..abba..", "...aa...", "........"] },
+  shockwave: { colors: { a: "#581c87", b: "#c084fc", c: "#faf5ff" }, pixels: ["a......a", ".ba..ab.", "..bccb..", ".abccba.", "..bccb..", ".ba..ab.", "a......a", "........"] },
   shout: { colors: { a: "#312e81", b: "#818cf8", c: "#e0e7ff" }, pixels: ["..aa....", ".abbba..", "abcccba.", ".abbba..", "..aa....", "..a.a...", ".a...a..", "a.....a."] },
   swordMastery: { colors: { a: "#1f2937", b: "#e5e7eb", c: "#fbbf24" }, pixels: ["....b...", "...bb...", "..bb....", ".bb.....", "cb......", "cc......", ".a......", "........"] },
   sureCrit: { colors: { a: "#581c87", b: "#facc15", c: "#faf5ff" }, pixels: ["...aa...", "..abba..", ".abccba.", "..bccb..", "...bb...", "..abba..", ".a....a.", "........"] },

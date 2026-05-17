@@ -111,7 +111,7 @@ function ActiveSkillBar(props: { state: StudyState; useActiveSkill: (skillId: Ac
         const isReadied = activeSkill?.id === skill.id;
         const disabled = !isReadied && !canUseActiveWarriorSkill(props.state, skill.id);
         return (
-          <Tooltip key={skill.id} label={isReadied ? `${skill.name} is readied.` : `${skill.description} Costs ${skill.cost} mana.`} withArrow>
+          <Tooltip key={skill.id} label={isReadied ? `${skill.name} is readied.` : `${skill.description} Costs ${skill.cost} mana${skill.healthCost ? ` and ${skill.healthCost} health` : ""}.`} withArrow>
             <Box style={{ minWidth: ACTIVE_SKILL_MIN_WIDTH }}>
               <ActionIcon
                 aria-label={skill.name}
@@ -137,6 +137,9 @@ function ActiveSkillBar(props: { state: StudyState; useActiveSkill: (skillId: Ac
 
 function ActiveSkillIcon(props: { skillId: ActiveWarriorSkillId }) {
   const paths: Record<ActiveWarriorSkillId, ReactNode> = {
+    bloodForBlood: <IconHeart size={ACTIVE_SKILL_ICON_SIZE} />,
+    cleave: <Text size="xs" fw={900}>x2</Text>,
+    execute: <Text size="xs" fw={900}>!</Text>,
     powerStrike: <IconBolt size={ACTIVE_SKILL_ICON_SIZE} />,
     sureCrit: <IconSparkles size={ACTIVE_SKILL_ICON_SIZE} />,
     tripleStrike: <Text size="xs" fw={900}>x3</Text>,

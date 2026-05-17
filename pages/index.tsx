@@ -266,7 +266,9 @@ function handleCodeRunMessage(message: CodeRunMessage, params: Parameters<typeof
 function formatHitStatus(hit: NonNullable<ReturnType<typeof applyPassedCombatResult>["hit"]>) {
   const skill = hit.activeSkillName ? `${hit.activeSkillName} ` : "";
   const hitCount = hit.hitCount > 1 ? ` x${hit.hitCount}` : "";
-  return hit.critical ? `${skill}critical hit${hitCount} for ${hit.damage}.` : `${skill}hit${hitCount} for ${hit.damage}.`;
+  const effects = hit.effects.length ? ` ${hit.effects.join(", ")}.` : "";
+  const restored = hit.lifeRestored ? ` Restored ${hit.lifeRestored} health.` : "";
+  return hit.critical ? `${skill}critical hit${hitCount} for ${hit.damage}.${effects}${restored}` : `${skill}hit${hitCount} for ${hit.damage}.${effects}${restored}`;
 }
 
 function getFailStatus(attack: ReturnType<typeof getMonsterAttackProfile>) {
