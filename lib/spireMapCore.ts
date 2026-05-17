@@ -82,15 +82,18 @@ const PATH_OFFSETS = [PATH_STEP_LEFT, PATH_STEP_STRAIGHT, PATH_STEP_RIGHT] as co
 const ELITE_RATING_BOOST = 300;
 const RATING_FIT_BASE = 5000;
 const ELITE_BONUS_SORT_WEIGHT = 1000;
+const MIN_ELITE_ROOM_COUNT = 3;
+const MIN_REST_ROOM_COUNT = 2;
+const UNKNOWN_ROOM_RATIO_CAP = 0.2;
 const ROOM_KIND_WEIGHTS: Array<{ kind: SpireNodeKind; weight: number }> = [
   { kind: "enemy", weight: 45 },
-  { kind: "unknown", weight: 22 },
-  { kind: "elite", weight: 16 },
+  { kind: "unknown", weight: 10 },
+  { kind: "elite", weight: 20 },
   { kind: "rest", weight: 12 },
   { kind: "merchant", weight: 5 },
   { kind: "treasure", weight: 0 }
 ];
-const CONSECUTIVE_BLOCKED_KINDS: SpireNodeKind[] = ["elite", "enemy", "merchant", "rest"];
+const CONSECUTIVE_BLOCKED_KINDS: SpireNodeKind[] = ["elite", "merchant", "rest"];
 
 type PathEdge = {
   fromColumn: number;
@@ -152,15 +155,25 @@ function getMapValidators() {
     hasLocalPathLinks,
     hasNoCrossedPathEdges,
     hasNoLongStraightPathChains,
-    hasNoConsecutiveEnemyRooms,
     hasNoDeadRooms,
     hasNoHangingRooms,
+    hasRequiredRoomDistribution,
     hasValidNodeFanOut
   ];
 }
 
 function hasValidNodeFanOut(nodes: SpireMapNode[]) {
   return nodes.every((node) => node.nextIds.length <= MAX_NODE_NEXT_IDS);
+}
+
+function hasRequiredRoomDistribution(nodes: SpireMapNode[]) {
+  return nodes.filter((node) => node.kind === "elite").length >= MIN_ELITE_ROOM_COUNT
+    && nodes.filter((node) => node.kind === "rest").length >= MIN_REST_ROOM_COUNT
+    && nodes.filter((node) => node.kind === "unknown").length <= getUnknownRoomCap(nodes);
+}
+
+function getUnknownRoomCap(nodes: SpireMapNode[]) {
+  return Math.max(1, Math.floor(nodes.length * UNKNOWN_ROOM_RATIO_CAP));
 }
 
 function hasValidColumns(nodes: SpireMapNode[]) {
@@ -222,11 +235,6 @@ function hasNoDeadRooms(nodes: SpireMapNode[]) {
 
 function hasNoHangingRooms(nodes: SpireMapNode[]) {
   return nodes.every((node) => node.rating === SPIRE_RATINGS[BOSS_FLOOR_INDEX] || node.nextIds.length > 0);
-}
-
-function hasNoConsecutiveEnemyRooms(nodes: SpireMapNode[]) {
-  const byId = new Map(nodes.map((node) => [node.id, node]));
-  return nodes.every((node) => node.kind !== "enemy" || node.nextIds.every((id) => byId.get(id)?.kind !== "enemy"));
 }
 
 export function getCurrentSpireNode(state: StudyState) {
@@ -485,20 +493,61 @@ function assignRoomKinds(seed: number, rows: SpireMapNode[][]) {
     });
     assignedRows.push(assignedRow);
   }
-  return breakConsecutiveEnemyRooms(assignedRows);
+  return balanceSpecialRoomCounts(seed, assignedRows);
 }
 
-function breakConsecutiveEnemyRooms(rows: SpireMapNode[][]) {
-  return rows.map((row, tierIndex) => {
-    if (tierIndex === FIRST_TIER) {
-      return row;
+function balanceSpecialRoomCounts(seed: number, rows: SpireMapNode[][]) {
+  const cappedUnknowns = capUnknownRooms(seed, rows);
+  const withElites = ensureMinimumRoomKind(seed, cappedUnknowns, "elite", MIN_ELITE_ROOM_COUNT);
+  return ensureMinimumRoomKind(seed, withElites, "rest", MIN_REST_ROOM_COUNT);
+}
+
+function capUnknownRooms(seed: number, rows: SpireMapNode[][]) {
+  const cap = getUnknownRoomCap(rows.flat());
+  const keepUnknownIds = new Set(rows
+    .flat()
+    .filter((node) => node.kind === "unknown")
+    .sort((a, b) => getRoll(`${seed}:keep-unknown:${b.id}`) - getRoll(`${seed}:keep-unknown:${a.id}`))
+    .slice(0, cap)
+    .map((node) => node.id));
+  return rows.map((row) => row.map((node) => node.kind === "unknown" && !keepUnknownIds.has(node.id) ? { ...node, kind: "enemy" as SpireNodeKind } : node));
+}
+
+function ensureMinimumRoomKind(seed: number, rows: SpireMapNode[][], kind: SpireNodeKind, minimumCount: number) {
+  const currentCount = rows.flat().filter((node) => node.kind === kind).length;
+  if (currentCount >= minimumCount) {
+    return rows;
+  }
+  let remaining = minimumCount - currentCount;
+  return rows.map((row, tierIndex) => row.map((node) => {
+    if (!remaining || !canForceRoomKind(rows, tierIndex, node, kind)) {
+      return node;
     }
-    const previousRow = rows[tierIndex - 1] || [];
-    return row.map((node) => {
-      const hasEnemyIncoming = previousRow.some((previous) => previous.kind === "enemy" && previous.nextIds.includes(node.id));
-      return hasEnemyIncoming && node.kind === "enemy" ? { ...node, kind: "unknown" as SpireNodeKind } : node;
-    });
-  });
+    const shouldUse = getRoll(`${seed}:force-kind:${kind}:${node.id}`) > RANDOM_CENTER || remaining >= getForceableRoomCount(rows, kind, tierIndex);
+    if (!shouldUse) {
+      return node;
+    }
+    remaining -= 1;
+    return { ...node, kind };
+  }));
+}
+
+function getForceableRoomCount(rows: SpireMapNode[][], kind: SpireNodeKind, fromTierIndex: number) {
+  return rows.slice(fromTierIndex).flatMap((row, tierOffset) => row.filter((node) => canForceRoomKind(rows, fromTierIndex + tierOffset, node, kind))).length;
+}
+
+function canForceRoomKind(rows: SpireMapNode[][], tierIndex: number, node: SpireMapNode, kind: SpireNodeKind) {
+  return node.kind === "enemy"
+    && isKindAllowedOnFloor(tierIndex, kind)
+    && !getIncomingNodes(rows, tierIndex, node.id).some((incoming) => CONSECUTIVE_BLOCKED_KINDS.includes(incoming.kind))
+    && !node.nextIds.some((nextId) => rows[tierIndex + 1]?.some((nextNode) => nextNode.id === nextId && CONSECUTIVE_BLOCKED_KINDS.includes(nextNode.kind)));
+}
+
+function isKindAllowedOnFloor(tierIndex: number, kind: SpireNodeKind) {
+  if ((kind === "elite" || kind === "rest") && tierIndex < FLOOR_SIX_INDEX) {
+    return false;
+  }
+  return tierIndex !== FLOOR_ONE_INDEX && tierIndex !== TREASURE_FLOOR_INDEX && tierIndex !== BOSS_FLOOR_INDEX;
 }
 
 function getIncomingNodes(rows: SpireMapNode[][], tierIndex: number, nodeId: string) {
@@ -521,6 +570,9 @@ function getForcedNodeKind(tierIndex: number): SpireNodeKind | null {
   if (tierIndex === TREASURE_FLOOR_INDEX) {
     return "treasure";
   }
+  if (tierIndex === FLOOR_FOURTEEN_INDEX) {
+    return "rest";
+  }
   if (tierIndex === BOSS_FLOOR_INDEX) {
     return "boss";
   }
@@ -531,9 +583,6 @@ function getCandidateKinds(tierIndex: number, incoming: SpireMapNode[], assigned
   const blocked = new Set<SpireNodeKind>();
   if (tierIndex < FLOOR_SIX_INDEX) {
     blocked.add("elite");
-    blocked.add("rest");
-  }
-  if (tierIndex === FLOOR_FOURTEEN_INDEX) {
     blocked.add("rest");
   }
   if (incoming.some((node) => CONSECUTIVE_BLOCKED_KINDS.includes(node.kind))) {

@@ -13,6 +13,9 @@ const FLOOR_FIFTEEN = 3500;
 const DEAD_ROOM_SAMPLE_COUNT = 25;
 const MAX_PATH_STEP = 1;
 const MAX_MAP_COLUMNS = 7;
+const MIN_ELITE_ROOMS = 3;
+const MIN_REST_ROOMS = 2;
+const UNKNOWN_ROOM_RATIO_CAP = 0.2;
 const STRAIGHT_CHAIN_SAMPLE_COUNT = 20;
 const CONSECUTIVE_BLOCKED_KINDS: SpireNodeKind[] = ["elite", "merchant", "rest"];
 
@@ -35,33 +38,30 @@ describe("spireMapCore", () => {
     expect(run.nodes.filter((node) => node.rating === FLOOR_NINE).every((node) => node.kind === "treasure")).toBe(true);
     expect(run.nodes.filter((node) => node.rating === FLOOR_FIFTEEN).every((node) => node.kind === "boss")).toBe(true);
     expect(run.nodes.filter((node) => node.rating < FLOOR_SIX).some((node) => node.kind === "elite" || node.kind === "rest")).toBe(false);
-    expect(run.nodes.filter((node) => node.rating === FLOOR_FOURTEEN).some((node) => node.kind === "rest")).toBe(false);
+    expect(run.nodes.filter((node) => node.rating === FLOOR_FOURTEEN).every((node) => node.kind === "rest")).toBe(true);
   });
 
-  it("prevents consecutive elite merchant or rest rooms on connected paths", () => {
+  it("prevents consecutive elite merchant or rest rooms before the pre-boss rest floor", () => {
     const run = createSpireRun(3000);
     const byId = new Map(run.nodes.map((node) => [node.id, node]));
 
     for (const node of run.nodes) {
-      if (!CONSECUTIVE_BLOCKED_KINDS.includes(node.kind)) {
+      if (!CONSECUTIVE_BLOCKED_KINDS.includes(node.kind) || node.rating >= FLOOR_FOURTEEN) {
         continue;
       }
       for (const nextId of node.nextIds) {
         const next = byId.get(nextId);
-        expect(next && CONSECUTIVE_BLOCKED_KINDS.includes(next.kind)).toBe(false);
+        expect(next && next.rating < FLOOR_FOURTEEN && CONSECUTIVE_BLOCKED_KINDS.includes(next.kind)).toBe(false);
       }
     }
   });
 
-  it("avoids direct enemy into enemy rooms on connected paths", () => {
+  it("keeps enough elite and rest rooms on the map", () => {
     const run = createSpireRun(3500);
-    const byId = new Map(run.nodes.map((node) => [node.id, node]));
 
-    for (const node of run.nodes.filter((mapNode) => mapNode.kind === "enemy")) {
-      for (const nextId of node.nextIds) {
-        expect(byId.get(nextId)?.kind).not.toBe("enemy");
-      }
-    }
+    expect(run.nodes.filter((node) => node.kind === "elite").length).toBeGreaterThanOrEqual(MIN_ELITE_ROOMS);
+    expect(run.nodes.filter((node) => node.kind === "rest").length).toBeGreaterThanOrEqual(MIN_REST_ROOMS);
+    expect(run.nodes.filter((node) => node.kind === "unknown").length).toBeLessThanOrEqual(Math.floor(run.nodes.length * UNKNOWN_ROOM_RATIO_CAP));
   });
 
   it("uses a sparse seven-column map instead of filling every floor", () => {

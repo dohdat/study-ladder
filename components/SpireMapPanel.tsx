@@ -8,7 +8,6 @@ import type { SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
 const MAP_HEIGHT = 760;
 const NODE_SIZE = 38;
 const PATH_COLOR = "#1f2933";
-const FLOOR_GUIDE_COLOR = "rgba(23, 33, 43, 0.38)";
 const ACTIVE_COLOR = "#4dabf7";
 const COMPLETED_COLOR = "#51cf66";
 const SELECTABLE_COLOR = "#f8f0c2";
@@ -25,12 +24,9 @@ const HIGHLIGHTED_NODE_Z_INDEX = 3;
 const MAP_BG = "radial-gradient(circle at 50% 20%, #6b6b60 0%, #4f5149 52%, #363932 100%)";
 const ENTER_BUTTON_RIGHT = 16;
 const ENTER_BUTTON_BOTTOM = 16;
-const FLOOR_LABEL_X = 2;
-const FLOOR_LINE_START_X = 6;
-const FLOOR_LINE_END_X = 98;
-const FLOOR_LABEL_DY = 1.3;
 const PATH_NODE_RADIUS = 1.75;
-const PATH_STROKE_WIDTH = 0.25;
+const PATH_STROKE_WIDTH = 0.18;
+const PATH_STROKE_DASH = "0.5 0.75";
 
 const NODE_LABELS: Record<SpireNodeKind, string> = {
   boss: "Boss",
@@ -63,7 +59,6 @@ export function SpireMapPanel(props: { setState: React.Dispatch<React.SetStateAc
           <Text size="xs" c="dimmed">{activeCombat ? `Room ${solved}/${target}` : "Pick a reachable node"}</Text>
         </Group>
         <Box style={{ background: MAP_BG, border: "1px solid var(--mantine-color-dark-4)", height: MAP_HEIGHT, overflow: "hidden", position: "relative" }}>
-          <FloorGuides state={props.state} />
           <MapPaths state={props.state} />
           {props.state.profile.spireRun.nodes.map((mapNode) => (
             <MapNode
@@ -117,7 +112,7 @@ function MapPaths(props: { state: StudyState }) {
           return null;
         }
         const line = getTrimmedPathLine(node, next);
-        return <line key={`${node.id}-${id}`} x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2} stroke={PATH_COLOR} strokeWidth={PATH_STROKE_WIDTH} />;
+        return <line key={`${node.id}-${id}`} x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2} stroke={PATH_COLOR} strokeDasharray={PATH_STROKE_DASH} strokeLinecap="round" strokeWidth={PATH_STROKE_WIDTH} />;
       }))}
     </svg>
   );
@@ -135,23 +130,6 @@ function getTrimmedPathLine(from: SpireMapNode, to: SpireMapNode) {
     y1: from.y + offsetY,
     y2: to.y - offsetY
   };
-}
-
-function FloorGuides(props: { state: StudyState }) {
-  const floors = SPIRE_RATINGS.map((rating, index) => ({
-    floor: index + 1,
-    y: props.state.profile.spireRun.nodes.find((node) => node.rating === rating)?.y || 0
-  }));
-  return (
-    <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ inset: 0, position: "absolute", height: "100%", width: "100%" }}>
-      {floors.map((floor) => (
-        <g key={floor.floor}>
-          <line x1={FLOOR_LINE_START_X} y1={floor.y} x2={FLOOR_LINE_END_X} y2={floor.y} stroke={FLOOR_GUIDE_COLOR} strokeDasharray="0.8 1.4" strokeWidth="0.3" />
-          <text x={FLOOR_LABEL_X} y={floor.y + FLOOR_LABEL_DY} fill="#17212b" fontSize="2.3" fontWeight="800">F{floor.floor}</text>
-        </g>
-      ))}
-    </svg>
-  );
 }
 
 function MapNode(props: { active: boolean; completed: boolean; highlighted: boolean; highlightMode: boolean; kind: SpireNodeKind; onSelect: () => void; selectable: boolean; x: number; y: number }) {
