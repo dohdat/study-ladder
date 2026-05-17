@@ -120,24 +120,34 @@ export function createSpireRun(seed = Date.now()): SpireRun {
 
 // eslint-disable-next-line complexity
 export function normalizeSpireRun(run: Partial<SpireRun> | undefined): SpireRun {
-  if (!run?.nodes?.length || !isValidBranchingMap(run.nodes)) {
+  const normalizedNodes = normalizeForcedRoomKinds(run?.nodes || []);
+  if (!normalizedNodes.length || !isValidBranchingMap(normalizedNodes)) {
     return createSpireRun(run?.mapSeed || Date.now());
   }
-  const currentNode = run.nodes.find((node) => node.id === run.currentNodeId) || run.nodes[0];
-  const availableNodeIds = (run.availableNodeIds?.length ? run.availableNodeIds : run.nodes.filter((node) => node.rating === SPIRE_RATINGS[FIRST_TIER]).map((node) => node.id))
-    .filter((id) => run.nodes?.some((node) => node.id === id));
+  const sourceRun = run || {};
+  const currentNode = normalizedNodes.find((node) => node.id === sourceRun.currentNodeId) || normalizedNodes[0];
+  const availableNodeIds = (sourceRun.availableNodeIds?.length ? sourceRun.availableNodeIds : normalizedNodes.filter((node) => node.rating === SPIRE_RATINGS[FIRST_TIER]).map((node) => node.id))
+    .filter((id) => normalizedNodes.some((node) => node.id === id));
   const roundQuestionIds: string[] = [];
   return {
     availableNodeIds,
-    completedNodeIds: run.completedNodeIds || [],
+    completedNodeIds: sourceRun.completedNodeIds || [],
     currentNodeId: currentNode.id,
     mapOpen: true,
-    mapSeed: Number.isFinite(run.mapSeed) ? run.mapSeed || Date.now() : Date.now(),
-    nodes: run.nodes,
+    mapSeed: Number.isFinite(sourceRun.mapSeed) ? sourceRun.mapSeed || Date.now() : Date.now(),
+    nodes: normalizedNodes,
     roundQuestionIds,
     roundSolvedIds: [],
-    tierIndex: Math.min(SPIRE_RATINGS.length - 1, Math.max(FIRST_TIER, Math.floor(run.tierIndex || FIRST_TIER)))
+    tierIndex: Math.min(SPIRE_RATINGS.length - 1, Math.max(FIRST_TIER, Math.floor(sourceRun.tierIndex || FIRST_TIER)))
   };
+}
+
+function normalizeForcedRoomKinds(nodes: SpireMapNode[]) {
+  return nodes.map((node) => {
+    const tierIndex = SPIRE_RATINGS.findIndex((rating) => rating === node.rating);
+    const forced = tierIndex >= FIRST_TIER ? getForcedNodeKind(tierIndex) : null;
+    return forced && node.kind !== forced ? { ...node, kind: forced } : node;
+  });
 }
 
 function isValidBranchingMap(nodes: SpireMapNode[]) {
@@ -158,6 +168,7 @@ function getMapValidators() {
     hasNoDeadRooms,
     hasNoHangingRooms,
     hasRequiredRoomDistribution,
+    hasForcedRoomKinds,
     hasValidNodeFanOut
   ];
 }
@@ -172,13 +183,17 @@ function hasRequiredRoomDistribution(nodes: SpireMapNode[]) {
     && nodes.filter((node) => node.kind === "unknown").length <= getUnknownRoomCap(nodes);
 }
 
-function getUnknownRoomCap(nodes: SpireMapNode[]) {
-  return Math.max(1, Math.floor(nodes.length * UNKNOWN_ROOM_RATIO_CAP));
+function hasForcedRoomKinds(nodes: SpireMapNode[]) {
+  return nodes.every((node) => {
+    const tierIndex = SPIRE_RATINGS.findIndex((rating) => rating === node.rating);
+    const forced = tierIndex >= FIRST_TIER ? getForcedNodeKind(tierIndex) : null;
+    return !forced || node.kind === forced;
+  });
 }
 
-function hasValidColumns(nodes: SpireMapNode[]) {
-  return nodes.every((node) => Number.isInteger(node.column) && node.column >= 0 && node.column < MAP_COLUMN_COUNT);
-}
+function getUnknownRoomCap(nodes: SpireMapNode[]) { return Math.max(1, Math.floor(nodes.length * UNKNOWN_ROOM_RATIO_CAP)); }
+
+function hasValidColumns(nodes: SpireMapNode[]) { return nodes.every((node) => Number.isInteger(node.column) && node.column >= 0 && node.column < MAP_COLUMN_COUNT); }
 
 function hasVariedPathLinks(nodes: SpireMapNode[]) {
   const byId = new Map(nodes.map((node) => [node.id, node]));
@@ -233,13 +248,9 @@ function hasNoDeadRooms(nodes: SpireMapNode[]) {
   return nodes.every((node) => node.rating === SPIRE_RATINGS[FIRST_TIER] || incomingIds.has(node.id));
 }
 
-function hasNoHangingRooms(nodes: SpireMapNode[]) {
-  return nodes.every((node) => node.rating === SPIRE_RATINGS[BOSS_FLOOR_INDEX] || node.nextIds.length > 0);
-}
+function hasNoHangingRooms(nodes: SpireMapNode[]) { return nodes.every((node) => node.rating === SPIRE_RATINGS[BOSS_FLOOR_INDEX] || node.nextIds.length > 0); }
 
-export function getCurrentSpireNode(state: StudyState) {
-  return state.profile.spireRun.nodes.find((node) => node.id === state.profile.spireRun.currentNodeId) || state.profile.spireRun.nodes[0];
-}
+export function getCurrentSpireNode(state: StudyState) { return state.profile.spireRun.nodes.find((node) => node.id === state.profile.spireRun.currentNodeId) || state.profile.spireRun.nodes[0]; }
 
 export function getCurrentRoundQuestion(state: StudyState, currentQuestion: Question | null) {
   if (state.profile.spireRun.mapOpen) {
@@ -347,9 +358,7 @@ export function enterSpireNode(state: StudyState, now = Date.now()) {
   };
 }
 
-export function isCombatNode(node: SpireMapNode | undefined) {
-  return Boolean(node && (node.kind === "enemy" || node.kind === "elite" || node.kind === "unknown" || node.kind === "boss"));
-}
+export function isCombatNode(node: SpireMapNode | undefined) { return Boolean(node && (node.kind === "enemy" || node.kind === "elite" || node.kind === "unknown" || node.kind === "boss")); }
 
 function completeSpireNode(state: StudyState, node: SpireMapNode, now: number) {
   const rewarded = claimSpireNodeReward(state, now);
@@ -471,9 +480,7 @@ function getNextIdsForColumn(tierIndex: number, column: number, edges: PathEdge[
   return nextColumns.map((nextColumn) => getNodeId(tierIndex + 1, nextColumn));
 }
 
-function getNodeId(tierIndex: number, column: number) {
-  return `tier-${tierIndex}-${column}-${SPIRE_RATINGS[tierIndex]}`;
-}
+function getNodeId(tierIndex: number, column: number) { return `tier-${tierIndex}-${column}-${SPIRE_RATINGS[tierIndex]}`; }
 
 function assignRoomKinds(seed: number, rows: SpireMapNode[][]) {
   const assignedByOrigin = new Map<string, Set<SpireNodeKind>>();
@@ -620,9 +627,7 @@ function getNodeX(seed: number, tierIndex: number, column: number) {
   return Math.min(MAP_X_MIN + MAP_X_SPREAD, Math.max(MAP_X_MIN, Math.round(base + jitter)));
 }
 
-function getTierIndex(rating: number) {
-  return Math.max(FIRST_TIER, SPIRE_RATINGS.findIndex((row) => row === rating));
-}
+function getTierIndex(rating: number) { return Math.max(FIRST_TIER, SPIRE_RATINGS.findIndex((row) => row === rating)); }
 
 function getRoundQuestionCount(node: SpireMapNode, now: number) {
   if (node.kind === "elite" || node.kind === "boss") {

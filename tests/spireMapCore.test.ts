@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
-import { advanceSpireNode, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, selectSpireNode, SPIRE_RATINGS } from "../lib/spireMapCore";
+import { advanceSpireNode, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, normalizeSpireRun, selectSpireNode, SPIRE_RATINGS } from "../lib/spireMapCore";
 import { defaultState } from "../lib/studyCore";
 import type { SpireNodeKind } from "../types/study";
 
@@ -33,12 +33,29 @@ describe("spireMapCore", () => {
 
   it("applies fixed floor and room assignment rules", () => {
     const run = createSpireRun(2000);
+    const byId = new Map(run.nodes.map((node) => [node.id, node]));
 
     expect(run.nodes.filter((node) => node.rating === FLOOR_ONE).every((node) => node.kind === "enemy")).toBe(true);
     expect(run.nodes.filter((node) => node.rating === FLOOR_NINE).every((node) => node.kind === "treasure")).toBe(true);
     expect(run.nodes.filter((node) => node.rating === FLOOR_FIFTEEN).every((node) => node.kind === "boss")).toBe(true);
     expect(run.nodes.filter((node) => node.rating < FLOOR_SIX).some((node) => node.kind === "elite" || node.kind === "rest")).toBe(false);
     expect(run.nodes.filter((node) => node.rating === FLOOR_FOURTEEN).every((node) => node.kind === "rest")).toBe(true);
+    expect(run.nodes.filter((node) => node.kind === "boss").every((node) => {
+      const incoming = run.nodes.filter((previous) => previous.nextIds.includes(node.id));
+      return incoming.length > 0 && incoming.every((previous) => byId.get(previous.id)?.kind === "rest");
+    })).toBe(true);
+  });
+
+  it("repairs old saved maps that have non-rest rooms before the boss floor", () => {
+    const run = createSpireRun(2100);
+    const savedRun = {
+      ...run,
+      nodes: run.nodes.map((node) => node.rating === FLOOR_FOURTEEN ? { ...node, kind: "enemy" as const } : node)
+    };
+
+    const normalized = normalizeSpireRun(savedRun);
+
+    expect(normalized.nodes.filter((node) => node.rating === FLOOR_FOURTEEN).every((node) => node.kind === "rest")).toBe(true);
   });
 
   it("prevents consecutive elite merchant or rest rooms before the pre-boss rest floor", () => {
