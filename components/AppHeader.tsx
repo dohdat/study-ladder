@@ -5,7 +5,7 @@ import { PlayerStatus } from "./PlayerStatus";
 import { UserMenu } from "./UserMenu";
 import type { UserMenuSection } from "./UserMenu";
 import { STUDY_BLOCKER_MS_PER_MINUTE, useStudyBlockerSettings } from "../hooks/useStudyBlocker";
-import type { CharacterStats, StudyState } from "../types/study";
+import type { ActiveWarriorSkillId, CharacterStats, StudyState } from "../types/study";
 
 const PROGRESS_MAX = 100;
 const MINUTES_DECIMAL_PLACES = 1;
@@ -25,6 +25,7 @@ export function AppHeader(props: {
   state: StudyState;
   setState: React.Dispatch<React.SetStateAction<StudyState>>;
   stats: CharacterStats;
+  useActiveSkill: (skillId: ActiveWarriorSkillId) => void;
 }) {
   const [activeSection, setActiveSection] = useState<UserMenuSection | null>(null);
   return (
@@ -41,7 +42,9 @@ export function AppHeader(props: {
           nextLevelExperience={props.nextLevelExperience}
           onOpenStats={() => setActiveSection("stats")}
           rating={props.rating}
+          state={props.state}
           stats={props.stats}
+          useActiveSkill={props.useActiveSkill}
         />
         <TodayProgress />
       </Group>

@@ -18,13 +18,12 @@ import {
   Tooltip,
   Title
 } from "@mantine/core";
-import { IconArrowRight, IconBolt, IconBulb, IconCheck, IconCode, IconLock, IconPlayerPlay, IconRefresh, IconTerminal2, IconWand, IconX } from "@tabler/icons-react";
+import { IconArrowRight, IconBulb, IconCheck, IconCode, IconLock, IconPlayerPlay, IconRefresh, IconTerminal2, IconWand, IconX } from "@tabler/icons-react";
 import type { OnMount } from "@monaco-editor/react";
 
 import { HighlightedCode } from "./HighlightedCode";
 import { MonsterEncounter } from "./MonsterEncounter";
 import { difficultyLabels } from "../lib/studyCore";
-import { ACTIVE_WARRIOR_SKILLS, canUseActiveWarriorSkill, getActiveWarriorSkill, getWarriorSkillRank } from "../lib/skillCore";
 import type { ActiveWarriorSkillId, ConsoleRunResult, Question, RunResult, StudyState } from "../types/study";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
@@ -284,11 +283,6 @@ function EditorToolbar(props: Parameters<typeof EditorCard>[0]) {
       </Group>
       <Group gap="xs">
         <SetupToolbarActions {...props} />
-        <ActiveSkillButtons
-          disabled={!props.sessionStarted || props.questionFinished || props.running || props.timeRemainingMs <= 0}
-          state={props.state}
-          useActiveSkill={props.actions.useActiveSkill}
-        />
         <RunToolbarActions {...props} />
       </Group>
     </Group>
@@ -332,38 +326,6 @@ function RunToolbarActions(props: Parameters<typeof EditorCard>[0]) {
           <Button size="xs" leftSection={<IconCheck size={ICON_SM} />} loading={props.running} disabled={disabled} onClick={props.actions.submitCode}>Submit</Button>
         </Box>
       </Tooltip>
-    </>
-  );
-}
-
-function ActiveSkillButtons(props: { disabled: boolean; state: StudyState; useActiveSkill: (skillId: ActiveWarriorSkillId) => void }) {
-  const activeSkill = getActiveWarriorSkill(props.state.profile.activeSkill);
-  return (
-    <>
-      {ACTIVE_WARRIOR_SKILLS.map((skill) => {
-        const unlocked = getWarriorSkillRank(props.state.profile.skillRanks, skill.id) > 0;
-        const canUse = canUseActiveWarriorSkill(props.state, skill.id);
-        const disabled = props.disabled || !canUse;
-        const label = unlocked
-          ? `${skill.description} Costs ${skill.cost} mana.`
-          : `Unlock ${skill.name} in the skill tree first.`;
-        return (
-          <Tooltip key={skill.id} label={activeSkill?.id === skill.id ? `${skill.name} is readied.` : label} withArrow>
-            <Box component="span">
-              <Button
-                size="xs"
-                variant={activeSkill?.id === skill.id ? "light" : "default"}
-                color={activeSkill?.id === skill.id ? "yellow" : undefined}
-                leftSection={<IconBolt size={ICON_SM} />}
-                disabled={disabled}
-                onClick={() => props.useActiveSkill(skill.id)}
-              >
-                {skill.name}
-              </Button>
-            </Box>
-          </Tooltip>
-        );
-      })}
     </>
   );
 }

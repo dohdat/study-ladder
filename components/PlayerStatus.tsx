@@ -1,8 +1,9 @@
-import { Box, Group, Paper, Progress, SimpleGrid, Text } from "@mantine/core";
-import { IconBolt, IconHeart, IconSparkles } from "@tabler/icons-react";
+import { ActionIcon, Box, Group, Paper, Progress, SimpleGrid, Stack, Text, Tooltip } from "@mantine/core";
+import { IconBolt, IconDroplet, IconHeart, IconSparkles } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 
-import type { CharacterStats } from "../types/study";
+import { ACTIVE_WARRIOR_SKILLS, canUseActiveWarriorSkill, getActiveWarriorSkill, getWarriorSkillRank } from "../lib/skillCore";
+import type { ActiveWarriorSkillId, CharacterStats, StudyState } from "../types/study";
 import { CoinIcon } from "./CoinIcon";
 
 const PERCENT_MAX = 100;
@@ -12,6 +13,12 @@ const ORANGE_RATING_MIN = 2400;
 const YELLOW_RATING_MIN = 1800;
 const BLUE_RATING_MIN = 1400;
 const AVATAR_SIZE = 58;
+const ACTIVE_SKILL_BUTTON_SIZE = 38;
+const ACTIVE_SKILL_ICON_SIZE = 18;
+const ACTIVE_SKILL_COST_ICON_SIZE = 11;
+const ACTIVE_SKILL_COST_FONT_SIZE = "10px";
+const ACTIVE_SKILL_GAP = 4;
+const ACTIVE_SKILL_MIN_WIDTH = 42;
 const SPRITE_SIZE = 16;
 const BRONZE_GEAR_LEVEL = 3;
 const STEEL_GEAR_LEVEL = 5;
@@ -34,7 +41,9 @@ export function PlayerStatus(props: {
   nextLevelExperience: number;
   onOpenStats?: () => void;
   rating: number;
+  state: StudyState;
   stats: CharacterStats;
+  useActiveSkill: (skillId: ActiveWarriorSkillId) => void;
 }) {
   const healthValue = (props.health / props.maxHealth) * PERCENT_MAX;
   const experienceValue = (props.currentExperience / props.nextLevelExperience) * PERCENT_MAX;
@@ -45,8 +54,6 @@ export function PlayerStatus(props: {
   return (
     <Paper
       withBorder
-      component="button"
-      type="button"
       onClick={props.onOpenStats}
       p="xs"
       style={{
@@ -60,7 +67,10 @@ export function PlayerStatus(props: {
         textAlign: "left"
         }}
     >
-      <AvatarIllustration gear={gear} level={props.level} />
+      <Group gap="xs" wrap="nowrap" align="center">
+        <AvatarIllustration gear={gear} level={props.level} />
+        <ActiveSkillBar state={props.state} useActiveSkill={props.useActiveSkill} />
+      </Group>
       <Box style={{ flex: 1, minWidth: 0 }}>
         <Group justify="space-between" gap="xs" wrap="nowrap" mb={2}>
           <Box>
@@ -87,6 +97,52 @@ export function PlayerStatus(props: {
       </Box>
     </Paper>
   );
+}
+
+function ActiveSkillBar(props: { state: StudyState; useActiveSkill: (skillId: ActiveWarriorSkillId) => void }) {
+  const visibleSkills = ACTIVE_WARRIOR_SKILLS.filter((skill) => getWarriorSkillRank(props.state.profile.skillRanks, skill.id) > 0);
+  const activeSkill = getActiveWarriorSkill(props.state.profile.activeSkill);
+  if (!visibleSkills.length) {
+    return null;
+  }
+  return (
+    <Stack gap={ACTIVE_SKILL_GAP} onClick={(event) => event.stopPropagation()}>
+      {visibleSkills.map((skill) => {
+        const isReadied = activeSkill?.id === skill.id;
+        const disabled = !isReadied && !canUseActiveWarriorSkill(props.state, skill.id);
+        return (
+          <Tooltip key={skill.id} label={isReadied ? `${skill.name} is readied.` : `${skill.description} Costs ${skill.cost} mana.`} withArrow>
+            <Box style={{ minWidth: ACTIVE_SKILL_MIN_WIDTH }}>
+              <ActionIcon
+                aria-label={skill.name}
+                color={isReadied ? "yellow" : "blue"}
+                disabled={disabled}
+                onClick={() => props.useActiveSkill(skill.id)}
+                size={ACTIVE_SKILL_BUTTON_SIZE}
+                variant={isReadied ? "filled" : "default"}
+              >
+                <ActiveSkillIcon skillId={skill.id} />
+              </ActionIcon>
+              <Group gap={2} justify="center" mt={1} wrap="nowrap">
+                <IconDroplet size={ACTIVE_SKILL_COST_ICON_SIZE} color="#4dabf7" />
+                <Text size={ACTIVE_SKILL_COST_FONT_SIZE} c="blue.2" fw={800}>{skill.cost}</Text>
+              </Group>
+            </Box>
+          </Tooltip>
+        );
+      })}
+    </Stack>
+  );
+}
+
+function ActiveSkillIcon(props: { skillId: ActiveWarriorSkillId }) {
+  const paths: Record<ActiveWarriorSkillId, ReactNode> = {
+    powerStrike: <IconBolt size={ACTIVE_SKILL_ICON_SIZE} />,
+    sureCrit: <IconSparkles size={ACTIVE_SKILL_ICON_SIZE} />,
+    tripleStrike: <Text size="xs" fw={900}>x3</Text>,
+    whirlwindAssault: <Text size="xs" fw={900}>x5</Text>
+  };
+  return paths[props.skillId];
 }
 
 function getRatingColor(rating: number) {
