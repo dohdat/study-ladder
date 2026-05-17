@@ -6,3 +6,4 @@ public/monaco/
 tsconfig.tsbuildinfo
 .env*
 !.env.example
+assets/hero_siege/

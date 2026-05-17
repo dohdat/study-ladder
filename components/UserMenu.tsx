@@ -12,19 +12,23 @@ import {
   SimpleGrid,
   Stack,
   Switch,
+  Tabs,
   Text,
   ThemeIcon,
   Tooltip,
   Title
 } from "@mantine/core";
-import { IconBackpack, IconChartBar, IconSettings, IconSparkles, IconSword, IconTrophy, IconUser } from "@tabler/icons-react";
+import { IconBackpack, IconBook, IconChartBar, IconSettings, IconSparkles, IconSword, IconTrophy, IconUser } from "@tabler/icons-react";
 
 import { AchievementsPanel } from "./AchievementsPanel";
 import { CoinAmount } from "./CoinIcon";
 import { InventoryPanel } from "./InventoryPanel";
+import { MONSTER_WIKI_ENTRIES } from "./MonsterEncounter";
+import { RelicIcon } from "./RelicIcon";
 import { WarriorSkillTree } from "./WarriorSkillTree";
 import { questions } from "../data/questions";
 import { useStudyBlockerSettings } from "../hooks/useStudyBlocker";
+import { RELIC_DEFINITIONS } from "../lib/relicCore";
 import {
   EXPERIENCE_PER_LEVEL,
   getAttackDamage,
@@ -39,12 +43,13 @@ import {
   getWarriorSkillBonusTotals,
   spendStatPoint
 } from "../lib/studyCore";
-import type { CharacterStatKey, StudyState } from "../types/study";
+import type { CharacterStatKey, ItemModifierKey, Relic, StudyState } from "../types/study";
 
 const ICON_SIZE = 16;
 const MENU_WIDTH = 180;
 const ACHIEVEMENTS_MODAL_SIZE = 920;
 const SKILLS_MODAL_SIZE = 920;
+const WIKI_MODAL_SIZE = 1040;
 const MODAL_TRANSITION_DURATION = 0;
 const PROGRESS_MAX = 100;
 const DAILY_MINUTES_MIN = 0;
@@ -61,6 +66,9 @@ const STAT_TEXT = "#f1ead7";
 const STAT_MUTED = "#9f9888";
 const STAT_PLUS_BG = "#7b1717";
 const STAT_PLUS_BORDER = "1px solid #caa36a";
+const WIKI_MONSTER_IMAGE_SIZE = 56;
+const WIKI_RELIC_ICON_SIZE = 42;
+const WIKI_GRID_MIN_WIDTH = 220;
 const STAT_ROWS: Array<{ key: CharacterStatKey; label: string }> = [
   { key: "strength", label: "Strength" },
   { key: "constitution", label: "Constitution" },
@@ -80,6 +88,7 @@ const USER_MENU_ITEMS = [
   { id: "skills", icon: IconSword, label: "Skills" },
   { id: "stats", icon: IconChartBar, label: "Stats" },
   { id: "achievements", icon: IconTrophy, label: "Achievements" },
+  { id: "wiki", icon: IconBook, label: "Wiki" },
   { id: "settings", icon: IconSettings, label: "Settings" }
 ] as const;
 
@@ -123,6 +132,9 @@ function getModalSize(section: UserMenuSection | null) {
   if (section === "skills") {
     return SKILLS_MODAL_SIZE;
   }
+  if (section === "wiki") {
+    return WIKI_MODAL_SIZE;
+  }
   return "lg";
 }
 
@@ -138,6 +150,9 @@ function UserModalContent(props: { section: UserMenuSection | null; state: Study
   }
   if (props.section === "achievements") {
     return <AchievementsPanel state={props.state} />;
+  }
+  if (props.section === "wiki") {
+    return <WikiPanel />;
   }
   if (props.section === "settings") {
     return <SettingsPanel state={props.state} />;
@@ -279,6 +294,100 @@ function D2ValueRow(props: { label: string; value: React.ReactNode }) {
       <Text size="sm" fw={800} c={STAT_TEXT}>{props.value}</Text>
     </Group>
   );
+}
+
+function WikiPanel() {
+  return (
+    <Tabs defaultValue="monsters" keepMounted={false}>
+      <Tabs.List grow mb="md">
+        <Tabs.Tab value="monsters">Monsters</Tabs.Tab>
+        <Tabs.Tab value="relics">Relics</Tabs.Tab>
+      </Tabs.List>
+      <Tabs.Panel value="monsters">
+        <MonsterWiki />
+      </Tabs.Panel>
+      <Tabs.Panel value="relics">
+        <RelicWiki />
+      </Tabs.Panel>
+    </Tabs>
+  );
+}
+
+function MonsterWiki() {
+  return (
+    <Stack gap="md">
+      <Group justify="space-between">
+        <Box>
+          <Title order={4}>Monster Catalog</Title>
+          <Text size="sm" c="dimmed">{MONSTER_WIKI_ENTRIES.length} monsters, including generated variants.</Text>
+        </Box>
+        <Badge variant="light">{MONSTER_WIKI_ENTRIES.length}</Badge>
+      </Group>
+      <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }}>
+        {MONSTER_WIKI_ENTRIES.map((monster) => (
+          <Box key={monster.id} p="sm" style={{ background: "var(--mantine-color-dark-7)", border: "1px solid var(--mantine-color-dark-4)", borderRadius: 6, minWidth: WIKI_GRID_MIN_WIDTH }}>
+            <Group gap="sm" wrap="nowrap">
+              <Box style={{ alignItems: "center", background: "#08070b", border: "1px solid #8a744c", display: "flex", flex: `0 0 ${WIKI_MONSTER_IMAGE_SIZE}px`, height: WIKI_MONSTER_IMAGE_SIZE, justifyContent: "center", width: WIKI_MONSTER_IMAGE_SIZE }}>
+                <Box alt="" component="img" src={monster.art.src} style={{ display: "block", filter: monster.filter, height: "100%", imageRendering: "pixelated", objectFit: "contain", width: "100%" }} />
+              </Box>
+              <Box>
+                <Text size="sm" fw={800}>{monster.name}</Text>
+                <Text size="xs" c="dimmed">{monster.id}</Text>
+              </Box>
+            </Group>
+          </Box>
+        ))}
+      </SimpleGrid>
+    </Stack>
+  );
+}
+
+function RelicWiki() {
+  return (
+    <Stack gap="md">
+      <Group justify="space-between">
+        <Box>
+          <Title order={4}>Relic Catalog</Title>
+          <Text size="sm" c="dimmed">{RELIC_DEFINITIONS.length} relics across all rarities.</Text>
+        </Box>
+        <Badge variant="light">{RELIC_DEFINITIONS.length}</Badge>
+      </Group>
+      <SimpleGrid cols={{ base: 1, sm: 2 }}>
+        {RELIC_DEFINITIONS.map((relic) => (
+          <Box key={`${relic.id}-${relic.rarity}`} p="sm" style={{ background: "var(--mantine-color-dark-7)", border: "1px solid var(--mantine-color-dark-4)", borderRadius: 6 }}>
+            <Group gap="sm" align="flex-start" wrap="nowrap">
+              <RelicIcon relic={relic} size={WIKI_RELIC_ICON_SIZE} />
+              <Box>
+                <Group gap="xs" mb={2}>
+                  <Text size="sm" fw={800}>{relic.name}</Text>
+                  <Badge size="xs" variant="light">{relic.rarity}</Badge>
+                  {relic.source !== "any" && <Badge size="xs" color="red" variant="outline">{relic.source}</Badge>}
+                </Group>
+                <Text size="xs" c="dimmed">{relic.description}</Text>
+                <Text size="xs" mt={4} c="yellow.3">{formatRelicModifiers(relic)}</Text>
+              </Box>
+            </Group>
+          </Box>
+        ))}
+      </SimpleGrid>
+    </Stack>
+  );
+}
+
+function formatRelicModifiers(relic: Relic) {
+  const modifiers = relic.modifiers || [];
+  if (!modifiers.length) {
+    return "No stat modifiers";
+  }
+  return modifiers.map((modifier) => `${formatModifierKey(modifier.key)} ${formatModifierValue(modifier.value)}`).join(", ");
+}
+
+function formatModifierKey(key: ItemModifierKey) {
+  return key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function formatModifierValue(value: number) {
+  return value > 0 ? `+${value}` : `${value}`;
 }
 
 function SettingsPanel(props: { state: StudyState }) {

@@ -1,8 +1,40 @@
 import { Badge, Box, Group, Paper, Progress, Text, Tooltip } from "@mantine/core";
+import type { StaticImageData } from "next/image";
 
 import { getMonsterCurrentHealth } from "../lib/combatCore";
 import { getMonsterMaxHealth, getUniqueMonsterBonusDescription, getUniqueMonsterBonuses, getUniqueMonsterName } from "../lib/monsterCore";
 import type { Difficulty, Question, StudyState } from "../types/study";
+import batArt from "../assets/hero_siege_monsters/bat.png";
+import bigEntArt from "../assets/hero_siege_monsters/big-ent.png";
+import bogMushroomArt from "../assets/hero_siege_monsters/bog-mushroom.png";
+import caveSlimeArt from "../assets/hero_siege_monsters/cave-slime.png";
+import cryptDollArt from "../assets/hero_siege_monsters/crypt-doll.png";
+import cursedDollArt from "../assets/hero_siege_monsters/cursed-doll.png";
+import cyclopsArt from "../assets/hero_siege_monsters/cyclops.png";
+import cyclopsGhostArt from "../assets/hero_siege_monsters/cyclops-ghost.png";
+import demonKingArt from "../assets/hero_siege_monsters/demon-king.png";
+import demonZealotArt from "../assets/hero_siege_monsters/demon-zealot.png";
+import desertBeastArt from "../assets/hero_siege_monsters/desert-beast.png";
+import entArt from "../assets/hero_siege_monsters/ent.png";
+import entBossArt from "../assets/hero_siege_monsters/ent-boss.png";
+import frostGoblinArt from "../assets/hero_siege_monsters/frost-goblin.png";
+import frostSkeletonArt from "../assets/hero_siege_monsters/frost-skeleton.png";
+import ghostArcherArt from "../assets/hero_siege_monsters/ghost-archer.png";
+import goblinArt from "../assets/hero_siege_monsters/goblin.png";
+import goblinBomberArt from "../assets/hero_siege_monsters/goblin-bomber.png";
+import goblinShamanArt from "../assets/hero_siege_monsters/goblin-shaman.png";
+import graveZombieArt from "../assets/hero_siege_monsters/grave-zombie.png";
+import hellBeastArt from "../assets/hero_siege_monsters/hell-beast.png";
+import samuraiSkeletonArt from "../assets/hero_siege_monsters/samurai-skeleton.png";
+import sandWaspArt from "../assets/hero_siege_monsters/sand-wasp.png";
+import sheepKingArt from "../assets/hero_siege_monsters/sheep-king.png";
+import skeletonGhostArt from "../assets/hero_siege_monsters/skeleton-ghost.png";
+import skeletonMageArt from "../assets/hero_siege_monsters/skeleton-mage.png";
+import smallSpiderArt from "../assets/hero_siege_monsters/small-spider.png";
+import spiderCritterArt from "../assets/hero_siege_monsters/spider-critter.png";
+import steveBossArt from "../assets/hero_siege_monsters/steve-boss.png";
+import zombieArt from "../assets/hero_siege_monsters/zombie.png";
+import zombieCrawlerArt from "../assets/hero_siege_monsters/zombie-crawler.png";
 
 const RATING_MAX = 3500;
 const PERCENT_MAX = 100;
@@ -11,268 +43,100 @@ const ORANGE_RATING_MIN = 2400;
 const YELLOW_RATING_MIN = 1800;
 const BLUE_RATING_MIN = 1400;
 const AVATAR_SIZE = 88;
-const PIXEL_SIZE = 3;
-const GRID_CELLS = 24;
-const PIXEL_GAP = 0;
 const AVATAR_BORDER_WIDTH = 2;
 const AVATAR_SHADOW_WIDTH = 2;
-
-type MonsterKind = "brute" | "demon" | "dragon" | "ranger" | "reaper" | "skeleton" | "slime" | "snake";
-
-type MonsterPalette = {
-  accent: string;
-  light: string;
-  mid: string;
-  outline: string;
-  shade: string;
-};
+const AVATAR_BACKGROUND = "#08070b";
+const AVATAR_BORDER_COLOR = "#8a744c";
+const AVATAR_SHADOW_COLOR = "#1f111a";
+const HASH_INITIAL = 7;
+const HASH_MULTIPLIER = 31;
+const HASH_MODULUS = 1000000007;
 
 type MonsterDefinition = {
-  form: string[];
+  art: StaticImageData;
+  filter?: string;
   name: string;
-  palette: MonsterPalette;
 };
 
-const PIXEL_COLOR_KEYS: Record<string, keyof MonsterPalette> = {
-  A: "accent",
-  L: "light",
-  M: "mid",
-  O: "outline",
-  S: "shade"
+export type MonsterWikiEntry = MonsterDefinition & {
+  id: string;
 };
+
+const MONSTER_VARIANTS = [
+  { filter: "none", idPrefix: "", namePrefix: "" },
+  { filter: "hue-rotate(38deg) saturate(1.22) brightness(1.08)", idPrefix: "ember", namePrefix: "Ember" },
+  { filter: "hue-rotate(215deg) saturate(1.35) brightness(0.94)", idPrefix: "void", namePrefix: "Void" }
+] as const;
+
+const BASE_MONSTERS = {
+  arcaneCube: { art: cursedDollArt, name: "Cursed Doll" },
+  bladeImp: { art: demonZealotArt, name: "Demon Zealot" },
+  bloodOoze: { art: graveZombieArt, name: "Grave Zombie" },
+  boneSoldier: { art: skeletonMageArt, name: "Skeleton Mage" },
+  carrionCrawler: { art: zombieCrawlerArt, name: "Zombie Crawler" },
+  caveSpider: { art: smallSpiderArt, name: "Small Spider" },
+  coilViper: { art: sandWaspArt, name: "Sand Wasp" },
+  coralCrusher: { art: desertBeastArt, name: "Desert Beast" },
+  emberSkull: { art: batArt, name: "Bat" },
+  frostWraith: { art: frostSkeletonArt, name: "Frost Skeleton" },
+  gildedMinotaur: { art: cyclopsArt, name: "Cyclops" },
+  goblinRanger: { art: goblinArt, name: "Goblin" },
+  haloSeraph: { art: steveBossArt, name: "Steve Boss" },
+  hornedFiend: { art: demonKingArt, name: "Demon King" },
+  livingTome: { art: bogMushroomArt, name: "Bog Mushroom" },
+  manyEyedHorror: { art: cryptDollArt, name: "Crypt Doll" },
+  moonReaper: { art: ghostArcherArt, name: "Ghost Archer" },
+  mossSlime: { art: caveSlimeArt, name: "Cave Slime" },
+  ogreMystic: { art: cyclopsGhostArt, name: "Cyclops Ghost" },
+  reefStalker: { art: hellBeastArt, name: "Hell Beast" },
+  runeGolem: { art: entBossArt, name: "Ent Boss" },
+  scarabHusk: { art: spiderCritterArt, name: "Spider Critter" },
+  shellWarlock: { art: skeletonGhostArt, name: "Skeleton Ghost" },
+  shieldCaptain: { art: samuraiSkeletonArt, name: "Samurai Skeleton" },
+  stoneBrute: { art: bigEntArt, name: "Big Ent" },
+  swampLurker: { art: zombieArt, name: "Zombie" },
+  thornBeast: { art: entArt, name: "Ent" },
+  venomWasp: { art: frostGoblinArt, name: "Frost Goblin" },
+  voidDragon: { art: sheepKingArt, name: "Sheep King" },
+  voidTentacle: { art: goblinBomberArt, name: "Goblin Bomber" },
+  watcherOrb: { art: goblinShamanArt, name: "Goblin Shaman" }
+} satisfies Record<string, MonsterDefinition>;
+
+type BaseMonsterKind = keyof typeof BASE_MONSTERS;
+type MonsterKind = string;
+
+const MONSTERS: Record<MonsterKind, MonsterDefinition> = createMonsterCatalog(BASE_MONSTERS);
+export const MONSTER_WIKI_ENTRIES: MonsterWikiEntry[] = Object.entries(MONSTERS).map(([id, monster]) => ({ id, ...monster }));
 
 const QUESTION_MONSTERS: Record<string, MonsterKind> = {
-  "array-first-duplicate": "slime",
-  "array-merge-intervals": "brute",
-  "array-two-sum": "ranger",
-  "binary-search-rotated": "reaper",
-  "dp-climb-cost": "brute",
-  "dp-coin-change": "dragon",
-  "graph-shortest-path": "reaper",
-  "heap-top-k": "demon",
-  "stack-valid-brackets": "skeleton",
-  "string-longest-unique": "snake",
-  "string-valid-palindrome": "skeleton",
-  "tree-level-order": "demon"
+  "array-first-duplicate": "mossSlime",
+  "array-merge-intervals": "stoneBrute",
+  "array-two-sum": "goblinRanger",
+  "binary-search-rotated": "moonReaper",
+  "dp-climb-cost": "shieldCaptain",
+  "dp-coin-change": "voidDragon",
+  "graph-shortest-path": "moonReaper",
+  "heap-top-k": "hornedFiend",
+  "stack-valid-brackets": "boneSoldier",
+  "string-longest-unique": "coilViper",
+  "string-valid-palindrome": "boneSoldier",
+  "tree-level-order": "hornedFiend"
 };
 
-const FALLBACK_MONSTERS: Record<Difficulty, MonsterKind> = {
-  1: "slime",
-  2: "ranger",
-  3: "brute",
-  4: "demon",
-  5: "dragon"
+const BASE_MONSTER_POOLS: Record<Difficulty, BaseMonsterKind[]> = {
+  1: ["mossSlime", "scarabHusk", "bloodOoze", "carrionCrawler", "coilViper", "bladeImp"],
+  2: ["goblinRanger", "caveSpider", "venomWasp", "reefStalker", "swampLurker", "watcherOrb"],
+  3: ["stoneBrute", "coralCrusher", "shieldCaptain", "shellWarlock", "emberSkull", "thornBeast", "livingTome"],
+  4: ["hornedFiend", "moonReaper", "boneSoldier", "frostWraith", "voidTentacle", "ogreMystic"],
+  5: ["voidDragon", "gildedMinotaur", "manyEyedHorror", "runeGolem", "arcaneCube", "haloSeraph"]
 };
 
-const MONSTERS: Record<MonsterKind, MonsterDefinition> = {
-  slime: {
-    name: "Moss Slime",
-    palette: palette("#17351f", "#225f34", "#45a54b", "#8de96f", "#7b1f32"),
-    form: frame([
-      "........OOOOOO........",
-      "......OOOLLLLOO.......",
-      ".....OOLLLLLLLOO......",
-      "....OOLLLLLLLLLLO.....",
-      "...OOLLLLLLLLLLLLO....",
-      "...OLLLLLAAALLLLLO....",
-      "..OLLLLLAAMMALLLLO....",
-      "..OLLLLLAAMMALLLLO....",
-      ".OLLLLLMMMMMSSLLLO....",
-      ".OLLLLMMMMSSSSSLLO....",
-      ".OLLLMMMSSSSSSSMO.....",
-      "..OLMMMSSSSSSMMO......",
-      "...OOMMMMMMMOOO.......",
-      ".....OOOMMMOO.........",
-      "......OO..OO..........",
-      ".....OO....OO.........",
-      "......................",
-      "......................",
-      "......................",
-      "......................"
-    ])
-  },
-  ranger: {
-    name: "Goblin Ranger",
-    palette: palette("#10251a", "#1f6a37", "#35b34a", "#79ef61", "#c46b22"),
-    form: frame([
-      "............AA........",
-      "...........AA.........",
-      ".......OOOOAA.........",
-      "......OMMOOA..........",
-      ".....OMLLMO...........",
-      "....OMLAALMO..........",
-      "....OMMMMOO....A......",
-      "...OOMMSMMOO..AA......",
-      "...OMMSSSMMOOAA.......",
-      "....OMSSSSMMOA........",
-      ".....OMMMMMOA.........",
-      "....OOOMMMOO..........",
-      "...OO..MMM..OO........",
-      ".......MSSM...........",
-      "......OO..OO..........",
-      ".....OO....OO.........",
-      "......................",
-      "......................",
-      "......................",
-      "......................"
-    ])
-  },
-  snake: {
-    name: "Coil Viper",
-    palette: palette("#2c160f", "#773a2b", "#c97848", "#ffbf87", "#ffec99"),
-    form: frame([
-      "..............OOOO....",
-      "............OOLAAO....",
-      "...........OLLLMMO....",
-      "..........OLLLSSO.....",
-      ".........OLLLSO.......",
-      "........OLLLSO........",
-      ".......OLLLSO.........",
-      "......OLLLSO..........",
-      ".....OLLLSO...........",
-      "....OLLLSOOO..........",
-      "...OLLLSOOMMOO........",
-      "..OLLLSOOMSSMMO.......",
-      "..OLLSOOMSSSSMO.......",
-      "...OOOMMSSSSMMO.......",
-      ".....OOMMMMMOO........",
-      ".......OOSSOO.........",
-      "......................",
-      "......................",
-      "......................",
-      "......................"
-    ])
-  },
-  skeleton: {
-    name: "Bone Soldier",
-    palette: palette("#191527", "#6f6680", "#b9b0a4", "#f0e8d8", "#8fb3ff"),
-    form: frame([
-      "........OOOOOO........",
-      ".......OLLLLLO........",
-      "......OLMAAMLO........",
-      "......OLMMMLOO....A...",
-      ".......OLMMO......A...",
-      ".....OOOMMMOO.....A...",
-      "....OMMOMMMOMM....A...",
-      "...OMMOOMMMOOMM...A...",
-      "..OMMO..MMM..MMO.AA...",
-      ".......OMMMO...AAA....",
-      "........MMMO..........",
-      ".......OMMMO..........",
-      "......OM...MO.........",
-      ".....OM.....MO........",
-      "....OO.......OO.......",
-      "...OO.........OO......",
-      "......................",
-      "......................",
-      "......................",
-      "......................"
-    ])
-  },
-  brute: {
-    name: "Stone Brute",
-    palette: palette("#2a2430", "#625957", "#a89a93", "#d8cec8", "#ffcf5a"),
-    form: frame([
-      ".......OOOOOOOO.......",
-      ".....OOOMMMMMMOO......",
-      "....OOMMLLLLMMMOO.....",
-      "...OMMLSSSSSLLMMO.....",
-      "..OMMMSLAAALSMMMO.....",
-      "..OMMMLLLLLLLMMMO.....",
-      ".OMMMMLSSSSSLMMMOO....",
-      ".OMMMLLLLLLLLLMMO.....",
-      "OMMMSSLLLLLLSSMMMO....",
-      "OMMS..LLLLLL..SMMO....",
-      ".OO...LSSSSL...OO.....",
-      "......LSSSSL..........",
-      ".....OMMMMMMO.........",
-      "....OO.....OO.........",
-      "...OO.......OO........",
-      "......................",
-      "......................",
-      "......................",
-      "......................",
-      "......................"
-    ])
-  },
-  demon: {
-    name: "Horned Fiend",
-    palette: palette("#24090b", "#761616", "#c92a2a", "#ff6b6b", "#ffd35a"),
-    form: frame([
-      "O....................O",
-      ".O......OOOO......O...",
-      "..O...OOMMMOO...O.....",
-      "...O.OMSSSSMO.O.......",
-      "....OMMLLLLMMO........",
-      "...OMMLAAALLMMO.......",
-      "..OMMMMMMMMMMMMO......",
-      ".OMMMMAAAAAMMMMOO.....",
-      "OMMMMLSSSSLMMMMOA.....",
-      "OMMMMMLLLLMMMMMOA.....",
-      ".OMMMMMMMMMMMMO.AA....",
-      "..OMMSSMMSSMMO.AA.....",
-      "...OOMMMMMMOO.AA......",
-      "..OO.MM..MM.OO........",
-      ".....SS..SS...........",
-      "....OO....OO..........",
-      "...OO......OO.........",
-      "......................",
-      "......................",
-      "......................"
-    ])
-  },
-  reaper: {
-    name: "Moon Reaper",
-    palette: palette("#0b0616", "#1f1238", "#4c1d95", "#8b5cf6", "#93c5fd"),
-    form: frame([
-      ".............AAAAA....",
-      "...........AALLLLA....",
-      "..........AA....LA....",
-      ".......OOOOO.....A....",
-      "......OMMMMOO....A....",
-      ".....OMMSSMMMO...A....",
-      "....OMMSAASMMOAAAA....",
-      "....OMMSSSSMMO........",
-      "...OMMSSLLSSMMO.......",
-      "...OMMLLSSLLMMO.......",
-      "....OMMMMMMMMMO.......",
-      ".....OMMSSMMMO........",
-      "......OMMMMMO.........",
-      ".....OO.MMM.OO........",
-      "....OO..SSS..OO.......",
-      "........S.S...........",
-      ".......OO.OO..........",
-      "......................",
-      "......................",
-      "......................"
-    ])
-  },
-  dragon: {
-    name: "Void Dragon",
-    palette: palette("#100318", "#3b0a45", "#862e9c", "#f06595", "#66d9e8"),
-    form: frame([
-      "O........AAA........O.",
-      ".O......ALLA......O...",
-      "..O...OALLLLAO...O....",
-      "...O.OMSSSSMMO.O......",
-      "....OMMLLLLMMO........",
-      "...OMMLAAALLMMO.......",
-      "..OMMMMMMMMMMMO.......",
-      ".OMMMMAAAAAMMMMOO.....",
-      "OMMMMLSSSSLMMMMOA.....",
-      "OMMMMMLLLLMMMMMOA.....",
-      "OMMMMMMMMMMMMMMOA.....",
-      ".OMSSSSMMSSSSMO.AA....",
-      "A.OOMMMMMMMMOO.AA.....",
-      "AAO.MMSSMMSS.OAA......",
-      ".A..MM..MM..M.A.......",
-      "....SS..SS..S.........",
-      "...OO....OO..OO.......",
-      "..OO......OO..OO......",
-      "......................",
-      "......................"
-    ])
-  }
+const MONSTER_POOLS: Record<Difficulty, MonsterKind[]> = {
+  1: expandMonsterPool(BASE_MONSTER_POOLS[1]),
+  2: expandMonsterPool(BASE_MONSTER_POOLS[2]),
+  3: expandMonsterPool(BASE_MONSTER_POOLS[3]),
+  4: expandMonsterPool(BASE_MONSTER_POOLS[4]),
+  5: expandMonsterPool(BASE_MONSTER_POOLS[5])
 };
 
 export function MonsterEncounter(props: { question: Question; state: StudyState }) {
@@ -329,58 +193,71 @@ function UniqueBonusBadge(props: { bonus: string; color: string }) {
 }
 
 function MonsterAvatar(props: { monster: MonsterDefinition }) {
-  const colors = props.monster.palette;
-  const pixels = getMonsterPixels(props.monster);
   return (
     <Box
       aria-hidden
       style={{
-        background: colors.outline,
-        border: `${AVATAR_BORDER_WIDTH}px solid ${colors.light}`,
-        boxShadow: `0 0 0 ${AVATAR_SHADOW_WIDTH}px ${colors.outline}`,
-        display: "grid",
+        alignItems: "center",
+        background: AVATAR_BACKGROUND,
+        border: `${AVATAR_BORDER_WIDTH}px solid ${AVATAR_BORDER_COLOR}`,
+        boxShadow: `0 0 0 ${AVATAR_SHADOW_WIDTH}px ${AVATAR_SHADOW_COLOR}`,
+        display: "flex",
         flex: `0 0 ${AVATAR_SIZE}px`,
-        gap: PIXEL_GAP,
-        gridTemplateColumns: `repeat(${GRID_CELLS}, ${PIXEL_SIZE}px)`,
         height: AVATAR_SIZE,
+        justifyContent: "center",
         padding: 0,
-        placeContent: "center",
         width: AVATAR_SIZE
       }}
     >
-      {pixels.map((pixel, index) => (
-        <Box
-          key={`${pixel}-${index}`}
-          style={{
-            backgroundColor: getPixelColor(pixel, colors),
-            height: PIXEL_SIZE,
-            width: PIXEL_SIZE
-          }}
-        />
-      ))}
+      <Box
+        alt=""
+        component="img"
+        src={props.monster.art.src}
+        style={{
+          display: "block",
+          filter: props.monster.filter,
+          height: "100%",
+          imageRendering: "pixelated",
+          objectFit: "contain",
+          width: "100%"
+        }}
+      />
     </Box>
   );
 }
 
-function palette(outline: string, shade: string, mid: string, light: string, accent: string): MonsterPalette {
-  return { accent, light, mid, outline, shade };
-}
-
-function frame(rows: string[]) {
-  return ["........................", "........................", ...rows.map((row) => `.${row}.`), "........................", "........................"];
-}
-
 function getMonsterDefinition(question: Question) {
-  return MONSTERS[QUESTION_MONSTERS[question.id] || FALLBACK_MONSTERS[question.difficulty]];
+  return MONSTERS[QUESTION_MONSTERS[question.id] || pickMonsterKind(question.id, MONSTER_POOLS[question.difficulty])];
 }
 
-function getMonsterPixels(monster: MonsterDefinition) {
-  return monster.form.join("").split("");
+function createMonsterCatalog(baseMonsters: Record<BaseMonsterKind, MonsterDefinition>) {
+  return Object.fromEntries(
+    Object.entries(baseMonsters).flatMap(([id, monster]) => MONSTER_VARIANTS.map((variant) => [
+      getVariantMonsterId(variant.idPrefix, id),
+      {
+        ...monster,
+        filter: variant.filter,
+        name: getVariantMonsterName(variant.namePrefix, monster.name)
+      }
+    ]))
+  );
 }
 
-function getPixelColor(pixel: string, colors: MonsterPalette) {
-  const colorKey = PIXEL_COLOR_KEYS[pixel];
-  return colorKey ? colors[colorKey] : "transparent";
+function expandMonsterPool(pool: BaseMonsterKind[]) {
+  return pool.flatMap((id) => MONSTER_VARIANTS.map((variant) => getVariantMonsterId(variant.idPrefix, id)));
+}
+
+function getVariantMonsterId(prefix: string, id: string) {
+  return prefix ? `${prefix}${id[0].toUpperCase()}${id.slice(1)}` : id;
+}
+
+function getVariantMonsterName(prefix: string, name: string) {
+  return prefix ? `${prefix} ${name}` : name;
+}
+
+function pickMonsterKind(seed: string, pool: MonsterKind[]) {
+  const hash = [...seed].reduce((total, character) => ((total * HASH_MULTIPLIER) + character.charCodeAt(0)) % HASH_MODULUS, HASH_INITIAL);
+  return pool[hash % pool.length] || pool[0];
 }
 
 function getRatingColor(rating: number) {
