@@ -1,11 +1,12 @@
 import { Badge, Box, Button, Group, SimpleGrid, Stack, Text } from "@mantine/core";
 
 import { CoinAmount } from "./CoinIcon";
+import { HeroSiegeEquipmentIcon, HeroSiegePotionIcon } from "./HeroSiegeItemIcon";
 import { ItemSummary } from "./InventoryPanel";
 import { RelicIcon } from "./RelicIcon";
 import { buyShopItem } from "../lib/shopCore";
 import { getMaxHealth, getMaxMana } from "../lib/studyCore";
-import type { EquipmentSlot, ItemRarity, Relic, ShopItem, StudyState } from "../types/study";
+import type { Relic, ShopItem, StudyState } from "../types/study";
 
 const SHOP_COLUMNS = { base: 1, sm: 2 };
 const SHOP_PANEL_BG = "radial-gradient(circle at 50% 18%, #332f28 0%, #1b1a17 52%, #090909 100%)";
@@ -14,32 +15,6 @@ const SHOP_CARD_BG = "linear-gradient(145deg, #0b0b0a, #24211c)";
 const SHOP_CARD_BORDER = "1px solid #7b6845";
 const SHOP_CARD_SHADOW = "inset 0 0 0 1px #050505, 0 1px 4px rgba(0, 0, 0, 0.45)";
 const SHOP_ICON_SIZE = 58;
-const SHOP_ICON_BOX_SHADOW = "inset 0 0 0 2px #050505";
-const HASH_SEED = 2166136261;
-const HASH_MULTIPLIER = 16777619;
-const VARIANT_COUNT = 4;
-const VARIANT_EVEN_DIVISOR = 2;
-const VARIANT_HIGH_MIN = 2;
-const ARMOR_NARROW_WIDTH = 8;
-const ARMOR_WIDE_WIDTH = 10;
-const ARMOR_NARROW_X = 4;
-const ARMOR_WIDE_X = 3;
-const AXE_VARIANT_REMAINDER = 1;
-
-type ArtColors = {
-  accent: string;
-  dark: string;
-  light: string;
-  mid: string;
-};
-
-const RARITY_ART_COLORS: Record<ItemRarity, ArtColors> = {
-  common: { accent: "#adb5bd", dark: "#161616", light: "#e9ecef", mid: "#868e96" },
-  epic: { accent: "#f06595", dark: "#1b0f2d", light: "#d0bfff", mid: "#845ef7" },
-  legendary: { accent: "#fff3bf", dark: "#2b1d09", light: "#ffd43b", mid: "#f08c00" },
-  rare: { accent: "#a5d8ff", dark: "#071829", light: "#74c0fc", mid: "#228be6" },
-  uncommon: { accent: "#b2f2bb", dark: "#0b2612", light: "#69db7c", mid: "#2f9e44" }
-} as const;
 
 export function ShopPanel(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   return (
@@ -84,22 +59,11 @@ function ShopCard(props: { item: ShopItem; state: StudyState; setState: React.Di
 
 function ShopItemArt(props: { item: ShopItem }) {
   if (props.item.kind === "relic") {
-    return (
-      <Box style={{ alignItems: "center", background: "#050505", border: "1px solid #8a744c", boxShadow: SHOP_ICON_BOX_SHADOW, display: "flex", flex: `0 0 ${SHOP_ICON_SIZE}px`, height: SHOP_ICON_SIZE, justifyContent: "center", width: SHOP_ICON_SIZE }}>
-        <RelicIcon relic={props.item.relic} size={44} />
-      </Box>
-    );
+    return <RelicIcon relic={props.item.relic} size={SHOP_ICON_SIZE} />;
   }
-  const colors = props.item.kind === "equipment" ? RARITY_ART_COLORS[props.item.item.rarity] : getPotionColors(props.item.type);
-  const seed = props.item.kind === "equipment" ? props.item.item.id : props.item.id;
-  const variant = getArtVariant(seed);
-  return (
-    <Box style={{ background: colors.dark, border: `1px solid ${colors.mid}`, boxShadow: SHOP_ICON_BOX_SHADOW, flex: `0 0 ${SHOP_ICON_SIZE}px`, height: SHOP_ICON_SIZE, width: SHOP_ICON_SIZE }}>
-      <svg viewBox="0 0 16 16" width={SHOP_ICON_SIZE} height={SHOP_ICON_SIZE} shapeRendering="crispEdges" aria-hidden>
-        {props.item.kind === "equipment" ? <EquipmentPixels colors={colors} slot={props.item.item.slot} variant={variant} /> : <PotionPixels colors={colors} variant={variant} />}
-      </svg>
-    </Box>
-  );
+  return props.item.kind === "equipment"
+    ? <HeroSiegeEquipmentIcon item={props.item.item} size={SHOP_ICON_SIZE} />
+    : <HeroSiegePotionIcon type={props.item.type} size={SHOP_ICON_SIZE} />;
 }
 
 function getShopSummary(item: ShopItem) {
@@ -120,136 +84,6 @@ function RelicSummary(props: { relic: Relic }) {
       <Text size="10px" c="dimmed">{props.relic.description}</Text>
     </Box>
   );
-}
-
-function getPotionColors(type: Extract<ShopItem, { kind: "consumable" }>["type"]) {
-  if (type === "health") {
-    return { accent: "#ffe3e3", dark: "#25090d", light: "#ff8787", mid: "#e03131" };
-  }
-  return { accent: "#d0ebff", dark: "#071829", light: "#74c0fc", mid: "#1c7ed6" };
-}
-
-function PotionPixels(props: { colors: ArtColors; variant: number }) {
-  const hasTallNeck = props.variant % VARIANT_EVEN_DIVISOR === 0;
-  const isWide = props.variant > VARIANT_HIGH_MIN;
-  return (
-    <>
-      <rect x={hasTallNeck ? "7" : "6"} y="1" width={hasTallNeck ? "2" : "4"} height="2" fill={props.colors.accent} />
-      <rect x="5" y="3" width="6" height="2" fill={props.colors.light} />
-      <rect x={isWide ? "3" : "4"} y="5" width={isWide ? "10" : "8"} height="8" fill={props.colors.mid} />
-      <rect x="5" y="6" width="2" height="2" fill={props.colors.light} />
-      <rect x="10" y="8" width="1" height="4" fill={props.colors.dark} />
-      <rect x="5" y="13" width="6" height="1" fill={props.colors.accent} />
-    </>
-  );
-}
-
-function EquipmentPixels(props: { colors: ArtColors; slot: EquipmentSlot; variant: number }) {
-  if (props.slot === "feet") {
-    return <BootPixels colors={props.colors} variant={props.variant} />;
-  }
-  if (props.slot === "headgear") {
-    return <HelmPixels colors={props.colors} variant={props.variant} />;
-  }
-  if (props.slot === "armor") {
-    return <ArmorPixels colors={props.colors} variant={props.variant} />;
-  }
-  if (props.slot === "mainHand" || props.slot === "offHand") {
-    return <WeaponPixels colors={props.colors} variant={props.variant} />;
-  }
-  return <AccessoryPixels colors={props.colors} variant={props.variant} />;
-}
-
-function WeaponPixels(props: { colors: ArtColors; variant: number }) {
-  const isAxe = props.variant % VARIANT_EVEN_DIVISOR === AXE_VARIANT_REMAINDER;
-  return (
-    <>
-      <rect x="10" y="1" width="2" height={isAxe ? "9" : "7"} fill={props.colors.light} />
-      {isAxe ? <rect x="7" y="3" width="4" height="4" fill={props.colors.accent} /> : null}
-      <rect x="9" y="7" width="4" height="2" fill={props.colors.accent} />
-      <rect x="7" y="9" width="2" height="2" fill={props.colors.mid} />
-      <rect x="5" y="11" width="2" height="3" fill={props.colors.mid} />
-    </>
-  );
-}
-
-function ArmorPixels(props: { colors: ArtColors; variant: number }) {
-  const isNarrow = props.variant % VARIANT_EVEN_DIVISOR === 0;
-  const shoulderWidth = isNarrow ? ARMOR_NARROW_WIDTH : ARMOR_WIDE_WIDTH;
-  const shoulderX = isNarrow ? ARMOR_NARROW_X : ARMOR_WIDE_X;
-  return (
-    <>
-      <rect x="5" y="2" width="6" height="2" fill={props.colors.light} />
-      <rect x={shoulderX} y="4" width={shoulderWidth} height="8" fill={props.colors.mid} />
-      <rect x="3" y="5" width="2" height="4" fill={props.colors.accent} />
-      <rect x="11" y="5" width="2" height="4" fill={props.colors.dark} />
-      <rect x={props.variant > VARIANT_HIGH_MIN ? "8" : "6"} y="6" width="2" height="5" fill={props.colors.light} />
-    </>
-  );
-}
-
-function HelmPixels(props: { colors: ArtColors; variant: number }) {
-  const hasCrest = props.variant % VARIANT_EVEN_DIVISOR === 0;
-  return (
-    <>
-      {hasCrest ? <rect x="7" y="1" width="2" height="3" fill={props.colors.accent} /> : null}
-      <rect x="4" y="3" width="8" height="3" fill={props.colors.light} />
-      <rect x={props.variant > VARIANT_HIGH_MIN ? "4" : "3"} y="6" width={props.variant > VARIANT_HIGH_MIN ? "8" : "10"} height="5" fill={props.colors.mid} />
-      <rect x="5" y="7" width="2" height="2" fill={props.colors.dark} />
-      <rect x="9" y="7" width="2" height="2" fill={props.colors.dark} />
-      <rect x={hasCrest ? "6" : "7"} y="11" width={hasCrest ? "4" : "2"} height="2" fill={props.colors.accent} />
-    </>
-  );
-}
-
-function BootPixels(props: { colors: ArtColors; variant: number }) {
-  const isTall = props.variant % VARIANT_EVEN_DIVISOR === 0;
-  return (
-    <>
-      <rect x="5" y={isTall ? "2" : "4"} width="4" height={isTall ? "8" : "6"} fill={props.colors.mid} />
-      <rect x="8" y="8" width="4" height="3" fill={props.colors.mid} />
-      <rect x="4" y="10" width="9" height="3" fill={props.colors.dark} />
-      <rect x={props.variant > VARIANT_HIGH_MIN ? "7" : "6"} y="4" width="2" height="4" fill={props.colors.light} />
-      <rect x="10" y="11" width="2" height="1" fill={props.colors.accent} />
-    </>
-  );
-}
-
-function AccessoryPixels(props: { colors: ArtColors; variant: number }) {
-  const isRing = props.variant % VARIANT_EVEN_DIVISOR === 0;
-  if (isRing) {
-    return <RingPixels colors={props.colors} variant={props.variant} />;
-  }
-  return (
-    <>
-      <rect x="7" y="2" width="2" height="3" fill={props.colors.light} />
-      <rect x="5" y="5" width="6" height="2" fill={props.colors.mid} />
-      <rect x="4" y="7" width="2" height="4" fill={props.colors.mid} />
-      <rect x="10" y="7" width="2" height="4" fill={props.colors.dark} />
-      <rect x="6" y="11" width="4" height="2" fill={props.colors.accent} />
-    </>
-  );
-}
-
-function RingPixels(props: { colors: ArtColors; variant: number }) {
-  return (
-    <>
-      <rect x="5" y="5" width="6" height="2" fill={props.colors.light} />
-      <rect x="4" y="7" width="2" height="4" fill={props.colors.mid} />
-      <rect x="10" y="7" width="2" height="4" fill={props.colors.dark} />
-      <rect x="5" y="11" width="6" height="2" fill={props.colors.mid} />
-      <rect x={props.variant > 1 ? "8" : "7"} y="3" width="2" height="2" fill={props.colors.accent} />
-    </>
-  );
-}
-
-function getArtVariant(seed: string) {
-  let hash = HASH_SEED;
-  for (const char of seed) {
-    hash ^= char.charCodeAt(0);
-    hash = Math.imul(hash, HASH_MULTIPLIER);
-  }
-  return (hash >>> 0) % VARIANT_COUNT;
 }
 
 function PotionSummary(props: { item: Extract<ShopItem, { kind: "consumable" }> }) {

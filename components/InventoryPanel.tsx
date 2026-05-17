@@ -1,5 +1,6 @@
 import { Badge, Box, Button, Group, Stack, Text } from "@mantine/core";
 
+import { HERO_ITEM_RARITY_COLORS, HeroSiegeEquipmentIcon } from "./HeroSiegeItemIcon";
 import { canEquipItem, EQUIPMENT_SLOT_LABELS, equipItem, getActiveSetBonuses, unequipItem } from "../lib/studyCore";
 import type { EquipmentSlot, InventoryItem, ItemModifierKey, StudyState } from "../types/study";
 
@@ -10,13 +11,7 @@ const STAT_LABELS = {
   strength: "STR"
 } as const;
 
-const RARITY_COLORS = {
-  common: "#b8b8b8",
-  epic: "#b46cff",
-  legendary: "#d6a94b",
-  rare: "#5fa8ff",
-  uncommon: "#40c057"
-} as const;
+const RARITY_COLORS = HERO_ITEM_RARITY_COLORS;
 const MODIFIER_FORMATTERS: Record<ItemModifierKey, (value: number) => string> = {
   bonusXpPercent: (value) => `+${value}% XP`,
   coldResistPercent: (value) => `+${value}% Cold Res`,
@@ -50,16 +45,8 @@ const INVENTORY_GRID_COLUMNS = 8;
 const INVENTORY_GRID_GAP = 4;
 const BOARD_MAX_WIDTH = 480;
 const ITEM_ICON_SIZE = 34;
-const ITEM_ICON_GRID = 8;
-const ITEM_ICON_CELL = 1;
-const ITEM_ICON_VIEWBOX = `0 0 ${ITEM_ICON_GRID} ${ITEM_ICON_GRID}`;
-const HASH_SEED = 2166136261;
-const HASH_MULTIPLIER = 16777619;
 const COMPACT_SUMMARY_GAP = 3;
 const FULL_SUMMARY_GAP = 6;
-const EVEN_DIVISOR = 2;
-const COLOR_VARIANT_DIVISOR = 3;
-const LIGHT_VARIANT_DIVISOR = 5;
 
 const EQUIPMENT_LAYOUT: Record<EquipmentSlot, { gridColumn: string; gridRow: string; minHeight: number; title: string }> = {
   armor: { gridColumn: "3 / 4", gridRow: "2 / 4", minHeight: LARGE_SLOT_HEIGHT, title: "Armor" },
@@ -165,14 +152,7 @@ export function ItemSummary(props: { compact?: boolean; item: InventoryItem }) {
 }
 
 function ItemPixelIcon(props: { item: InventoryItem }) {
-  const colors = getItemIconColors(props.item);
-  return (
-    <Box aria-hidden="true" style={{ background: "#050505", border: `1px solid ${RARITY_COLORS[props.item.rarity]}`, flex: `0 0 ${ITEM_ICON_SIZE}px`, height: ITEM_ICON_SIZE, width: ITEM_ICON_SIZE }}>
-      <svg viewBox={ITEM_ICON_VIEWBOX} width={ITEM_ICON_SIZE} height={ITEM_ICON_SIZE} shapeRendering="crispEdges">
-        {getItemIconPixels(props.item.slot).flatMap((row, y) => [...row].map((pixel, x) => pixel === "." ? null : <rect key={`${props.item.id}-${x}-${y}`} x={x} y={y} width={ITEM_ICON_CELL} height={ITEM_ICON_CELL} fill={colors[pixel as keyof typeof colors]} />))}
-      </svg>
-    </Box>
-  );
+  return <HeroSiegeEquipmentIcon item={props.item} size={ITEM_ICON_SIZE} />;
 }
 
 function formatItemRequirements(item: InventoryItem) {
@@ -196,45 +176,4 @@ function formatStats(stats: InventoryItem["stats"]) {
     .filter(([, value]) => value)
     .map(([key, value]) => `${STAT_LABELS[key as keyof typeof STAT_LABELS]} +${value}`)
     .join(", ");
-}
-
-function getItemIconColors(item: InventoryItem) {
-  const roll = hashString(item.id);
-  const accent = RARITY_COLORS[item.rarity];
-  const dark = roll % EVEN_DIVISOR === 0 ? "#16110c" : "#101626";
-  const mid = getMidItemIconColor(roll);
-  const light = roll % LIGHT_VARIANT_DIVISOR === 0 ? "#f8e7b1" : "#d8d1bf";
-  return { a: dark, b: mid, c: light, d: accent };
-}
-
-function getMidItemIconColor(roll: number) {
-  const variant = roll % COLOR_VARIANT_DIVISOR;
-  if (variant === 0) {
-    return "#8f6b3d";
-  }
-  return variant === 1 ? "#6b7280" : "#4f7d5a";
-}
-
-function getItemIconPixels(slot: EquipmentSlot) {
-  const pixels: Record<EquipmentSlot, string[]> = {
-    armor: ["..dd....", ".dbbd...", "dbbbbd..", "dbccbd..", ".bbbb...", ".bbbb...", ".b..b...", "........"],
-    backAccessory: ["..dd....", ".dbbd...", "dbccbd..", ".bbbb...", "..bb....", "..bb....", ".b..b...", "........"],
-    bodyAccessory: [".dd..dd.", "dbb..bbd", ".bbccbb.", ".bbbbbb.", "..bbbb..", "..b..b..", "........", "........"],
-    eyewear: ["........", "..dd.dd.", ".dbbdbbd", "..dd.dd.", "........", "........", "........", "........"],
-    feet: ["........", "..dd....", ".dbbd...", ".bbbd...", ".bbbddd.", ".bbbbbd.", "........", "........"],
-    headAccessory: ["..dd....", ".dccd...", "dccccd..", ".dccd...", "..dd....", "........", "........", "........"],
-    headgear: ["..dddd..", ".dbbbd..", "dbcccbd.", "dbbbbbd.", ".d....d.", "........", "........", "........"],
-    mainHand: ["....dd..", "...dbd..", "..dbd...", ".dbd....", "dbd.....", ".b......", "b.......", "........"],
-    offHand: ["..dddd..", ".dbbbd..", "dbcccbd.", "dbcccbd.", ".dbbbd..", "..dddd..", "........", "........"]
-  };
-  return pixels[slot];
-}
-
-function hashString(value: string) {
-  let hash = HASH_SEED;
-  for (const char of value) {
-    hash ^= char.charCodeAt(0);
-    hash = Math.imul(hash, HASH_MULTIPLIER);
-  }
-  return hash >>> 0;
 }

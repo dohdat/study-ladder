@@ -1,7 +1,8 @@
 import { Box, Group, Paper, Stack, Text } from "@mantine/core";
-import { IconBolt, IconHeart, IconShield, IconSparkles, IconTrophy } from "@tabler/icons-react";
+import { IconBolt, IconHeart, IconSparkles, IconTrophy } from "@tabler/icons-react";
 
 import { CoinIcon } from "./CoinIcon";
+import { HeroSiegeRewardItemIcon } from "./HeroSiegeItemIcon";
 
 const TOAST_TOP = 24;
 const TOAST_RIGHT = 24;
@@ -116,11 +117,7 @@ function RewardIcon(props: { kind: RewardNotification["kind"] }) {
     );
   }
   if (props.kind === "item") {
-    return (
-      <Box c="violet.2" style={{ alignItems: "center", display: "flex" }}>
-        <IconShield size={TOAST_ICON_SIZE} />
-      </Box>
-    );
+    return <HeroSiegeRewardItemIcon size={TOAST_ICON_SIZE} />;
   }
   if (props.kind === "achievement") {
     return (

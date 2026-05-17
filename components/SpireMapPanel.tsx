@@ -4,6 +4,16 @@ import { useState } from "react";
 
 import { advanceSpireNode, enterSpireNode, getCurrentSpireNode, isCombatNode, selectSpireNode, SPIRE_RATINGS } from "../lib/spireMapCore";
 import type { SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
+import darkPathBg from "../assets/hero_siege_map/backgrounds/dark-path.png";
+import fallDarkPathBg from "../assets/hero_siege_map/backgrounds/fall-dark-path.png";
+import fallFieldBg from "../assets/hero_siege_map/backgrounds/fall-field.png";
+import fallLeavesBg from "../assets/hero_siege_map/backgrounds/fall-leaves.png";
+import fallPathBg from "../assets/hero_siege_map/backgrounds/fall-path.png";
+import graveyardGroundBg from "../assets/hero_siege_map/backgrounds/graveyard-ground.png";
+import graveyardPathBg from "../assets/hero_siege_map/backgrounds/graveyard-path.png";
+import leavesBg from "../assets/hero_siege_map/backgrounds/leaves.png";
+import witchBogGroundBg from "../assets/hero_siege_map/backgrounds/witch-bog-ground.png";
+import witchBogPathBg from "../assets/hero_siege_map/backgrounds/witch-bog-path.png";
 import campBenchArt from "../assets/hero_siege_map/camp-bench.png";
 import campfireArt from "../assets/hero_siege_map/campfire.png";
 import chestArt from "../assets/hero_siege_map/chest.png";
@@ -16,6 +26,7 @@ import fieldTreeArt from "../assets/hero_siege_map/field-tree.png";
 import fieldWallArt from "../assets/hero_siege_map/field-wall.png";
 import graveyardRocksArt from "../assets/hero_siege_map/graveyard-rocks.png";
 import healthShrineArt from "../assets/hero_siege_map/health-shrine.png";
+import questionMarkArt from "../assets/hero_siege_map/question-mark.png";
 import tombstoneArt from "../assets/hero_siege_map/tombstone.png";
 import wildBushArt from "../assets/hero_siege_map/wild-bush.png";
 import demonKingArt from "../assets/hero_siege_monsters/demon-king.png";
@@ -27,13 +38,13 @@ const NODE_SIZE = 38;
 const NODE_ICON_SIZE = 30;
 const LEGEND_ICON_SIZE = 24;
 const ACT_LABEL = "Act #1 The Sightless Eye";
-const PATH_COLOR = "rgba(15, 25, 21, 0.82)";
+const PATH_COLOR = "rgba(20, 31, 34, 0.72)";
 const ACTIVE_COLOR = "#4dabf7";
 const COMPLETED_COLOR = "#51cf66";
 const SELECTABLE_COLOR = "#dfc37a";
 const LOCKED_COLOR = "#18231d";
-const NODE_FILL = "radial-gradient(circle at 45% 30%, rgba(52, 48, 35, 0.92), rgba(13, 17, 13, 0.94) 72%)";
-const NODE_COMPLETED_FILL = "radial-gradient(circle at 45% 30%, rgba(42, 70, 38, 0.92), rgba(14, 31, 18, 0.94) 72%)";
+const NODE_FILL = "radial-gradient(circle at 45% 30%, rgba(34, 52, 58, 0.98), rgba(11, 20, 25, 0.98) 72%)";
+const NODE_COMPLETED_FILL = "radial-gradient(circle at 45% 30%, rgba(40, 74, 58, 0.98), rgba(12, 29, 24, 0.98) 72%)";
 const NODE_ICON_COLOR = "#d8d1ba";
 const LOCKED_NODE_OPACITY = 0.42;
 const HIGHLIGHTED_NODE_OPACITY = 1;
@@ -41,17 +52,36 @@ const DIMMED_NODE_OPACITY = 0.2;
 const HIGHLIGHT_GLOW = "0 0 0 4px rgba(77, 171, 247, 0.25), 0 0 18px rgba(77, 171, 247, 0.55)";
 const NODE_Z_INDEX = 2;
 const HIGHLIGHTED_NODE_Z_INDEX = 3;
-const MAP_BG = [
-  "radial-gradient(circle at 16% 18%, rgba(71, 87, 55, 0.84) 0%, rgba(57, 69, 47, 0.44) 24%, transparent 43%)",
-  "radial-gradient(circle at 72% 78%, rgba(92, 67, 43, 0.38) 0%, rgba(47, 45, 33, 0.3) 28%, transparent 52%)",
-  "linear-gradient(145deg, rgba(32, 43, 31, 0.96) 0%, rgba(55, 57, 44, 0.96) 42%, rgba(28, 34, 28, 0.98) 100%)"
-].join(", ");
+const MAP_BG = "#8f9183";
+const TERRAIN_TILE_SIZE_LARGE = 352;
+const TERRAIN_TILE_SIZE_MEDIUM = 256;
+const TERRAIN_TILE_SIZE_SMALL = 128;
+const TERRAIN_LAYER_BASE_OPACITY = 0.11;
+const TERRAIN_LAYER_DETAIL_OPACITY = 0.07;
+const TERRAIN_LAYER_PATH_OPACITY = 0.08;
+const TERRAIN_LAYER_DARK_OPACITY = 0.05;
+const TERRAIN_LAYER_BOG_OPACITY = 0.05;
+const TERRAIN_LAYER_GRAVE_OPACITY = 0.05;
+const MAP_SURFACE_TINT = "linear-gradient(180deg, rgba(154, 156, 141, 0.9), rgba(126, 128, 113, 0.92))";
+const MAP_SURFACE_TEXTURE = "radial-gradient(circle at 20% 18%, rgba(237, 229, 196, 0.2), transparent 24%), radial-gradient(circle at 72% 78%, rgba(62, 74, 59, 0.16), transparent 30%)";
 const ENTER_BUTTON_RIGHT = 16;
 const ENTER_BUTTON_BOTTOM = 16;
 const PATH_NODE_RADIUS = 1.75;
-const PATH_STROKE_WIDTH = 0.18;
-const PATH_STROKE_DASH = "0.5 0.75";
-const BACKDROP_PROP_OPACITY = 0.52;
+const PATH_STROKE_WIDTH = 0.24;
+const PATH_STROKE_DASH = "0.7 0.45";
+const PATH_CURVE_JITTER = 3.6;
+const NODE_VISUAL_X_JITTER = 2.4;
+const NODE_VISUAL_Y_JITTER = 3.8;
+const NODE_VISUAL_MIN = 5;
+const NODE_VISUAL_MAX = 95;
+const BOSS_VISUAL_JITTER_SCALE = 0.45;
+const RANDOM_CENTER = 0.5;
+const MIDPOINT_DIVISOR = 2;
+const POSITION_ROUNDING_FACTOR = 10;
+const HASH_SEED = 2166136261;
+const HASH_MULTIPLIER = 16777619;
+const HASH_DIVISOR = 4294967296;
+const BACKDROP_PROP_OPACITY = 0.18;
 const ACT_LABEL_TOP = 12;
 const ACT_LABEL_LEFT = 14;
 const ACT_LABEL_BORDER = "1px solid rgba(223, 195, 122, 0.72)";
@@ -79,7 +109,7 @@ const NODE_ICON_ASSETS: Record<SpireNodeKind, StaticImageData> = {
   merchant: fieldTentArt,
   rest: campfireArt,
   treasure: chestArt,
-  unknown: tombstoneArt
+  unknown: questionMarkArt
 };
 
 // eslint-disable-next-line complexity
@@ -104,22 +134,26 @@ export function SpireMapPanel(props: { setState: React.Dispatch<React.SetStateAc
           <Text size="xs" c="dimmed">{activeCombat ? `Room ${solved}/${target}` : "Pick a reachable node"}</Text>
         </Group>
         <Box style={{ background: MAP_BG, border: "1px solid var(--mantine-color-dark-4)", height: MAP_HEIGHT, overflow: "hidden", position: "relative" }}>
+          <MapTerrainBackground />
           <MapBackdrop />
           <MapPaths state={props.state} />
-          {props.state.profile.spireRun.nodes.map((mapNode) => (
-            <MapNode
-              key={mapNode.id}
-              active={mapNode.id === props.state.profile.spireRun.currentNodeId}
-              completed={props.state.profile.spireRun.completedNodeIds.includes(mapNode.id)}
-              highlighted={highlightedKind === mapNode.kind}
-              highlightMode={Boolean(highlightedKind)}
-              kind={mapNode.kind}
-              onSelect={() => props.setState((previous) => selectSpireNode(previous, mapNode.id))}
-              selectable={mapOpen && props.state.profile.spireRun.availableNodeIds.includes(mapNode.id)}
-              x={mapNode.x}
-              y={mapNode.y}
-            />
-          ))}
+          {props.state.profile.spireRun.nodes.map((mapNode) => {
+            const position = getVisualNodePosition(mapNode);
+            return (
+              <MapNode
+                key={mapNode.id}
+                active={mapNode.id === props.state.profile.spireRun.currentNodeId}
+                completed={props.state.profile.spireRun.completedNodeIds.includes(mapNode.id)}
+                highlighted={highlightedKind === mapNode.kind}
+                highlightMode={Boolean(highlightedKind)}
+                kind={mapNode.kind}
+                onSelect={() => props.setState((previous) => selectSpireNode(previous, mapNode.id))}
+                selectable={mapOpen && props.state.profile.spireRun.availableNodeIds.includes(mapNode.id)}
+                x={position.x}
+                y={position.y}
+              />
+            );
+          })}
           <Legend highlightedKind={highlightedKind} onHighlight={setHighlightedKind} />
           {mapOpen && (
             <Button
@@ -230,27 +264,80 @@ function getHeaderStatusBadgeColor(tone: "blue" | "gold" | "red") {
   return "#f6d678";
 }
 
+function MapTerrainBackground() {
+  return (
+    <Box aria-hidden="true" style={{ inset: 0, overflow: "hidden", pointerEvents: "none", position: "absolute", zIndex: 0 }}>
+      <Box style={{ background: MAP_SURFACE_TINT, inset: 0, position: "absolute" }} />
+      <TerrainLayer asset={fallFieldBg} opacity={TERRAIN_LAYER_BASE_OPACITY} size={TERRAIN_TILE_SIZE_LARGE} />
+      <TerrainLayer asset={fallPathBg} opacity={TERRAIN_LAYER_PATH_OPACITY} position="22px 18px" size={TERRAIN_TILE_SIZE_LARGE} />
+      <TerrainLayer asset={fallDarkPathBg} opacity={TERRAIN_LAYER_DARK_OPACITY} position="164px 84px" size={TERRAIN_TILE_SIZE_LARGE} />
+      <TerrainLayer asset={fallLeavesBg} opacity={TERRAIN_LAYER_DETAIL_OPACITY} position="88px 38px" size={TERRAIN_TILE_SIZE_LARGE} />
+      <TerrainLayer asset={leavesBg} opacity={TERRAIN_LAYER_DETAIL_OPACITY} position="12px 10px" size={TERRAIN_TILE_SIZE_SMALL} />
+      <TerrainPatch asset={graveyardGroundBg} left="58%" opacity={TERRAIN_LAYER_GRAVE_OPACITY} size={TERRAIN_TILE_SIZE_MEDIUM} top="3%" />
+      <TerrainPatch asset={graveyardPathBg} left="50%" opacity={TERRAIN_LAYER_GRAVE_OPACITY} size={TERRAIN_TILE_SIZE_LARGE} top="48%" />
+      <TerrainPatch asset={witchBogGroundBg} left="0" opacity={TERRAIN_LAYER_BOG_OPACITY} size={TERRAIN_TILE_SIZE_MEDIUM} top="12%" />
+      <TerrainPatch asset={witchBogPathBg} left="64%" opacity={TERRAIN_LAYER_BOG_OPACITY} size={TERRAIN_TILE_SIZE_LARGE} top="62%" />
+      <TerrainLayer asset={darkPathBg} opacity={TERRAIN_LAYER_DARK_OPACITY} position="42px 24px" size={TERRAIN_TILE_SIZE_SMALL} />
+      <Box style={{ background: MAP_SURFACE_TEXTURE, inset: 0, position: "absolute" }} />
+    </Box>
+  );
+}
+
+function TerrainLayer(props: { asset: StaticImageData; opacity: number; position?: string; size: number }) {
+  return (
+    <Box
+      style={{
+        backgroundImage: `url(${props.asset.src})`,
+        backgroundPosition: props.position || "0 0",
+        backgroundRepeat: "repeat",
+        backgroundSize: `${props.size}px auto`,
+        inset: 0,
+        opacity: props.opacity,
+        position: "absolute"
+      }}
+    />
+  );
+}
+
+function TerrainPatch(props: { asset: StaticImageData; left: string; opacity: number; size: number; top: string }) {
+  return (
+    <Box
+      style={{
+        backgroundImage: `url(${props.asset.src})`,
+        backgroundRepeat: "repeat",
+        backgroundSize: `${props.size}px auto`,
+        height: "42%",
+        left: props.left,
+        opacity: props.opacity,
+        position: "absolute",
+        top: props.top,
+        transform: "rotate(-4deg)",
+        width: "48%"
+      }}
+    />
+  );
+}
+
 function MapBackdrop() {
   return (
     <Box aria-hidden="true" style={{ inset: 0, overflow: "hidden", pointerEvents: "none", position: "absolute", zIndex: 0 }}>
-      <Box style={{ background: "radial-gradient(ellipse at center, transparent 0%, rgba(12, 12, 10, 0.26) 68%, rgba(6, 7, 5, 0.52) 100%)", inset: 0, position: "absolute" }} />
-      <Box style={{ background: "linear-gradient(64deg, transparent 0 38%, rgba(85, 70, 42, 0.18) 39% 43%, transparent 44% 100%), linear-gradient(113deg, transparent 0 54%, rgba(20, 17, 11, 0.22) 55% 58%, transparent 59% 100%)", inset: 0, position: "absolute" }} />
-      <MapProp asset={fieldTreeArt} left={3} top={2} width={132} opacity={0.36} />
-      <MapProp asset={deadTreeArt} left={91} top={3} width={118} opacity={0.34} />
-      <MapProp asset={fieldTentArt} left={5} top={72} width={92} opacity={0.45} />
-      <MapProp asset={campfireArt} left={12} top={79} width={54} opacity={0.5} />
-      <MapProp asset={campBenchArt} left={10} top={70} width={74} opacity={0.42} />
-      <MapProp asset={fieldWallArt} left={33} top={86} width={104} opacity={0.32} />
-      <MapProp asset={fieldPillarArt} left={68} top={4} width={44} opacity={0.36} />
-      <MapProp asset={graveyardRocksArt} left={83} top={78} width={86} opacity={0.4} />
-      <MapProp asset={tombstoneArt} left={79} top={66} width={50} opacity={0.36} />
-      <MapProp asset={fieldTorchArt} left={88} top={21} width={44} opacity={0.44} />
-      <MapProp asset={healthShrineArt} left={59} top={80} width={54} opacity={0.4} />
-      <MapProp asset={chestArt} left={89} top={84} width={64} opacity={0.4} />
-      <MapProp asset={fieldCorpseArt} left={24} top={78} width={70} opacity={0.28} />
-      <MapProp asset={wildBushArt} left={20} top={8} width={82} opacity={0.36} />
-      <MapProp asset={wildBushArt} left={53} top={3} width={96} opacity={0.3} />
-      <MapProp asset={wildBushArt} left={74} top={83} width={92} opacity={0.3} />
+      <Box style={{ background: "radial-gradient(ellipse at center, transparent 0%, rgba(17, 20, 17, 0.04) 72%, rgba(8, 10, 8, 0.18) 100%)", inset: 0, position: "absolute" }} />
+      <MapProp asset={fieldTreeArt} left={3} top={2} width={132} opacity={0.15} />
+      <MapProp asset={deadTreeArt} left={91} top={3} width={118} opacity={0.14} />
+      <MapProp asset={fieldTentArt} left={5} top={72} width={92} opacity={0.22} />
+      <MapProp asset={campfireArt} left={12} top={79} width={54} opacity={0.24} />
+      <MapProp asset={campBenchArt} left={10} top={70} width={74} opacity={0.18} />
+      <MapProp asset={fieldWallArt} left={33} top={86} width={104} opacity={0.14} />
+      <MapProp asset={fieldPillarArt} left={68} top={4} width={44} opacity={0.16} />
+      <MapProp asset={graveyardRocksArt} left={83} top={78} width={86} opacity={0.18} />
+      <MapProp asset={tombstoneArt} left={79} top={66} width={50} opacity={0.16} />
+      <MapProp asset={fieldTorchArt} left={88} top={21} width={44} opacity={0.22} />
+      <MapProp asset={healthShrineArt} left={59} top={80} width={54} opacity={0.2} />
+      <MapProp asset={chestArt} left={89} top={84} width={64} opacity={0.2} />
+      <MapProp asset={fieldCorpseArt} left={24} top={78} width={70} opacity={0.12} />
+      <MapProp asset={wildBushArt} left={20} top={8} width={82} opacity={0.16} />
+      <MapProp asset={wildBushArt} left={53} top={3} width={96} opacity={0.14} />
+      <MapProp asset={wildBushArt} left={74} top={83} width={92} opacity={0.14} />
     </Box>
   );
 }
@@ -317,14 +404,15 @@ function MapPaths(props: { state: StudyState }) {
         if (!next) {
           return null;
         }
-        const line = getTrimmedPathLine(node, next);
-        return <line key={`${node.id}-${id}`} x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2} stroke={PATH_COLOR} strokeDasharray={PATH_STROKE_DASH} strokeLinecap="round" strokeWidth={PATH_STROKE_WIDTH} />;
+        const line = getTrimmedPathLine(getVisualNodePosition(node), getVisualNodePosition(next));
+        const curve = getPathCurve(line, node.id, id);
+        return <path key={`${node.id}-${id}`} d={`M ${line.x1} ${line.y1} Q ${curve.x} ${curve.y} ${line.x2} ${line.y2}`} fill="none" stroke={PATH_COLOR} strokeDasharray={PATH_STROKE_DASH} strokeLinecap="round" strokeWidth={PATH_STROKE_WIDTH} />;
       }))}
     </svg>
   );
 }
 
-function getTrimmedPathLine(from: SpireMapNode, to: SpireMapNode) {
+function getTrimmedPathLine(from: { x: number; y: number }, to: { x: number; y: number }) {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const length = Math.hypot(dx, dy) || 1;
@@ -336,6 +424,40 @@ function getTrimmedPathLine(from: SpireMapNode, to: SpireMapNode) {
     y1: from.y + offsetY,
     y2: to.y - offsetY
   };
+}
+
+function getPathCurve(line: { x1: number; x2: number; y1: number; y2: number }, fromId: string, toId: string) {
+  const dx = line.x2 - line.x1;
+  const dy = line.y2 - line.y1;
+  const length = Math.hypot(dx, dy) || 1;
+  const offset = (getStableRoll(`${fromId}:${toId}:curve`) - RANDOM_CENTER) * PATH_CURVE_JITTER;
+  return {
+    x: (line.x1 + line.x2) / MIDPOINT_DIVISOR + (-dy / length) * offset,
+    y: (line.y1 + line.y2) / MIDPOINT_DIVISOR + (dx / length) * offset
+  };
+}
+
+function getVisualNodePosition(node: SpireMapNode) {
+  const bossScale = node.kind === "boss" ? BOSS_VISUAL_JITTER_SCALE : 1;
+  const x = node.x + (getStableRoll(`${node.id}:visual-x`) - RANDOM_CENTER) * NODE_VISUAL_X_JITTER * bossScale;
+  const y = node.y + (getStableRoll(`${node.id}:visual-y`) - RANDOM_CENTER) * NODE_VISUAL_Y_JITTER * bossScale;
+  return {
+    x: roundPosition(clamp(x, NODE_VISUAL_MIN, NODE_VISUAL_MAX)),
+    y: roundPosition(clamp(y, NODE_VISUAL_MIN, NODE_VISUAL_MAX))
+  };
+}
+
+function roundPosition(value: number) { return Math.round(value * POSITION_ROUNDING_FACTOR) / POSITION_ROUNDING_FACTOR; }
+
+function clamp(value: number, min: number, max: number) { return Math.min(max, Math.max(min, value)); }
+
+function getStableRoll(value: string) {
+  let hash = HASH_SEED;
+  for (const char of value) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, HASH_MULTIPLIER);
+  }
+  return (hash >>> 0) / HASH_DIVISOR;
 }
 
 function MapNode(props: { active: boolean; completed: boolean; highlighted: boolean; highlightMode: boolean; kind: SpireNodeKind; onSelect: () => void; selectable: boolean; x: number; y: number }) {

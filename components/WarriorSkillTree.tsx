@@ -1,16 +1,16 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 
 import { Badge, Box, Group, Progress, Stack, Tabs, Text, Tooltip } from "@mantine/core";
-import { IconShield, IconSparkles, IconSword } from "@tabler/icons-react";
 
+import { HeroSiegeSkillIcon } from "./HeroSiegeSkillIcon";
 import { canSpendWarriorSkillPoint, getActiveWarriorSkillByTreeId, getAvailableWarriorSkillPoints, getWarriorSkillRank, spendWarriorSkillPoint, WARRIOR_SKILLS } from "../lib/skillCore";
 import { getLevelProgress } from "../lib/studyCore";
 import type { StudyState, WarriorSkillId } from "../types/study";
 
 const BRANCH_ICONS = {
-  "Combat Masteries": IconShield,
-  "Combat Skills": IconSword,
-  Warcries: IconSparkles
+  "Combat Masteries": "swordMastery",
+  "Combat Skills": "whirlwind",
+  Warcries: "battleOrders"
 } as const;
 const TREE_BG = "radial-gradient(circle at 50% 10%, #34291f 0%, #191714 48%, #090909 100%)";
 const TREE_BORDER = "2px solid #8a744c";
@@ -32,10 +32,6 @@ const TREE_Y_GUTTER_PERCENT = 8;
 const SKILL_NODE_WIDTH = 118;
 const SKILL_NODE_HEIGHT = 68;
 const SKILL_ICON_SIZE = 30;
-const SKILL_ICON_GRID = 8;
-const SKILL_ICON_CELL = 1;
-const SKILL_ICON_VIEWBOX = `0 0 ${SKILL_ICON_GRID} ${SKILL_ICON_GRID}`;
-const LOCKED_SKILL_ICON_OPACITY = 0.45;
 const LOCKED_NODE_OPACITY = 0.68;
 const ARROW_COLOR = "#8a744c";
 const ARROW_LOCKED_COLOR = "#433b2d";
@@ -48,11 +44,6 @@ type WarriorSkillBranch = typeof SKILL_BRANCHES[number];
 type SkillPosition = { column: number; row: number };
 type SkillNode = { skill: (typeof WARRIOR_SKILLS)[number]; position: SkillPosition };
 type SkillArrow = { active: boolean; from: SkillPosition; key: string; to: SkillPosition };
-
-type SkillPixelArt = {
-  colors: Record<string, string>;
-  pixels: string[];
-};
 
 const SKILL_LAYOUTS: Record<WarriorSkillBranch, Partial<Record<WarriorSkillId, SkillPosition>>> = {
   "Combat Skills": {
@@ -98,45 +89,6 @@ const SKILL_LAYOUTS: Record<WarriorSkillBranch, Partial<Record<WarriorSkillId, S
   }
 };
 
-const SKILL_PIXEL_ART: Record<WarriorSkillId, SkillPixelArt> = {
-  bash: { colors: { a: "#7c2d12", b: "#f97316", c: "#fed7aa" }, pixels: ["...aa...", "..abb...", ".abbb...", ".abca...", "..ba....", ".bba....", "a..a....", "........"] },
-  arcaneFocus: { colors: { a: "#1e1b4b", b: "#38bdf8", c: "#e0f2fe" }, pixels: ["...aa...", "..abba..", ".abccba.", "..bccb..", "...bb...", "..abba..", ".a....a.", "........"] },
-  axeMastery: { colors: { a: "#3f1d0b", b: "#94a3b8", c: "#facc15" }, pixels: ["..bb....", ".bccb...", "..bb....", "..ba....", ".ba.....", "ba......", "a.......", "........"] },
-  battleCry: { colors: { a: "#7c2d12", b: "#fb923c", c: "#ffedd5" }, pixels: [".a..a...", "abccba..", ".bbbb...", "..aa....", ".abba...", "a....a..", "........", "........"] },
-  battleCommand: { colors: { a: "#78350f", b: "#facc15", c: "#fef3c7" }, pixels: ["..aaaa..", ".abbbb..", "abccba..", ".abbbb..", "..aaaa..", "...aa...", "..abba..", ".a....a."] },
-  battleOrders: { colors: { a: "#1d4ed8", b: "#60a5fa", c: "#dbeafe" }, pixels: ["..aa....", ".abbba..", "abcccba.", ".abbba..", "..aa....", ".a..a...", "a....a..", "........"] },
-  battleTrance: { colors: { a: "#1e3a8a", b: "#38bdf8", c: "#e0f2fe" }, pixels: ["...aa...", "..abba..", ".abccba.", "abbbbbba", ".abccba.", "..abba..", "...aa...", "........"] },
-  bloodForBlood: { colors: { a: "#450a0a", b: "#dc2626", c: "#fecaca" }, pixels: ["a....a..", "ba..ab..", ".baab...", "..cc....", ".baab...", "ba..ab..", "a....a..", "........"] },
-  bloodlust: { colors: { a: "#450a0a", b: "#ef4444", c: "#fee2e2" }, pixels: ["..aa....", ".abba...", "abccba..", ".abbb...", "..bb....", ".abba...", "a....a..", "........"] },
-  burningPact: { colors: { a: "#7f1d1d", b: "#f97316", c: "#fde68a" }, pixels: ["...a....", "..aba...", ".abbba..", ".bbccb..", "abccba..", ".abba...", "..aa....", "........"] },
-  cleave: { colors: { a: "#713f12", b: "#f59e0b", c: "#fef3c7" }, pixels: ["....a...", "...ab...", "..abb...", ".abbc...", "abbc....", ".bb.....", "b.......", "........"] },
-  concentrate: { colors: { a: "#4c1d95", b: "#a78bfa", c: "#f5f3ff" }, pixels: ["...aa...", "..abba..", ".abccba.", ".abccba.", "..abba..", "...aa...", "..a..a..", ".a....a."] },
-  demonForm: { colors: { a: "#4c0519", b: "#be123c", c: "#fda4af" }, pixels: ["a....a..", "ba..ab..", ".bbbb...", "abccba..", ".bbbb...", "..bb....", ".b..b...", "a....a.."] },
-  doubleSwing: { colors: { a: "#0f766e", b: "#5eead4", c: "#ccfbf1" }, pixels: [".a....a.", ".ba..ab.", "..babb..", "...cc...", "..babb..", ".ab..ba.", ".a....a.", "........"] },
-  execute: { colors: { a: "#111827", b: "#ef4444", c: "#fef2f2" }, pixels: ["...c....", "..bcb...", ".bbbbb..", "..bbb...", ".bbbbb..", "b..b....", "a..a....", "........"] },
-  findItem: { colors: { a: "#713f12", b: "#eab308", c: "#fef08a" }, pixels: ["..aaaa..", ".abbbba.", "abcccba.", "abcbcba.", ".abbba..", "..aa....", ".a..a...", "........"] },
-  findPotion: { colors: { a: "#7f1d1d", b: "#ef4444", c: "#fecaca" }, pixels: ["...aa...", "..abba..", "..abba..", ".abccba.", ".abccba.", "..abba..", "...aa...", "........"] },
-  frenzy: { colors: { a: "#991b1b", b: "#fb7185", c: "#ffe4e6" }, pixels: ["a.....a.", "ba...ab.", ".ba.ab..", "..bcb...", ".ab.ba..", "ab...ba.", "a.....a.", "........"] },
-  goldMastery: { colors: { a: "#713f12", b: "#facc15", c: "#fef3c7" }, pixels: ["..aaaa..", ".abccba.", "abbbbbba", "abcccbba", ".abbbba.", "..aaaa..", "........", "........"] },
-  grimWard: { colors: { a: "#1f2937", b: "#a3e635", c: "#f7fee7" }, pixels: ["...cc...", "..cbbc..", "...bb...", "..abba..", ".ab..ba.", "a....a..", "........", "........"] },
-  howl: { colors: { a: "#164e63", b: "#22d3ee", c: "#ecfeff" }, pixels: ["...aa...", "..abba..", ".abccba.", "abccccba", ".abccba.", "..abba..", "...aa...", "........"] },
-  ironSkin: { colors: { a: "#334155", b: "#94a3b8", c: "#f8fafc" }, pixels: ["..aaaa..", ".abbbba.", "abcccba.", "abcccba.", ".abbbba.", "..abba..", "...aa...", "........"] },
-  naturalResistance: { colors: { a: "#14532d", b: "#22c55e", c: "#bbf7d0" }, pixels: ["a..aa..a", ".abbbba.", "abcccba.", ".abccba.", "..abba..", ".a.ba.a.", "a..aa..a", "........"] },
-  powerStrike: { colors: { a: "#7c2d12", b: "#f59e0b", c: "#fff7ed" }, pixels: ["....a...", "...abb..", "..abcb..", ".abcb...", "abcb....", ".bb.....", "b.......", "........"] },
-  quickRecovery: { colors: { a: "#064e3b", b: "#34d399", c: "#d1fae5" }, pixels: ["..aa....", ".abbba..", "abccba..", ".abbba..", "..aa....", ".a..a...", "a....a..", "........"] },
-  rallyingCry: { colors: { a: "#1e3a8a", b: "#93c5fd", c: "#eff6ff" }, pixels: ["..aa....", ".abbb...", "abccba..", ".abbb...", "..aa....", "..a.a...", ".a...a..", "........"] },
-  shieldMastery: { colors: { a: "#1f2937", b: "#64748b", c: "#f8fafc" }, pixels: ["..aaaa..", ".abbbba.", "abcccba.", "abcccba.", ".abbbba.", "..abba..", "...aa...", "........"] },
-  shockwave: { colors: { a: "#581c87", b: "#c084fc", c: "#faf5ff" }, pixels: ["a......a", ".ba..ab.", "..bccb..", ".abccba.", "..bccb..", ".ba..ab.", "a......a", "........"] },
-  shout: { colors: { a: "#312e81", b: "#818cf8", c: "#e0e7ff" }, pixels: ["..aa....", ".abbba..", "abcccba.", ".abbba..", "..aa....", "..a.a...", ".a...a..", "a.....a."] },
-  swordMastery: { colors: { a: "#1f2937", b: "#e5e7eb", c: "#fbbf24" }, pixels: ["....b...", "...bb...", "..bb....", ".bb.....", "cb......", "cc......", ".a......", "........"] },
-  sureCrit: { colors: { a: "#581c87", b: "#facc15", c: "#faf5ff" }, pixels: ["...aa...", "..abba..", ".abccba.", "..bccb..", "...bb...", "..abba..", ".a....a.", "........"] },
-  taunt: { colors: { a: "#7f1d1d", b: "#f59e0b", c: "#ffedd5" }, pixels: ["..aaaa..", ".abccba.", "abbbbbba", "abcbbcba", ".abbbba.", "..abba..", ".a....a.", "........"] },
-  treasureSense: { colors: { a: "#14532d", b: "#facc15", c: "#fef9c3" }, pixels: ["..aaaa..", ".abbbba.", "abcccbba", "abbbbbba", ".abccba.", "..aaaa..", "........", "........"] },
-  tripleStrike: { colors: { a: "#0f766e", b: "#67e8f9", c: "#ecfeff" }, pixels: ["a..a..a.", "ba.ba.ba", ".bbbbb..", "..ccc...", ".bbbbb..", "ba.ba.ba", "a..a..a.", "........"] },
-  warCry: { colors: { a: "#581c87", b: "#c084fc", c: "#faf5ff" }, pixels: ["a..aa..a", ".abccba.", "abccccba", ".abccba.", "a..aa..a", "..abba..", ".a....a.", "........"] },
-  whirlwind: { colors: { a: "#0f172a", b: "#38bdf8", c: "#f8fafc" }, pixels: ["..aa....", ".abbba..", "ab..bba.", "a..ccba.", ".abb..a.", "..abba..", "....aa..", "........"] },
-  whirlwindAssault: { colors: { a: "#0f172a", b: "#22d3ee", c: "#f8fafc" }, pixels: ["..aa..aa", ".abbba..", "ab..bba.", "a..ccba.", ".abb..a.", "..abba..", "aa..aa..", "........"] }
-};
 
 export function WarriorSkillTree(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const [activeBranch, setActiveBranch] = useState<WarriorSkillBranch>("Combat Skills");
@@ -155,9 +107,8 @@ export function WarriorSkillTree(props: { state: StudyState; setState: React.Dis
         <Tabs value={activeBranch} onChange={(value) => value && setActiveBranch(value as WarriorSkillBranch)} keepMounted={false}>
           <Tabs.List grow mb="md" style={{ borderColor: "#6b5736" }}>
             {SKILL_BRANCHES.map((branch) => {
-              const Icon = BRANCH_ICONS[branch];
               return (
-                <Tabs.Tab key={branch} value={branch} leftSection={<Icon size={16} />}>
+                <Tabs.Tab key={branch} value={branch} leftSection={<HeroSiegeSkillIcon skillId={BRANCH_ICONS[branch]} size={20} />}>
                   {branch}
                 </Tabs.Tab>
               );
@@ -307,14 +258,7 @@ function SkillCostText(props: { skillId: WarriorSkillId }) {
 }
 
 function SkillPixelIcon(props: { locked: boolean; skillId: WarriorSkillId }) {
-  const art = SKILL_PIXEL_ART[props.skillId];
-  return (
-    <Box aria-hidden="true" style={{ background: "#050505", border: `1px solid ${props.locked ? "#3d3527" : "#8a744c"}`, flex: `0 0 ${SKILL_ICON_SIZE}px`, height: SKILL_ICON_SIZE, opacity: props.locked ? LOCKED_SKILL_ICON_OPACITY : 1, width: SKILL_ICON_SIZE }}>
-      <svg viewBox={SKILL_ICON_VIEWBOX} width={SKILL_ICON_SIZE} height={SKILL_ICON_SIZE} shapeRendering="crispEdges">
-        {art.pixels.flatMap((row, y) => [...row].map((pixel, x) => pixel === "." ? null : <rect key={`${props.skillId}-${x}-${y}`} x={x} y={y} width={SKILL_ICON_CELL} height={SKILL_ICON_CELL} fill={art.colors[pixel]} />))}
-      </svg>
-    </Box>
-  );
+  return <HeroSiegeSkillIcon locked={props.locked} skillId={props.skillId} size={SKILL_ICON_SIZE} />;
 }
 
 function getNodeBorder(rank: number, locked: boolean) {
@@ -373,3 +317,4 @@ function getRequirementText(state: StudyState, skill: (typeof WARRIOR_SKILLS)[nu
   const missing = (skill.requires || []).filter((id) => getWarriorSkillRank(state.profile.skillRanks, id) === 0).map(getSkillName);
   return `${levelText}${missing.length ? `Requires ${missing.join(", ")}.` : "Spend a skill point to unlock this rank."}`;
 }
+

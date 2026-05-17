@@ -69,6 +69,22 @@ function Get-ObjectPropertyValue {
   return $property.Value
 }
 
+function Test-ExtensionSettingsEnabled {
+  param([object]$Settings)
+
+  $disableReasons = Get-ObjectPropertyValue -Object $Settings -Name "disable_reasons"
+  if ($disableReasons -and @($disableReasons).Count -gt 0) {
+    return $false
+  }
+
+  $state = Get-ObjectPropertyValue -Object $Settings -Name "state"
+  if ($null -ne $state -and $state -eq 0) {
+    return $false
+  }
+
+  return $true
+}
+
 function Resolve-ChromePath {
   param([string]$Path)
 
@@ -114,20 +130,40 @@ function Find-UnpackedExtensionId {
   }
 
   $expectedPath = Get-NormalizedPath $ExpectedExtensionPath
+  $pathMatches = @()
 
   foreach ($extension in $settings.PSObject.Properties) {
     $extensionPath = Get-NormalizedPath (Get-ObjectPropertyValue -Object $extension.Value -Name "path")
     if ($extensionPath -and ($extensionPath -ieq $expectedPath)) {
-      return $extension.Name
+      $pathMatches += $extension
     }
   }
 
+  foreach ($extension in $pathMatches) {
+    if (Test-ExtensionSettingsEnabled -Settings $extension.Value) {
+      return $extension.Name
+    }
+  }
+  if ($pathMatches.Count -gt 0) {
+    return $pathMatches[0].Name
+  }
+
+  $nameMatches = @()
   foreach ($extension in $settings.PSObject.Properties) {
     $manifest = Get-ObjectPropertyValue -Object $extension.Value -Name "manifest"
     $name = Get-ObjectPropertyValue -Object $manifest -Name "name"
     if ($name -eq "Study Ladder") {
+      $nameMatches += $extension
+    }
+  }
+
+  foreach ($extension in $nameMatches) {
+    if (Test-ExtensionSettingsEnabled -Settings $extension.Value) {
       return $extension.Name
     }
+  }
+  if ($nameMatches.Count -gt 0) {
+    return $nameMatches[0].Name
   }
 
   return ""

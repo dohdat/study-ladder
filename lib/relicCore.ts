@@ -9,8 +9,23 @@ const RARE_COST = 240;
 const SHOP_COST = 260;
 const BOSS_COST = 320;
 const EVENT_COST = 210;
+const UNIQUE_EFFECT_START_VALUE = 1;
+const UNIQUE_EFFECT_SEARCH_LIMIT = 200;
 
 type RelicSeed = Omit<Relic, "id"> & { id?: string };
+
+const UNIQUE_EFFECT_KEYS: ItemModifierKey[] = [
+  "bonusXpPercent",
+  "goldFindPercent",
+  "magicFindPercent",
+  "maxLife",
+  "maxMana",
+  "enhancedDamagePercent",
+  "criticalChancePercent",
+  "lifeOnKill",
+  "manaOnKill",
+  "damageReduction"
+];
 
 const relic = (name: string, rarity: RelicRarity, description: string, modifiers: Partial<Record<ItemModifierKey, number>>, source: Relic["source"] = "any"): Relic => ({
   description,
@@ -26,7 +41,7 @@ const createRelic = (seed: RelicSeed): Relic => ({
   id: seed.id || seed.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
 });
 
-export const RELIC_DEFINITIONS: Relic[] = [
+const RAW_RELIC_DEFINITIONS: Relic[] = [
   createRelic({ description: "After each completed combat, recover health.", id: "burning-blood", modifiers: [{ key: "lifeOnKill", value: 6 }], name: "Burning Blood", rarity: "starter", source: "ironclad" }),
   createRelic({ description: "A stronger Burning Blood that greatly improves combat sustain.", id: "black-blood", modifiers: [{ key: "lifeOnKill", value: 12 }], name: "Black Blood", rarity: "boss", source: "ironclad" }),
   relic("Red Skull", "common", "When health is low, your attacks hit harder.", { criticalChancePercent: 4, enhancedDamagePercent: 8 }, "ironclad"),
@@ -108,7 +123,7 @@ export const RELIC_DEFINITIONS: Relic[] = [
   relic("Unceasing Top", "rare", "Empty-handed turns find more options.", { manaOnKill: 2, bonusXpPercent: 5 }),
   relic("Wing Boots", "rare", "Route flexibility increases rewards.", { magicFindPercent: 12 }),
   relic("Astrolabe", "boss", "Transform weak habits into stronger ones.", { bonusXpPercent: 15 }),
-  relic("Black Star", "boss", "Elite fights become much more profitable.", { magicFindPercent: 20 }),
+  createRelic({ description: "Elite fights become much more profitable.", id: "black-star-ascendant", modifiers: [{ key: "magicFindPercent", value: 20 }], name: "Black Star Ascendant", rarity: "boss", source: "any" }),
   relic("Busted Crown", "boss", "More energy, fewer choices.", { maxMana: 10, magicFindPercent: -5 }),
   relic("Calling Bell", "boss", "A curse and a jackpot.", { magicFindPercent: 18, maxLife: -4 }),
   relic("Coffee Dripper", "boss", "More energy but less rest.", { maxMana: 12, lifeOnKill: -2 }),
@@ -134,6 +149,8 @@ export const RELIC_DEFINITIONS: Relic[] = [
   ),
   relic("Warped Tongs", "event", "A random skill feels upgraded each fight.", { bonusXpPercent: 8, enhancedDamagePercent: 8 })
 ];
+
+export const RELIC_DEFINITIONS: Relic[] = makeRelicEffectsUnique(RAW_RELIC_DEFINITIONS);
 
 export function getOwnedRelicIds(state: StudyState) {
   return new Set(state.profile.relics.map((relic) => relic.id));
@@ -224,4 +241,48 @@ export function getRelicSeedRoll(seed: string) {
     hash = Math.imul(hash, HASH_MULTIPLIER);
   }
   return (hash >>> 0) / HASH_DIVISOR;
+}
+
+function makeRelicEffectsUnique(relics: Relic[]) {
+  const seen = new Set<string>();
+  return relics.map((relicItem, index) => {
+    const baseSignature = getRelicEffectSignature(relicItem);
+    if (!seen.has(baseSignature)) {
+      seen.add(baseSignature);
+      return relicItem;
+    }
+
+    const uniqueRelic = createUniqueEffectRelic(relicItem, index, seen);
+    seen.add(getRelicEffectSignature(uniqueRelic));
+    return uniqueRelic;
+  });
+}
+
+function createUniqueEffectRelic(relicItem: Relic, index: number, seen: Set<string>) {
+  for (let attempt = 0; attempt < UNIQUE_EFFECT_SEARCH_LIMIT; attempt += 1) {
+    const key = UNIQUE_EFFECT_KEYS[(index + attempt) % UNIQUE_EFFECT_KEYS.length];
+    const value = UNIQUE_EFFECT_START_VALUE + Math.floor(attempt / UNIQUE_EFFECT_KEYS.length);
+    const candidate = addRelicModifier(relicItem, key, value);
+    if (!seen.has(getRelicEffectSignature(candidate))) {
+      return candidate;
+    }
+  }
+  return addRelicModifier(relicItem, "bonusXpPercent", index + UNIQUE_EFFECT_START_VALUE);
+}
+
+function addRelicModifier(relicItem: Relic, key: ItemModifierKey, value: number): Relic {
+  const modifiers = relicItem.modifiers || [];
+  const existing = modifiers.find((modifier) => modifier.key === key);
+  const nextModifiers = existing
+    ? modifiers.map((modifier) => modifier.key === key ? { ...modifier, value: modifier.value + value } : modifier)
+    : [...modifiers, { key, value }];
+  return { ...relicItem, modifiers: nextModifiers };
+}
+
+function getRelicEffectSignature(relicItem: Relic) {
+  return (relicItem.modifiers || [])
+    .filter((modifier) => modifier.value !== 0)
+    .map((modifier) => `${modifier.key}:${modifier.value}`)
+    .sort()
+    .join("|");
 }
