@@ -127,6 +127,43 @@ export type ItemModifier = {
   value: number;
 };
 
+export type RelicRarity = "starter" | "common" | "uncommon" | "rare" | "boss" | "shop" | "event" | "blight" | "special";
+
+export type RelicSource = "any" | "ironclad";
+
+export type Relic = {
+  id: string;
+  name: string;
+  rarity: RelicRarity;
+  source: RelicSource;
+  description: string;
+  modifiers?: ItemModifier[];
+};
+
+export type SpireNodeKind = "unknown" | "merchant" | "treasure" | "rest" | "enemy" | "elite" | "boss";
+
+export type SpireMapNode = {
+  column: number;
+  id: string;
+  kind: SpireNodeKind;
+  rating: number;
+  x: number;
+  y: number;
+  nextIds: string[];
+};
+
+export type SpireRun = {
+  availableNodeIds: string[];
+  tierIndex: number;
+  currentNodeId: string;
+  completedNodeIds: string[];
+  mapOpen: boolean;
+  mapSeed: number;
+  nodes: SpireMapNode[];
+  roundQuestionIds: string[];
+  roundSolvedIds: string[];
+};
+
 export type InventoryItem = {
   id: string;
   modifiers?: ItemModifier[];
@@ -158,6 +195,13 @@ export type ShopItem =
       item: InventoryItem;
       kind: "equipment";
       name: string;
+    }
+  | {
+      cost: number;
+      id: string;
+      kind: "relic";
+      name: string;
+      relic: Relic;
     };
 
 export type StudyState = {
@@ -183,6 +227,8 @@ export type StudyState = {
     equipment: Record<EquipmentSlot, string | null>;
     shopLastRefreshedAt: number | null;
     shopStock: ShopItem[];
+    relics: Relic[];
+    spireRun: SpireRun;
     unlockedAchievementIds: string[];
   };
   cards: Record<string, CardState>;

@@ -2,9 +2,10 @@ import { Badge, Box, Button, Group, SimpleGrid, Stack, Text } from "@mantine/cor
 
 import { CoinAmount } from "./CoinIcon";
 import { ItemSummary } from "./InventoryPanel";
+import { RelicIcon } from "./RelicIcon";
 import { buyShopItem } from "../lib/shopCore";
 import { getMaxHealth, getMaxMana } from "../lib/studyCore";
-import type { EquipmentSlot, ItemRarity, ShopItem, StudyState } from "../types/study";
+import type { EquipmentSlot, ItemRarity, Relic, ShopItem, StudyState } from "../types/study";
 
 const SHOP_COLUMNS = { base: 1, sm: 2 };
 const SHOP_PANEL_BG = "radial-gradient(circle at 50% 18%, #332f28 0%, #1b1a17 52%, #090909 100%)";
@@ -71,7 +72,7 @@ function ShopCard(props: { item: ShopItem; state: StudyState; setState: React.Di
     <Box p="sm" style={{ background: SHOP_CARD_BG, border: SHOP_CARD_BORDER, boxShadow: SHOP_CARD_SHADOW }}>
       <Group justify="space-between" align="flex-start" gap="xs" wrap="nowrap">
         <ShopItemArt item={props.item} />
-        <Box flex={1}>{props.item.kind === "equipment" ? <ItemSummary item={props.item.item} /> : <PotionSummary item={props.item} />}</Box>
+        <Box flex={1}>{getShopSummary(props.item)}</Box>
         <Badge variant="light" color={canAfford ? "yellow" : "gray"}>{props.item.cost}</Badge>
       </Group>
       <Button fullWidth mt="sm" size="xs" variant="light" disabled={!canAfford} onClick={() => buyItem(props)}>
@@ -82,6 +83,13 @@ function ShopCard(props: { item: ShopItem; state: StudyState; setState: React.Di
 }
 
 function ShopItemArt(props: { item: ShopItem }) {
+  if (props.item.kind === "relic") {
+    return (
+      <Box style={{ alignItems: "center", background: "#050505", border: "1px solid #8a744c", boxShadow: SHOP_ICON_BOX_SHADOW, display: "flex", flex: `0 0 ${SHOP_ICON_SIZE}px`, height: SHOP_ICON_SIZE, justifyContent: "center", width: SHOP_ICON_SIZE }}>
+        <RelicIcon relic={props.item.relic} size={44} />
+      </Box>
+    );
+  }
   const colors = props.item.kind === "equipment" ? RARITY_ART_COLORS[props.item.item.rarity] : getPotionColors(props.item.type);
   const seed = props.item.kind === "equipment" ? props.item.item.id : props.item.id;
   const variant = getArtVariant(seed);
@@ -90,6 +98,26 @@ function ShopItemArt(props: { item: ShopItem }) {
       <svg viewBox="0 0 16 16" width={SHOP_ICON_SIZE} height={SHOP_ICON_SIZE} shapeRendering="crispEdges" aria-hidden>
         {props.item.kind === "equipment" ? <EquipmentPixels colors={colors} slot={props.item.item.slot} variant={variant} /> : <PotionPixels colors={colors} variant={variant} />}
       </svg>
+    </Box>
+  );
+}
+
+function getShopSummary(item: ShopItem) {
+  if (item.kind === "equipment") {
+    return <ItemSummary item={item.item} />;
+  }
+  if (item.kind === "relic") {
+    return <RelicSummary relic={item.relic} />;
+  }
+  return <PotionSummary item={item} />;
+}
+
+function RelicSummary(props: { relic: Relic }) {
+  return (
+    <Box>
+      <Text size="xs" fw={800} c="cyan.3">{props.relic.name}</Text>
+      <Text size="10px" c="gray.4">{props.relic.rarity} - {props.relic.source}</Text>
+      <Text size="10px" c="dimmed">{props.relic.description}</Text>
     </Box>
   );
 }

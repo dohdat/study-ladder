@@ -1,4 +1,5 @@
 import { createDropItem } from "./itemCore";
+import { getRelicCost, grantRelic, rollRelic } from "./relicCore";
 import type { CharacterStats, Difficulty, Question, ShopItem, StudyState } from "../types/study";
 
 const HASH_SEED = 2166136261;
@@ -10,6 +11,7 @@ const HEALTH_POTION_COST = 16;
 const MANA_POTION_COST = 12;
 const POTION_DIFFICULTY_AMOUNT = 4;
 const EQUIPMENT_STOCK_COUNT = 4;
+const RELIC_STOCK_COUNT = 4;
 const SHOP_RATING_DISCOUNT = 180;
 const SHOP_RATING_STEP = 45;
 const MIN_SHOP_RATING = 1000;
@@ -30,7 +32,8 @@ export function createShopStock(question: Question, stats: CharacterStats, now: 
   return [
     createHealthPotion(question, now),
     createManaPotion(question, now),
-    ...Array.from({ length: EQUIPMENT_STOCK_COUNT }, (_unused, index) => createShopEquipment(question, stats, now, index))
+    ...Array.from({ length: EQUIPMENT_STOCK_COUNT }, (_unused, index) => createShopEquipment(question, stats, now, index)),
+    ...Array.from({ length: RELIC_STOCK_COUNT }, (_unused, index) => createShopRelic(question, now, index))
   ];
 }
 
@@ -46,17 +49,28 @@ export function buyShopItem(state: StudyState, shopItemId: string, maxHealth: nu
     next.profile.inventory.push(listing.item);
     return next;
   }
+  if (listing.kind === "relic") {
+    return grantRelic(next, listing.relic);
+  }
   applyConsumable(next, listing, maxHealth, maxMana);
   return next;
 }
 
 export function normalizeShopStock(items: ShopItem[] | undefined): ShopItem[] {
-  return (items || []).filter((item) => {
-    if (item.kind === "consumable") {
-      return Boolean(item.id && item.name && item.cost >= 0 && item.amount > 0 && (item.type === "health" || item.type === "mana"));
-    }
-    return Boolean(item.id && item.name && item.cost >= 0 && item.item);
-  });
+  return (items || []).filter(isValidShopItem);
+}
+
+function isValidShopItem(item: ShopItem) {
+  if (!item.id || !item.name || item.cost < 0) {
+    return false;
+  }
+  if (item.kind === "consumable") {
+    return item.amount > 0 && (item.type === "health" || item.type === "mana");
+  }
+  if (item.kind === "equipment") {
+    return Boolean(item.item);
+  }
+  return Boolean(item.relic);
 }
 
 function createHealthPotion(question: Question, now: number): ShopItem {
@@ -74,6 +88,11 @@ function createShopEquipment(question: Question, stats: CharacterStats, now: num
   const item = createDropItem(shopQuestion, stats, now + index);
   const cost = getEquipmentCost(item);
   return { cost, id: `shop-equipment-${item.id}`, item, kind: "equipment", name: item.name };
+}
+
+function createShopRelic(question: Question, now: number, index: number): ShopItem {
+  const relic = rollRelic({ profile: { relics: [] } } as unknown as StudyState, `${question.id}:${now}:shop-relic:${index}`, { includeShop: true });
+  return { cost: getRelicCost(relic), id: `shop-relic-${relic.id}-${now}-${index}`, kind: "relic", name: relic.name, relic };
 }
 
 function createShopQuestion(question: Question, index: number): Question {
@@ -106,6 +125,7 @@ function cloneShopState(state: StudyState): StudyState {
       ...state.profile,
       equipment: { ...state.profile.equipment },
       inventory: state.profile.inventory.map((item) => ({ ...item, modifiers: item.modifiers?.map((modifier) => ({ ...modifier })), stats: { ...item.stats } })),
+      relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })),
       shopStock: state.profile.shopStock.map((item) => ({ ...item }))
     },
     cards: { ...state.cards }

@@ -8,6 +8,7 @@ import { AppHeader } from "../components/AppHeader";
 import { PracticeArea, type PracticePanelActions } from "../components/PracticePanels";
 import { DeathResetModal } from "../components/DeathResetModal";
 import { RewardNotifications, type RewardNotification } from "../components/RewardNotifications";
+import { SpireMapPanel } from "../components/SpireMapPanel";
 import { questions } from "../data/questions";
 import { useCodexHintStream } from "../hooks/useCodexHintStream";
 import { useActiveWarriorSkillAction } from "../hooks/useActiveWarriorSkillAction";
@@ -21,9 +22,10 @@ import { beautifyCode } from "../lib/codeFormat";
 import { applyPassedCombatResult } from "../lib/combatCore";
 import { getMonsterAttackProfile } from "../lib/monsterCore";
 import { getTimerDisplay } from "../lib/timerDisplay";
+import { chooseNextSpireQuestion, completeSpireQuestion, getCurrentRoundQuestion, getCurrentSpireNode, isCombatNode as isSpireCombatNode } from "../lib/spireMapCore";
 import {
   HINT_COST, applyHealthPenalty, applyScheduleResult, buyHint, canBuyHint, cloneState, defaultState, getCard,
-  getHealthLoss, getMonsterDamageRoll, getQuestionTimeLimitMs, isQuestionInRecommendedRange, normalizeStudyState, pickQuestion, setCard
+  getHealthLoss, getMonsterDamageRoll, getQuestionTimeLimitMs, isQuestionInRecommendedRange, normalizeStudyState, setCard
 } from "../lib/studyCore";
 import { createHintPrompt } from "../lib/hintPrompt";
 import { createLocalHint } from "../lib/localHint";
@@ -53,7 +55,7 @@ function useHydrateStudy(setState: (state: StudyState) => void, setQuestion: (qu
     async function hydrate() {
       const saved = normalizeStudyState(await migrateLocalStorageState());
       const savedQuestion = questions.find((question) => question.id === saved.currentId);
-      const initialQuestion = savedQuestion && isQuestionInRecommendedRange(saved, savedQuestion, true) ? savedQuestion : pickQuestion(saved, null);
+      const initialQuestion = getCurrentRoundQuestion(saved, savedQuestion && isQuestionInRecommendedRange(saved, savedQuestion, true) ? savedQuestion : null);
       if (active) {
         setState({ ...saved, currentId: initialQuestion.id });
         setQuestion(initialQuestion);
@@ -63,7 +65,7 @@ function useHydrateStudy(setState: (state: StudyState) => void, setQuestion: (qu
     }
     hydrate().catch(() => {
       const saved = defaultState();
-      const initialQuestion = pickQuestion(saved, null);
+      const initialQuestion = getCurrentRoundQuestion(saved, null);
       if (active) {
         setState(saved);
         setQuestion(initialQuestion);
@@ -236,8 +238,9 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
   }
   const now = Date.now();
   const combat = applyPassedCombatResult(params.state, question.id, params.code, now);
-  const picked = pickQuestion(combat.state, question, true);
-  const nextState = { ...combat.state, currentId: picked.id };
+  const progressed = completeSpireQuestion(combat.state, question, now);
+  const picked = chooseNextSpireQuestion(progressed, question);
+  const nextState = { ...progressed, currentId: picked.id };
   params.showRewards(question, params.state, now);
   params.setResults([]);
   params.setConsoleRunResult(null);
@@ -247,6 +250,11 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
   params.setSessionStarted(false);
   params.setQuestionFinished(false);
   params.clearHint();
+  if (progressed.profile.spireRun.mapOpen) {
+    params.setTone("pass");
+    params.setStatus("Room cleared. Choose the next path on the map.");
+    return;
+  }
   if (combat.hit?.defeated) {
     params.setTone("pass");
     params.setStatus(`Monster defeated. ${formatHitStatus(combat.hit)} Next question loaded.`);
@@ -357,7 +365,7 @@ function useEditorMount(beautifyCurrentCode: (source?: string) => void, submitCo
 
 function useChooseQuestion(params: Parameters<typeof usePracticeActions>[0], updateDraft: (code: string) => void) {
   return useCallback((preferNext: boolean) => {
-    const picked = pickQuestion(params.state, params.currentQuestion, preferNext);
+    const picked = preferNext ? chooseNextSpireQuestion(params.state, params.currentQuestion) : getCurrentRoundQuestion(params.state, params.currentQuestion);
     params.setCurrentQuestion(picked);
     params.setState((previous) => ({ ...previous, currentId: picked.id }));
     updateDraft(picked.starter);
@@ -390,7 +398,7 @@ function useBuyHint(params: Parameters<typeof usePracticeActions>[0]) {
 
 function useStartQuestion(params: Parameters<typeof usePracticeActions>[0]) {
   return useCallback(() => {
-    if (!params.currentQuestion || params.state.mode !== "leetcode") {
+    if (!params.currentQuestion || params.state.mode !== "leetcode" || params.state.profile.spireRun.mapOpen) {
       return;
     }
     params.runnerFrame.current?.contentWindow?.postMessage({ type: "runner-ping" }, "*");
@@ -540,7 +548,7 @@ function useFailAndAdvance(params: {
     const attack = getMonsterAttackProfile(currentQuestion, monsterDamage);
     const healthLoss = getHealthLoss(state, attack.damage, attack.element);
     const scheduled = applyScheduleResult(state, currentQuestion.id, false, draft, Date.now(), attack.damage, attack.manaDamage, attack.element);
-    const picked = pickQuestion(scheduled, currentQuestion, true);
+    const picked = chooseNextSpireQuestion(scheduled, currentQuestion);
     const nextState = { ...scheduled, currentId: picked.id };
     activeRunId.current = null;
     clearRunTimer(runTimer);
@@ -558,6 +566,28 @@ function useFailAndAdvance(params: {
   }, [activeRunId, code, currentQuestion, params, runTimer, setCode, setConsoleRunResult, setCurrentQuestion, setResults, setRunning, setSessionStarted, setState, setStatus, setTone, state]);
 }
 
+function useSyncSpireQuestion(params: {
+  currentQuestion: Question | null;
+  sessionStarted: boolean;
+  setCode: (code: string) => void;
+  setCurrentQuestion: (question: Question) => void;
+  setState: React.Dispatch<React.SetStateAction<StudyState>>;
+  state: StudyState;
+}) {
+  useEffect(() => {
+    if (params.sessionStarted || params.state.profile.spireRun.mapOpen) {
+      return;
+    }
+    const nextQuestion = getCurrentRoundQuestion(params.state, params.currentQuestion);
+    if (nextQuestion.id !== params.currentQuestion?.id) {
+      params.setCurrentQuestion(nextQuestion);
+      params.setCode(nextQuestion.starter);
+      params.setState((previous) => ({ ...previous, currentId: nextQuestion.id }));
+    }
+  }, [params]);
+}
+
+// eslint-disable-next-line max-lines-per-function, complexity
 export default function Home() {
   const [state, setState] = useState<StudyState>(() => defaultState());
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
@@ -585,7 +615,7 @@ export default function Home() {
   const resetAfterDeath = useCallback(() => {
     const freshState = defaultState();
     freshState.profile.unlockedAchievementIds = state.profile.unlockedAchievementIds;
-    const picked = pickQuestion(freshState, null);
+    const picked = getCurrentRoundQuestion(freshState, null);
     activeRunId.current = null;
     clearRunTimer(runTimer);
     setRunning(false);
@@ -606,6 +636,9 @@ export default function Home() {
   useFullscreenGuard({ active: state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished && !isDead, pauseQuestion: pauseQuestionForFocusLoss, setStatus: setRunStatus, setTone: setRunTone });
   const headerStats = useHeaderStats(state);
   const timerDisplay = getTimerDisplay(currentQuestion, timer.timeRemainingMs);
+  const currentSpireNode = getCurrentSpireNode(state);
+  const showPractice = !state.profile.spireRun.mapOpen && isSpireCombatNode(currentSpireNode);
+  useSyncSpireQuestion({ currentQuestion, sessionStarted, setCode, setCurrentQuestion, setState, state });
   return (
     <>
       <Head><title>Study Ladder</title></Head>
@@ -629,7 +662,8 @@ export default function Home() {
             setState={setState}
             useActiveSkill={actions.useActiveSkill}
           />
-          <PracticeArea actions={actions} currentQuestion={currentQuestion} editorProps={{ canBuyHint: canBuyHint(state), code, consoleRunResult, hintCost: HINT_COST, hintError: hints.hintError, hintStreaming: hints.hintStreaming, hintText: hints.hintText, questionFinished: timer.questionFinished, results, runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} state={state} />
+          <SpireMapPanel state={state} setState={setState} />
+          {showPractice && <PracticeArea actions={actions} currentQuestion={currentQuestion} editorProps={{ canBuyHint: canBuyHint(state), code, consoleRunResult, hintCost: HINT_COST, hintError: hints.hintError, hintStreaming: hints.hintStreaming, hintText: hints.hintText, questionFinished: timer.questionFinished, results, runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} state={state} />}
         </Stack>
       </Container>
       <iframe ref={runnerFrame} src={RUNNER_FRAME} title="JavaScript runner" hidden onLoad={() => setRunnerReady(true)} />

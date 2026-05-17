@@ -17,12 +17,11 @@ import {
   Tooltip,
   Title
 } from "@mantine/core";
-import { IconBackpack, IconChartBar, IconSettings, IconShoppingBag, IconSparkles, IconSword, IconTrophy, IconUser } from "@tabler/icons-react";
+import { IconBackpack, IconChartBar, IconSettings, IconSparkles, IconSword, IconTrophy, IconUser } from "@tabler/icons-react";
 
 import { AchievementsPanel } from "./AchievementsPanel";
 import { CoinAmount } from "./CoinIcon";
 import { InventoryPanel } from "./InventoryPanel";
-import { ShopPanel } from "./ShopPanel";
 import { WarriorSkillTree } from "./WarriorSkillTree";
 import { questions } from "../data/questions";
 import { useStudyBlockerSettings } from "../hooks/useStudyBlocker";
@@ -32,11 +31,11 @@ import {
   getCriticalChance,
   getEffectiveCharacterStats,
   getElementalResistances,
-  getEquipmentModifierTotals,
   getHealthLoss,
   getLevelProgress,
   getMaxHealth,
   getMaxMana,
+  getRunModifierTotals,
   getWarriorSkillBonusTotals,
   spendStatPoint
 } from "../lib/studyCore";
@@ -44,7 +43,6 @@ import type { CharacterStatKey, StudyState } from "../types/study";
 
 const ICON_SIZE = 16;
 const MENU_WIDTH = 180;
-const SHOP_MODAL_SIZE = 980;
 const ACHIEVEMENTS_MODAL_SIZE = 920;
 const SKILLS_MODAL_SIZE = 920;
 const MODAL_TRANSITION_DURATION = 0;
@@ -78,7 +76,6 @@ const STAT_DESCRIPTIONS: Record<CharacterStatKey, string> = {
 
 const USER_MENU_ITEMS = [
   { id: "profile", icon: IconUser, label: "Profile" },
-  { id: "shop", icon: IconShoppingBag, label: "Shop" },
   { id: "inventory", icon: IconBackpack, label: "Inventory" },
   { id: "skills", icon: IconSword, label: "Skills" },
   { id: "stats", icon: IconChartBar, label: "Stats" },
@@ -120,9 +117,6 @@ export function UserMenu(props: { activeSection: UserMenuSection | null; setActi
 }
 
 function getModalSize(section: UserMenuSection | null) {
-  if (section === "shop") {
-    return SHOP_MODAL_SIZE;
-  }
   if (section === "achievements") {
     return ACHIEVEMENTS_MODAL_SIZE;
   }
@@ -138,9 +132,6 @@ function UserModalContent(props: { section: UserMenuSection | null; state: Study
   }
   if (props.section === "inventory") {
     return <InventoryPanel state={props.state} setState={props.setState} />;
-  }
-  if (props.section === "shop") {
-    return <ShopPanel state={props.state} setState={props.setState} />;
   }
   if (props.section === "skills") {
     return <WarriorSkillTree state={props.state} setState={props.setState} />;
@@ -202,7 +193,7 @@ function StatsPanel(props: { state: StudyState; setState: React.Dispatch<React.S
   const stats = useMemo(() => getEffectiveCharacterStats(props.state), [props.state]);
   const sampleQuestion = questions.find((question) => question.id === props.state.currentId) || questions[0];
   const criticalChance = Math.round(getCriticalChance(props.state) * PROGRESS_MAX);
-  const modifiers = getEquipmentModifierTotals(props.state);
+  const modifiers = getRunModifierTotals(props.state);
   const skillBonuses = getWarriorSkillBonusTotals(props.state);
   const resistances = getElementalResistances(props.state);
   const maxHealth = getMaxHealth(props.state);
