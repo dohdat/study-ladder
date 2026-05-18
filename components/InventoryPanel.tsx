@@ -154,6 +154,7 @@ const MODIFIER_DETAILS: Record<ItemModifierKey, { color: string; label: (value: 
 type EquipmentSpriteLayout = { asset: StaticImageData; height: number; iconSize: number; label: string; left: number; top: number; width: number };
 type ItemFootprint = { columns: number; rows: number };
 type InventoryPlacement = { column: number; footprint: ItemFootprint; item: InventoryItem; row: number; tab: number };
+type InventoryDropPreview = { footprint: ItemFootprint; position: InventoryItemPosition; valid: boolean };
 
 const ITEM_FOOTPRINTS: Record<EquipmentSlot, ItemFootprint> = {
   armor: { columns: 2, rows: 2 },
@@ -259,36 +260,61 @@ function EquipmentSlotCell(props: { item?: InventoryItem; layout: EquipmentSprit
 
 function InventoryGrid(props: { activeTab: number; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+  const [dropPreview, setDropPreview] = useState<InventoryDropPreview | null>(null);
   const placements = getAllInventoryPlacements(props.state.profile.inventory, props.state.profile.inventorySlots);
   const visiblePlacements = placements.filter((placement) => placement.tab === props.activeTab);
   const cells = Array.from({ length: INVENTORY_GRID_ROWS * INVENTORY_GRID_COLUMNS });
+  const clearDragState = () => {
+    setDraggedItemId(null);
+    setDropPreview(null);
+  };
   return (
     <Box
       onDragOver={(event) => {
         if (!draggedItemId) {
           return;
         }
+        const draggedPlacement = placements.find((placement) => placement.item.id === draggedItemId);
         const position = getDropInventoryPosition(event.currentTarget, event, props.activeTab);
-        if (position && canMoveItemToPosition(draggedItemId, position, placements)) {
+        if (!position || !draggedPlacement) {
+          setDropPreview(null);
+          return;
+        }
+        const dropPosition = clampDropPreviewPosition(position, draggedPlacement.footprint);
+        const valid = canMoveItemToPosition(draggedItemId, dropPosition, placements);
+        setDropPreview({
+          footprint: draggedPlacement.footprint,
+          position: dropPosition,
+          valid
+        });
+        if (valid) {
           event.preventDefault();
           event.dataTransfer.dropEffect = "move";
         }
       }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setDropPreview(null);
+        }
+      }}
       onDrop={(event) => {
         const itemId = event.dataTransfer.getData("text/plain") || draggedItemId;
+        const draggedPlacement = placements.find((placement) => placement.item.id === itemId);
         const position = getDropInventoryPosition(event.currentTarget, event, props.activeTab);
-        setDraggedItemId(null);
-        if (!itemId || !position || !canMoveItemToPosition(itemId, position, placements)) {
+        const dropPosition = position && draggedPlacement ? clampDropPreviewPosition(position, draggedPlacement.footprint) : null;
+        clearDragState();
+        if (!itemId || !dropPosition || !canMoveItemToPosition(itemId, dropPosition, placements)) {
           return;
         }
         event.preventDefault();
-        props.setState((previous) => moveInventoryItem(previous, itemId, position));
+        props.setState((previous) => moveInventoryItem(previous, itemId, dropPosition));
       }}
       style={{ display: "grid", gap: INVENTORY_GRID_GAP, gridTemplateColumns: `repeat(${INVENTORY_GRID_COLUMNS}, ${INVENTORY_GRID_CELL_SIZE}px)`, gridTemplateRows: `repeat(${INVENTORY_GRID_ROWS}, ${INVENTORY_GRID_CELL_SIZE}px)`, left: INVENTORY_GRID_LEFT, position: "absolute", top: INVENTORY_GRID_TOP, width: INVENTORY_GRID_WIDTH }}
     >
       {cells.map((_, index) => (
         <InventoryEmptyCell key={`empty-${index}`} />
       ))}
+      {dropPreview ? <InventoryDropPreviewOverlay preview={dropPreview} /> : null}
       {visiblePlacements.map((placement) => (
         <InventoryItemCell
           key={placement.item.id}
@@ -296,12 +322,14 @@ function InventoryGrid(props: { activeTab: number; state: StudyState; setState: 
           equipped={props.state.profile.equipment[placement.item.slot] === placement.item.id}
           item={placement.item}
           footprint={placement.footprint}
+          isDragging={draggedItemId === placement.item.id}
           onEquip={() => props.setState((previous) => equipItem(previous, placement.item.id))}
           onUnequip={() => props.setState((previous) => unequipItem(previous, placement.item.slot))}
           onDiscard={() => props.setState((previous) => discardItem(previous, placement.item.id))}
-          onDragEnd={() => setDraggedItemId(null)}
+          onDragEnd={clearDragState}
           onDragStart={(itemId) => setDraggedItemId(itemId)}
           placement={placement}
+          tooltipDisabled={draggedItemId !== null}
         />
       ))}
     </Box>
@@ -312,13 +340,45 @@ function InventoryEmptyCell() {
   return <Box style={{ backgroundImage: `url(${inventoryGridBg})`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%", height: INVENTORY_GRID_CELL_SIZE, imageRendering: "pixelated", width: INVENTORY_GRID_CELL_SIZE }} />;
 }
 
-function InventoryItemCell(props: { canEquip: boolean; equipped: boolean; footprint: ItemFootprint; item: InventoryItem; onDiscard: () => void; onDragEnd: () => void; onDragStart: (itemId: string) => void; onEquip: () => void; onUnequip: () => void; placement: InventoryPlacement }) {
+function InventoryDropPreviewOverlay(props: { preview: InventoryDropPreview }) {
+  const color = props.preview.valid ? "#fff6c4" : "#d84d4d";
+  const width = props.preview.footprint.columns * INVENTORY_GRID_CELL_SIZE + (props.preview.footprint.columns - 1) * INVENTORY_GRID_GAP;
+  const height = props.preview.footprint.rows * INVENTORY_GRID_CELL_SIZE + (props.preview.footprint.rows - 1) * INVENTORY_GRID_GAP;
+  return (
+    <Box
+      aria-hidden="true"
+      style={{
+        background: props.preview.valid ? "rgba(255, 238, 164, 0.16)" : "rgba(150, 20, 20, 0.2)",
+        border: `2px solid ${color}`,
+        boxShadow: props.preview.valid ? "0 0 12px rgba(255, 246, 196, 0.75), inset 0 0 10px rgba(255, 246, 196, 0.28)" : "0 0 12px rgba(216, 77, 77, 0.72), inset 0 0 10px rgba(216, 77, 77, 0.24)",
+        height,
+        imageRendering: "pixelated",
+        left: props.preview.position.column * (INVENTORY_GRID_CELL_SIZE + INVENTORY_GRID_GAP),
+        pointerEvents: "none",
+        position: "absolute",
+        top: props.preview.position.row * (INVENTORY_GRID_CELL_SIZE + INVENTORY_GRID_GAP),
+        width,
+        zIndex: 4
+      }}
+    />
+  );
+}
+
+function clampDropPreviewPosition(position: InventoryItemPosition, footprint: ItemFootprint): InventoryItemPosition {
+  return {
+    column: Math.min(position.column, INVENTORY_GRID_COLUMNS - footprint.columns),
+    row: Math.min(position.row, INVENTORY_GRID_ROWS - footprint.rows),
+    tab: position.tab
+  };
+}
+
+function InventoryItemCell(props: { canEquip: boolean; equipped: boolean; footprint: ItemFootprint; isDragging: boolean; item: InventoryItem; onDiscard: () => void; onDragEnd: () => void; onDragStart: (itemId: string) => void; onEquip: () => void; onUnequip: () => void; placement: InventoryPlacement; tooltipDisabled: boolean }) {
   const [hovered, setHovered] = useState(false);
   const action = props.equipped ? props.onUnequip : props.onEquip;
   const iconSize = getInventoryItemIconSize(props.footprint);
   const rarityColor = RARITY_COLORS[props.item.rarity];
   return (
-    <InventoryItemTooltip canEquip={props.canEquip} equipped={props.equipped} item={props.item}>
+    <InventoryItemTooltip canEquip={props.canEquip} disabled={props.tooltipDisabled} equipped={props.equipped} item={props.item}>
       <Box
         draggable
         onDragEnd={props.onDragEnd}
@@ -329,7 +389,7 @@ function InventoryItemCell(props: { canEquip: boolean; equipped: boolean; footpr
         }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        style={{ gridColumn: `${props.placement.column + 1} / span ${props.footprint.columns}`, gridRow: `${props.placement.row + 1} / span ${props.footprint.rows}`, position: "relative", zIndex: 2 }}
+        style={{ gridColumn: `${props.placement.column + 1} / span ${props.footprint.columns}`, gridRow: `${props.placement.row + 1} / span ${props.footprint.rows}`, opacity: props.isDragging ? 0.42 : 1, position: "relative", zIndex: 5 }}
       >
         <Box
           aria-disabled={!props.equipped && !props.canEquip}
@@ -587,9 +647,10 @@ function ItemPixelIcon(props: { item: InventoryItem }) {
   return <HeroSiegeEquipmentIcon item={props.item} size={ITEM_ICON_SIZE} />;
 }
 
-function InventoryItemTooltip(props: { canEquip?: boolean; children: React.ReactNode; equipped?: boolean; item: InventoryItem }) {
+function InventoryItemTooltip(props: { canEquip?: boolean; children: React.ReactNode; disabled?: boolean; equipped?: boolean; item: InventoryItem }) {
   return (
     <Tooltip
+      disabled={props.disabled}
       label={<ItemDetails canEquip={props.canEquip} equipped={props.equipped} item={props.item} />}
       multiline
       withArrow
