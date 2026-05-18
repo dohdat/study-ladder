@@ -1,4 +1,3 @@
-import Head from "next/head";
 import { useEffect, useMemo, useState } from "react";
 import {
   Badge,
@@ -45,9 +44,6 @@ export default function Profile() {
   const maxMana = useMemo(() => getMaxMana(state), [state]);
   return (
     <>
-      <Head>
-        <title>Study Ladder Profile</title>
-      </Head>
       <Container size="xl" px="md" py="md">
         <Stack gap="md">
           <ProfileHeader loaded={loaded} />

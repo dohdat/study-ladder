@@ -1,5 +1,4 @@
 /* eslint-disable max-lines */
-import Head from "next/head";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Container, Stack } from "@mantine/core";
 import type { OnMount } from "@monaco-editor/react";
@@ -637,19 +636,20 @@ export default function Home() {
   const headerStats = useHeaderStats(state);
   const timerDisplay = getTimerDisplay(currentQuestion, timer.timeRemainingMs);
   const currentSpireNode = getCurrentSpireNode(state);
-  const showPractice = !state.profile.spireRun.mapOpen && isSpireCombatNode(currentSpireNode);
+  const mapOpen = state.profile.spireRun.mapOpen;
+  const showPractice = !mapOpen && isSpireCombatNode(currentSpireNode);
   useSyncSpireQuestion({ currentQuestion, sessionStarted, setCode, setCurrentQuestion, setState, state });
   return (
     <>
-      <Head><title>Study Ladder</title></Head>
       <RewardNotifications items={rewardNotifications} />
       <DeathResetModal opened={isDead} onReset={resetAfterDeath} />
-      <Container fluid px="md" py="md" w={{ base: "100%", lg: "70%" }}>
-        <Stack gap="md">
+      <Container fluid px="md" py="md" w={{ base: "100%", lg: "70%" }} style={mapOpen ? { height: "100vh", overflow: "hidden" } : undefined}>
+        <Stack gap="md" style={mapOpen ? { height: "100%", minHeight: 0 } : undefined}>
           <AppHeader
             coins={state.profile.coins}
             currentExperience={headerStats.levelProgress.currentExperience}
             health={state.profile.health}
+            hidePlayerStatus={mapOpen}
             level={headerStats.levelProgress.level}
             mana={state.profile.mana}
             maxHealth={headerStats.maxHealth}
@@ -662,7 +662,7 @@ export default function Home() {
             setState={setState}
             useActiveSkill={actions.useActiveSkill}
           />
-          <SpireMapPanel state={state} setState={setState} />
+          <SpireMapPanel fillAvailableHeight={mapOpen} state={state} setState={setState} />
           {showPractice && <PracticeArea actions={actions} currentQuestion={currentQuestion} editorProps={{ canBuyHint: canBuyHint(state), code, consoleRunResult, hintCost: HINT_COST, hintError: hints.hintError, hintStreaming: hints.hintStreaming, hintText: hints.hintText, questionFinished: timer.questionFinished, results, runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} state={state} />}
         </Stack>
       </Container>

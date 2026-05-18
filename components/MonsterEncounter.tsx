@@ -1,5 +1,5 @@
 import { Badge, Box, Group, Paper, Progress, Text, Tooltip } from "@mantine/core";
-import type { StaticImageData } from "next/image";
+type StaticImageData = string;
 
 import { getMonsterCurrentHealth } from "../lib/combatCore";
 import { getMonsterMaxHealth, getUniqueMonsterBonusDescription, getUniqueMonsterBonuses, getUniqueMonsterName } from "../lib/monsterCore";
@@ -212,7 +212,7 @@ function MonsterAvatar(props: { monster: MonsterDefinition }) {
       <Box
         alt=""
         component="img"
-        src={props.monster.art.src}
+        src={props.monster.art}
         style={{
           display: "block",
           filter: props.monster.filter,

@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import {
   Badge,
   Box,
-  Button,
   Group,
   Menu,
   Modal,
@@ -22,6 +21,7 @@ import { IconBackpack, IconBook, IconChartBar, IconSettings, IconSparkles, IconS
 
 import { AchievementsPanel } from "./AchievementsPanel";
 import { CoinAmount } from "./CoinIcon";
+import { HeroSiegeButton } from "./HeroSiegeUi";
 import { InventoryPanel } from "./InventoryPanel";
 import { MONSTER_WIKI_ENTRIES } from "./MonsterEncounter";
 import { RelicIcon } from "./RelicIcon";
@@ -66,6 +66,12 @@ const STAT_TEXT = "#f1ead7";
 const STAT_MUTED = "#9f9888";
 const STAT_PLUS_BG = "#7b1717";
 const STAT_PLUS_BORDER = "1px solid #caa36a";
+const MODAL_BG = "#17100c";
+const MODAL_BORDER = "1px solid rgba(210, 168, 84, 0.62)";
+const MODAL_SHADOW = "inset 0 0 0 1px #050403, 0 14px 38px rgba(0, 0, 0, 0.62)";
+const MENU_DROPDOWN_BG = "linear-gradient(180deg, #2f1d11, #0c0805)";
+const MENU_DROPDOWN_BORDER = "1px solid rgba(223, 195, 122, 0.56)";
+const MENU_ITEM_COLOR = "#f6d992";
 const WIKI_MONSTER_IMAGE_SIZE = 56;
 const WIKI_RELIC_ICON_SIZE = 42;
 const WIKI_GRID_MIN_WIDTH = 220;
@@ -100,11 +106,11 @@ export function UserMenu(props: { activeSection: UserMenuSection | null; setActi
     <>
       <Menu position="bottom-end" width={MENU_WIDTH} shadow="md">
         <Menu.Target>
-          <Button variant="default" leftSection={<IconUser size={ICON_SIZE} />}>User</Button>
+          <HeroSiegeButton leftSection={<IconUser size={ICON_SIZE} />} minWidth={104}>User</HeroSiegeButton>
         </Menu.Target>
-        <Menu.Dropdown>
+        <Menu.Dropdown style={{ background: MENU_DROPDOWN_BG, border: MENU_DROPDOWN_BORDER, borderRadius: 2, boxShadow: MODAL_SHADOW }}>
           {USER_MENU_ITEMS.map((item) => (
-            <Menu.Item key={item.label} leftSection={<item.icon size={ICON_SIZE} />} onClick={() => props.setActiveSection(item.id)}>
+            <Menu.Item key={item.label} leftSection={<item.icon size={ICON_SIZE} />} onClick={() => props.setActiveSection(item.id)} style={{ color: MENU_ITEM_COLOR, fontWeight: 800 }}>
               {item.label}
             </Menu.Item>
           ))}
@@ -117,6 +123,12 @@ export function UserMenu(props: { activeSection: UserMenuSection | null; setActi
         centered
         keepMounted
         size={getModalSize(props.activeSection)}
+        styles={{
+          body: { background: MODAL_BG },
+          content: { background: MODAL_BG, border: MODAL_BORDER, borderRadius: 2, boxShadow: MODAL_SHADOW },
+          header: { background: MODAL_BG, borderBottom: MODAL_BORDER },
+          title: { color: "#ffe8a8", fontWeight: 900, textShadow: "0 1px 0 #000" }
+        }}
         transitionProps={{ duration: MODAL_TRANSITION_DURATION }}
       >
         <UserModalContent section={props.activeSection} state={props.state} setState={props.setState} />
@@ -192,7 +204,7 @@ function ProfilePanel(props: { state: StudyState; setState: React.Dispatch<React
             key={stat.key}
             label={stat.label}
             value={stats[stat.key]}
-            action={<Button size="compact-xs" variant="light" disabled={props.state.profile.statPoints <= 0} onClick={() => props.setState((previous) => spendStatPoint(previous, stat.key))}>Add</Button>}
+            action={<HeroSiegeButton height={24} minWidth={54} disabled={props.state.profile.statPoints <= 0} onClick={() => props.setState((previous) => spendStatPoint(previous, stat.key))}>Add</HeroSiegeButton>}
           />
         ))}
       </SimpleGrid>
@@ -282,7 +294,7 @@ function D2StatRow(props: { canSpend: boolean; description: string; label: strin
           <D2ValueRow label={props.label} value={props.value} />
         </Box>
       </Tooltip>
-      {props.canSpend && <Button size="compact-xs" onClick={props.onSpend} style={{ alignSelf: "center", background: STAT_PLUS_BG, border: STAT_PLUS_BORDER }}>+</Button>}
+      {props.canSpend && <HeroSiegeButton height={24} minWidth={34} onClick={props.onSpend} style={{ alignSelf: "center", backgroundColor: STAT_PLUS_BG, border: STAT_PLUS_BORDER, padding: 0, width: 34 }}>+</HeroSiegeButton>}
     </Box>
   );
 }
@@ -328,7 +340,7 @@ function MonsterWiki() {
           <Box key={monster.id} p="sm" style={{ background: "var(--mantine-color-dark-7)", border: "1px solid var(--mantine-color-dark-4)", borderRadius: 6, minWidth: WIKI_GRID_MIN_WIDTH }}>
             <Group gap="sm" wrap="nowrap">
               <Box style={{ alignItems: "center", background: "#08070b", border: "1px solid #8a744c", display: "flex", flex: `0 0 ${WIKI_MONSTER_IMAGE_SIZE}px`, height: WIKI_MONSTER_IMAGE_SIZE, justifyContent: "center", width: WIKI_MONSTER_IMAGE_SIZE }}>
-                <Box alt="" component="img" src={monster.art.src} style={{ display: "block", filter: monster.filter, height: "100%", imageRendering: "pixelated", objectFit: "contain", width: "100%" }} />
+                <Box alt="" component="img" src={monster.art} style={{ display: "block", filter: monster.filter, height: "100%", imageRendering: "pixelated", objectFit: "contain", width: "100%" }} />
               </Box>
               <Box>
                 <Text size="sm" fw={800}>{monster.name}</Text>

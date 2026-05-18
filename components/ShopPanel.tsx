@@ -1,6 +1,7 @@
-import { Badge, Box, Button, Group, SimpleGrid, Stack, Text } from "@mantine/core";
+import { Badge, Box, Group, SimpleGrid, Stack, Text } from "@mantine/core";
 
 import { CoinAmount } from "./CoinIcon";
+import { HeroSiegeButton } from "./HeroSiegeUi";
 import { HeroSiegeEquipmentIcon, HeroSiegePotionIcon } from "./HeroSiegeItemIcon";
 import { ItemSummary } from "./InventoryPanel";
 import { RelicIcon } from "./RelicIcon";
@@ -50,9 +51,9 @@ function ShopCard(props: { item: ShopItem; state: StudyState; setState: React.Di
         <Box flex={1}>{getShopSummary(props.item)}</Box>
         <Badge variant="light" color={canAfford ? "yellow" : "gray"}>{props.item.cost}</Badge>
       </Group>
-      <Button fullWidth mt="sm" size="xs" variant="light" disabled={!canAfford} onClick={() => buyItem(props)}>
+      <HeroSiegeButton fullWidth disabled={!canAfford} onClick={() => buyItem(props)} style={{ marginTop: 10 }}>
         Buy
-      </Button>
+      </HeroSiegeButton>
     </Box>
   );
 }

@@ -1,6 +1,8 @@
 node_modules/
 .next/
 out/
+.vite-dev.log
+.vite-dev.err.log
 coverage/
 public/monaco/
 tsconfig.tsbuildinfo

@@ -1,8 +1,24 @@
-import { Badge, Box, Button, Group, Stack, Text } from "@mantine/core";
+import { Badge, Box, Group, Stack, Text, Tooltip } from "@mantine/core";
+type StaticImageData = string;
 
 import { HERO_ITEM_RARITY_COLORS, HeroSiegeEquipmentIcon } from "./HeroSiegeItemIcon";
 import { canEquipItem, EQUIPMENT_SLOT_LABELS, equipItem, getActiveSetBonuses, unequipItem } from "../lib/studyCore";
 import type { EquipmentSlot, InventoryItem, ItemModifierKey, StudyState } from "../types/study";
+import inventoryGamepadBg from "../assets/hero_siege_inventory/inventory-gamepad.png";
+import inventoryGridBg from "../assets/hero_siege_inventory/inventory-grid-normal.png";
+import inventorySlotAmuletBg from "../assets/hero_siege_inventory/slot-amulet.png";
+import inventorySlotArmorBg from "../assets/hero_siege_inventory/slot-armor.png";
+import inventorySlotBeltBg from "../assets/hero_siege_inventory/slot-belt.png";
+import inventorySlotBootsBg from "../assets/hero_siege_inventory/slot-boots.png";
+import inventorySlotGlovesBg from "../assets/hero_siege_inventory/slot-gloves.png";
+import inventorySlotHelmetBg from "../assets/hero_siege_inventory/slot-helmet.png";
+import inventorySlotRingBg from "../assets/hero_siege_inventory/slot-ring.png";
+import inventorySlotShieldBg from "../assets/hero_siege_inventory/slot-shield.png";
+import inventorySlotWeaponBg from "../assets/hero_siege_inventory/slot-weapon.png";
+import menuButtonBg from "../assets/hero_siege_inventory/menu-button.png";
+import tabExtraBg from "../assets/hero_siege_inventory/tab-extra.png";
+import tabMainBg from "../assets/hero_siege_inventory/tab-main.png";
+import tabSmallBg from "../assets/hero_siege_inventory/tab-small.png";
 
 const STAT_LABELS = {
   constitution: "CON",
@@ -29,52 +45,75 @@ const MODIFIER_FORMATTERS: Record<ItemModifierKey, (value: number) => string> = 
   poisonResistPercent: (value) => `+${value}% Poison Res`
 };
 
-const INVENTORY_CELL_COUNT = 40;
+const INVENTORY_CELL_COUNT = 50;
 const COMPACT_NAME_LINES = 2;
-const PANEL_BG = "radial-gradient(circle at 50% 20%, #36332c 0%, #1b1a17 48%, #090909 100%)";
-const SLOT_BG = "linear-gradient(145deg, #090909, #24211c)";
-const SLOT_BORDER = "1px solid #7b6845";
-const SLOT_SHADOW = "inset 0 0 0 1px #050505, 0 1px 4px rgba(0, 0, 0, 0.45)";
-const EMPTY_SLOT_COLOR = "#95886c";
-const PAPER_DOLL_COLUMNS = "94px 64px 104px 64px 94px";
-const PAPER_DOLL_ROW_HEIGHT = 64;
-const PAPER_DOLL_GAP = 8;
-const SMALL_SLOT_HEIGHT = 64;
-const LARGE_SLOT_HEIGHT = 136;
-const INVENTORY_GRID_COLUMNS = 8;
+const INVENTORY_PANEL_WIDTH = 534;
+const INVENTORY_PANEL_HEIGHT = 720;
+const SMALL_EQUIPPED_ICON_SIZE = 34;
+const MEDIUM_EQUIPPED_ICON_SIZE = 52;
+const LARGE_EQUIPPED_ICON_SIZE = 76;
+const INVENTORY_GRID_COLUMNS = 12;
 const INVENTORY_GRID_GAP = 4;
-const BOARD_MAX_WIDTH = 480;
-const ITEM_ICON_SIZE = 34;
+const INVENTORY_GRID_LEFT = 44;
+const INVENTORY_GRID_TOP = 430;
+const INVENTORY_GRID_CELL_SIZE = 32;
+const INVENTORY_GRID_WIDTH = 428;
+const SORT_BUTTON_WIDTH = 180;
+const SORT_BUTTON_HEIGHT = 35;
+const SORT_BUTTON_RIGHT = 24;
+const SORT_BUTTON_TOP = 632;
+const TAB_ROW_LEFT = 154;
+const TAB_ROW_TOP = 676;
+const TAB_GAP = 4;
+const TAB_MAIN_WIDTH = 96;
+const TAB_EXTRA_WIDTH = 76;
+const TAB_HEIGHT = 33;
+const TAB_SMALL_WIDTH = 48;
+const ITEM_ICON_SIZE = 32;
+const INVENTORY_ITEM_ICON_SIZE = 28;
+const LOCKED_ITEM_OPACITY = 0.52;
+const DETAILS_WIDTH = 260;
+const DETAILS_BG = "linear-gradient(180deg, rgba(35, 13, 13, 0.98), rgba(9, 6, 5, 0.99))";
+const DETAILS_BORDER = "1px solid #9f2d4e";
+const DETAILS_SHADOW = "inset 0 0 0 1px rgba(0, 0, 0, 0.86), 0 12px 28px rgba(0, 0, 0, 0.62)";
+const DETAILS_PADDING = 10;
 const COMPACT_SUMMARY_GAP = 3;
 const FULL_SUMMARY_GAP = 6;
 
-const EQUIPMENT_LAYOUT: Record<EquipmentSlot, { gridColumn: string; gridRow: string; minHeight: number; title: string }> = {
-  armor: { gridColumn: "3 / 4", gridRow: "2 / 4", minHeight: LARGE_SLOT_HEIGHT, title: "Armor" },
-  backAccessory: { gridColumn: "3 / 4", gridRow: "4 / 5", minHeight: SMALL_SLOT_HEIGHT, title: "Belt / Back" },
-  bodyAccessory: { gridColumn: "1 / 2", gridRow: "4 / 5", minHeight: SMALL_SLOT_HEIGHT, title: "Hands" },
-  eyewear: { gridColumn: "4 / 5", gridRow: "3 / 4", minHeight: SMALL_SLOT_HEIGHT, title: "Ring / Eye" },
-  feet: { gridColumn: "5 / 6", gridRow: "4 / 5", minHeight: SMALL_SLOT_HEIGHT, title: "Boots" },
-  headAccessory: { gridColumn: "2 / 3", gridRow: "3 / 4", minHeight: SMALL_SLOT_HEIGHT, title: "Amulet" },
-  headgear: { gridColumn: "3 / 4", gridRow: "1 / 2", minHeight: PAPER_DOLL_ROW_HEIGHT, title: "Helm" },
-  mainHand: { gridColumn: "1 / 2", gridRow: "1 / 4", minHeight: LARGE_SLOT_HEIGHT, title: "Left Hand" },
-  offHand: { gridColumn: "5 / 6", gridRow: "1 / 4", minHeight: LARGE_SLOT_HEIGHT, title: "Right Hand" }
+type EquipmentSpriteLayout = { asset: StaticImageData; height: number; iconSize: number; label: string; left: number; top: number; width: number };
+
+const EQUIPMENT_LAYOUT: Record<EquipmentSlot, EquipmentSpriteLayout> = {
+  armor: { asset: inventorySlotArmorBg, height: 99, iconSize: LARGE_EQUIPPED_ICON_SIZE, label: "Armor", left: 234, top: 220, width: 66 },
+  backAccessory: { asset: inventorySlotBeltBg, height: 35, iconSize: MEDIUM_EQUIPPED_ICON_SIZE, label: "Belt", left: 234, top: 353, width: 66 },
+  bodyAccessory: { asset: inventorySlotGlovesBg, height: 67, iconSize: MEDIUM_EQUIPPED_ICON_SIZE, label: "Gloves", left: 84, top: 320, width: 66 },
+  eyewear: { asset: inventorySlotRingBg, height: 35, iconSize: SMALL_EQUIPPED_ICON_SIZE, label: "Ring", left: 366, top: 320, width: 34 },
+  feet: { asset: inventorySlotBootsBg, height: 67, iconSize: MEDIUM_EQUIPPED_ICON_SIZE, label: "Boots", left: 382, top: 352, width: 66 },
+  headAccessory: { asset: inventorySlotAmuletBg, height: 35, iconSize: SMALL_EQUIPPED_ICON_SIZE, label: "Amulet", left: 134, top: 320, width: 34 },
+  headgear: { asset: inventorySlotHelmetBg, height: 67, iconSize: MEDIUM_EQUIPPED_ICON_SIZE, label: "Helmet", left: 234, top: 102, width: 66 },
+  mainHand: { asset: inventorySlotWeaponBg, height: 131, iconSize: LARGE_EQUIPPED_ICON_SIZE, label: "Weapon", left: 92, top: 176, width: 98 },
+  offHand: { asset: inventorySlotShieldBg, height: 131, iconSize: LARGE_EQUIPPED_ICON_SIZE, label: "Shield", left: 344, top: 176, width: 98 }
 };
+
+const TAB_BUTTONS = [
+  { asset: tabMainBg, label: "Main", width: TAB_MAIN_WIDTH },
+  { asset: tabExtraBg, label: "Extra", width: TAB_EXTRA_WIDTH },
+  { asset: tabExtraBg, label: "Extra", width: TAB_EXTRA_WIDTH },
+  { asset: tabSmallBg, label: "Extra +", width: TAB_SMALL_WIDTH }
+] as const;
 
 export function InventoryPanel(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const activeSetBonuses = getActiveSetBonuses(props.state);
   return (
     <Stack gap="sm">
-      <Box p="sm" style={{ background: PANEL_BG, border: "2px solid #8a744c", boxShadow: "inset 0 0 0 2px #111" }}>
-        <Text ta="center" mb="xs" size="sm" fw={800} c="#c8a96a" style={{ letterSpacing: 3 }}>INVENTORY</Text>
+      <Box mx="auto" style={{ maxWidth: "100%", width: INVENTORY_PANEL_WIDTH }}>
         <EquipmentBoard state={props.state} setState={props.setState} />
         {activeSetBonuses.length > 0 && (
-          <Stack gap={2} mt="sm">
+          <Stack gap={2} mt="xs">
             {activeSetBonuses.map((set) => (
               <Text key={set.id} size="xs" c="green.3">{set.name} ({set.count}/{set.total}) - {set.bonuses.map((bonus) => `${bonus.pieces}pc ${formatStats(bonus.stats)}`).join("; ") || "No active bonus yet"}</Text>
             ))}
           </Stack>
         )}
-        <InventoryGrid state={props.state} setState={props.setState} />
       </Box>
     </Stack>
   );
@@ -82,56 +121,146 @@ export function InventoryPanel(props: { state: StudyState; setState: React.Dispa
 
 function EquipmentBoard(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   return (
-    <Box mx="auto" style={{ display: "grid", gap: PAPER_DOLL_GAP, gridTemplateColumns: PAPER_DOLL_COLUMNS, gridTemplateRows: `repeat(4, ${PAPER_DOLL_ROW_HEIGHT}px)`, maxWidth: BOARD_MAX_WIDTH }}>
+    <Box style={{ backgroundImage: `url(${inventoryGamepadBg})`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%", height: INVENTORY_PANEL_HEIGHT, imageRendering: "pixelated", position: "relative", width: INVENTORY_PANEL_WIDTH }}>
       {Object.entries(EQUIPMENT_LAYOUT).map(([slotKey, layout]) => {
         const slot = slotKey as EquipmentSlot;
         const item = props.state.profile.inventory.find((row) => row.id === props.state.profile.equipment[slot]);
         return <EquipmentSlotCell key={slot} item={item} layout={layout} slot={slot} onUnequip={() => props.setState((previous) => unequipItem(previous, slot))} />;
       })}
+      <InventoryGrid state={props.state} setState={props.setState} />
+      <InventorySortButton setState={props.setState} />
+      <InventoryTabs />
     </Box>
   );
 }
 
-function EquipmentSlotCell(props: { item?: InventoryItem; layout: (typeof EQUIPMENT_LAYOUT)[EquipmentSlot]; onUnequip: () => void; slot: EquipmentSlot }) {
-  return (
-    <Box p="xs" mih={props.layout.minHeight} style={{ background: SLOT_BG, border: SLOT_BORDER, boxShadow: SLOT_SHADOW, gridColumn: props.layout.gridColumn, gridRow: props.layout.gridRow, overflow: "hidden" }}>
-      <Text size="10px" c="dimmed" fw={700}>{props.layout.title || EQUIPMENT_SLOT_LABELS[props.slot]}</Text>
+function EquipmentSlotCell(props: { item?: InventoryItem; layout: EquipmentSpriteLayout; onUnequip: () => void; slot: EquipmentSlot }) {
+  const content = (
+    <Box component={props.item ? "button" : "div"} onClick={props.item ? props.onUnequip : undefined} style={{ backgroundColor: "transparent", backgroundImage: `url(${props.layout.asset})`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%", border: "none", cursor: props.item ? "pointer" : "default", height: props.layout.height, imageRendering: "pixelated", left: props.layout.left, padding: 0, position: "absolute", top: props.layout.top, width: props.layout.width }}>
       {props.item ? (
-        <Stack gap={4} mt={4}>
-          <ItemSummary item={props.item} />
-          <Button size="compact-xs" variant="subtle" color="gray" onClick={props.onUnequip}>Unequip</Button>
-        </Stack>
-      ) : <Text size="xs" c={EMPTY_SLOT_COLOR} mt="xs">Empty</Text>}
+        <Box style={{ alignItems: "center", display: "flex", height: "100%", justifyContent: "center", width: "100%" }}>
+          <HeroSiegeEquipmentIcon item={props.item} size={props.layout.iconSize} />
+        </Box>
+      ) : null}
     </Box>
   );
+  return props.item ? (
+    <InventoryItemTooltip item={props.item} equipped>
+      {content}
+    </InventoryItemTooltip>
+  ) : content;
 }
 
 function InventoryGrid(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const cells = Array.from({ length: Math.max(INVENTORY_CELL_COUNT, props.state.profile.inventory.length) }, (_, index) => props.state.profile.inventory[index]);
   return (
-    <Box mt="sm">
-      <Text size="xs" c="dimmed" fw={700} mb={4}>Inventory</Text>
-      <Box style={{ display: "grid", gap: INVENTORY_GRID_GAP, gridTemplateColumns: `repeat(${INVENTORY_GRID_COLUMNS}, minmax(0, 1fr))` }}>
-        {cells.map((item, index) => (
-          <InventoryCell key={item?.id || index} canEquip={item ? canEquipItem(props.state, item) : false} equipped={item ? props.state.profile.equipment[item.slot] === item.id : false} item={item} onEquip={() => item && props.setState((previous) => equipItem(previous, item.id))} onUnequip={() => item && props.setState((previous) => unequipItem(previous, item.slot))} />
-        ))}
-      </Box>
+    <Box style={{ display: "grid", gap: INVENTORY_GRID_GAP, gridTemplateColumns: `repeat(${INVENTORY_GRID_COLUMNS}, ${INVENTORY_GRID_CELL_SIZE}px)`, left: INVENTORY_GRID_LEFT, position: "absolute", top: INVENTORY_GRID_TOP, width: INVENTORY_GRID_WIDTH }}>
+      {cells.map((item, index) => (
+        <InventoryCell key={item?.id || index} canEquip={item ? canEquipItem(props.state, item) : false} equipped={item ? props.state.profile.equipment[item.slot] === item.id : false} item={item} onEquip={() => item && props.setState((previous) => equipItem(previous, item.id))} onUnequip={() => item && props.setState((previous) => unequipItem(previous, item.slot))} />
+      ))}
     </Box>
   );
 }
 
 function InventoryCell(props: { canEquip: boolean; equipped: boolean; item?: InventoryItem; onEquip: () => void; onUnequip: () => void }) {
   if (!props.item) {
-    return <Box style={{ aspectRatio: "1 / 1", background: "#090909", border: "1px solid #3d3527" }} />;
+    return <Box style={{ backgroundImage: `url(${inventoryGridBg})`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%", height: INVENTORY_GRID_CELL_SIZE, imageRendering: "pixelated", width: INVENTORY_GRID_CELL_SIZE }} />;
   }
+  const action = props.equipped ? props.onUnequip : props.onEquip;
   return (
-    <Box p={4} style={{ aspectRatio: "1 / 1", background: "#111", border: `1px solid ${RARITY_COLORS[props.item.rarity]}`, overflow: "hidden" }}>
-      <ItemSummary item={props.item} compact />
-      <Button fullWidth mt={3} size="compact-xs" variant={props.equipped ? "subtle" : "light"} disabled={!props.equipped && !props.canEquip} onClick={props.equipped ? props.onUnequip : props.onEquip}>
-        {props.equipped ? "Unequip" : "Wear"}
-      </Button>
+    <InventoryItemTooltip canEquip={props.canEquip} equipped={props.equipped} item={props.item}>
+      <Box
+        aria-disabled={!props.equipped && !props.canEquip}
+        component="button"
+        onClick={() => {
+          if (props.equipped || props.canEquip) {
+            action();
+          }
+        }}
+        style={{
+          alignItems: "center",
+          backgroundImage: `url(${inventoryGridBg})`,
+          backgroundRepeat: "no-repeat",
+          backgroundSize: "100% 100%",
+          border: "none",
+          cursor: props.equipped || props.canEquip ? "pointer" : "default",
+          display: "flex",
+          height: INVENTORY_GRID_CELL_SIZE,
+          imageRendering: "pixelated",
+          justifyContent: "center",
+          opacity: props.equipped || props.canEquip ? 1 : LOCKED_ITEM_OPACITY,
+          padding: 0,
+          width: INVENTORY_GRID_CELL_SIZE
+        }}
+        type="button"
+      >
+        <HeroSiegeEquipmentIcon item={props.item} size={INVENTORY_ITEM_ICON_SIZE} />
+      </Box>
+    </InventoryItemTooltip>
+  );
+}
+
+function InventorySortButton(props: { setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
+  return (
+    <Box
+      component="button"
+      onClick={() => props.setState(sortInventory)}
+      style={{
+        backgroundColor: "transparent",
+        backgroundImage: `url(${menuButtonBg})`,
+        backgroundRepeat: "no-repeat",
+        backgroundSize: "100% 100%",
+        border: 0,
+        cursor: "pointer",
+        height: SORT_BUTTON_HEIGHT,
+        imageRendering: "pixelated",
+        padding: 0,
+        position: "absolute",
+        right: SORT_BUTTON_RIGHT,
+        top: SORT_BUTTON_TOP,
+        width: SORT_BUTTON_WIDTH
+      }}
+      type="button"
+    >
+      <Text size="sm" fw={900} ta="center" style={{ color: "#e8d684", lineHeight: `${SORT_BUTTON_HEIGHT}px`, textShadow: "0 1px 0 #000" }}>Sort Tab</Text>
     </Box>
   );
+}
+
+function InventoryTabs() {
+  return (
+    <Group gap={TAB_GAP} wrap="nowrap" style={{ left: TAB_ROW_LEFT, position: "absolute", top: TAB_ROW_TOP }}>
+      {TAB_BUTTONS.map((tab, index) => (
+        <Box key={`${tab.label}-${index}`} component="button" style={{ backgroundColor: "transparent", backgroundImage: `url(${tab.asset})`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%", border: 0, cursor: index === 0 ? "pointer" : "default", height: TAB_HEIGHT, imageRendering: "pixelated", padding: 0, width: tab.width }} type="button">
+          <Text size="sm" fw={900} ta="center" style={{ color: "#d6d18f", lineHeight: `${TAB_HEIGHT}px`, textShadow: "0 1px 0 #000" }}>{tab.label}</Text>
+        </Box>
+      ))}
+    </Group>
+  );
+}
+
+function sortInventory(state: StudyState): StudyState {
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      inventory: [...state.profile.inventory].sort(compareInventoryItems(state))
+    }
+  };
+}
+
+function compareInventoryItems(state: StudyState) {
+  return (left: InventoryItem, right: InventoryItem) => {
+    const equippedDelta = Number(isItemEquipped(state, right)) - Number(isItemEquipped(state, left));
+    if (equippedDelta) {
+      return equippedDelta;
+    }
+    return `${left.slot}:${left.rarity}:${left.name}`.localeCompare(`${right.slot}:${right.rarity}:${right.name}`);
+  };
+}
+
+function isItemEquipped(state: StudyState, item: InventoryItem) {
+  return state.profile.equipment[item.slot] === item.id;
 }
 
 export function ItemSummary(props: { compact?: boolean; item: InventoryItem }) {
@@ -153,6 +282,51 @@ export function ItemSummary(props: { compact?: boolean; item: InventoryItem }) {
 
 function ItemPixelIcon(props: { item: InventoryItem }) {
   return <HeroSiegeEquipmentIcon item={props.item} size={ITEM_ICON_SIZE} />;
+}
+
+function InventoryItemTooltip(props: { canEquip?: boolean; children: React.ReactNode; equipped?: boolean; item: InventoryItem }) {
+  return (
+    <Tooltip
+      label={<ItemDetails canEquip={props.canEquip} equipped={props.equipped} item={props.item} />}
+      multiline
+      withArrow
+      color="dark"
+      styles={{
+        tooltip: {
+          background: DETAILS_BG,
+          border: DETAILS_BORDER,
+          borderRadius: 2,
+          boxShadow: DETAILS_SHADOW,
+          color: "#f1dfad",
+          padding: DETAILS_PADDING
+        }
+      }}
+    >
+      {props.children}
+    </Tooltip>
+  );
+}
+
+function ItemDetails(props: { canEquip?: boolean; equipped?: boolean; item: InventoryItem }) {
+  return (
+    <Stack gap={4} style={{ width: DETAILS_WIDTH }}>
+      <Group gap="xs" wrap="nowrap">
+        <HeroSiegeEquipmentIcon item={props.item} size={INVENTORY_ITEM_ICON_SIZE} />
+        <Box style={{ minWidth: 0 }}>
+          <Text size="sm" fw={900} c={RARITY_COLORS[props.item.rarity]}>{props.item.name}</Text>
+          <Text size="xs" c="dimmed">{EQUIPMENT_SLOT_LABELS[props.item.slot]} - {props.item.rarity}</Text>
+        </Box>
+      </Group>
+      <Text size="xs" c="gray.3">{formatItemStats(props.item) || "No stat bonus"}</Text>
+      {props.item.modifiers?.length ? <Text size="xs" c="blue.2">{formatItemModifiers(props.item)}</Text> : null}
+      <Text size="xs" c="dimmed">{formatItemRequirements(props.item)}</Text>
+      <Group gap={4}>
+        {props.item.setId && <Badge size="xs" color="green" variant="light">set</Badge>}
+        {props.equipped && <Badge size="xs" color="yellow" variant="light">equipped</Badge>}
+        {!props.equipped && props.canEquip === false && <Badge size="xs" color="red" variant="light">locked</Badge>}
+      </Group>
+    </Stack>
+  );
 }
 
 function formatItemRequirements(item: InventoryItem) {

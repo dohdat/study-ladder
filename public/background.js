@@ -7,6 +7,7 @@ const ADD_STUDY_TIME_TYPE = "study-blocker-add-study-ms";
 const BLOCKER_SETTINGS_KEY = "study-ladder-blocker-settings-v1";
 const BLOCKER_PROGRESS_KEY = "study-ladder-blocker-progress-v1";
 const STUDY_PAGE = "index.html";
+const DEFAULT_BLOCKER_ENABLED = true;
 const MS_PER_MINUTE = 60000;
 const DEFAULT_DAILY_MINUTES = 30;
 const DEFAULT_DISTRACTING_SITES = [
@@ -23,9 +24,13 @@ const DEFAULT_DISTRACTING_SITES = [
 let hintPort = null;
 let hintRequestActive = false;
 
+function getStudyPageUrl() {
+  return /^https?:\/\//.test(STUDY_PAGE) ? STUDY_PAGE : chrome.runtime.getURL(STUDY_PAGE);
+}
+
 function openStudyPage() {
   chrome.tabs.create({
-    url: chrome.runtime.getURL(STUDY_PAGE)
+    url: getStudyPageUrl()
   });
 }
 
@@ -120,7 +125,7 @@ function getDefaultBlockerSettings() {
   return {
     dailyMinutes: DEFAULT_DAILY_MINUTES,
     distractingSites: DEFAULT_DISTRACTING_SITES,
-    enabled: true
+    enabled: DEFAULT_BLOCKER_ENABLED
   };
 }
 
@@ -211,7 +216,7 @@ function redirectIfBlocked(tabId, url) {
   }
   loadBlockerState((state) => {
     if (shouldRedirectUrl(url, state.settings, state.progress)) {
-      chrome.tabs.update(tabId, { url: chrome.runtime.getURL(STUDY_PAGE) });
+      chrome.tabs.update(tabId, { url: getStudyPageUrl() });
     }
   });
 }

@@ -1,5 +1,5 @@
 import { Box } from "@mantine/core";
-import type { StaticImageData } from "next/image";
+type StaticImageData = string;
 
 import amuletArt from "../assets/hero_siege_items/amulet.png";
 import armorArt from "../assets/hero_siege_items/armor.png";
@@ -349,7 +349,7 @@ function FramedItemAsset(props: { asset: StaticImageData; borderColor: string; s
       <Box
         alt=""
         component="img"
-        src={props.asset.src}
+        src={props.asset}
         style={{
           display: "block",
           filter: "drop-shadow(0 2px 0 rgba(0, 0, 0, 0.72))",

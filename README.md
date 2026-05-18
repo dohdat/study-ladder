@@ -1,15 +1,33 @@
 # Study Ladder
 
-A Chrome extension built with Next.js, Mantine, and Monaco Editor for JavaScript LeetCode-style practice.
+A Chrome extension built with Vite, React, Mantine, and Monaco Editor for JavaScript LeetCode-style practice.
 
 ## Develop
 
 ```powershell
 npm.cmd install
-npm.cmd run dev
+npm.cmd run dev:extension
 ```
 
-Open `http://127.0.0.1:3000`.
+For Chrome extension UI iteration, build and reload the real unpacked extension:
+
+```powershell
+npm.cmd run dev:extension
+```
+
+This uses a quick Vite build to rebuild `out/` and then reloads `chrome-extension://.../out/index.html`.
+The page stays inside the extension; it does not open a localhost app.
+The quick loop skips the full Monaco asset check after `public/monaco/vs` already exists.
+
+For repeated small visual tweaks, keep a warm build watcher running:
+
+```powershell
+npm.cmd run dev:extension:watch -- -ExtensionId mckniaaigcphmilhcpcpanfipcaoainb
+```
+
+It rebuilds `out/` on file changes and reloads the unpacked extension after each rebuild.
+
+`npm.cmd run dev:web` is only for optional browser preview work outside the extension.
 
 ## Build Extension
 

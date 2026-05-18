@@ -1,5 +1,5 @@
 import { Box } from "@mantine/core";
-import type { StaticImageData } from "next/image";
+type StaticImageData = string;
 
 import arcaneFocusArt from "../assets/hero_siege_skills/arcane-focus.png";
 import axeMasteryArt from "../assets/hero_siege_skills/axe-mastery.png";
@@ -106,7 +106,7 @@ export function HeroSiegeSkillIcon(props: { locked?: boolean; size?: number; ski
       <Box
         alt=""
         component="img"
-        src={SKILL_ASSETS[props.skillId].src}
+        src={SKILL_ASSETS[props.skillId]}
         style={{
           display: "block",
           filter: "drop-shadow(0 2px 0 rgba(0, 0, 0, 0.72))",

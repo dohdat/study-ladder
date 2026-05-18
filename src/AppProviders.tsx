@@ -1,17 +1,18 @@
 import "@mantine/core/styles.css";
+import "./global.css";
 
-import type { AppProps } from "next/app";
 import { MantineProvider, createTheme } from "@mantine/core";
+import type { ReactNode } from "react";
 
 const theme = createTheme({
-  primaryColor: "blue",
-  defaultRadius: "md"
+  defaultRadius: "md",
+  primaryColor: "blue"
 });
 
-export default function App({ Component, pageProps }: AppProps) {
+export function AppProviders(props: { children: ReactNode }) {
   return (
     <MantineProvider theme={theme} forceColorScheme="dark">
-      <Component {...pageProps} />
+      {props.children}
     </MantineProvider>
   );
 }

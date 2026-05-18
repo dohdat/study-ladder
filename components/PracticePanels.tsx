@@ -1,10 +1,7 @@
-import dynamic from "next/dynamic";
 import { useState } from "react";
 import {
-  ActionIcon,
   Badge,
   Box,
-  Button,
   Card,
   Divider,
   Grid,
@@ -19,14 +16,14 @@ import {
   Title
 } from "@mantine/core";
 import { IconArrowRight, IconBulb, IconCheck, IconCode, IconLock, IconPlayerPlay, IconRefresh, IconTerminal2, IconWand, IconX } from "@tabler/icons-react";
-import type { OnMount } from "@monaco-editor/react";
+import MonacoEditor, { type OnMount } from "@monaco-editor/react";
 
+import { HeroSiegeButton } from "./HeroSiegeUi";
 import { HighlightedCode } from "./HighlightedCode";
 import { MonsterEncounter } from "./MonsterEncounter";
 import { difficultyLabels } from "../lib/studyCore";
 import type { ActiveWarriorSkillId, ConsoleRunResult, Question, RunResult, StudyState } from "../types/study";
 
-const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 const ICON_XS = 12;
 const ICON_SM = 14;
 const ICON_LG = 18;
@@ -145,9 +142,11 @@ function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; c
       <Group justify="space-between" align="flex-start">
         {props.sessionStarted ? <ProblemHeader currentQuestion={props.currentQuestion} /> : <LockedProblemHeader />}
         <Tooltip label={props.canMoveNext ? "Move to the next question" : "Pass all tests before moving on"} withArrow>
-          <ActionIcon variant="light" size="lg" aria-label="Next question" disabled={!props.canMoveNext} onClick={() => props.chooseQuestion(true)}>
+          <Box component="span">
+            <HeroSiegeButton aria-label="Next question" disabled={!props.canMoveNext} height={35} minWidth={44} onClick={() => props.chooseQuestion(true)} style={{ padding: 0, width: 44 }}>
             <IconArrowRight size={ICON_LG} />
-          </ActionIcon>
+            </HeroSiegeButton>
+          </Box>
         </Tooltip>
       </Group>
       {props.sessionStarted ? <ProblemDetails currentQuestion={props.currentQuestion} state={props.state} /> : <LockedProblemDetails />}
@@ -294,18 +293,18 @@ function SetupToolbarActions(props: Parameters<typeof EditorCard>[0]) {
     <>
       <Tooltip label="Start timer and enter fullscreen" withArrow>
         <Box component="span">
-          <Button size="xs" variant="default" leftSection={<IconPlayerPlay size={ICON_SM} />} disabled={props.sessionStarted} onClick={props.actions.startQuestion}>Start</Button>
+          <HeroSiegeButton leftSection={<IconPlayerPlay size={ICON_SM} />} disabled={props.sessionStarted} onClick={props.actions.startQuestion}>Start</HeroSiegeButton>
         </Box>
       </Tooltip>
       <Tooltip label="Restore the starter code" withArrow>
-        <Button size="xs" variant="default" leftSection={<IconRefresh size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.updateDraft(props.currentQuestion.starter)}>Reset</Button>
+        <HeroSiegeButton leftSection={<IconRefresh size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.updateDraft(props.currentQuestion.starter)}>Reset</HeroSiegeButton>
       </Tooltip>
       <Tooltip label="Format JavaScript code (Ctrl+S)" withArrow>
-        <Button size="xs" variant="default" leftSection={<IconWand size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.beautifyCurrentCode()}>Beautify</Button>
+        <HeroSiegeButton leftSection={<IconWand size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.beautifyCurrentCode()}>Beautify</HeroSiegeButton>
       </Tooltip>
       <Tooltip label={`Buy one next-step hint (${props.hintCost} coins)`} withArrow>
         <Box component="span">
-          <Button size="xs" variant="default" leftSection={<IconBulb size={ICON_SM} />} disabled={!props.sessionStarted || !props.canBuyHint} onClick={props.actions.buyHint}>Hint</Button>
+          <HeroSiegeButton leftSection={<IconBulb size={ICON_SM} />} disabled={!props.sessionStarted || !props.canBuyHint} onClick={props.actions.buyHint}>Hint</HeroSiegeButton>
         </Box>
       </Tooltip>
     </>
@@ -318,12 +317,12 @@ function RunToolbarActions(props: Parameters<typeof EditorCard>[0]) {
     <>
       <Tooltip label="Run code and show console.log output" withArrow>
         <Box component="span">
-          <Button size="xs" variant="default" leftSection={<IconTerminal2 size={ICON_SM} />} loading={props.running} disabled={disabled} onClick={props.actions.runCode}>Run</Button>
+          <HeroSiegeButton leftSection={<IconTerminal2 size={ICON_SM} />} loading={props.running} disabled={disabled} onClick={props.actions.runCode}>Run</HeroSiegeButton>
         </Box>
       </Tooltip>
       <Tooltip label="Submit code against hidden tests (Ctrl+Enter)" withArrow>
         <Box component="span">
-          <Button size="xs" leftSection={<IconCheck size={ICON_SM} />} loading={props.running} disabled={disabled} onClick={props.actions.submitCode}>Submit</Button>
+          <HeroSiegeButton leftSection={<IconCheck size={ICON_SM} />} loading={props.running} disabled={disabled} onClick={props.actions.submitCode}>Submit</HeroSiegeButton>
         </Box>
       </Tooltip>
     </>
@@ -367,17 +366,15 @@ function RunCasePanel(props: { currentQuestion: Question; result: ConsoleRunResu
       </Group>
       <Group gap="sm" mb="md">
         {results.map((result, index) => (
-          <Button
+          <HeroSiegeButton
             key={`${result.name}-${index}`}
-            size="sm"
-            variant={index === selectedIndex ? "filled" : "subtle"}
-            color={result.pass ? "green" : "red"}
+            active={index === selectedIndex}
             leftSection={result.pass ? <IconCheck size={ICON_XS} /> : <IconX size={ICON_XS} />}
-            miw={CASE_TAB_MIN_WIDTH}
+            minWidth={CASE_TAB_MIN_WIDTH}
             onClick={() => setActiveIndex(index)}
           >
             {result.name}
-          </Button>
+          </HeroSiegeButton>
         ))}
       </Group>
       <ScrollArea.Autosize mah={RUN_PANEL_MAX_HEIGHT}>

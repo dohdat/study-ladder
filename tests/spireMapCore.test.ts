@@ -38,6 +38,7 @@ describe("spireMapCore", () => {
     expect(run.nodes.filter((node) => node.rating === FLOOR_ONE).every((node) => node.kind === "enemy")).toBe(true);
     expect(run.nodes.filter((node) => node.rating === FLOOR_NINE).every((node) => node.kind === "treasure")).toBe(true);
     expect(run.nodes.filter((node) => node.rating === FLOOR_FIFTEEN).every((node) => node.kind === "boss")).toBe(true);
+    expect(run.nodes.filter((node) => node.rating === FLOOR_FIFTEEN)).toHaveLength(1);
     expect(run.nodes.filter((node) => node.rating < FLOOR_SIX).some((node) => node.kind === "elite" || node.kind === "rest")).toBe(false);
     expect(run.nodes.filter((node) => node.rating === FLOOR_FOURTEEN).every((node) => node.kind === "rest")).toBe(true);
     expect(run.nodes.filter((node) => node.kind === "boss").every((node) => {
@@ -100,7 +101,9 @@ describe("spireMapCore", () => {
       for (const nextId of node.nextIds) {
         const next = byId.get(nextId);
         expect(next?.rating).toBeGreaterThan(node.rating);
-        expect(next ? Math.abs(next.column - node.column) : Number.POSITIVE_INFINITY).toBeLessThanOrEqual(MAX_PATH_STEP);
+        if (next?.rating !== FLOOR_FIFTEEN) {
+          expect(next ? Math.abs(next.column - node.column) : Number.POSITIVE_INFINITY).toBeLessThanOrEqual(MAX_PATH_STEP);
+        }
       }
     }
 

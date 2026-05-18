@@ -1,6 +1,6 @@
-import { ActionIcon, Box, Group, Paper, Progress, SimpleGrid, Stack, Text, Tooltip } from "@mantine/core";
+import { Box, Group, Paper, Progress, SimpleGrid, Stack, Text, Tooltip } from "@mantine/core";
 import { IconDroplet } from "@tabler/icons-react";
-import type { StaticImageData } from "next/image";
+type StaticImageData = string;
 
 import healthShrineArt from "../assets/hero_siege_map/health-shrine.png";
 import chestArt from "../assets/hero_siege_map/chest.png";
@@ -9,6 +9,7 @@ import warriorAvatarArt from "../assets/hero_siege_monsters/samurai-skeleton.png
 import { ACTIVE_WARRIOR_SKILLS, canUseActiveWarriorSkill, getActiveWarriorSkill, getWarriorSkillRank } from "../lib/skillCore";
 import type { ActiveWarriorSkillId, CharacterStats, StudyState } from "../types/study";
 import { CoinIcon } from "./CoinIcon";
+import { HeroSiegeButton } from "./HeroSiegeUi";
 import { HeroSiegeSkillIcon } from "./HeroSiegeSkillIcon";
 
 const PERCENT_MAX = 100;
@@ -120,24 +121,17 @@ function ActiveSkillBar(props: { state: StudyState; useActiveSkill: (skillId: Ac
         return (
           <Tooltip key={skill.id} label={isReadied ? `${skill.name} is readied.` : `${skill.description} Costs ${skill.cost} mana${skill.healthCost ? ` and ${skill.healthCost} health` : ""}.`} withArrow>
             <Box style={{ minWidth: ACTIVE_SKILL_MIN_WIDTH }}>
-              <ActionIcon
+              <HeroSiegeButton
+                active={isReadied}
                 aria-label={skill.name}
-                color={isReadied ? "yellow" : "blue"}
                 disabled={disabled}
+                height={ACTIVE_SKILL_BUTTON_SIZE}
+                minWidth={ACTIVE_SKILL_BUTTON_SIZE}
                 onClick={() => props.useActiveSkill(skill.id)}
-                size={ACTIVE_SKILL_BUTTON_SIZE}
-                styles={{
-                  root: {
-                    background: isReadied ? "linear-gradient(180deg, #8a5d1b 0%, #41240f 58%, #160c06 100%)" : "linear-gradient(180deg, #263b43 0%, #142229 58%, #090e12 100%)",
-                    border: isReadied ? "1px solid rgba(241, 223, 173, 0.86)" : "1px solid rgba(119, 170, 196, 0.5)",
-                    borderRadius: 2,
-                    boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.68)"
-                  }
-                }}
-                variant={isReadied ? "filled" : "default"}
+                style={{ padding: 0, width: ACTIVE_SKILL_BUTTON_SIZE }}
               >
                 <ActiveSkillIcon skillId={skill.id} />
-              </ActionIcon>
+              </HeroSiegeButton>
               <Group gap={2} justify="center" mt={1} wrap="nowrap">
                 <IconDroplet size={ACTIVE_SKILL_COST_ICON_SIZE} color="#4dabf7" />
                 <Text size={ACTIVE_SKILL_COST_FONT_SIZE} c="blue.2" fw={800}>{skill.cost}</Text>
@@ -192,7 +186,7 @@ function AvatarIllustration() {
       <Box
         alt=""
         component="img"
-        src={warriorAvatarArt.src}
+        src={warriorAvatarArt}
         style={{
           display: "block",
           filter: "drop-shadow(0 2px 0 rgba(0, 0, 0, 0.7)) saturate(1.08) brightness(1.08)",
@@ -219,7 +213,7 @@ function StatBar(props: { asset: StaticImageData; color: string; text: string; v
 function ResourceIcon(props: { asset: StaticImageData }) {
   return (
     <Box style={{ alignItems: "center", background: "rgba(0, 0, 0, 0.28)", border: "1px solid rgba(223, 195, 122, 0.24)", display: "flex", height: RESOURCE_ICON_FRAME_SIZE, justifyContent: "center", width: RESOURCE_ICON_FRAME_SIZE }}>
-      <Box alt="" component="img" src={props.asset.src} style={{ display: "block", height: RESOURCE_ICON_SIZE, imageRendering: "pixelated", objectFit: "contain", width: RESOURCE_ICON_SIZE }} />
+      <Box alt="" component="img" src={props.asset} style={{ display: "block", height: RESOURCE_ICON_SIZE, imageRendering: "pixelated", objectFit: "contain", width: RESOURCE_ICON_SIZE }} />
     </Box>
   );
 }

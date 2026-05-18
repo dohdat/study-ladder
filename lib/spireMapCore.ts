@@ -68,6 +68,7 @@ const COLUMN_3 = 3;
 const COLUMN_4 = 4;
 const COLUMN_5 = 5;
 const COLUMN_6 = 6;
+const BOSS_COLUMN = COLUMN_3;
 const PATH_STEP_LEFT = -MAX_PATH_STEP;
 const PATH_STEP_STRAIGHT = 0;
 const PATH_STEP_RIGHT = MAX_PATH_STEP;
@@ -169,6 +170,7 @@ function getMapValidators() {
     hasNoHangingRooms,
     hasRequiredRoomDistribution,
     hasForcedRoomKinds,
+    hasSingleBossRoom,
     hasValidNodeFanOut
   ];
 }
@@ -191,6 +193,8 @@ function hasForcedRoomKinds(nodes: SpireMapNode[]) {
   });
 }
 
+function hasSingleBossRoom(nodes: SpireMapNode[]) { const bossNodes = nodes.filter((node) => node.rating === SPIRE_RATINGS[BOSS_FLOOR_INDEX]); return bossNodes.length === 1 && bossNodes[0]?.kind === "boss" && bossNodes[0].column === BOSS_COLUMN; }
+
 function getUnknownRoomCap(nodes: SpireMapNode[]) { return Math.max(1, Math.floor(nodes.length * UNKNOWN_ROOM_RATIO_CAP)); }
 
 function hasValidColumns(nodes: SpireMapNode[]) { return nodes.every((node) => Number.isInteger(node.column) && node.column >= 0 && node.column < MAP_COLUMN_COUNT); }
@@ -205,7 +209,7 @@ function hasLocalPathLinks(nodes: SpireMapNode[]) {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   return nodes.every((node) => node.nextIds.every((id) => {
     const next = byId.get(id);
-    return next && next.rating > node.rating && Math.abs(next.column - node.column) <= MAX_PATH_STEP;
+    return next && next.rating > node.rating && (next.rating === SPIRE_RATINGS[BOSS_FLOOR_INDEX] || Math.abs(next.column - node.column) <= MAX_PATH_STEP);
   }));
 }
 
@@ -401,7 +405,14 @@ function createPathRows(seed: number) {
       column = nextColumn;
     }
   }
+  normalizeBossFloor(rowColumns, edges);
   return rowColumns.map((columns, tierIndex) => createTierNodesFromColumns(seed, tierIndex, [...columns].sort((a, b) => a - b), edges));
+}
+
+function normalizeBossFloor(rowColumns: Array<Set<number>>, edges: PathEdge[]) {
+  rowColumns[BOSS_FLOOR_INDEX] = new Set([BOSS_COLUMN]);
+  for (let index = edges.length - 1; index >= 0; index -= 1) { if (edges[index].fromTier === FLOOR_FOURTEEN_INDEX) { edges.splice(index, 1); } }
+  rowColumns[FLOOR_FOURTEEN_INDEX].forEach((column) => edges.push({ fromColumn: column, fromTier: FLOOR_FOURTEEN_INDEX, toColumn: BOSS_COLUMN }));
 }
 
 function getPathStartColumn(seed: number, pathIndex: number): number {
@@ -616,10 +627,7 @@ function pickWeightedKind(candidates: Array<{ kind: SpireNodeKind; weight: numbe
   return candidates[DEFAULT_FIRST_SLOT].kind;
 }
 
-function getNodeY(tierIndex: number) {
-  const rowStep = (FIRST_ROW_Y - TOP_ROW_Y) / Math.max(1, SPIRE_RATINGS.length - 1);
-  return Math.round(FIRST_ROW_Y - tierIndex * rowStep);
-}
+function getNodeY(tierIndex: number) { const rowStep = (FIRST_ROW_Y - TOP_ROW_Y) / Math.max(1, SPIRE_RATINGS.length - 1); return Math.round(FIRST_ROW_Y - tierIndex * rowStep); }
 
 function getNodeX(seed: number, tierIndex: number, column: number) {
   const base = MAP_X_MIN + (MAP_X_SPREAD / Math.max(1, MAP_COLUMN_COUNT - 1)) * column;
@@ -629,12 +637,7 @@ function getNodeX(seed: number, tierIndex: number, column: number) {
 
 function getTierIndex(rating: number) { return Math.max(FIRST_TIER, SPIRE_RATINGS.findIndex((row) => row === rating)); }
 
-function getRoundQuestionCount(node: SpireMapNode, now: number) {
-  if (node.kind === "elite" || node.kind === "boss") {
-    return MAX_ROUND_QUESTION_COUNT;
-  }
-  return MIN_ROUND_QUESTION_COUNT + Math.floor(getRoll(`${node.id}:${now}:round-count`) * (MAX_ROUND_QUESTION_COUNT - MIN_ROUND_QUESTION_COUNT + 1));
-}
+function getRoundQuestionCount(node: SpireMapNode, now: number) { return node.kind === "elite" || node.kind === "boss" ? MAX_ROUND_QUESTION_COUNT : MIN_ROUND_QUESTION_COUNT + Math.floor(getRoll(`${node.id}:${now}:round-count`) * (MAX_ROUND_QUESTION_COUNT - MIN_ROUND_QUESTION_COUNT + 1)); }
 
 function pickRoundQuestions(node: SpireMapNode, seed: number, previousIds: string[], count: number) {
   const targetRating = node.kind === "elite" || node.kind === "boss" ? Math.min(SPIRE_RATINGS[SPIRE_RATINGS.length - 1], node.rating + ELITE_RATING_BOOST) : node.rating;
@@ -644,11 +647,7 @@ function pickRoundQuestions(node: SpireMapNode, seed: number, previousIds: strin
   return ranked.slice(0, count).map((question) => question.id);
 }
 
-function getQuestionSortValue(node: SpireMapNode, question: Question, targetRating: number, seed: number) {
-  const ratingFit = RATING_FIT_BASE - Math.abs(question.rating - targetRating);
-  const eliteBonus = node.kind === "elite" || node.kind === "boss" ? getUniqueMonsterBonusCount(question) * ELITE_BONUS_SORT_WEIGHT : 0;
-  return ratingFit + eliteBonus + getRoll(`${seed}:${question.id}`);
-}
+function getQuestionSortValue(node: SpireMapNode, question: Question, targetRating: number, seed: number) { const ratingFit = RATING_FIT_BASE - Math.abs(question.rating - targetRating); const eliteBonus = node.kind === "elite" || node.kind === "boss" ? getUniqueMonsterBonusCount(question) * ELITE_BONUS_SORT_WEIGHT : 0; return ratingFit + eliteBonus + getRoll(`${seed}:${question.id}`); }
 
 function getRoll(seed: string) {
   let hash = HASH_SEED;
