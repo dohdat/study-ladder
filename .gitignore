@@ -5,6 +5,7 @@ out/
 .vite-dev.err.log
 coverage/
 public/monaco/
+public/hero_siege_yytex_atlases/
 tsconfig.tsbuildinfo
 .env*
 !.env.example

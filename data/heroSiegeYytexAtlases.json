@@ -1,0 +1,2001 @@
+{
+  "atlases": [
+    {
+      "height": 2048,
+      "name": "accessories_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/accessories_tex_0.png",
+      "sourceSize": 440212,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "accessories_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/accessories_tex_1.png",
+      "sourceSize": 1525594,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "accessories_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/accessories_tex_2.png",
+      "sourceSize": 1976585,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "accessories_tex_3.yytex",
+      "path": "hero_siege_yytex_atlases/accessories_tex_3.png",
+      "sourceSize": 1741845,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "accessories_tex_4.yytex",
+      "path": "hero_siege_yytex_atlases/accessories_tex_4.png",
+      "sourceSize": 258662,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_1_black_tower_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_1_black_tower_tex_0.png",
+      "sourceSize": 306342,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "act_1_large_1_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_1_large_1_tex_0.png",
+      "sourceSize": 74234,
+      "width": 1024
+    },
+    {
+      "height": 1024,
+      "name": "act_1_large_2_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_1_large_2_tex_0.png",
+      "sourceSize": 73712,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_1_large_3_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_1_large_3_tex_0.png",
+      "sourceSize": 189524,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_1_large_4_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_1_large_4_tex_0.png",
+      "sourceSize": 156678,
+      "width": 1024
+    },
+    {
+      "height": 1024,
+      "name": "act_1_swamp_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_1_swamp_tex_0.png",
+      "sourceSize": 61900,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_1_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_1_tex_0.png",
+      "sourceSize": 984875,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "act_1_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_1_tex_1.png",
+      "sourceSize": 136222,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_1_tile_water_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_1_tile_water_tex_0.png",
+      "sourceSize": 219150,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_1_tiles_black_tower_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_1_tiles_black_tower_tex_0.png",
+      "sourceSize": 77589,
+      "width": 1024
+    },
+    {
+      "height": 1024,
+      "name": "act_1_tiles_rat_den_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_1_tiles_rat_den_tex_0.png",
+      "sourceSize": 32379,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_1_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_1_tiles_tex_0.png",
+      "sourceSize": 519096,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_1_tiles_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_1_tiles_tex_1.png",
+      "sourceSize": 453012,
+      "width": 2048
+    },
+    {
+      "height": 512,
+      "name": "act_1_tiles_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/act_1_tiles_tex_2.png",
+      "sourceSize": 23243,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "act_2_large_1_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_2_large_1_tex_0.png",
+      "sourceSize": 195836,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "act_2_large_2_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_2_large_2_tex_0.png",
+      "sourceSize": 74498,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_2_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_2_tex_0.png",
+      "sourceSize": 1333538,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_2_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_2_tex_1.png",
+      "sourceSize": 489167,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_2_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_2_tiles_tex_0.png",
+      "sourceSize": 611331,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_2_tiles_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_2_tiles_tex_1.png",
+      "sourceSize": 822564,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_3_pyramid_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_3_pyramid_tex_0.png",
+      "sourceSize": 735493,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_3_pyramid_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_3_pyramid_tex_1.png",
+      "sourceSize": 888069,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_3_pyramid_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/act_3_pyramid_tex_2.png",
+      "sourceSize": 404181,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_3_pyramid_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_3_pyramid_tiles_tex_0.png",
+      "sourceSize": 544973,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_3_pyramid_tiles_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_3_pyramid_tiles_tex_1.png",
+      "sourceSize": 128352,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_3_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_3_tex_0.png",
+      "sourceSize": 1120604,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "act_3_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_3_tex_1.png",
+      "sourceSize": 211485,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_3_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_3_tiles_tex_0.png",
+      "sourceSize": 573996,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_3_tiles_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_3_tiles_tex_1.png",
+      "sourceSize": 152321,
+      "width": 1024
+    },
+    {
+      "height": 1024,
+      "name": "act_4_lava_cave_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_4_lava_cave_tex_0.png",
+      "sourceSize": 69008,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "act_4_lava_cave_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_4_lava_cave_tiles_tex_0.png",
+      "sourceSize": 457597,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_4_nightmare_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_4_nightmare_tex_0.png",
+      "sourceSize": 589733,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_4_nightmare_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_4_nightmare_tiles_tex_0.png",
+      "sourceSize": 291069,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_4_nightmare_tiles_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_4_nightmare_tiles_tex_1.png",
+      "sourceSize": 119252,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_4_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_4_tex_0.png",
+      "sourceSize": 1251680,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "act_4_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_4_tex_1.png",
+      "sourceSize": 150054,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_4_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_4_tiles_tex_0.png",
+      "sourceSize": 600769,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "act_4_tiles_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_4_tiles_tex_1.png",
+      "sourceSize": 53254,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "act_5_mist_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_5_mist_tex_0.png",
+      "sourceSize": 476556,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_5_mist_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_5_mist_tiles_tex_0.png",
+      "sourceSize": 474788,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "act_5_mist_tiles_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_5_mist_tiles_tex_1.png",
+      "sourceSize": 37719,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "act_5_sea_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_5_sea_tex_0.png",
+      "sourceSize": 4435896,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_5_sea_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_5_sea_tex_1.png",
+      "sourceSize": 4390770,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_5_sea_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/act_5_sea_tex_2.png",
+      "sourceSize": 3044346,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_5_sea_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_5_sea_tiles_tex_0.png",
+      "sourceSize": 148239,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_5_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_5_tex_0.png",
+      "sourceSize": 599721,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_5_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_5_tex_1.png",
+      "sourceSize": 285155,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_5_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_5_tiles_tex_0.png",
+      "sourceSize": 530917,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_5_tiles_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_5_tiles_tex_1.png",
+      "sourceSize": 335391,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_6_graveyard_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_6_graveyard_tex_0.png",
+      "sourceSize": 441072,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_6_graveyard_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_6_graveyard_tiles_tex_0.png",
+      "sourceSize": 333983,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_6_prison_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_6_prison_tex_0.png",
+      "sourceSize": 868205,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_6_prison_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_6_prison_tiles_tex_0.png",
+      "sourceSize": 473913,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "act_6_prison_tiles_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_6_prison_tiles_tex_1.png",
+      "sourceSize": 41575,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_6_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_6_tex_0.png",
+      "sourceSize": 731656,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_6_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_6_tiles_tex_0.png",
+      "sourceSize": 440780,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_6_tiles_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_6_tiles_tex_1.png",
+      "sourceSize": 158018,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_7_bad_trip_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_7_bad_trip_tex_0.png",
+      "sourceSize": 593573,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_7_bad_trip_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_7_bad_trip_tiles_tex_0.png",
+      "sourceSize": 476346,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_7_bad_trip_tiles_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_7_bad_trip_tiles_tex_1.png",
+      "sourceSize": 113677,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_7_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_7_tex_0.png",
+      "sourceSize": 1331527,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_7_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_7_tex_1.png",
+      "sourceSize": 1459416,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_7_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/act_7_tex_2.png",
+      "sourceSize": 945905,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_7_tex_3.yytex",
+      "path": "hero_siege_yytex_atlases/act_7_tex_3.png",
+      "sourceSize": 1321190,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "act_7_tex_4.yytex",
+      "path": "hero_siege_yytex_atlases/act_7_tex_4.png",
+      "sourceSize": 130355,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "act_7_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_7_tiles_tex_0.png",
+      "sourceSize": 417951,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "act_7_tiles_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_7_tiles_tex_1.png",
+      "sourceSize": 107072,
+      "width": 1024
+    },
+    {
+      "height": 1024,
+      "name": "act_8_asgard_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_asgard_tex_0.png",
+      "sourceSize": 119842,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_8_asgard_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_asgard_tiles_tex_0.png",
+      "sourceSize": 146032,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_helheim_souls_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_helheim_souls_tex_0.png",
+      "sourceSize": 1272042,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_helheim_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_helheim_tex_0.png",
+      "sourceSize": 703048,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_helheim_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_helheim_tex_1.png",
+      "sourceSize": 571676,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_helheim_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_helheim_tex_2.png",
+      "sourceSize": 974010,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_helheim_tex_3.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_helheim_tex_3.png",
+      "sourceSize": 1317037,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_helheim_tex_4.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_helheim_tex_4.png",
+      "sourceSize": 1147414,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_helheim_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_helheim_tiles_tex_0.png",
+      "sourceSize": 428270,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_helheim_tiles_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_helheim_tiles_tex_1.png",
+      "sourceSize": 130058,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_8_muspelheim_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_muspelheim_tex_0.png",
+      "sourceSize": 748067,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_muspelheim_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_muspelheim_tiles_tex_0.png",
+      "sourceSize": 62030,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_8_niflheim_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_niflheim_tex_0.png",
+      "sourceSize": 470239,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_8_niflheim_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_niflheim_tiles_tex_0.png",
+      "sourceSize": 241400,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_niflhel_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_niflhel_tex_0.png",
+      "sourceSize": 488858,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "act_8_niflhel_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_niflhel_tex_1.png",
+      "sourceSize": 59944,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "act_8_niflhel_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_niflhel_tiles_tex_0.png",
+      "sourceSize": 105767,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_8_odin_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_odin_tex_0.png",
+      "sourceSize": 408123,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_odin_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_odin_tex_1.png",
+      "sourceSize": 672673,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_odin_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_odin_tex_2.png",
+      "sourceSize": 299119,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_8_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_tex_0.png",
+      "sourceSize": 255943,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_tex_1.png",
+      "sourceSize": 910439,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_tex_2.png",
+      "sourceSize": 935791,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_tex_3.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_tex_3.png",
+      "sourceSize": 790475,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_tex_4.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_tex_4.png",
+      "sourceSize": 868948,
+      "width": 2048
+    },
+    {
+      "height": 512,
+      "name": "act_8_tex_5.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_tex_5.png",
+      "sourceSize": 36746,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "act_8_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_tiles_tex_0.png",
+      "sourceSize": 482685,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "act_8_tiles_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_tiles_tex_1.png",
+      "sourceSize": 106772,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_8_valhalla_cave_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_valhalla_cave_tex_0.png",
+      "sourceSize": 399201,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_valhalla_cave_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_valhalla_cave_tex_1.png",
+      "sourceSize": 186493,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "act_8_valhalla_cave_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_valhalla_cave_tiles_tex_0.png",
+      "sourceSize": 362858,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_8_vanaheim_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_8_vanaheim_tex_0.png",
+      "sourceSize": 889505,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "act_universal_tiles_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/act_universal_tiles_tex_0.png",
+      "sourceSize": 834468,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "bosses_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/bosses_tex_0.png",
+      "sourceSize": 603083,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "bosses_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/bosses_tex_1.png",
+      "sourceSize": 190007,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "chaos_tower_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/chaos_tower_tex_0.png",
+      "sourceSize": 398807,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "chaos_tower_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/chaos_tower_tex_1.png",
+      "sourceSize": 380899,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "character_creation_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/character_creation_tex_0.png",
+      "sourceSize": 567203,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "character_creation_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/character_creation_tex_1.png",
+      "sourceSize": 478338,
+      "width": 2048
+    },
+    {
+      "height": 512,
+      "name": "character_creation_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/character_creation_tex_2.png",
+      "sourceSize": 9003,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "chat_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/chat_tex_0.png",
+      "sourceSize": 301540,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_01_viking_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_01_viking_tex_0.png",
+      "sourceSize": 504196,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "class_02_pyromancer_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_02_pyromancer_tex_0.png",
+      "sourceSize": 1135642,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "class_03_marksman_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_03_marksman_tex_0.png",
+      "sourceSize": 129239,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "class_04_pirate_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_04_pirate_tex_0.png",
+      "sourceSize": 582954,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_05_nomad_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_05_nomad_tex_0.png",
+      "sourceSize": 875721,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "class_06_redneck_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_06_redneck_tex_0.png",
+      "sourceSize": 485925,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_06_redneck_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/class_06_redneck_tex_1.png",
+      "sourceSize": 334464,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "class_07_necromancer_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_07_necromancer_tex_0.png",
+      "sourceSize": 792359,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_08_samurai_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_08_samurai_tex_0.png",
+      "sourceSize": 744779,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_08_samurai_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/class_08_samurai_tex_1.png",
+      "sourceSize": 127008,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "class_09_paladin_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_09_paladin_tex_0.png",
+      "sourceSize": 633958,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "class_10_amazon_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_10_amazon_tex_0.png",
+      "sourceSize": 761421,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_11_demonslayer_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_11_demonslayer_tex_0.png",
+      "sourceSize": 474820,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "class_12_demonspawn_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_12_demonspawn_tex_0.png",
+      "sourceSize": 157176,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "class_13_shaman_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_13_shaman_tex_0.png",
+      "sourceSize": 295928,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "class_14_white_mage_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_14_white_mage_tex_0.png",
+      "sourceSize": 310314,
+      "width": 1024
+    },
+    {
+      "height": 512,
+      "name": "class_15_marauder_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_15_marauder_tex_0.png",
+      "sourceSize": 30886,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "class_16_plague_doctor_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_16_plague_doctor_tex_0.png",
+      "sourceSize": 328859,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "class_17_shield_lancer_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_17_shield_lancer_tex_0.png",
+      "sourceSize": 967004,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_18_jotunn_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_18_jotunn_tex_0.png",
+      "sourceSize": 1380008,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_18_jotunn_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/class_18_jotunn_tex_1.png",
+      "sourceSize": 1362035,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_18_jotunn_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/class_18_jotunn_tex_2.png",
+      "sourceSize": 2176183,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_19_illusionist_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_19_illusionist_tex_0.png",
+      "sourceSize": 703947,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_20_exo_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_20_exo_tex_0.png",
+      "sourceSize": 1151542,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "class_21_butcher_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_21_butcher_tex_0.png",
+      "sourceSize": 94448,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "class_22_stormweaver_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_22_stormweaver_tex_0.png",
+      "sourceSize": 1440272,
+      "width": 2048
+    },
+    {
+      "height": 512,
+      "name": "class_22_stormweaver_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/class_22_stormweaver_tex_1.png",
+      "sourceSize": 77289,
+      "width": 512
+    },
+    {
+      "height": 512,
+      "name": "class_23_monk_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_23_monk_tex_0.png",
+      "sourceSize": 19048,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "class_skill_01_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_skill_01_tex_0.png",
+      "sourceSize": 989659,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_skill_01_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/class_skill_01_tex_1.png",
+      "sourceSize": 1457330,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_skill_01_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/class_skill_01_tex_2.png",
+      "sourceSize": 1414884,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_skill_01_tex_3.yytex",
+      "path": "hero_siege_yytex_atlases/class_skill_01_tex_3.png",
+      "sourceSize": 1511360,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_skill_01_tex_4.yytex",
+      "path": "hero_siege_yytex_atlases/class_skill_01_tex_4.png",
+      "sourceSize": 1388157,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_skill_01_tex_5.yytex",
+      "path": "hero_siege_yytex_atlases/class_skill_01_tex_5.png",
+      "sourceSize": 1209195,
+      "width": 2048
+    },
+    {
+      "height": 128,
+      "name": "class_skill_01_tex_6.yytex",
+      "path": "hero_siege_yytex_atlases/class_skill_01_tex_6.png",
+      "sourceSize": 2400,
+      "width": 128
+    },
+    {
+      "height": 2048,
+      "name": "class_skill_02_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_skill_02_tex_0.png",
+      "sourceSize": 2998990,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_skill_02_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/class_skill_02_tex_1.png",
+      "sourceSize": 1399832,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_skill_02_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/class_skill_02_tex_2.png",
+      "sourceSize": 3098371,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_skill_02_tex_3.yytex",
+      "path": "hero_siege_yytex_atlases/class_skill_02_tex_3.png",
+      "sourceSize": 2879685,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_skill_02_tex_4.yytex",
+      "path": "hero_siege_yytex_atlases/class_skill_02_tex_4.png",
+      "sourceSize": 1804890,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_skill_03_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/class_skill_03_tex_0.png",
+      "sourceSize": 1595481,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_skill_03_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/class_skill_03_tex_1.png",
+      "sourceSize": 1813354,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "class_skill_03_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/class_skill_03_tex_2.png",
+      "sourceSize": 1481087,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "default_0.yytex",
+      "path": "hero_siege_yytex_atlases/default_0.png",
+      "sourceSize": 456353,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "default_1.yytex",
+      "path": "hero_siege_yytex_atlases/default_1.png",
+      "sourceSize": 349603,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "default_2.yytex",
+      "path": "hero_siege_yytex_atlases/default_2.png",
+      "sourceSize": 57252,
+      "width": 1024
+    },
+    {
+      "height": 512,
+      "name": "dev_stuff_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/dev_stuff_tex_0.png",
+      "sourceSize": 25407,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "effects_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/effects_tex_0.png",
+      "sourceSize": 854703,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "effects_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/effects_tex_1.png",
+      "sourceSize": 1617588,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "effects_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/effects_tex_2.png",
+      "sourceSize": 1772174,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "enemy_group_01_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/enemy_group_01_tex_0.png",
+      "sourceSize": 690806,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "enemy_group_02_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/enemy_group_02_tex_0.png",
+      "sourceSize": 703936,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "enemy_group_02_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/enemy_group_02_tex_1.png",
+      "sourceSize": 223920,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "enemy_group_03_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/enemy_group_03_tex_0.png",
+      "sourceSize": 418591,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "enemy_group_04_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/enemy_group_04_tex_0.png",
+      "sourceSize": 511718,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "enemy_group_05_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/enemy_group_05_tex_0.png",
+      "sourceSize": 966544,
+      "width": 2048
+    },
+    {
+      "height": 512,
+      "name": "enemy_group_05_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/enemy_group_05_tex_1.png",
+      "sourceSize": 23930,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "enemy_group_06_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/enemy_group_06_tex_0.png",
+      "sourceSize": 741745,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "enemy_group_06_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/enemy_group_06_tex_1.png",
+      "sourceSize": 91577,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "enemy_group_07_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/enemy_group_07_tex_0.png",
+      "sourceSize": 178007,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "enemy_group_08_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/enemy_group_08_tex_0.png",
+      "sourceSize": 914991,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "enemy_group_08_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/enemy_group_08_tex_1.png",
+      "sourceSize": 557728,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "enemy_group_08_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/enemy_group_08_tex_2.png",
+      "sourceSize": 423948,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "enemy_group_shadow_realm_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/enemy_group_shadow_realm_tex_0.png",
+      "sourceSize": 54686,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "enemy_group_universal_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/enemy_group_universal_tex_0.png",
+      "sourceSize": 252738,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "gui_inventory_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/gui_inventory_tex_0.png",
+      "sourceSize": 872869,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "gui_inventory_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/gui_inventory_tex_1.png",
+      "sourceSize": 1179270,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "gui_inventory_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/gui_inventory_tex_2.png",
+      "sourceSize": 1733361,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "gui_inventory_tex_3.yytex",
+      "path": "hero_siege_yytex_atlases/gui_inventory_tex_3.png",
+      "sourceSize": 329465,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "gui_mapscreen_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/gui_mapscreen_tex_0.png",
+      "sourceSize": 746293,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "gui_mapscreen_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/gui_mapscreen_tex_1.png",
+      "sourceSize": 628899,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "gui_mapscreen_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/gui_mapscreen_tex_2.png",
+      "sourceSize": 350450,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "loot_ground_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/loot_ground_tex_0.png",
+      "sourceSize": 528593,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "magic_weapons_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/magic_weapons_tex_0.png",
+      "sourceSize": 244834,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "melee_weapons_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/melee_weapons_tex_0.png",
+      "sourceSize": 670781,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "menu_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/menu_tex_0.png",
+      "sourceSize": 450435,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/menu_tex_1.png",
+      "sourceSize": 183803,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/menu_tex_2.png",
+      "sourceSize": 360021,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_tex_3.yytex",
+      "path": "hero_siege_yytex_atlases/menu_tex_3.png",
+      "sourceSize": 268552,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_tex_4.yytex",
+      "path": "hero_siege_yytex_atlases/menu_tex_4.png",
+      "sourceSize": 608003,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_tex_5.yytex",
+      "path": "hero_siege_yytex_atlases/menu_tex_5.png",
+      "sourceSize": 328289,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_tex_6.yytex",
+      "path": "hero_siege_yytex_atlases/menu_tex_6.png",
+      "sourceSize": 255596,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_tex_7.yytex",
+      "path": "hero_siege_yytex_atlases/menu_tex_7.png",
+      "sourceSize": 187111,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_tex_8.yytex",
+      "path": "hero_siege_yytex_atlases/menu_tex_8.png",
+      "sourceSize": 292883,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_tex_9.yytex",
+      "path": "hero_siege_yytex_atlases/menu_tex_9.png",
+      "sourceSize": 799908,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_valhalla_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/menu_valhalla_tex_0.png",
+      "sourceSize": 576129,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_valhalla_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/menu_valhalla_tex_1.png",
+      "sourceSize": 738962,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_valhalla_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/menu_valhalla_tex_2.png",
+      "sourceSize": 816131,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_valhalla_tex_3.yytex",
+      "path": "hero_siege_yytex_atlases/menu_valhalla_tex_3.png",
+      "sourceSize": 847545,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_valhalla_tex_4.yytex",
+      "path": "hero_siege_yytex_atlases/menu_valhalla_tex_4.png",
+      "sourceSize": 2084915,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_valhalla_tex_5.yytex",
+      "path": "hero_siege_yytex_atlases/menu_valhalla_tex_5.png",
+      "sourceSize": 2000050,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_valhalla_tex_6.yytex",
+      "path": "hero_siege_yytex_atlases/menu_valhalla_tex_6.png",
+      "sourceSize": 2031600,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "menu_valhalla_tex_7.yytex",
+      "path": "hero_siege_yytex_atlases/menu_valhalla_tex_7.png",
+      "sourceSize": 501277,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "mercenary_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/mercenary_tex_0.png",
+      "sourceSize": 183566,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "minigames_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/minigames_tex_0.png",
+      "sourceSize": 17086,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "npc_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/npc_tex_0.png",
+      "sourceSize": 338432,
+      "width": 1024
+    },
+    {
+      "height": 1024,
+      "name": "options_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/options_tex_0.png",
+      "sourceSize": 15788,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "player_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/player_tex_0.png",
+      "sourceSize": 2160341,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "player_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/player_tex_1.png",
+      "sourceSize": 1858904,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "qr_codes_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/qr_codes_tex_0.png",
+      "sourceSize": 24821,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "qr_codes_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/qr_codes_tex_1.png",
+      "sourceSize": 24605,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "ranged_weapons_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/ranged_weapons_tex_0.png",
+      "sourceSize": 344806,
+      "width": 1024
+    },
+    {
+      "height": 128,
+      "name": "season_promo_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/season_promo_tex_0.png",
+      "sourceSize": 57099,
+      "width": 512
+    },
+    {
+      "height": 1024,
+      "name": "seasonal_events_0.yytex",
+      "path": "hero_siege_yytex_atlases/seasonal_events_0.png",
+      "sourceSize": 155953,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "shields_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/shields_tex_0.png",
+      "sourceSize": 367164,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "shop_images_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/shop_images_tex_0.png",
+      "sourceSize": 1115334,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "shop_images_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/shop_images_tex_1.png",
+      "sourceSize": 1606244,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "shop_images_tex_10.yytex",
+      "path": "hero_siege_yytex_atlases/shop_images_tex_10.png",
+      "sourceSize": 393909,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "shop_images_tex_11.yytex",
+      "path": "hero_siege_yytex_atlases/shop_images_tex_11.png",
+      "sourceSize": 356013,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "shop_images_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/shop_images_tex_2.png",
+      "sourceSize": 1816956,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "shop_images_tex_3.yytex",
+      "path": "hero_siege_yytex_atlases/shop_images_tex_3.png",
+      "sourceSize": 2872245,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "shop_images_tex_4.yytex",
+      "path": "hero_siege_yytex_atlases/shop_images_tex_4.png",
+      "sourceSize": 2848417,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "shop_images_tex_5.yytex",
+      "path": "hero_siege_yytex_atlases/shop_images_tex_5.png",
+      "sourceSize": 5052463,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "shop_images_tex_6.yytex",
+      "path": "hero_siege_yytex_atlases/shop_images_tex_6.png",
+      "sourceSize": 5193159,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "shop_images_tex_7.yytex",
+      "path": "hero_siege_yytex_atlases/shop_images_tex_7.png",
+      "sourceSize": 4641336,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "shop_images_tex_8.yytex",
+      "path": "hero_siege_yytex_atlases/shop_images_tex_8.png",
+      "sourceSize": 1330025,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "shop_images_tex_9.yytex",
+      "path": "hero_siege_yytex_atlases/shop_images_tex_9.png",
+      "sourceSize": 484394,
+      "width": 2048
+    },
+    {
+      "height": 512,
+      "name": "shop_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/shop_tex_0.png",
+      "sourceSize": 49183,
+      "width": 1024
+    },
+    {
+      "height": 1024,
+      "name": "special_zones_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/special_zones_tex_0.png",
+      "sourceSize": 105958,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "steam_inventory_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/steam_inventory_tex_0.png",
+      "sourceSize": 860454,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "steam_inventory_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/steam_inventory_tex_1.png",
+      "sourceSize": 1228186,
+      "width": 2048
+    },
+    {
+      "height": 512,
+      "name": "steam_inventory_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/steam_inventory_tex_2.png",
+      "sourceSize": 98719,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "summoning_portal_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/summoning_portal_tex_0.png",
+      "sourceSize": 138867,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "summons_companions_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/summons_companions_tex_0.png",
+      "sourceSize": 1146131,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "summons_companions_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/summons_companions_tex_1.png",
+      "sourceSize": 42646,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "talent_icons_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/talent_icons_tex_0.png",
+      "sourceSize": 1641808,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "talent_icons_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/talent_icons_tex_1.png",
+      "sourceSize": 655417,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "universal_skin_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/universal_skin_tex_0.png",
+      "sourceSize": 365985,
+      "width": 1024
+    },
+    {
+      "height": 512,
+      "name": "xmas_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/xmas_tex_0.png",
+      "sourceSize": 32944,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "zone_angelic_realm_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_angelic_realm_tex_0.png",
+      "sourceSize": 1024253,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_chaos_tower_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_chaos_tower_tex_0.png",
+      "sourceSize": 574889,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_circle_hate_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_circle_hate_tex_0.png",
+      "sourceSize": 1041027,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_circle_hate_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/zone_circle_hate_tex_1.png",
+      "sourceSize": 528421,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_construction_yard_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_construction_yard_tex_0.png",
+      "sourceSize": 114871,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "zone_ct_boss_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_ct_boss_tex_0.png",
+      "sourceSize": 590613,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_ct_boss_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/zone_ct_boss_tex_1.png",
+      "sourceSize": 236710,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_disc_golf_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_disc_golf_tex_0.png",
+      "sourceSize": 139577,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "zone_fallen_realm_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_fallen_realm_tex_0.png",
+      "sourceSize": 933106,
+      "width": 2048
+    },
+    {
+      "height": 512,
+      "name": "zone_fallen_realm_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/zone_fallen_realm_tex_1.png",
+      "sourceSize": 29494,
+      "width": 512
+    },
+    {
+      "height": 1024,
+      "name": "zone_fields_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_fields_tex_0.png",
+      "sourceSize": 48391,
+      "width": 512
+    },
+    {
+      "height": 128,
+      "name": "zone_horizon_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_horizon_tex_0.png",
+      "sourceSize": 1476,
+      "width": 128
+    },
+    {
+      "height": 2048,
+      "name": "zone_jungle_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_jungle_tex_0.png",
+      "sourceSize": 455760,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_jungle_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/zone_jungle_tex_1.png",
+      "sourceSize": 766425,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_jungle_tex_10.yytex",
+      "path": "hero_siege_yytex_atlases/zone_jungle_tex_10.png",
+      "sourceSize": 994413,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_jungle_tex_11.yytex",
+      "path": "hero_siege_yytex_atlases/zone_jungle_tex_11.png",
+      "sourceSize": 823497,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_jungle_tex_12.yytex",
+      "path": "hero_siege_yytex_atlases/zone_jungle_tex_12.png",
+      "sourceSize": 506307,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_jungle_tex_13.yytex",
+      "path": "hero_siege_yytex_atlases/zone_jungle_tex_13.png",
+      "sourceSize": 1756444,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_jungle_tex_14.yytex",
+      "path": "hero_siege_yytex_atlases/zone_jungle_tex_14.png",
+      "sourceSize": 556148,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_jungle_tex_15.yytex",
+      "path": "hero_siege_yytex_atlases/zone_jungle_tex_15.png",
+      "sourceSize": 419469,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_jungle_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/zone_jungle_tex_2.png",
+      "sourceSize": 670527,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_jungle_tex_3.yytex",
+      "path": "hero_siege_yytex_atlases/zone_jungle_tex_3.png",
+      "sourceSize": 1523586,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_jungle_tex_4.yytex",
+      "path": "hero_siege_yytex_atlases/zone_jungle_tex_4.png",
+      "sourceSize": 1569458,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_jungle_tex_5.yytex",
+      "path": "hero_siege_yytex_atlases/zone_jungle_tex_5.png",
+      "sourceSize": 1503467,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_jungle_tex_6.yytex",
+      "path": "hero_siege_yytex_atlases/zone_jungle_tex_6.png",
+      "sourceSize": 591985,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_jungle_tex_7.yytex",
+      "path": "hero_siege_yytex_atlases/zone_jungle_tex_7.png",
+      "sourceSize": 560457,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_jungle_tex_8.yytex",
+      "path": "hero_siege_yytex_atlases/zone_jungle_tex_8.png",
+      "sourceSize": 659913,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_jungle_tex_9.yytex",
+      "path": "hero_siege_yytex_atlases/zone_jungle_tex_9.png",
+      "sourceSize": 704971,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "zone_mists_of_chaos_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_mists_of_chaos_tex_0.png",
+      "sourceSize": 205224,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "zone_moon_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_moon_tex_0.png",
+      "sourceSize": 114552,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "zone_office_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_office_tex_0.png",
+      "sourceSize": 169887,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "zone_race_track_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_race_track_tex_0.png",
+      "sourceSize": 102506,
+      "width": 1024
+    },
+    {
+      "height": 2048,
+      "name": "zone_ruby_gardens_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_ruby_gardens_tex_0.png",
+      "sourceSize": 681740,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_shadow_realm_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_shadow_realm_tex_0.png",
+      "sourceSize": 1044093,
+      "width": 2048
+    },
+    {
+      "height": 1024,
+      "name": "zone_shadow_realm_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/zone_shadow_realm_tex_1.png",
+      "sourceSize": 29769,
+      "width": 512
+    },
+    {
+      "height": 2048,
+      "name": "zone_sheep_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_sheep_tex_0.png",
+      "sourceSize": 376708,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_sky_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_sky_tex_0.png",
+      "sourceSize": 843880,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_sky_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/zone_sky_tex_1.png",
+      "sourceSize": 518215,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_universal_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_universal_tex_0.png",
+      "sourceSize": 923137,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_universal_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/zone_universal_tex_1.png",
+      "sourceSize": 754442,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_witch_bog_tex_0.yytex",
+      "path": "hero_siege_yytex_atlases/zone_witch_bog_tex_0.png",
+      "sourceSize": 801719,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_witch_bog_tex_1.yytex",
+      "path": "hero_siege_yytex_atlases/zone_witch_bog_tex_1.png",
+      "sourceSize": 661053,
+      "width": 2048
+    },
+    {
+      "height": 2048,
+      "name": "zone_witch_bog_tex_2.yytex",
+      "path": "hero_siege_yytex_atlases/zone_witch_bog_tex_2.png",
+      "sourceSize": 207170,
+      "width": 1024
+    }
+  ],
+  "failures": [],
+  "sourceDirectory": "D:\\Leetcode + System Design extension\\assets\\hero_siege"
+}

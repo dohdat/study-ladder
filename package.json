@@ -10,6 +10,7 @@
     "dev:extension": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-reload-extension.ps1",
     "dev:extension:watch": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/watch-extension.ps1",
     "import:hero-siege-items": "node scripts/import-hero-siege-wiki-items.mjs",
+    "import:hero-siege-yytex": "python scripts/import_hero_siege_yytex_atlases.py",
     "build": "npm run prepare:monaco && vite build",
     "build:fast": "vite build",
     "lint": "eslint .",
