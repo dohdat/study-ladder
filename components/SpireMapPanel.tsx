@@ -38,6 +38,8 @@ const NODE_SHAPE_HIGHLIGHT = "drop-shadow(1px 0 0 rgba(255, 255, 255, 0.98)) dro
 const NODE_SELECTED_HIGHLIGHT = "drop-shadow(2px 0 0 rgba(255, 220, 89, 0.98)) drop-shadow(-2px 0 0 rgba(255, 220, 89, 0.98)) drop-shadow(0 2px 0 rgba(255, 220, 89, 0.98)) drop-shadow(0 -2px 0 rgba(255, 220, 89, 0.98)) drop-shadow(0 0 14px rgba(255, 220, 89, 0.88))";
 const NODE_ACTIVE_HIGHLIGHT = "drop-shadow(2px 0 0 rgba(62, 169, 255, 0.98)) drop-shadow(-2px 0 0 rgba(62, 169, 255, 0.98)) drop-shadow(0 2px 0 rgba(62, 169, 255, 0.98)) drop-shadow(0 -2px 0 rgba(62, 169, 255, 0.98)) drop-shadow(0 0 14px rgba(62, 169, 255, 0.88))";
 const BOSS_ACTIVE_HIGHLIGHT = "drop-shadow(2px 0 0 rgba(175, 35, 42, 0.98)) drop-shadow(-2px 0 0 rgba(175, 35, 42, 0.98)) drop-shadow(0 2px 0 rgba(175, 35, 42, 0.98)) drop-shadow(0 -2px 0 rgba(175, 35, 42, 0.98)) drop-shadow(0 0 18px rgba(151, 21, 28, 0.9))";
+const NODE_HIGHLIGHT_TRANSITION = "opacity 70ms ease-out";
+const LEGEND_ROW_TRANSITION = "background-color 70ms ease-out";
 const NODE_Z_INDEX = 2;
 const HIGHLIGHTED_NODE_Z_INDEX = 3;
 const SELECTED_NODE_Z_INDEX = 4;
@@ -62,7 +64,7 @@ const HASH_SEED = 2166136261;
 const HASH_MULTIPLIER = 16777619;
 const HASH_DIVISOR = 4294967296;
 const MAP_DRAG_POINTER_BUTTON = 0;
-const LEGEND_HIGHLIGHT_DEBOUNCE_MS = 140;
+const LEGEND_HIGHLIGHT_CLEAR_DEBOUNCE_MS = 90;
 const FLEX_FILL_STYLE = { flex: "1 1 auto", minHeight: 0 };
 const BACKDROP_PROP_OPACITY = 0.18;
 const ACT_LABEL_TOP = 12;
@@ -194,10 +196,14 @@ function useDebouncedLegendHighlight(onHighlight: (kind: SpireNodeKind | null) =
 
   return useCallback((kind: SpireNodeKind | null) => {
     clearHighlightTimeout();
-    timeoutRef.current = setTimeout(() => {
+    if (kind) {
       onHighlight(kind);
+      return;
+    }
+    timeoutRef.current = setTimeout(() => {
+      onHighlight(null);
       timeoutRef.current = null;
-    }, LEGEND_HIGHLIGHT_DEBOUNCE_MS);
+    }, LEGEND_HIGHLIGHT_CLEAR_DEBOUNCE_MS);
   }, [clearHighlightTimeout, onHighlight]);
 }
 
@@ -479,7 +485,7 @@ function MapNode(props: { active: boolean; completed: boolean; highlighted: bool
   const size = dimensions.size;
   const iconSize = dimensions.icon;
   const zIndex = getNodeZIndex(props.kind, props.highlighted, props.active);
-  const highlightTone = getNodeHighlightTone(props.active, props.highlighted, hovered);
+  const highlightTone = getNodeHighlightTone(props.active, hovered);
   return (
     <Box
       aria-label={NODE_LABELS[props.kind]}
@@ -492,7 +498,7 @@ function MapNode(props: { active: boolean; completed: boolean; highlighted: bool
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ alignItems: "center", background: "transparent", border: 0, borderRadius: 0, boxShadow: "none", cursor: props.selectable ? "pointer" : "default", display: "flex", height: size, justifyContent: "center", left: `${props.x}%`, opacity, padding: 0, position: "absolute", top: `${props.y}%`, transform: props.highlighted ? "translate(-50%, -50%) scale(1.08)" : "translate(-50%, -50%)", width: size, zIndex }}
+      style={{ alignItems: "center", background: "transparent", border: 0, borderRadius: 0, boxShadow: "none", cursor: props.selectable ? "pointer" : "default", display: "flex", height: size, justifyContent: "center", left: `${props.x}%`, opacity, padding: 0, position: "absolute", top: `${props.y}%`, transform: "translate(-50%, -50%)", transition: NODE_HIGHLIGHT_TRANSITION, width: size, zIndex }}
       type="button"
     >
       <NodeIcon kind={props.kind} highlightTone={highlightTone} shadow size={iconSize} />
@@ -514,12 +520,9 @@ function getNodeZIndex(kind: SpireNodeKind, highlighted: boolean, active: boolea
   return kind === "boss" ? BOSS_NODE_Z_INDEX : NODE_Z_INDEX;
 }
 
-function getNodeHighlightTone(active: boolean, highlighted: boolean, hovered: boolean): "active" | "hover" | "selected" | undefined {
+function getNodeHighlightTone(active: boolean, hovered: boolean): "active" | "hover" | undefined {
   if (active) {
     return "active";
-  }
-  if (highlighted) {
-    return "selected";
   }
   if (hovered) {
     return "hover";
@@ -597,7 +600,7 @@ function Legend(props: { highlightedKind: SpireNodeKind | null; onHighlight: (ki
             gap="xs"
             onMouseEnter={() => props.onHighlight(kind)}
             onMouseLeave={() => props.onHighlight(null)}
-            style={{ background: props.highlightedKind === kind ? "rgba(223, 195, 122, 0.16)" : undefined, borderRadius: 4, cursor: "default", marginInline: -4, paddingInline: 4 }}
+            style={{ background: props.highlightedKind === kind ? "rgba(223, 195, 122, 0.16)" : undefined, borderRadius: 4, cursor: "default", marginInline: -4, paddingInline: 4, transition: LEGEND_ROW_TRANSITION }}
             wrap="nowrap"
           >
             <Box style={{ alignItems: "center", background: "rgba(0, 0, 0, 0.28)", border: "1px solid rgba(223, 195, 122, 0.26)", display: "flex", height: 26, justifyContent: "center", width: 26 }}>
