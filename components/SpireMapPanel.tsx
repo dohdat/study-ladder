@@ -2,8 +2,8 @@ import { Box, Group, Paper, Stack, Text } from "@mantine/core";
 type StaticImageData = string;
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { HeroSiegeButton } from "./HeroSiegeUi";
-import { advanceSpireNode, enterSpireNode, getCurrentSpireNode, isCombatNode, selectSpireNode, SPIRE_RATINGS } from "../lib/spireMapCore";
+import { HeroSiegeButton, getHeroSiegeMenuButtonAsset } from "./HeroSiegeUi";
+import { advanceSpireNode, enterSpireNode, getCurrentSpireNode, isCombatNode, selectSpireNode, smithSpireNode } from "../lib/spireMapCore";
 import type { SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
 import campfireArt from "../assets/hero_siege_map/campfire.png";
 import chestArt from "../assets/hero_siege_map/chest.png";
@@ -67,12 +67,10 @@ const MAP_DRAG_POINTER_BUTTON = 0;
 const LEGEND_HIGHLIGHT_CLEAR_DEBOUNCE_MS = 90;
 const FLEX_FILL_STYLE = { flex: "1 1 auto", minHeight: 0 };
 const BACKDROP_PROP_OPACITY = 0.18;
-const ACT_LABEL_TOP = 12;
-const ACT_LABEL_LEFT = 14;
+const ACT_LABEL_TOP = 16;
 const ACT_LABEL_BORDER = "1px solid rgba(223, 195, 122, 0.72)";
 const ACT_LABEL_BG = "linear-gradient(180deg, rgba(51, 34, 19, 0.96), rgba(15, 12, 8, 0.94))";
-const HEADER_BADGE_BG = "linear-gradient(180deg, rgba(55, 36, 18, 0.92), rgba(18, 14, 9, 0.92))";
-const HEADER_BADGE_BORDER = "1px solid rgba(223, 195, 122, 0.52)";
+const ACT_LABEL_ASSET = getHeroSiegeMenuButtonAsset();
 const NODE_LABELS: Record<SpireNodeKind, string> = {
   boss: "Boss",
   elite: "Elite",
@@ -112,29 +110,20 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
   const solved = props.state.profile.spireRun.roundSolvedIds.length;
   const target = props.state.profile.spireRun.roundQuestionIds.length;
   const mapOpen = props.state.profile.spireRun.mapOpen;
-  const activeCombat = !mapOpen && isCombatNode(node);
   const selectedNodeIsReachable = mapOpen && Boolean(node && props.state.profile.spireRun.availableNodeIds.includes(node.id));
   return (
     <Paper withBorder p="sm" style={{ background: "var(--mantine-color-dark-7)", ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
       <Box style={{ minWidth: 0, ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
-        <Group justify="space-between" mb="xs">
-          <Group gap="xs">
-            <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>Spire Run</Text>
-            <HeaderActBadge />
-            <HeaderStatusBadge tone="gold">Rating {node?.rating || SPIRE_RATINGS[0]}</HeaderStatusBadge>
-            <HeaderStatusBadge tone={activeCombat ? "red" : "blue"}>{getRunBadgeLabel(mapOpen, node)}</HeaderStatusBadge>
-          </Group>
-          <Text size="xs" c="dimmed">{activeCombat ? `Room ${solved}/${target}` : "Pick a reachable node"}</Text>
-        </Group>
         {mapOpen ? (
           <Box style={{ background: MAP_BG, border: "1px solid var(--mantine-color-dark-4)", height: props.fillAvailableHeight ? undefined : EXPANDED_MAP_HEIGHT, overflow: "hidden", position: "relative", ...(props.fillAvailableHeight ? FLEX_FILL_STYLE : {}) }}>
             <Box
+              className="spire-map-scroll"
               ref={mapDrag.scrollRef}
               onPointerCancel={mapDrag.endDrag}
               onPointerDown={mapDrag.startDrag}
               onPointerMove={mapDrag.moveDrag}
               onPointerUp={mapDrag.endDrag}
-              style={{ cursor: mapDrag.dragging ? "grabbing" : "grab", inset: 0, overflow: "auto", overscrollBehavior: "contain", position: "absolute", touchAction: "none", userSelect: mapDrag.dragging ? "none" : undefined }}
+              style={{ cursor: mapDrag.dragging ? "grabbing" : "grab", inset: 0, msOverflowStyle: "none", overflow: "auto", overscrollBehavior: "contain", position: "absolute", scrollbarWidth: "none", touchAction: "none", userSelect: mapDrag.dragging ? "none" : undefined }}
             >
               <Box style={{ background: MAP_BG, height: MAP_CONTENT_HEIGHT, minHeight: "100%", minWidth: "100%", position: "relative", width: MAP_CONTENT_WIDTH }}>
                 <MapBackdrop />
@@ -160,19 +149,26 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
               </Box>
             </Box>
             <Legend highlightedKind={highlightedKind} onHighlight={setDebouncedHighlightedKind} />
-            <HeroSiegeButton
-              disabled={!selectedNodeIsReachable}
-              onClick={() => props.setState((previous) => (isCombatNode(node) ? enterSpireNode(previous) : advanceSpireNode(previous)))}
-              minWidth={134}
-              style={{
-                bottom: ENTER_BUTTON_BOTTOM,
-                position: "absolute",
-                right: ENTER_BUTTON_RIGHT,
-                zIndex: 4
-              }}
-            >
-              {getMapButtonLabel(node)}
-            </HeroSiegeButton>
+            {node?.kind === "rest" ? (
+              <Group gap={8} wrap="nowrap" style={{ bottom: ENTER_BUTTON_BOTTOM, position: "absolute", right: ENTER_BUTTON_RIGHT, zIndex: 4 }}>
+                <HeroSiegeButton disabled={!selectedNodeIsReachable} onClick={() => props.setState((previous) => advanceSpireNode(previous))} minWidth={104}>Rest</HeroSiegeButton>
+                <HeroSiegeButton disabled={!selectedNodeIsReachable || props.state.profile.inventory.length === 0} onClick={() => props.setState((previous) => smithSpireNode(previous))} minWidth={104}>Smith</HeroSiegeButton>
+              </Group>
+            ) : (
+              <HeroSiegeButton
+                disabled={!selectedNodeIsReachable}
+                onClick={() => props.setState((previous) => (isCombatNode(node) ? enterSpireNode(previous) : advanceSpireNode(previous)))}
+                minWidth={134}
+                style={{
+                  bottom: ENTER_BUTTON_BOTTOM,
+                  position: "absolute",
+                  right: ENTER_BUTTON_RIGHT,
+                  zIndex: 4
+                }}
+              >
+                {getMapButtonLabel(node)}
+              </HeroSiegeButton>
+            )}
           </Box>
         ) : (
           <CompactRoomPanel node={node} solved={solved} target={target} />
@@ -269,84 +265,6 @@ function CompactRoomPanel(props: { node: SpireMapNode | undefined; solved: numbe
   );
 }
 
-function HeaderActBadge() {
-  return (
-    <Box
-      component="span"
-      style={{
-        background: HEADER_BADGE_BG,
-        border: HEADER_BADGE_BORDER,
-        borderRadius: 2,
-        color: "#f6d678",
-        display: "inline-flex",
-        fontSize: 11,
-        fontWeight: 900,
-        letterSpacing: 0,
-        lineHeight: 1,
-        padding: "5px 10px",
-        textShadow: "0 1px 0 #000",
-        textTransform: "uppercase"
-      }}
-    >
-      {ACT_LABEL}
-    </Box>
-  );
-}
-
-function HeaderStatusBadge(props: { children: React.ReactNode; tone: "blue" | "gold" | "red" }) {
-  return (
-    <Box
-      component="span"
-      style={{
-        background: getHeaderStatusBadgeBg(props.tone),
-        border: getHeaderStatusBadgeBorder(props.tone),
-        borderRadius: 2,
-        color: getHeaderStatusBadgeColor(props.tone),
-        display: "inline-flex",
-        fontSize: 11,
-        fontWeight: 900,
-        letterSpacing: 0,
-        lineHeight: 1,
-        padding: "5px 10px",
-        textShadow: "0 1px 0 #000",
-        textTransform: "uppercase"
-      }}
-    >
-      {props.children}
-    </Box>
-  );
-}
-
-function getHeaderStatusBadgeBg(tone: "blue" | "gold" | "red") {
-  if (tone === "red") {
-    return "linear-gradient(180deg, rgba(86, 27, 18, 0.94), rgba(27, 10, 7, 0.94))";
-  }
-  if (tone === "blue") {
-    return "linear-gradient(180deg, rgba(30, 55, 72, 0.94), rgba(10, 20, 29, 0.94))";
-  }
-  return HEADER_BADGE_BG;
-}
-
-function getHeaderStatusBadgeBorder(tone: "blue" | "gold" | "red") {
-  if (tone === "red") {
-    return "1px solid rgba(227, 112, 78, 0.46)";
-  }
-  if (tone === "blue") {
-    return "1px solid rgba(101, 172, 218, 0.46)";
-  }
-  return HEADER_BADGE_BORDER;
-}
-
-function getHeaderStatusBadgeColor(tone: "blue" | "gold" | "red") {
-  if (tone === "red") {
-    return "#ffb098";
-  }
-  if (tone === "blue") {
-    return "#a9dcff";
-  }
-  return "#f6d678";
-}
-
 function MapBackdrop() {
   return (
     <Box aria-hidden="true" style={{ inset: 0, overflow: "hidden", pointerEvents: "none", position: "absolute", zIndex: 0 }}>
@@ -383,20 +301,29 @@ function ActMapLabel() {
   return (
     <Box
       style={{
-        background: ACT_LABEL_BG,
-        border: ACT_LABEL_BORDER,
-        borderRadius: 2,
-        boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.72), 0 6px 18px rgba(0, 0, 0, 0.34)",
+        alignItems: "center",
+        backgroundColor: "transparent",
+        backgroundImage: `url(${ACT_LABEL_ASSET})`,
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundSize: "100% 100%",
+        border: 0,
+        boxShadow: "0 6px 18px rgba(0, 0, 0, 0.34)",
         color: "#f1dfad",
-        left: ACT_LABEL_LEFT,
-        minWidth: 186,
-        padding: "10px 14px",
+        display: "flex",
+        height: 40,
+        imageRendering: "pixelated",
+        justifyContent: "center",
+        left: "50%",
+        minWidth: 276,
+        padding: "0 26px",
         position: "absolute",
         top: ACT_LABEL_TOP,
+        transform: "translateX(-50%)",
         zIndex: 4
       }}
     >
-      <Text size="xs" fw={900} ta="center" tt="uppercase" style={{ letterSpacing: 0, textShadow: "0 1px 0 #000" }}>{ACT_LABEL}</Text>
+      <Text size="xs" fw={900} ta="center" tt="uppercase" style={{ letterSpacing: 0, lineHeight: 1, textShadow: "0 2px 0 #000" }}>{ACT_LABEL}</Text>
     </Box>
   );
 }
@@ -538,13 +465,6 @@ function getNodeOpacity(props: { active: boolean; completed: boolean; highlighte
     return props.selectable || props.completed || props.active ? HIGHLIGHTED_NODE_OPACITY : BOSS_LOCKED_OPACITY;
   }
   return props.selectable || props.completed || props.active ? HIGHLIGHTED_NODE_OPACITY : LOCKED_NODE_OPACITY;
-}
-
-function getRunBadgeLabel(mapOpen: boolean, node: ReturnType<typeof getCurrentSpireNode>) {
-  if (mapOpen) {
-    return "Choose Room";
-  }
-  return node ? NODE_LABELS[node.kind] : "Enemy";
 }
 
 function NodeIcon(props: { highlightTone?: "active" | "hover" | "selected"; kind: SpireNodeKind; shadow?: boolean; size?: number }) {

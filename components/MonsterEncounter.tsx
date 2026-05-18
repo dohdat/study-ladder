@@ -51,6 +51,8 @@ const AVATAR_SHADOW_COLOR = "#1f111a";
 const HASH_INITIAL = 7;
 const HASH_MULTIPLIER = 31;
 const HASH_MODULUS = 1000000007;
+const DAMAGE_POP_TOP = 4;
+const DAMAGE_POP_RIGHT = 2;
 
 type MonsterDefinition = {
   art: StaticImageData;
@@ -59,6 +61,15 @@ type MonsterDefinition = {
 };
 
 export type MonsterWikiEntry = MonsterDefinition & {
+  difficulty: Difficulty;
+  id: string;
+  rating: number;
+};
+
+export type MonsterDamagePop = {
+  amount: number;
+  critical: boolean;
+  hitCount: number;
   id: string;
 };
 
@@ -105,9 +116,6 @@ const BASE_MONSTERS = {
 type BaseMonsterKind = keyof typeof BASE_MONSTERS;
 type MonsterKind = string;
 
-const MONSTERS: Record<MonsterKind, MonsterDefinition> = createMonsterCatalog(BASE_MONSTERS);
-export const MONSTER_WIKI_ENTRIES: MonsterWikiEntry[] = Object.entries(MONSTERS).map(([id, monster]) => ({ id, ...monster }));
-
 const QUESTION_MONSTERS: Record<string, MonsterKind> = {
   "array-first-duplicate": "mossSlime",
   "array-merge-intervals": "stoneBrute",
@@ -138,8 +146,14 @@ const MONSTER_POOLS: Record<Difficulty, MonsterKind[]> = {
   4: expandMonsterPool(BASE_MONSTER_POOLS[4]),
   5: expandMonsterPool(BASE_MONSTER_POOLS[5])
 };
+const WIKI_RATINGS_BY_DIFFICULTY: Record<Difficulty, number> = { 1: 1100, 2: 1500, 3: 2000, 4: 2600, 5: 3200 };
+const MONSTERS: Record<MonsterKind, MonsterDefinition> = createMonsterCatalog(BASE_MONSTERS);
+export const MONSTER_WIKI_ENTRIES: MonsterWikiEntry[] = Object.entries(MONSTERS).map(([id, monster]) => {
+  const difficulty = getWikiMonsterDifficulty(id);
+  return { difficulty, id, rating: WIKI_RATINGS_BY_DIFFICULTY[difficulty], ...monster };
+});
 
-export function MonsterEncounter(props: { question: Question; state: StudyState }) {
+export function MonsterEncounter(props: { damagePop?: MonsterDamagePop | null; question: Question; state: StudyState }) {
   const maxHealth = getMonsterMaxHealth(props.question);
   const health = getMonsterCurrentHealth(props.state, props.question);
   const monster = getMonsterDefinition(props.question);
@@ -148,7 +162,7 @@ export function MonsterEncounter(props: { question: Question; state: StudyState 
   return (
     <Paper withBorder p="xs" mt="md" bg="dark.7" style={{ overflow: "visible" }}>
       <Group gap="sm" wrap="nowrap" align="center" style={{ overflow: "visible" }}>
-        <MonsterAvatar monster={monster} />
+        <MonsterAvatar damagePop={props.damagePop} monster={monster} />
         <Box flex={1} style={{ overflow: "visible" }}>
           <Group justify="space-between" gap="xs" mb={4}>
             <Box>
@@ -192,7 +206,7 @@ function UniqueBonusBadge(props: { bonus: string; color: string }) {
   );
 }
 
-function MonsterAvatar(props: { monster: MonsterDefinition }) {
+function MonsterAvatar(props: { damagePop?: MonsterDamagePop | null; monster: MonsterDefinition }) {
   return (
     <Box
       aria-hidden
@@ -206,6 +220,7 @@ function MonsterAvatar(props: { monster: MonsterDefinition }) {
         height: AVATAR_SIZE,
         justifyContent: "center",
         padding: 0,
+        position: "relative",
         width: AVATAR_SIZE
       }}
     >
@@ -222,6 +237,30 @@ function MonsterAvatar(props: { monster: MonsterDefinition }) {
           width: "100%"
         }}
       />
+      {props.damagePop && <DamagePop key={props.damagePop.id} damage={props.damagePop} />}
+    </Box>
+  );
+}
+
+function DamagePop(props: { damage: MonsterDamagePop }) {
+  const hitCount = props.damage.hitCount > 1 ? ` x${props.damage.hitCount}` : "";
+  return (
+    <Box
+      style={{
+        animation: "monster-damage-pop 820ms ease-out both",
+        color: props.damage.critical ? "#fff0a8" : "#ff4d4d",
+        fontSize: props.damage.critical ? 22 : 18,
+        fontWeight: 900,
+        pointerEvents: "none",
+        position: "absolute",
+        right: DAMAGE_POP_RIGHT,
+        textShadow: props.damage.critical ? "0 2px 0 #000, 0 0 8px #ff2a2a" : "0 2px 0 #000, 0 0 6px rgba(255, 0, 0, 0.78)",
+        top: DAMAGE_POP_TOP,
+        transform: "translateY(0)",
+        zIndex: 3
+      }}
+    >
+      -{props.damage.amount}{hitCount}
     </Box>
   );
 }
@@ -245,6 +284,16 @@ function createMonsterCatalog(baseMonsters: Record<BaseMonsterKind, MonsterDefin
 
 function expandMonsterPool(pool: BaseMonsterKind[]) {
   return pool.flatMap((id) => MONSTER_VARIANTS.map((variant) => getVariantMonsterId(variant.idPrefix, id)));
+}
+
+function getWikiMonsterDifficulty(id: MonsterKind): Difficulty {
+  const baseId = getBaseMonsterId(id);
+  return (Object.entries(BASE_MONSTER_POOLS).find(([, pool]) => pool.includes(baseId))?.[0] || "1") as unknown as Difficulty;
+}
+
+function getBaseMonsterId(id: MonsterKind): BaseMonsterKind {
+  const normalized = id.replace(/^(ember|void)([A-Z])/, (_match, _prefix, firstLetter: string) => firstLetter.toLowerCase());
+  return normalized as BaseMonsterKind;
 }
 
 function getVariantMonsterId(prefix: string, id: string) {

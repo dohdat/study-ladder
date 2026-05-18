@@ -6,13 +6,13 @@ A Chrome extension built with Vite, React, Mantine, and Monaco Editor for JavaSc
 
 ```powershell
 npm.cmd install
-npm.cmd run dev:extension
+scripts\dev-extension.cmd -ExtensionId mckniaaigcphmilhcpcpanfipcaoainb
 ```
 
 For Chrome extension UI iteration, build and reload the real unpacked extension:
 
 ```powershell
-npm.cmd run dev:extension
+scripts\dev-extension.cmd -ExtensionId mckniaaigcphmilhcpcpanfipcaoainb
 ```
 
 This uses a quick Vite build to rebuild `out/` and then reloads `chrome-extension://.../out/index.html`.
@@ -22,12 +22,12 @@ The quick loop skips the full Monaco asset check after `public/monaco/vs` alread
 For repeated small visual tweaks, keep a warm build watcher running:
 
 ```powershell
-npm.cmd run dev:extension:watch -- -ExtensionId mckniaaigcphmilhcpcpanfipcaoainb
+scripts\watch-extension.cmd -ExtensionId mckniaaigcphmilhcpcpanfipcaoainb
 ```
 
 It rebuilds `out/` on file changes and reloads the unpacked extension after each rebuild.
 
-`npm.cmd run dev:web` is only for optional browser preview work outside the extension.
+`npm.cmd run typecheck` runs TypeScript checks without building. Use it when changing logic or shared types, not for every tiny visual-only edit.
 
 ## Build Extension
 

@@ -15,7 +15,8 @@ const RELIC_STOCK_COUNT = 4;
 const SHOP_RATING_DISCOUNT = 180;
 const SHOP_RATING_STEP = 45;
 const MIN_SHOP_RATING = 1000;
-const MAX_BASIC_SHOP_DIFFICULTY: Difficulty = 2;
+const MAX_SHOP_DIFFICULTY: Difficulty = 5;
+const SHOP_ITEM_RARITY_BONUS = 0.04;
 const ITEM_LEVEL_COST_MULTIPLIER = 3;
 const ITEM_STAT_COST_MULTIPLIER = 6;
 const COMMON_RARITY_COST = 8;
@@ -85,7 +86,7 @@ function createManaPotion(question: Question, now: number): ShopItem {
 
 function createShopEquipment(question: Question, stats: CharacterStats, now: number, index: number): ShopItem {
   const shopQuestion = createShopQuestion(question, index);
-  const item = createDropItem(shopQuestion, stats, now + index);
+  const item = createDropItem(shopQuestion, stats, now + index, { rarityBonus: SHOP_ITEM_RARITY_BONUS * index });
   const cost = getEquipmentCost(item);
   return { cost, id: `shop-equipment-${item.id}`, item, kind: "equipment", name: item.name };
 }
@@ -99,7 +100,7 @@ function createShopQuestion(question: Question, index: number): Question {
   const rating = Math.max(MIN_SHOP_RATING, question.rating - SHOP_RATING_DISCOUNT + index * SHOP_RATING_STEP);
   return {
     ...question,
-    difficulty: Math.min(question.difficulty, MAX_BASIC_SHOP_DIFFICULTY) as Difficulty,
+    difficulty: Math.min(MAX_SHOP_DIFFICULTY, Math.max(1, question.difficulty + (index % 2))) as Difficulty,
     id: `${question.id}-shop-${index}`,
     rating
   };

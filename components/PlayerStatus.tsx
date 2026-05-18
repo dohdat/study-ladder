@@ -1,15 +1,16 @@
-import { Box, Group, Paper, Progress, SimpleGrid, Stack, Text, Tooltip } from "@mantine/core";
-import { IconDroplet } from "@tabler/icons-react";
+import { Box, Group, Paper, Text, Tooltip } from "@mantine/core";
+import type { ReactNode } from "react";
 type StaticImageData = string;
 
 import healthShrineArt from "../assets/hero_siege_map/health-shrine.png";
 import chestArt from "../assets/hero_siege_map/chest.png";
 import fieldTorchArt from "../assets/hero_siege_map/field-torch.png";
-import warriorAvatarArt from "../assets/hero_siege_monsters/samurai-skeleton.png";
+import demonKingArt from "../assets/hero_siege_monsters/demon-king.png";
+import slotBgArt from "../assets/hero_siege_inventory/slot-bg-normal.png";
+import tabSquareArt from "../assets/hero_siege_inventory/tab-square.png";
 import { ACTIVE_WARRIOR_SKILLS, canUseActiveWarriorSkill, getActiveWarriorSkill, getWarriorSkillRank } from "../lib/skillCore";
 import type { ActiveWarriorSkillId, CharacterStats, StudyState } from "../types/study";
 import { CoinIcon } from "./CoinIcon";
-import { HeroSiegeButton } from "./HeroSiegeUi";
 import { HeroSiegeSkillIcon } from "./HeroSiegeSkillIcon";
 
 const PERCENT_MAX = 100;
@@ -18,21 +19,23 @@ const RED_RATING_MIN = 3000;
 const ORANGE_RATING_MIN = 2400;
 const YELLOW_RATING_MIN = 1800;
 const BLUE_RATING_MIN = 1400;
-const AVATAR_SIZE = 58;
-const AVATAR_ART_SIZE = 50;
-const ACTIVE_SKILL_BUTTON_SIZE = 38;
+const AVATAR_FRAME_WIDTH = 86;
+const AVATAR_FRAME_HEIGHT = 104;
+const AVATAR_ART_SIZE = 118;
+const ACTIVE_SKILL_BUTTON_SIZE = 36;
 const ACTIVE_SKILL_ICON_SIZE = 30;
-const ACTIVE_SKILL_COST_ICON_SIZE = 11;
-const ACTIVE_SKILL_COST_FONT_SIZE = "10px";
-const ACTIVE_SKILL_GAP = 4;
-const ACTIVE_SKILL_MIN_WIDTH = 42;
-const RESOURCE_ICON_SIZE = 19;
-const RESOURCE_ICON_FRAME_SIZE = 23;
-const PLAYER_PANEL_BG = "linear-gradient(180deg, rgba(51, 43, 32, 0.98) 0%, rgba(29, 24, 18, 0.98) 56%, rgba(15, 13, 10, 0.99) 100%)";
-const PLAYER_PANEL_BORDER = "1px solid rgba(223, 195, 122, 0.56)";
-const PLAYER_PANEL_SHADOW = "inset 0 0 0 1px rgba(0, 0, 0, 0.78), 0 10px 26px rgba(0, 0, 0, 0.36)";
+const ACTIVE_SKILL_SLOT_COUNT = 3;
+const RESOURCE_BAR_HEIGHT = 18;
+const RESOURCE_BAR_BORDER = "1px solid rgba(12, 10, 14, 0.98)";
+const PLAYER_PANEL_BG = "linear-gradient(180deg, rgba(10, 9, 12, 0.76), rgba(4, 4, 5, 0.8))";
+const PLAYER_PANEL_BORDER = "1px solid rgba(32, 30, 34, 0.96)";
+const PLAYER_PANEL_SHADOW = "inset 0 0 0 1px rgba(115, 107, 92, 0.14), 0 10px 24px rgba(0, 0, 0, 0.38)";
+const NAME_COLOR = "#e95aff";
 const HERO_GOLD = "#f1dfad";
 const HERO_DIM = "#bca982";
+const HEALTH_FILL = "linear-gradient(180deg, #ff5d5d, #b30017 72%, #5b0209)";
+const MANA_FILL = "linear-gradient(180deg, #5f8fff, #123abb 70%, #06185e)";
+const XP_FILL = "linear-gradient(180deg, #ffc658, #e58100 72%, #6c3500)";
 
 export function PlayerStatus(props: {
   coins: number;
@@ -63,27 +66,26 @@ export function PlayerStatus(props: {
         alignItems: "center",
         background: PLAYER_PANEL_BG,
         border: PLAYER_PANEL_BORDER,
-        borderRadius: 4,
+        borderRadius: 2,
         boxShadow: PLAYER_PANEL_SHADOW,
         color: "inherit",
         cursor: props.onOpenStats ? "pointer" : "default",
         display: "flex",
-        gap: 12,
-        minWidth: 360,
+        gap: 10,
+        minHeight: 126,
+        minWidth: 472,
         overflow: "hidden",
+        padding: 8,
         position: "relative",
         textAlign: "left"
         }}
     >
-      <Group gap="xs" wrap="nowrap" align="center">
-        <AvatarIllustration />
-        <ActiveSkillBar state={props.state} useActiveSkill={props.useActiveSkill} />
-      </Group>
-      <Box style={{ flex: 1, minWidth: 0 }}>
-        <Group justify="space-between" gap="xs" wrap="nowrap" mb={2}>
+      <AvatarIllustration level={props.level} />
+      <Box style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
+        <Group justify="space-between" gap="xs" wrap="nowrap" mb={5}>
           <Box>
-            <Text size="sm" fw={900} lh={1.1} style={{ color: HERO_GOLD, textShadow: "0 1px 0 #000" }}>Dat Do</Text>
-            <Text size="xs" fw={700} style={{ color: HERO_DIM, textShadow: "0 1px 0 #000" }}>Level {props.level} Warrior</Text>
+            <Text size="lg" fw={900} lh={1} style={{ color: NAME_COLOR, textShadow: "0 2px 0 #000" }}>Dat Do</Text>
+            <Text size="xs" fw={800} mt={1} style={{ color: HERO_GOLD, textShadow: "0 1px 0 #000" }}>Level {props.level} Warrior</Text>
           </Box>
           <Box ta="right">
             <Group gap={5} wrap="nowrap" justify="flex-end">
@@ -93,15 +95,20 @@ export function PlayerStatus(props: {
             <Text size="10px" c={`${ratingColor}.4`} fw={800} lh={1.2}>Rating {props.rating}</Text>
           </Box>
         </Group>
-        <StatBar asset={healthShrineArt} color="red" value={healthValue} text={`${props.health} / ${props.maxHealth}`} />
-        <StatBar asset={fieldTorchArt} color="blue" value={manaValue} text={`${props.mana} / ${props.maxMana}`} />
-        <StatBar asset={chestArt} color="yellow" value={experienceValue} text={`${props.currentExperience} / ${props.nextLevelExperience}`} />
-        <SimpleGrid cols={4} spacing={4} mt={4}>
-          <MiniStat label="STR" value={props.stats.strength} />
-          <MiniStat label="CON" value={props.stats.constitution} />
-          <MiniStat label="PER" value={props.stats.perception} />
-          <MiniStat label="INT" value={props.stats.intelligence} />
-        </SimpleGrid>
+        <StackedResourceBars>
+          <HudBar fill={HEALTH_FILL} icon={healthShrineArt} value={healthValue} text={`${props.health} / ${props.maxHealth}`} />
+          <HudBar fill={MANA_FILL} icon={fieldTorchArt} value={manaValue} text={`${props.mana} / ${props.maxMana}`} />
+          <HudBar fill={XP_FILL} icon={chestArt} value={experienceValue} text={`${props.currentExperience} / ${props.nextLevelExperience}`} />
+        </StackedResourceBars>
+        <Group justify="space-between" mt={7} wrap="nowrap">
+          <ActiveSkillBar state={props.state} useActiveSkill={props.useActiveSkill} />
+          <Group gap={4} wrap="nowrap">
+            <MiniStat label="STR" value={props.stats.strength} />
+            <MiniStat label="CON" value={props.stats.constitution} />
+            <MiniStat label="PER" value={props.stats.perception} />
+            <MiniStat label="INT" value={props.stats.intelligence} />
+          </Group>
+        </Group>
       </Box>
     </Paper>
   );
@@ -110,37 +117,66 @@ export function PlayerStatus(props: {
 function ActiveSkillBar(props: { state: StudyState; useActiveSkill: (skillId: ActiveWarriorSkillId) => void }) {
   const visibleSkills = ACTIVE_WARRIOR_SKILLS.filter((skill) => getWarriorSkillRank(props.state.profile.skillRanks, skill.id) > 0);
   const activeSkill = getActiveWarriorSkill(props.state.profile.activeSkill);
-  if (!visibleSkills.length) {
-    return null;
-  }
+  const slots = Array.from({ length: ACTIVE_SKILL_SLOT_COUNT }, (_item, index) => visibleSkills[index] || null);
   return (
-    <Stack gap={ACTIVE_SKILL_GAP} onClick={(event) => event.stopPropagation()}>
-      {visibleSkills.map((skill) => {
+    <Group gap={7} onClick={(event) => event.stopPropagation()} wrap="nowrap">
+      {slots.map((skill, index) => {
+        if (!skill) {
+          return <EmptySkillSlot key={`empty-skill-${index}`} />;
+        }
         const isReadied = activeSkill?.id === skill.id;
         const disabled = !isReadied && !canUseActiveWarriorSkill(props.state, skill.id);
         return (
           <Tooltip key={skill.id} label={isReadied ? `${skill.name} is readied.` : `${skill.description} Costs ${skill.cost} mana${skill.healthCost ? ` and ${skill.healthCost} health` : ""}.`} withArrow>
-            <Box style={{ minWidth: ACTIVE_SKILL_MIN_WIDTH }}>
-              <HeroSiegeButton
-                active={isReadied}
-                aria-label={skill.name}
-                disabled={disabled}
-                height={ACTIVE_SKILL_BUTTON_SIZE}
-                minWidth={ACTIVE_SKILL_BUTTON_SIZE}
-                onClick={() => props.useActiveSkill(skill.id)}
-                style={{ padding: 0, width: ACTIVE_SKILL_BUTTON_SIZE }}
-              >
-                <ActiveSkillIcon skillId={skill.id} />
-              </HeroSiegeButton>
-              <Group gap={2} justify="center" mt={1} wrap="nowrap">
-                <IconDroplet size={ACTIVE_SKILL_COST_ICON_SIZE} color="#4dabf7" />
-                <Text size={ACTIVE_SKILL_COST_FONT_SIZE} c="blue.2" fw={800}>{skill.cost}</Text>
-              </Group>
+            <Box
+              component="button"
+              aria-label={skill.name}
+              disabled={disabled}
+              onClick={() => props.useActiveSkill(skill.id)}
+              style={{
+                alignItems: "center",
+                backgroundColor: "transparent",
+                backgroundImage: `url(${slotBgArt})`,
+                backgroundPosition: "center",
+                backgroundRepeat: "no-repeat",
+                backgroundSize: "100% 100%",
+                border: 0,
+                boxShadow: isReadied ? "0 0 0 1px #fff, 0 0 10px rgba(102, 180, 255, 0.72)" : "none",
+                cursor: disabled ? "not-allowed" : "pointer",
+                display: "flex",
+                height: ACTIVE_SKILL_BUTTON_SIZE,
+                imageRendering: "pixelated",
+                justifyContent: "center",
+                opacity: disabled ? 0.44 : 1,
+                padding: 0,
+                width: ACTIVE_SKILL_BUTTON_SIZE
+              }}
+            >
+              <ActiveSkillIcon skillId={skill.id} />
             </Box>
           </Tooltip>
         );
       })}
-    </Stack>
+    </Group>
+  );
+}
+
+function EmptySkillSlot() {
+  return (
+    <Box
+      aria-hidden="true"
+      style={{
+        backgroundColor: "transparent",
+        backgroundImage: `url(${slotBgArt})`,
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundSize: "100% 100%",
+        height: ACTIVE_SKILL_BUTTON_SIZE,
+        imageRendering: "pixelated",
+        opacity: 0.74,
+        width: ACTIVE_SKILL_BUTTON_SIZE
+      }}
+    />
   );
 }
 
@@ -167,60 +203,87 @@ function getRatingColor(rating: number) {
   return "green";
 }
 
-function AvatarIllustration() {
+function AvatarIllustration(props: { level: number }) {
   return (
     <Box
       aria-hidden="true"
       style={{
-        alignItems: "center",
-        background: "radial-gradient(circle at 48% 28%, rgba(88, 76, 50, 0.92), rgba(25, 20, 14, 0.98) 70%)",
-        border: "2px solid rgba(223, 195, 122, 0.66)",
-        boxShadow: "inset 0 0 0 2px rgba(0, 0, 0, 0.72), 0 4px 12px rgba(0, 0, 0, 0.34)",
-        display: "flex",
-        height: AVATAR_SIZE,
-        justifyContent: "center",
-        padding: 2,
-        width: AVATAR_SIZE
+        flex: `0 0 ${AVATAR_FRAME_WIDTH}px`,
+        height: AVATAR_FRAME_HEIGHT,
+        position: "relative"
       }}
     >
       <Box
-        alt=""
-        component="img"
-        src={warriorAvatarArt}
         style={{
-          display: "block",
-          filter: "drop-shadow(0 2px 0 rgba(0, 0, 0, 0.7)) saturate(1.08) brightness(1.08)",
-          height: AVATAR_ART_SIZE,
+          alignItems: "center",
+          background: "radial-gradient(circle at 50% 43%, rgba(23, 16, 18, 0.78), rgba(0, 0, 0, 0) 69%)",
+          display: "flex",
+          height: 88,
           imageRendering: "pixelated",
-          objectFit: "contain",
-          width: AVATAR_ART_SIZE
+          justifyContent: "center",
+          left: -18,
+          overflow: "visible",
+          position: "absolute",
+          top: -14,
+          width: AVATAR_FRAME_WIDTH
         }}
-      />
+      >
+        <Box
+          alt=""
+          component="img"
+          src={demonKingArt}
+          style={{
+            display: "block",
+            filter: "drop-shadow(0 5px 2px rgba(0, 0, 0, 0.82)) saturate(1.12) brightness(1.08)",
+            height: AVATAR_ART_SIZE,
+            imageRendering: "pixelated",
+            objectFit: "contain",
+            objectPosition: "center 48%",
+            width: AVATAR_ART_SIZE
+          }}
+        />
+      </Box>
+      <Box
+        style={{
+          alignItems: "center",
+          background: "linear-gradient(180deg, #164c6c 0%, #0b314c 54%, #082034 100%)",
+          border: "2px solid rgba(113, 183, 210, 0.82)",
+          bottom: 2,
+          boxShadow: "inset 0 0 0 2px #031016, 0 4px 8px rgba(0, 0, 0, 0.56)",
+          clipPath: "polygon(50% 0, 100% 14%, 92% 74%, 50% 100%, 8% 74%, 0 14%)",
+          color: "#f1dfad",
+          display: "flex",
+          height: 48,
+          justifyContent: "center",
+          left: 2,
+          position: "absolute",
+          width: 42
+        }}
+      >
+        <Text size="sm" fw={900} lh={1} style={{ textShadow: "0 2px 0 #000" }}>{props.level}</Text>
+      </Box>
     </Box>
   );
 }
 
-function StatBar(props: { asset: StaticImageData; color: string; text: string; value: number }) {
-  return (
-    <Group gap="xs" wrap="nowrap" mb={4}>
-      <ResourceIcon asset={props.asset} />
-      <Progress color={props.color} value={props.value} size="sm" radius={0} style={{ background: "rgba(0, 0, 0, 0.38)", flex: 1, minWidth: 120 }} />
-      <Text size="xs" fw={700} ta="right" style={{ color: "#eadfca", minWidth: 48, textShadow: "0 1px 0 #000" }}>{props.text}</Text>
-    </Group>
-  );
+function StackedResourceBars(props: { children: ReactNode }) {
+  return <Box style={{ display: "grid", gap: 4 }}>{props.children}</Box>;
 }
 
-function ResourceIcon(props: { asset: StaticImageData }) {
+function HudBar(props: { fill: string; icon: StaticImageData; text: string; value: number }) {
+  const value = Math.max(0, Math.min(PERCENT_MAX, props.value));
   return (
-    <Box style={{ alignItems: "center", background: "rgba(0, 0, 0, 0.28)", border: "1px solid rgba(223, 195, 122, 0.24)", display: "flex", height: RESOURCE_ICON_FRAME_SIZE, justifyContent: "center", width: RESOURCE_ICON_FRAME_SIZE }}>
-      <Box alt="" component="img" src={props.asset} style={{ display: "block", height: RESOURCE_ICON_SIZE, imageRendering: "pixelated", objectFit: "contain", width: RESOURCE_ICON_SIZE }} />
+    <Box style={{ background: "#050507", border: RESOURCE_BAR_BORDER, boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 2px 0 rgba(0, 0, 0, 0.5)", height: RESOURCE_BAR_HEIGHT, overflow: "hidden", position: "relative" }}>
+      <Box style={{ background: props.fill, height: "100%", left: 0, position: "absolute", top: 0, width: `${value}%` }} />
+      <Box alt="" component="img" src={props.icon} style={{ display: "block", filter: "drop-shadow(0 1px 0 #000)", height: 16, imageRendering: "pixelated", left: 4, objectFit: "contain", position: "absolute", top: 1, width: 16 }} />
+      <Text size="xs" fw={900} ta="center" style={{ color: "#f2efe7", inset: 0, lineHeight: `${RESOURCE_BAR_HEIGHT}px`, position: "absolute", textShadow: "0 1px 0 #000" }}>{props.text}</Text>
     </Box>
   );
 }
 
 function MiniStat(props: { label: string; value: number }) {
   return (
-    <Group gap={4} justify="center" wrap="nowrap" style={{ background: "rgba(0, 0, 0, 0.34)", border: "1px solid rgba(223, 195, 122, 0.18)", borderRadius: 2, padding: "2px 4px" }}>
+    <Group gap={4} justify="center" wrap="nowrap" style={{ backgroundColor: "rgba(0, 0, 0, 0.34)", backgroundImage: `url(${tabSquareArt})`, backgroundSize: "100% 100%", border: "1px solid rgba(223, 195, 122, 0.18)", borderRadius: 2, imageRendering: "pixelated", minWidth: 42, padding: "2px 4px" }}>
       <Text size="10px" fw={800} style={{ color: HERO_DIM, textShadow: "0 1px 0 #000" }}>{props.label}</Text>
       <Text size="10px" fw={900} style={{ color: HERO_GOLD, textShadow: "0 1px 0 #000" }}>{props.value}</Text>
     </Group>

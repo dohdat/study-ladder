@@ -136,8 +136,6 @@ const DEFAULT_RELIC_ICON_SIZE = 36;
 const DEFAULT_SHOP_ICON_SIZE = 58;
 const HASH_SEED = 2166136261;
 const HASH_MULTIPLIER = 16777619;
-const WEAPON_VARIANT_DIVISOR = 2;
-const AXE_VARIANT = 1;
 const ITEM_ICON_PADDING = 3;
 const ITEM_IMAGE_SCALE = "82%";
 const ITEM_FRAME_BG = "radial-gradient(circle at 45% 28%, rgba(68, 55, 34, 0.98), rgba(9, 8, 7, 0.98) 72%)";
@@ -295,12 +293,13 @@ const RELIC_FALLBACK_ASSETS = [
 
 const RELIC_ASSET_INDEXES = new Map(RELIC_DEFINITIONS.map((relic, index) => [getRelicAssetKey(relic), index]));
 
-export function HeroSiegeEquipmentIcon(props: { item: InventoryItem; size?: number }) {
+export function HeroSiegeEquipmentIcon(props: { item: InventoryItem; size?: number; unframed?: boolean }) {
   return (
     <FramedItemAsset
       asset={getEquipmentAsset(props.item)}
       borderColor={HERO_ITEM_RARITY_COLORS[props.item.rarity]}
       size={props.size || DEFAULT_ICON_SIZE}
+      unframed={props.unframed}
     />
   );
 }
@@ -353,10 +352,12 @@ function FramedItemAsset(props: { asset: StaticImageData; borderColor: string; s
         style={{
           display: "block",
           filter: "drop-shadow(0 2px 0 rgba(0, 0, 0, 0.72))",
+          height: props.unframed ? "100%" : undefined,
           imageRendering: "pixelated",
-          maxHeight: ITEM_IMAGE_SCALE,
-          maxWidth: ITEM_IMAGE_SCALE,
-          objectFit: "contain"
+          maxHeight: props.unframed ? "100%" : ITEM_IMAGE_SCALE,
+          maxWidth: props.unframed ? "100%" : ITEM_IMAGE_SCALE,
+          objectFit: "contain",
+          width: props.unframed ? "100%" : undefined
         }}
       />
     </Box>
@@ -364,10 +365,57 @@ function FramedItemAsset(props: { asset: StaticImageData; borderColor: string; s
 }
 
 function getEquipmentAsset(item: InventoryItem) {
-  if (item.slot === "mainHand" && hashString(item.id) % WEAPON_VARIANT_DIVISOR === AXE_VARIANT) {
-    return axeArt;
+  const name = item.name.toLowerCase();
+  if (item.slot === "mainHand") {
+    if (matchesItemName(name, ["axe", "cleaver", "club", "cudgel", "devil star", "flail", "hammer", "mace", "maul", "morning star", "tabar"])) {
+      return axeArt;
+    }
+    if (matchesItemName(name, ["staff", "wand"])) {
+      return relicGlyphArt;
+    }
+    if (matchesItemName(name, ["dagger", "dirge", "kris", "thorn"])) {
+      return stormDaggerRelicArt;
+    }
+    return swordArt;
+  }
+  if (item.slot === "offHand") {
+    if (matchesItemName(name, ["globe", "orb", "stone"])) {
+      return relicOrbArt;
+    }
+    if (matchesItemName(name, ["crest", "fetish", "head", "spirit ward", "totem"])) {
+      return charmRelicArt;
+    }
+    return shieldArt;
+  }
+  if (item.slot === "bodyAccessory") {
+    return matchesItemName(name, ["belt", "sash"]) ? beltArt : glovesArt;
+  }
+  if (item.slot === "headAccessory") {
+    if (matchesItemName(name, ["band"])) {
+      return ringArt;
+    }
+    if (matchesItemName(name, ["crest"])) {
+      return helmetArt;
+    }
+    return amuletArt;
+  }
+  if (item.slot === "eyewear") {
+    if (matchesItemName(name, ["demon", "spectral", "wraith", "abyss", "bone", "chaos", "eye", "satanic"])) {
+      return relicOrbArt;
+    }
+    if (matchesItemName(name, ["bloodstone", "stone", "crystal", "gem"])) {
+      return gemChaosRelicArt;
+    }
+    return ringArt;
+  }
+  if (item.slot === "backAccessory") {
+    return charmRelicArt;
   }
   return EQUIPMENT_ASSETS[item.slot];
+}
+
+function matchesItemName(name: string, keywords: string[]) {
+  return keywords.some((keyword) => name.includes(keyword));
 }
 
 function getRelicAsset(relic: Relic) {

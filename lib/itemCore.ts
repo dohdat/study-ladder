@@ -1,4 +1,4 @@
-import { ITEM_BASE_NAMES, ITEM_NAME_POOL_COUNT, RARE_NAME_WORDS, STAT_NAME_AFFIXES } from "./itemNames";
+import { ITEM_BASE_NAMES, ITEM_NAME_POOL_COUNT } from "./itemNames";
 import type { CharacterStatKey, CharacterStats, EquipmentSlot, InventoryItem, ItemModifierKey, ItemRarity, Question } from "../types/study";
 
 const FIRST_STAT_LEVEL = 1;
@@ -28,7 +28,8 @@ const RARITY_STAT_MAX: Record<ItemRarity, number> = { common: 1, uncommon: 2, ra
 const RARITY_LEVEL_OFFSET: Record<ItemRarity, number> = { common: 0, uncommon: 2, rare: 5, epic: 9, legendary: 14 };
 const RARITY_STAT_REQUIREMENTS: Record<ItemRarity, number> = { common: 0, uncommon: 2, rare: 4, epic: 7, legendary: 10 };
 const RARITY_MODIFIER_COUNTS: Record<ItemRarity, number> = { common: 0, uncommon: 0, rare: 1, epic: 2, legendary: 3 };
-const SET_DROP_CHANCE = 0.18;
+const RARITY_ORDER: ItemRarity[] = ["common", "uncommon", "rare", "epic", "legendary"];
+const SET_DROP_CHANCE = 0;
 const MIN_SET_DIFFICULTY: Question["difficulty"] = 2;
 const STAT_KEYS: CharacterStatKey[] = ["strength", "constitution", "perception", "intelligence"];
 const MODIFIER_POOLS: Array<{ key: ItemModifierKey; min: number; max: number }> = [
@@ -73,7 +74,7 @@ export const SLOT_STAT_BIAS: Record<EquipmentSlot, CharacterStatKey> = {
   offHand: "strength"
 };
 
-const ITEM_SETS = [
+export const ITEM_SET_DEFINITIONS = [
   { id: "sigons-complete-steel", name: "Sigon's Complete Steel", pieces: ["Sigon's Gage", "Sigon's Guard", "Sigon's Shelter", "Sigon's Sabot"], bonuses: { 2: { constitution: 2 }, 3: { strength: 2, constitution: 2 }, 4: { strength: 3, constitution: 3 } } },
   { id: "angelic-raiment", name: "Angelic Raiment", pieces: ["Angelic Sickle", "Angelic Mantle", "Angelic Halo", "Angelic Wings"], bonuses: { 2: { intelligence: 2 }, 3: { perception: 2, intelligence: 2 }, 4: { perception: 3, intelligence: 3 } } },
   { id: "isenharts-armory", name: "Isenhart's Armory", pieces: ["Isenhart's Lightbrand", "Isenhart's Case", "Isenhart's Horns", "Isenhart's Parry"], bonuses: { 2: { strength: 2 }, 3: { strength: 2, constitution: 2 }, 4: { strength: 4 } } },
@@ -82,10 +83,15 @@ const ITEM_SETS = [
   { id: "arcannas-tricks", name: "Arcanna's Tricks", pieces: ["Arcanna's Sign", "Arcanna's Head", "Arcanna's Flesh", "Arcanna's Deathwand"], bonuses: { 2: { intelligence: 2 }, 3: { intelligence: 3 }, 4: { intelligence: 4, perception: 2 } } }
 ] as const;
 
-export function createDropItem(question: Question, stats: CharacterStats, now: number): InventoryItem {
+export type DropItemOptions = {
+  minRarity?: ItemRarity;
+  rarityBonus?: number;
+};
+
+export function createDropItem(question: Question, stats: CharacterStats, now: number, options: DropItemOptions = {}): InventoryItem {
   const seed = `${question.id}:${now}`;
   const slot = pickFrom(EQUIPMENT_SLOTS, seededRandom(`${seed}:slot`));
-  const rarity = getDropRarity(question, stats, seed);
+  const rarity = getDropRarity(question, stats, seed, options);
   const itemLevel = getItemLevelRequirement(question, rarity);
   const itemStats = rollItemStats(slot, rarity, itemLevel, seed);
   const primaryStat = getStrongestItemStat(itemStats) || SLOT_STAT_BIAS[slot];
@@ -94,7 +100,7 @@ export function createDropItem(question: Question, stats: CharacterStats, now: n
   return {
     id: `item-${question.id}-${now}-${Math.floor(seededRandom(`${seed}:id`) * HASH_SEED).toString(ITEM_ID_RADIX)}`,
     modifiers: rollItemModifiers(rarity, itemLevel, seed),
-    name: setPieceName || createItemName(slot, rarity, primaryStat, seed),
+    name: setPieceName || createItemName(slot, seed),
     requirements: rollItemRequirements(rarity, primaryStat, itemLevel, seed),
     rarity,
     setId: setDefinition?.id,
@@ -104,7 +110,7 @@ export function createDropItem(question: Question, stats: CharacterStats, now: n
 }
 
 export function getActiveSetBonusesForItems(items: InventoryItem[]) {
-  return ITEM_SETS.map((set) => {
+  return ITEM_SET_DEFINITIONS.map((set) => {
     const count = items.filter((item) => item.setId === set.id).length;
     const bonuses = Object.entries(set.bonuses).filter(([pieces]) => count >= Number(pieces)).map(([pieces, stats]) => ({ pieces: Number(pieces), stats }));
     return { count, id: set.id, name: set.name, total: set.pieces.length, bonuses };
@@ -115,20 +121,12 @@ function getDropSet(question: Question, seed: string) {
   if (question.difficulty < MIN_SET_DIFFICULTY || seededRandom(`${seed}:set`) > SET_DROP_CHANCE) {
     return null;
   }
-  return pickFrom([...ITEM_SETS], seededRandom(`${seed}:set-id`));
+  return pickFrom([...ITEM_SET_DEFINITIONS], seededRandom(`${seed}:set-id`));
 }
 
-function createItemName(slot: EquipmentSlot, rarity: ItemRarity, primaryStat: CharacterStatKey, seed: string) {
+function createItemName(slot: EquipmentSlot, seed: string) {
   const baseName = pickFrom(ITEM_BASE_NAMES[slot], seededRandom(`${seed}:base-name`));
-  const affixes = STAT_NAME_AFFIXES[primaryStat];
-  if (rarity === "common") {
-    return baseName;
-  }
-  if (rarity === "uncommon") {
-    return `${pickFrom(affixes.prefixes, seededRandom(`${seed}:prefix`))} ${baseName}`;
-  }
-  const rareName = `${pickFrom(RARE_NAME_WORDS, seededRandom(`${seed}:rare-a`))} ${pickFrom(RARE_NAME_WORDS, seededRandom(`${seed}:rare-b`))}`;
-  return rarity === "rare" ? `${rareName} ${baseName}` : `${rareName} ${baseName} ${pickFrom(affixes.suffixes, seededRandom(`${seed}:suffix`))}`;
+  return baseName;
 }
 
 function getItemLevelRequirement(question: Question, rarity: ItemRarity) {
@@ -230,8 +228,13 @@ function getStrongestItemStat(stats: Partial<CharacterStats>): CharacterStatKey 
   }, { stat: null, value: 0 }).stat;
 }
 
-function getDropRarity(question: Question, stats: CharacterStats, seed: string): ItemRarity {
-  const roll = seededRandom(`${seed}:rarity`) - question.difficulty * RARITY_DIFFICULTY_BONUS - (stats.perception - FIRST_STAT_LEVEL) * RARITY_PERCEPTION_BONUS;
+function getDropRarity(question: Question, stats: CharacterStats, seed: string, options: DropItemOptions): ItemRarity {
+  const roll = seededRandom(`${seed}:rarity`) - question.difficulty * RARITY_DIFFICULTY_BONUS - (stats.perception - FIRST_STAT_LEVEL) * RARITY_PERCEPTION_BONUS - (options.rarityBonus || 0);
+  const rolled = getRarityFromRoll(roll);
+  return enforceMinimumRarity(rolled, options.minRarity);
+}
+
+function getRarityFromRoll(roll: number): ItemRarity {
   if (roll < LEGENDARY_ROLL_MAX) {
     return "legendary";
   }
@@ -245,6 +248,13 @@ function getDropRarity(question: Question, stats: CharacterStats, seed: string):
     return "uncommon";
   }
   return "common";
+}
+
+function enforceMinimumRarity(rarity: ItemRarity, minRarity: ItemRarity | undefined) {
+  if (!minRarity) {
+    return rarity;
+  }
+  return RARITY_ORDER[Math.max(RARITY_ORDER.indexOf(rarity), RARITY_ORDER.indexOf(minRarity))] || rarity;
 }
 
 function pickFrom<T>(items: T[], roll: number) {

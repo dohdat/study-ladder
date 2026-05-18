@@ -408,6 +408,20 @@ describe("studyCore", () => {
     expect(specialDrop?.modifiers?.length).toBeGreaterThan(0);
   });
 
+  it("uses god mode for testing drops and failure penalties", () => {
+    const question = questions[0];
+    const state = defaultState();
+    state.profile.godMode = true;
+    state.profile.mana = 5;
+
+    expect(getHealthLoss(state, 25)).toBe(0);
+    expect(getQuestionDrop(question, state, 1)).toBeTruthy();
+
+    const penalized = applyHealthPenalty(state, HEALTH_LOSS_PER_FAIL, 3);
+    expect(penalized.profile.health).toBe(state.profile.health);
+    expect(penalized.profile.mana).toBe(state.profile.mana);
+  });
+
   it("scales item requirements and bonuses by item level", () => {
     const starterQuestion = questions[0];
     const endgameQuestion = questions[questions.length - 1];

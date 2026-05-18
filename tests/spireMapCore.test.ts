@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
-import { advanceSpireNode, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, normalizeSpireRun, selectSpireNode, SPIRE_RATINGS } from "../lib/spireMapCore";
-import { defaultState } from "../lib/studyCore";
+import { advanceSpireNode, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, normalizeSpireRun, selectSpireNode, smithSpireNode, SPIRE_RATINGS } from "../lib/spireMapCore";
+import { defaultState, getMaxHealth } from "../lib/studyCore";
 import type { SpireNodeKind } from "../types/study";
 
 const FLOOR_ONE = 1500;
@@ -198,5 +198,97 @@ describe("spireMapCore", () => {
     state = advanceSpireNode(state, 1000);
 
     expect(state.profile.relics).toHaveLength(1);
+  });
+
+  it("grants enemy room gold when combat rooms are cleared", () => {
+    let state = defaultState();
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
+    const enemy = state.profile.spireRun.nodes.find((node) => node.kind === "enemy") || state.profile.spireRun.nodes[0];
+    state.profile.spireRun.availableNodeIds = [enemy.id];
+    state = selectSpireNode(state, enemy.id);
+
+    state = advanceSpireNode(state, 1000);
+
+    expect(state.profile.coins).toBeGreaterThan(0);
+  });
+
+  it("grants elite relics, gold, and high quality items", () => {
+    let state = defaultState();
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(3500) } };
+    const elite = state.profile.spireRun.nodes.find((node) => node.kind === "elite") || state.profile.spireRun.nodes[0];
+    state.profile.spireRun.availableNodeIds = [elite.id];
+    state = selectSpireNode(state, elite.id);
+
+    state = advanceSpireNode(state, 2000);
+
+    expect(state.profile.relics).toHaveLength(1);
+    expect(state.profile.coins).toBeGreaterThan(0);
+    expect(state.profile.inventory.some((item) => ["rare", "epic", "legendary"].includes(item.rarity))).toBe(true);
+  });
+
+  it("rests for 30 percent of max health rounded down", () => {
+    let state = defaultState();
+    state.profile.health = 10;
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(3500) } };
+    const rest = state.profile.spireRun.nodes.find((node) => node.kind === "rest") || state.profile.spireRun.nodes[0];
+    state.profile.spireRun.availableNodeIds = [rest.id];
+    state = selectSpireNode(state, rest.id);
+    const expectedHealth = state.profile.health + Math.floor(getMaxHealth(state) * 0.3);
+
+    state = advanceSpireNode(state, 3000);
+
+    expect(state.profile.health).toBe(expectedHealth);
+  });
+
+  it("smiths the lowest tier item instead of healing at rest sites", () => {
+    let state = defaultState();
+    state.profile.health = 10;
+    state.profile.inventory.push({
+      id: "rusty-sword",
+      name: "Rusty Sword",
+      rarity: "common",
+      requirements: { level: 1, stats: {} },
+      slot: "mainHand",
+      stats: { strength: 1 }
+    });
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(3500) } };
+    const rest = state.profile.spireRun.nodes.find((node) => node.kind === "rest") || state.profile.spireRun.nodes[0];
+    state.profile.spireRun.availableNodeIds = [rest.id];
+    state = selectSpireNode(state, rest.id);
+
+    state = smithSpireNode(state, 3500);
+
+    expect(state.profile.inventory[0].rarity).toBe("uncommon");
+    expect(state.profile.inventory[0].stats.strength).toBe(2);
+    expect(state.profile.health).toBe(10);
+    expect(state.profile.spireRun.completedNodeIds).toContain(rest.id);
+  });
+
+  it("refreshes merchant stock with potions, items, and relics", () => {
+    let state = defaultState();
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(3500), shopStock: [] } };
+    const merchant = state.profile.spireRun.nodes.find((node) => node.kind === "merchant") || state.profile.spireRun.nodes[0];
+    state.profile.spireRun.availableNodeIds = [merchant.id];
+    state = selectSpireNode(state, merchant.id);
+
+    state = advanceSpireNode(state, 4000);
+
+    expect(state.profile.shopStock.some((item) => item.kind === "consumable")).toBe(true);
+    expect(state.profile.shopStock.some((item) => item.kind === "equipment")).toBe(true);
+    expect(state.profile.shopStock.some((item) => item.kind === "relic")).toBe(true);
+  });
+
+  it("tracks unknown encounter pity by resetting seen outcomes and increasing the others", () => {
+    let state = defaultState();
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(3500) } };
+    const unknown = state.profile.spireRun.nodes.find((node) => node.kind === "unknown") || state.profile.spireRun.nodes[0];
+    state.profile.spireRun.availableNodeIds = [unknown.id];
+    state = selectSpireNode(state, unknown.id);
+
+    state = advanceSpireNode(state, 5000);
+
+    const misses = state.profile.spireRun.unknownEncounterMisses;
+    expect(Object.values(misses).some((value) => value === 0)).toBe(true);
+    expect(Object.values(misses).filter((value) => value === 1).length).toBe(3);
   });
 });

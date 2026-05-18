@@ -6,6 +6,7 @@ import type { OnMount } from "@monaco-editor/react";
 import { AppHeader } from "../components/AppHeader";
 import { PracticeArea, type PracticePanelActions } from "../components/PracticePanels";
 import { DeathResetModal } from "../components/DeathResetModal";
+import type { MonsterDamagePop } from "../components/MonsterEncounter";
 import { RewardNotifications, type RewardNotification } from "../components/RewardNotifications";
 import { SpireMapPanel } from "../components/SpireMapPanel";
 import { questions } from "../data/questions";
@@ -35,6 +36,10 @@ import type { ConsoleRunResult, Question, RunResult, StudyState } from "../types
 const RUN_TIMEOUT_MS = 2500, SECOND_MS = 1000;
 const TIMER_PAD = 2, NUMBER_BASE_HEX = 16;
 const VISIBLE_RUN_CASE_COUNT = 3;
+const DAMAGE_POP_TIMEOUT_MS = 840;
+const TIME_DAMAGE_FREE_RATIO = 0.18;
+const TIME_DAMAGE_MIN_RATIO = 0.18;
+const TIME_DAMAGE_RATIO_RANGE = 0.82;
 
 type TestRunnerMessage = { type: "run-result"; runId: string; ok: boolean; error?: string; results: RunResult[]; runtimeMs?: number };
 type CodeRunMessage = { type: "code-run-result"; runId: string; ok: boolean; error?: string; output: string[]; results?: RunResult[]; runtimeMs?: number };
@@ -174,7 +179,9 @@ function useRunnerMessages(params: {
   failAndAdvance: FailAndAdvance;
   showHealthLoss: (amount?: number, hitCount?: number) => void;
   showRewards: (question: Question, state: StudyState, now?: number) => void; runnerReady: boolean; runnerFrame: React.MutableRefObject<HTMLIFrameElement | null>;
+  showMonsterDamage: (damage: MonsterDamagePop) => void;
   state: StudyState;
+  timeRemainingMs: number;
   setState: React.Dispatch<React.SetStateAction<StudyState>>;
   setQuestionFinished: (finished: boolean) => void;
   setCode: (code: string) => void;
@@ -220,6 +227,10 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
   if (!question) {
     return;
   }
+  if (params.state.profile.godMode) {
+    completePassedSubmit(params, question);
+    return;
+  }
   if (message.error) {
     params.failAndAdvance(message.error);
     return;
@@ -235,9 +246,25 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
     params.setStatus(getFailStatus(attack));
     return;
   }
+  completePassedSubmit(params, question);
+}
+
+function completePassedSubmit(params: Parameters<typeof useRunnerMessages>[0], question: Question) {
   const now = Date.now();
   const combat = applyPassedCombatResult(params.state, question.id, params.code, now);
-  const progressed = completeSpireQuestion(combat.state, question, now);
+  if (combat.hit) {
+    params.showMonsterDamage({
+      amount: combat.hit.damage,
+      critical: combat.hit.critical,
+      hitCount: combat.hit.hitCount,
+      id: `${question.id}-${now}-${combat.hit.damage}`
+    });
+  }
+  const timed = applyElapsedCombatDamage(combat.state, question, params.timeRemainingMs, now);
+  if (timed.healthLoss > 0) {
+    params.showHealthLoss(timed.healthLoss, timed.attack.hitCount);
+  }
+  const progressed = completeSpireQuestion(timed.state, question, now);
   const picked = chooseNextSpireQuestion(progressed, question);
   const nextState = { ...progressed, currentId: picked.id };
   params.showRewards(question, params.state, now);
@@ -251,16 +278,66 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
   params.clearHint();
   if (progressed.profile.spireRun.mapOpen) {
     params.setTone("pass");
-    params.setStatus("Room cleared. Choose the next path on the map.");
+    params.setStatus(`${getTimeDamageStatus(timed)}Room cleared. Choose the next path on the map.`);
     return;
   }
   if (combat.hit?.defeated) {
     params.setTone("pass");
-    params.setStatus(`Monster defeated. ${formatHitStatus(combat.hit)} Next question loaded.`);
+    params.setStatus(`Monster defeated. ${formatHitStatus(combat.hit)} ${getTimeDamageStatus(timed)}Next question loaded.`);
     return;
   }
   params.setTone("pass");
-  params.setStatus(`${combat.hit ? formatHitStatus(combat.hit) : "Hit for 0."} Enemy health ${combat.hit?.remainingHealth}/${combat.hit?.maxHealth}. Next question loaded.`);
+  params.setStatus(`${combat.hit ? formatHitStatus(combat.hit) : "Hit for 0."} ${getTimeDamageStatus(timed)}Enemy health ${combat.hit?.remainingHealth}/${combat.hit?.maxHealth}. Next question loaded.`);
+}
+
+function applyElapsedCombatDamage(state: StudyState, question: Question, timeRemainingMs: number, now: number) {
+  const attack = getElapsedMonsterAttack(question, timeRemainingMs, now);
+  const healthLoss = attack.damage > 0 ? getHealthLoss(state, attack.damage, attack.element) : 0;
+  if (healthLoss <= 0 && attack.manaDamage <= 0) {
+    return { attack, healthLoss, state };
+  }
+  return {
+    attack,
+    healthLoss,
+    state: {
+      ...state,
+      profile: {
+        ...state.profile,
+        health: Math.max(0, state.profile.health - healthLoss),
+        mana: state.profile.godMode ? state.profile.mana : Math.max(0, state.profile.mana - attack.manaDamage)
+      }
+    }
+  };
+}
+
+function getElapsedMonsterAttack(question: Question, timeRemainingMs: number, now: number) {
+  const timeLimitMs = getQuestionTimeLimitMs(question);
+  const elapsedRatio = timeLimitMs > 0 ? Math.min(1, Math.max(0, (timeLimitMs - timeRemainingMs) / timeLimitMs)) : 0;
+  const damageRatio = getElapsedDamageRatio(elapsedRatio);
+  const attack = getMonsterAttackProfile(question, getMonsterDamageRoll(question, now), now);
+  return {
+    ...attack,
+    damage: Math.floor(attack.damage * damageRatio),
+    manaDamage: Math.floor(attack.manaDamage * damageRatio),
+    perHitDamage: Math.max(0, Math.floor(attack.perHitDamage * damageRatio))
+  };
+}
+
+function getElapsedDamageRatio(elapsedRatio: number) {
+  if (elapsedRatio <= TIME_DAMAGE_FREE_RATIO) {
+    return 0;
+  }
+  const pressureRatio = (elapsedRatio - TIME_DAMAGE_FREE_RATIO) / (1 - TIME_DAMAGE_FREE_RATIO);
+  return Math.min(1, TIME_DAMAGE_MIN_RATIO + pressureRatio * TIME_DAMAGE_RATIO_RANGE);
+}
+
+function getTimeDamageStatus(result: ReturnType<typeof applyElapsedCombatDamage>) {
+  if (result.healthLoss <= 0) {
+    return "";
+  }
+  const hitCount = result.attack.hitCount > 1 ? ` x${result.attack.hitCount}` : "";
+  const manaBurn = result.attack.manaDamage ? ` Mana Burn drained ${result.attack.manaDamage}.` : "";
+  return `Time pressure hit${hitCount} for ${result.healthLoss}.${manaBurn} `;
 }
 
 function handleCodeRunMessage(message: CodeRunMessage, params: Parameters<typeof useRunnerMessages>[0]) {
@@ -316,6 +393,8 @@ function usePracticeActions(params: {
   startHint: (prompt: string, localHint?: string) => void;
   showHealthLoss: (amount?: number, hitCount?: number) => void;
   showRewards: (question: Question, state: StudyState, now?: number) => void;
+  showMonsterDamage: (damage: MonsterDamagePop) => void;
+  timeRemainingMs: number;
 }): PracticeActions {
   const updateDraft = useUpdateDraft(params);
   const beautifyCurrentCode = useCallback((source = params.code) => updateDraft(beautifyCode(source)), [params.code, updateDraft]);
@@ -326,7 +405,7 @@ function usePracticeActions(params: {
   const submitCode = useSubmitCode({ ...params, updateDraft });
   const runCode = useRunCode({ ...params, updateDraft });
   const useActiveSkill = useActiveWarriorSkillAction({ setState: params.setState, setStatus: params.setStatus, setTone: params.setTone, state: params.state });
-  const handleEditorMount = useEditorMount(beautifyCurrentCode, submitCode);
+  const handleEditorMount = useEditorMount(beautifyCurrentCode, runCode, submitCode);
   return { updateDraft, beautifyCurrentCode, handleEditorMount, chooseQuestion, buyHint: buyHintAction, runCode, startQuestion, submitCode, useActiveSkill };
 }
 
@@ -345,21 +424,37 @@ function useUpdateDraft(params: { currentQuestion: Question | null; setCode: (co
   }, [params]);
 }
 
-function useEditorMount(beautifyCurrentCode: (source?: string) => void, submitCode: () => void): OnMount {
+function useEditorMount(beautifyCurrentCode: (source?: string) => void, runCode: () => void, submitCode: () => void): OnMount {
+  const beautifyRef = useRef(beautifyCurrentCode);
+  const runRef = useRef(runCode);
+  const submitRef = useRef(submitCode);
+
+  useEffect(() => {
+    beautifyRef.current = beautifyCurrentCode;
+    runRef.current = runCode;
+    submitRef.current = submitCode;
+  }, [beautifyCurrentCode, runCode, submitCode]);
+
   return useCallback((editor, monaco) => {
     editor.addAction({
       id: "study-ladder-beautify",
       label: "Beautify Code",
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
-      run: () => beautifyCurrentCode(editor.getValue())
+      run: () => beautifyRef.current(editor.getValue())
+    });
+    editor.addAction({
+      id: "study-ladder-run",
+      label: "Run Code",
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Quote],
+      run: () => runRef.current()
     });
     editor.addAction({
       id: "study-ladder-submit",
       label: "Submit Solution",
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
-      run: submitCode
+      run: () => submitRef.current()
     });
-  }, [beautifyCurrentCode, submitCode]);
+  }, []);
 }
 
 function useChooseQuestion(params: Parameters<typeof usePracticeActions>[0], updateDraft: (code: string) => void) {
@@ -586,6 +681,20 @@ function useSyncSpireQuestion(params: {
   }, [params]);
 }
 
+function useMonsterDamagePop(setMonsterDamagePop: React.Dispatch<React.SetStateAction<MonsterDamagePop | null>>) {
+  const clearTimer = useRef<number | null>(null);
+  useEffect(() => () => clearRunTimer(clearTimer), [clearTimer]);
+
+  return useCallback((damage: MonsterDamagePop) => {
+    clearRunTimer(clearTimer);
+    setMonsterDamagePop(damage);
+    clearTimer.current = window.setTimeout(() => {
+      setMonsterDamagePop(null);
+      clearTimer.current = null;
+    }, DAMAGE_POP_TIMEOUT_MS);
+  }, [setMonsterDamagePop]);
+}
+
 // eslint-disable-next-line max-lines-per-function, complexity
 export default function Home() {
   const [state, setState] = useState<StudyState>(() => defaultState());
@@ -598,6 +707,7 @@ export default function Home() {
   const [running, setRunning] = useState(false);
   const [runnerReady, setRunnerReady] = useState(false);
   const [rewardNotifications, setRewardNotifications] = useState<RewardNotification[]>([]);
+  const [monsterDamagePop, setMonsterDamagePop] = useState<MonsterDamagePop | null>(null);
   const [sessionStarted, setSessionStarted] = useState(false);
   const activeRunId = useRef<string | null>(null);
   const runTimer = useRef<number | null>(null);
@@ -607,10 +717,11 @@ export default function Home() {
   const hydrated = useHydrateStudy(setState, setCurrentQuestion, setCode);
   usePersistAchievements(state, hydrated, setState);
   const { showHealthLoss, showRewards } = useStudyNotifications(state, hydrated, setRewardNotifications);
+  const showMonsterDamage = useMonsterDamagePop(setMonsterDamagePop);
   usePersistStudy(state, hydrated, setRunTone, setRunStatus);
   const failAndAdvance = useFailAndAdvance({ code, currentQuestion, setCode, setCurrentQuestion, setConsoleRunResult, setResults, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, clearHint: hints.clearHint, showHealthLoss });
   const timer = useQuestionTimer({ code, currentQuestion, failAndAdvance, sessionStarted, mode: state.mode, setConsoleRunResult, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer });
-  const actions = usePracticeActions({ code, currentQuestion, failAndAdvance, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setConsoleRunResult, setResults, setRunnerReady, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame, clearHint: hints.clearHint, startHint: hints.startHint, showHealthLoss, showRewards });
+  const actions = usePracticeActions({ code, currentQuestion, failAndAdvance, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setConsoleRunResult, setResults, setRunnerReady, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame, clearHint: hints.clearHint, startHint: hints.startHint, showHealthLoss, showRewards, showMonsterDamage, timeRemainingMs: timer.timeRemainingMs });
   const resetAfterDeath = useCallback(() => {
     const freshState = defaultState();
     freshState.profile.unlockedAchievementIds = state.profile.unlockedAchievementIds;
@@ -663,7 +774,7 @@ export default function Home() {
             useActiveSkill={actions.useActiveSkill}
           />
           <SpireMapPanel fillAvailableHeight={mapOpen} state={state} setState={setState} />
-          {showPractice && <PracticeArea actions={actions} currentQuestion={currentQuestion} editorProps={{ canBuyHint: canBuyHint(state), code, consoleRunResult, hintCost: HINT_COST, hintError: hints.hintError, hintStreaming: hints.hintStreaming, hintText: hints.hintText, questionFinished: timer.questionFinished, results, runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} state={state} />}
+          {showPractice && <PracticeArea actions={actions} currentQuestion={currentQuestion} damagePop={monsterDamagePop} editorProps={{ canBuyHint: canBuyHint(state), code, consoleRunResult, hintCost: HINT_COST, hintError: hints.hintError, hintStreaming: hints.hintStreaming, hintText: hints.hintText, questionFinished: timer.questionFinished, results, runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} state={state} />}
         </Stack>
       </Container>
       <iframe ref={runnerFrame} src={RUNNER_FRAME} title="JavaScript runner" hidden onLoad={() => setRunnerReady(true)} />

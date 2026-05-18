@@ -20,7 +20,7 @@ import MonacoEditor, { type OnMount } from "@monaco-editor/react";
 
 import { HeroSiegeButton } from "./HeroSiegeUi";
 import { HighlightedCode } from "./HighlightedCode";
-import { MonsterEncounter } from "./MonsterEncounter";
+import { MonsterEncounter, type MonsterDamagePop } from "./MonsterEncounter";
 import { difficultyLabels } from "../lib/studyCore";
 import type { ActiveWarriorSkillId, ConsoleRunResult, Question, RunResult, StudyState } from "../types/study";
 
@@ -103,6 +103,7 @@ type EditorProps = {
 export function PracticeArea(props: {
   actions: PracticePanelActions;
   currentQuestion: Question | null;
+  damagePop?: MonsterDamagePop | null;
   editorProps: EditorProps;
   mode: StudyState["mode"];
   state: StudyState;
@@ -125,6 +126,7 @@ export function PracticeArea(props: {
           canMoveNext={!props.editorProps.sessionStarted || props.editorProps.questionFinished}
           currentQuestion={props.currentQuestion}
           chooseQuestion={props.actions.chooseQuestion}
+          damagePop={props.damagePop}
           sessionStarted={props.editorProps.sessionStarted}
           state={props.state}
         />
@@ -136,7 +138,7 @@ export function PracticeArea(props: {
   );
 }
 
-function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; chooseQuestion: (preferNext: boolean) => void; sessionStarted: boolean; state: StudyState }) {
+function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; chooseQuestion: (preferNext: boolean) => void; damagePop?: MonsterDamagePop | null; sessionStarted: boolean; state: StudyState }) {
   return (
     <Card withBorder>
       <Group justify="space-between" align="flex-start">
@@ -149,7 +151,7 @@ function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; c
           </Box>
         </Tooltip>
       </Group>
-      {props.sessionStarted ? <ProblemDetails currentQuestion={props.currentQuestion} state={props.state} /> : <LockedProblemDetails />}
+      {props.sessionStarted ? <ProblemDetails currentQuestion={props.currentQuestion} damagePop={props.damagePop} state={props.state} /> : <LockedProblemDetails />}
     </Card>
   );
 }
@@ -178,10 +180,10 @@ function LockedProblemHeader() {
   );
 }
 
-function ProblemDetails(props: { currentQuestion: Question; state: StudyState }) {
+function ProblemDetails(props: { currentQuestion: Question; damagePop?: MonsterDamagePop | null; state: StudyState }) {
   return (
     <>
-      <MonsterEncounter question={props.currentQuestion} state={props.state} />
+      <MonsterEncounter damagePop={props.damagePop} question={props.currentQuestion} state={props.state} />
       <Text mt="md">{props.currentQuestion.prompt}</Text>
       <Divider my="md" />
       <Title order={5}>Examples</Title>
@@ -315,7 +317,7 @@ function RunToolbarActions(props: Parameters<typeof EditorCard>[0]) {
   const disabled = !props.runnerReady || props.questionFinished || !props.sessionStarted || props.timeRemainingMs <= 0;
   return (
     <>
-      <Tooltip label="Run code and show console.log output" withArrow>
+      <Tooltip label="Run code and show console.log output (Ctrl+')" withArrow>
         <Box component="span">
           <HeroSiegeButton leftSection={<IconTerminal2 size={ICON_SM} />} loading={props.running} disabled={disabled} onClick={props.actions.runCode}>Run</HeroSiegeButton>
         </Box>

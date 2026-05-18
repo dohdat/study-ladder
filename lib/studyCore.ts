@@ -7,7 +7,7 @@ import { applyElementalResistance, getResistancesFromModifiers } from "./resista
 import { getWarriorSkillBonuses, normalizeWarriorSkillRanks } from "./skillCore";
 import { createShopStock, normalizeShopStock } from "./shopCore";
 import { createSpireRun, normalizeSpireRun } from "./spireMapCore";
-import type { CardState, CharacterStatKey, CharacterStats, ElementalDamageType, EquipmentSlot, InventoryItem, ItemModifierKey, Question, StudyState } from "../types/study";
+import type { CardState, CharacterStatKey, CharacterStats, ElementalDamageType, EquipmentSlot, InventoryItem, InventoryItemPosition, ItemModifierKey, Question, StudyState } from "../types/study";
 
 const MS_PER_MINUTE = 60000;
 const EASY_MINUTES = 10;
@@ -111,6 +111,7 @@ function createDefaultStateBase(): StudyState {
       health: MAX_HEALTH,
       mana: BASE_MANA,
       rating: DEFAULT_PLAYER_RATING,
+      godMode: false,
       statPoints: 0,
       statPointsAwardedLevel: FIRST_STAT_LEVEL,
       hintsBought: 0,
@@ -120,6 +121,7 @@ function createDefaultStateBase(): StudyState {
       skillRanks: {},
       activeSkill: null,
       inventory: [],
+      inventorySlots: {},
       equipment: defaultEquipment(),
       shopLastRefreshedAt: null,
       shopStock: [],
@@ -140,11 +142,15 @@ export const cloneState = (state: StudyState): StudyState => ({
 });
 
 function cloneProfile(state: StudyState): StudyState["profile"] {
-  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, spireRun: { ...state.profile.spireRun, availableNodeIds: [...state.profile.spireRun.availableNodeIds], completedNodeIds: [...state.profile.spireRun.completedNodeIds], nodes: state.profile.spireRun.nodes.map((node) => ({ ...node, nextIds: [...node.nextIds] })), roundQuestionIds: [...state.profile.spireRun.roundQuestionIds], roundSolvedIds: [...state.profile.spireRun.roundSolvedIds] }, stats: { ...state.profile.stats } };
+  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), inventorySlots: cloneInventorySlots(state.profile.inventorySlots), relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, spireRun: { ...state.profile.spireRun, availableNodeIds: [...state.profile.spireRun.availableNodeIds], completedNodeIds: [...state.profile.spireRun.completedNodeIds], nodes: state.profile.spireRun.nodes.map((node) => ({ ...node, nextIds: [...node.nextIds] })), roundQuestionIds: [...state.profile.spireRun.roundQuestionIds], roundSolvedIds: [...state.profile.spireRun.roundSolvedIds], unknownEncounterMisses: { ...state.profile.spireRun.unknownEncounterMisses } }, stats: { ...state.profile.stats } };
 }
 
 function cloneInventoryItem(item: InventoryItem) {
   return { ...item, modifiers: item.modifiers?.map((modifier) => ({ ...modifier })), stats: { ...item.stats } };
+}
+
+function cloneInventorySlots(slots: Record<string, InventoryItemPosition>) {
+  return Object.fromEntries(Object.entries(slots || {}).map(([itemId, position]) => [itemId, { ...position }]));
 }
 
 // eslint-disable-next-line complexity
@@ -155,12 +161,14 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
   }
   const profile: Partial<StudyState["profile"]> = stored.profile || {};
 
+  const inventory = normalizeInventory(profile.inventory);
   const normalized = {
     ...fallback,
     ...stored,
     profile: {
       ...fallback.profile,
       ...profile,
+      godMode: Boolean(profile.godMode),
       experience: Math.max(0, profile.experience ?? fallback.profile.experience),
       rating: normalizeRating(stored, fallback),
       statPoints: Math.max(0, profile.statPoints ?? fallback.profile.statPoints),
@@ -168,7 +176,8 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
       stats: normalizeCharacterStats(profile.stats),
       skillRanks: normalizeWarriorSkillRanks(profile.skillRanks),
       activeSkill: profile.activeSkill ?? null,
-      inventory: normalizeInventory(profile.inventory),
+      inventory,
+      inventorySlots: normalizeInventorySlots(profile.inventorySlots, inventory),
       equipment: normalizeEquipment(profile.equipment),
       shopLastRefreshedAt: profile.shopLastRefreshedAt ?? fallback.profile.shopLastRefreshedAt,
       shopStock: normalizeShopStock(profile.shopStock),
@@ -206,6 +215,23 @@ function defaultEquipment(): Record<EquipmentSlot, string | null> { return Objec
 
 function normalizeInventory(items: InventoryItem[] | undefined) {
   return (items || []).map((item) => ({ ...item, modifiers: normalizeItemModifiers(item.modifiers), requirements: item.requirements || { level: FIRST_STAT_LEVEL, stats: {} }, stats: { ...item.stats } }));
+}
+
+function normalizeInventorySlots(slots: Record<string, InventoryItemPosition> | undefined, inventory: InventoryItem[]) {
+  const itemIds = new Set(inventory.map((item) => item.id));
+  return Object.fromEntries(Object.entries(slots || {}).filter(([itemId, position]) => itemIds.has(itemId) && isFiniteInventoryPosition(position)).map(([itemId, position]) => [itemId, normalizeInventoryPosition(position)]));
+}
+
+function isFiniteInventoryPosition(position: InventoryItemPosition | undefined) {
+  return Boolean(position) && Number.isFinite(position?.tab) && Number.isFinite(position?.row) && Number.isFinite(position?.column);
+}
+
+function normalizeInventoryPosition(position: InventoryItemPosition) {
+  return {
+    column: Math.max(0, Math.floor(position.column)),
+    row: Math.max(0, Math.floor(position.row)),
+    tab: Math.max(0, Math.floor(position.tab))
+  };
 }
 
 function normalizeEquipment(equipment: Partial<Record<EquipmentSlot, string | null>> | undefined) { return { ...defaultEquipment(), ...(equipment || {}) }; }
@@ -347,6 +373,9 @@ export const getMaxMana = (state: StudyState) => {
 };
 
 export const getHealthLoss = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, element?: ElementalDamageType | null) => {
+  if (state.profile.godMode) {
+    return 0;
+  }
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getRunModifierTotals(state);
   const skills = getWarriorSkillBonusTotals(state);
@@ -465,6 +494,32 @@ export const unequipItem = (state: StudyState, slot: EquipmentSlot): StudyState 
   return next;
 };
 
+export const discardItem = (state: StudyState, itemId: string): StudyState => {
+  if (!state.profile.inventory.some((item) => item.id === itemId)) {
+    return state;
+  }
+  const next = cloneState(state);
+  next.profile.inventory = next.profile.inventory.filter((item) => item.id !== itemId);
+  delete next.profile.inventorySlots[itemId];
+  for (const slot of EQUIPMENT_SLOTS) {
+    if (next.profile.equipment[slot] === itemId) {
+      next.profile.equipment[slot] = null;
+    }
+  }
+  next.profile.health = Math.min(next.profile.health, getMaxHealth(next));
+  next.profile.mana = Math.min(next.profile.mana, getMaxMana(next));
+  return next;
+};
+
+export const moveInventoryItem = (state: StudyState, itemId: string, position: InventoryItemPosition): StudyState => {
+  if (!state.profile.inventory.some((item) => item.id === itemId)) {
+    return state;
+  }
+  const next = cloneState(state);
+  next.profile.inventorySlots[itemId] = normalizeInventoryPosition(position);
+  return next;
+};
+
 export const canEquipItem = (state: StudyState, item: InventoryItem) => {
   if (getLevelProgress(state).level < item.requirements.level) {
     return false;
@@ -477,6 +532,9 @@ export const canEquipItem = (state: StudyState, item: InventoryItem) => {
 
 export const getQuestionDrop = (question: Question, state: StudyState, now = Date.now()) => {
   const stats = getEffectiveCharacterStats(state);
+  if (state.profile.godMode) {
+    return createDropItem(question, stats, now);
+  }
   const modifiers = getRunModifierTotals(state);
   const skills = getWarriorSkillBonusTotals(state);
   const baseChance = DROP_CHANCES[question.difficulty] + (stats.perception - FIRST_STAT_LEVEL) * DROP_PERCEPTION_BONUS;
@@ -504,7 +562,7 @@ function getSeededRoll(seed: string) {
 export const applyHealthPenalty = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, manaDamage = 0, questionId?: string, draft?: string, now = Date.now(), element?: ElementalDamageType | null): StudyState => {
   const next = cloneState(state);
   next.profile.health = Math.max(0, next.profile.health - getHealthLoss(state, amount, element));
-  next.profile.mana = Math.max(0, next.profile.mana - manaDamage);
+  next.profile.mana = state.profile.godMode ? next.profile.mana : Math.max(0, next.profile.mana - manaDamage);
   if (questionId) {
     applyFailedRating(next, questionId, draft, now);
   }
@@ -685,7 +743,7 @@ function applyShopRefresh(next: StudyState, question: Question | undefined, now:
 
 function applyFailedSchedule(next: StudyState, card: CardState, questionId: string, state: StudyState, now: number, failureDamage: number, failureManaDamage: number, failureElement?: ElementalDamageType | null) {
   next.profile.health = Math.max(0, next.profile.health - getHealthLoss(state, failureDamage, failureElement));
-  next.profile.mana = Math.max(0, next.profile.mana - failureManaDamage);
+  next.profile.mana = state.profile.godMode ? next.profile.mana : Math.max(0, next.profile.mana - failureManaDamage);
   next.streak = 0;
   card.failedSubmissions += 1;
   card.intervalDays = 0;

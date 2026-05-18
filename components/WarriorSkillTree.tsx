@@ -12,33 +12,38 @@ const BRANCH_ICONS = {
   "Combat Skills": "whirlwind",
   Warcries: "battleOrders"
 } as const;
-const TREE_BG = "radial-gradient(circle at 50% 10%, #34291f 0%, #191714 48%, #090909 100%)";
-const TREE_BORDER = "2px solid #8a744c";
-const NODE_BG = "linear-gradient(145deg, #18130d, #2d2519)";
-const NODE_LOCKED_BG = "linear-gradient(145deg, #080808, #181818)";
-const NODE_BORDER = "1px solid #7b6845";
-const NODE_ACTIVE_BORDER = "1px solid #c8a96a";
-const NODE_LOCKED_BORDER = "1px solid #3d3527";
-const TOOLTIP_BG = "#12100d";
-const TOOLTIP_BORDER = "1px solid #8a744c";
+const TREE_BG = "radial-gradient(circle at 50% 12%, rgba(92, 20, 24, 0.55), rgba(35, 8, 11, 0.98) 44%, #070303 100%)";
+const TREE_BORDER = "2px solid #8a1744";
+const TREE_INNER_BORDER = "1px solid rgba(205, 36, 83, 0.82)";
+const TREE_PANEL_BG = "linear-gradient(180deg, rgba(37, 6, 9, 0.72), rgba(11, 4, 5, 0.9))";
+const TREE_TITLE_BG = "linear-gradient(180deg, rgba(13, 11, 12, 0.98), rgba(4, 3, 4, 0.98))";
+const NODE_BG = "radial-gradient(circle at 42% 28%, rgba(94, 32, 17, 0.9), rgba(9, 6, 5, 0.98) 72%)";
+const NODE_LOCKED_BG = "linear-gradient(145deg, #080808, #141211)";
+const NODE_BORDER = "2px solid #a45c16";
+const NODE_ACTIVE_BORDER = "2px solid #f6a21d";
+const NODE_LOCKED_BORDER = "2px solid #27211b";
+const TOOLTIP_BG = "#120608";
+const TOOLTIP_BORDER = "1px solid #9f2d4e";
 const TOOLTIP_TEXT = "#f3ead7";
 const SKILL_BRANCHES = ["Combat Skills", "Combat Masteries", "Warcries"] as const;
 const PROGRESS_MAX = 100;
 const TREE_ROWS = 6;
 const TREE_COLUMNS = 4;
-const TREE_HEIGHT = 600;
-const TREE_X_GUTTER_PERCENT = 14;
-const TREE_Y_GUTTER_PERCENT = 8;
-const SKILL_NODE_WIDTH = 118;
-const SKILL_NODE_HEIGHT = 68;
-const SKILL_ICON_SIZE = 30;
-const LOCKED_NODE_OPACITY = 0.68;
-const ARROW_COLOR = "#8a744c";
-const ARROW_LOCKED_COLOR = "#433b2d";
+const TREE_HEIGHT = 640;
+const TREE_X_GUTTER_PERCENT = 12;
+const TREE_Y_GUTTER_PERCENT = 10;
+const SKILL_NODE_WIDTH = 62;
+const SKILL_NODE_HEIGHT = 62;
+const SKILL_ICON_SIZE = 56;
+const LOCKED_NODE_OPACITY = 0.52;
+const ARROW_COLOR = "#b42050";
+const ARROW_LOCKED_COLOR = "#4b1828";
 const ARROW_MIDPOINT_DIVISOR = 2;
-const ARROW_NODE_X_OFFSET = 7;
-const ARROW_NODE_Y_OFFSET = 6.4;
+const ARROW_NODE_X_OFFSET = 3.8;
+const ARROW_NODE_Y_OFFSET = 4.8;
 const SAME_ROW_THRESHOLD = 0.2;
+const RANK_BADGE_SIZE = 21;
+const EMPTY_SOCKET_SIZE = 26;
 
 type WarriorSkillBranch = typeof SKILL_BRANCHES[number];
 type SkillPosition = { column: number; row: number };
@@ -103,12 +108,25 @@ export function WarriorSkillTree(props: { state: StudyState; setState: React.Dis
         </Box>
         <Badge color={availablePoints > 0 ? "yellow" : "gray"} variant="light">{availablePoints} skill points</Badge>
       </Group>
-      <Box p="md" style={{ background: TREE_BG, border: TREE_BORDER, boxShadow: "inset 0 0 0 2px #111" }}>
+      <Box p="md" style={{ background: TREE_BG, border: TREE_BORDER, boxShadow: "inset 0 0 0 2px #080304, 0 16px 42px rgba(0, 0, 0, 0.58)" }}>
         <Tabs value={activeBranch} onChange={(value) => value && setActiveBranch(value as WarriorSkillBranch)} keepMounted={false}>
-          <Tabs.List grow mb="md" style={{ borderColor: "#6b5736" }}>
+          <Tabs.List grow mb="md" style={{ borderColor: "rgba(205, 36, 83, 0.62)", gap: 10 }}>
             {SKILL_BRANCHES.map((branch) => {
               return (
-                <Tabs.Tab key={branch} value={branch} leftSection={<HeroSiegeSkillIcon skillId={BRANCH_ICONS[branch]} size={20} />}>
+                <Tabs.Tab
+                  key={branch}
+                  value={branch}
+                  leftSection={<HeroSiegeSkillIcon skillId={BRANCH_ICONS[branch]} size={24} />}
+                  styles={{
+                    tab: {
+                      background: branch === activeBranch ? "linear-gradient(180deg, #3d1017, #130607)" : TREE_TITLE_BG,
+                      border: branch === activeBranch ? "1px solid #d94467" : "1px solid #332025",
+                      color: "#f1dfad",
+                      fontWeight: 900,
+                      textTransform: "uppercase"
+                    }
+                  }}
+                >
                   {branch}
                 </Tabs.Tab>
               );
@@ -144,8 +162,15 @@ function SkillBranchTree(props: { branch: WarriorSkillBranch; level: number; sta
   }));
 
   return (
-    <Box style={{ overflow: "hidden" }}>
+    <Box style={{ background: TREE_PANEL_BG, border: TREE_INNER_BORDER, boxShadow: "inset 0 0 0 2px rgba(7, 2, 3, 0.92)", overflow: "hidden", padding: 14 }}>
+      <Group justify="center" mb="md">
+        <Box style={{ alignItems: "center", background: TREE_TITLE_BG, border: "1px solid rgba(205, 36, 83, 0.72)", boxShadow: "inset 0 0 0 2px #050203, 0 4px 14px rgba(0, 0, 0, 0.55)", display: "flex", gap: 12, justifyContent: "center", minWidth: 340, padding: "8px 18px" }}>
+          <HeroSiegeSkillIcon skillId={BRANCH_ICONS[props.branch]} size={34} />
+          <Text fw={900} size="xl" style={{ color: "#f1dfad", letterSpacing: 0, textShadow: "0 2px 0 #000", textTransform: "uppercase" }}>{props.branch}</Text>
+        </Box>
+      </Group>
       <Box style={{ height: TREE_HEIGHT, position: "relative", width: "100%" }}>
+        <SkillSockets />
         <DependencyArrows arrows={arrows} />
         {skills.map((node) => (
           <SkillNodeButton key={node.skill.id} level={props.level} node={node} state={props.state} setState={props.setState} />
@@ -189,18 +214,77 @@ function SkillNodeButton(props: { level: number; node: SkillNode; state: StudySt
             cursor: canSpend ? "pointer" : "default",
             height: "100%",
             opacity: locked ? LOCKED_NODE_OPACITY : 1,
-            padding: 6,
+            padding: 2,
+            position: "relative",
             width: "100%"
           }}
         >
-          <Stack align="center" gap={4}>
+          <Stack align="center" gap={0} justify="center" style={{ height: "100%" }}>
             <SkillPixelIcon locked={locked} skillId={skill.id} />
-            <Text component="span" size="xs" fw={800} lh={1.05} ta="center" c={locked ? "dimmed" : "gray.1"}>{skill.name}</Text>
-            <Badge size="xs" color={rank ? "yellow" : "gray"} variant="light">{rank}/{skill.maxRank}</Badge>
           </Stack>
+          <Box
+            component="span"
+            style={{
+              alignItems: "center",
+              background: "linear-gradient(180deg, #252026, #080708)",
+              border: "1px solid #6d5a61",
+              bottom: -8,
+              boxShadow: "0 2px 0 #000",
+              color: "#f1dfad",
+              display: "flex",
+              fontSize: 12,
+              fontWeight: 900,
+              height: RANK_BADGE_SIZE,
+              justifyContent: "center",
+              left: -8,
+              lineHeight: 1,
+              position: "absolute",
+              width: RANK_BADGE_SIZE
+            }}
+          >
+            {rank || 1}
+          </Box>
         </button>
       </span>
     </Tooltip>
+  );
+}
+
+function SkillSockets() {
+  const sockets = [
+    { column: 1, row: 1.75 },
+    { column: 2, row: 1.75 },
+    { column: 3, row: 1.75 },
+    { column: 4, row: 1.75 },
+    { column: 1, row: 3.35 },
+    { column: 2, row: 3.35 },
+    { column: 3, row: 3.35 },
+    { column: 4, row: 3.35 },
+    { column: 1, row: 5.25 },
+    { column: 2, row: 5.25 },
+    { column: 3, row: 5.25 },
+    { column: 4, row: 5.25 }
+  ];
+  return (
+    <>
+      {sockets.map((socket) => (
+        <Box
+          key={`${socket.column}-${socket.row}`}
+          style={{
+            background: "linear-gradient(145deg, #060707, #11120f)",
+            border: "1px solid #242522",
+            boxShadow: "inset 0 0 0 2px #020202, 0 2px 3px rgba(0, 0, 0, 0.55)",
+            height: EMPTY_SOCKET_SIZE,
+            left: `${getCoordinatePercent(socket.column, TREE_COLUMNS, TREE_X_GUTTER_PERCENT)}%`,
+            opacity: 0.58,
+            position: "absolute",
+            top: `${getCoordinatePercent(socket.row, TREE_ROWS, TREE_Y_GUTTER_PERCENT)}%`,
+            transform: "translate(-50%, -50%)",
+            width: EMPTY_SOCKET_SIZE
+          }}
+        />
+      ))}
+    </>
   );
 }
 
@@ -208,12 +292,9 @@ function DependencyArrows(props: { arrows: SkillArrow[] }) {
   return (
     <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ height: "100%", inset: 0, overflow: "visible", pointerEvents: "none", position: "absolute", width: "100%" }}>
       <defs>
-        <marker id="skill-arrow-active" markerHeight="5" markerWidth="5" orient="auto" refX="4" refY="2.5">
-          <path d="M0,0 L5,2.5 L0,5 Z" fill={ARROW_COLOR} />
-        </marker>
-        <marker id="skill-arrow-locked" markerHeight="5" markerWidth="5" orient="auto" refX="4" refY="2.5">
-          <path d="M0,0 L5,2.5 L0,5 Z" fill={ARROW_LOCKED_COLOR} />
-        </marker>
+        <filter id="skill-arrow-glow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="0" stdDeviation="0.55" floodColor="#b42050" floodOpacity="0.55" />
+        </filter>
       </defs>
       {props.arrows.map((arrow) => {
         const from = getArrowPoint(arrow.from);
@@ -224,10 +305,10 @@ function DependencyArrows(props: { arrows: SkillArrow[] }) {
             key={arrow.key}
             d={getArrowPath(from, to)}
             fill="none"
-            markerEnd={`url(#${arrow.active ? "skill-arrow-active" : "skill-arrow-locked"})`}
+            filter={arrow.active ? "url(#skill-arrow-glow)" : undefined}
             stroke={color}
             strokeLinecap="round"
-            strokeWidth={0.8}
+            strokeWidth={1.7}
             vectorEffect="non-scaling-stroke"
           />
         );

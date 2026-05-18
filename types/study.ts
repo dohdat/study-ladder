@@ -142,6 +142,8 @@ export type Relic = {
 
 export type SpireNodeKind = "unknown" | "merchant" | "treasure" | "rest" | "enemy" | "elite" | "boss";
 
+export type UnknownEncounterKind = "event" | "monster" | "shop" | "treasure";
+
 export type SpireMapNode = {
   column: number;
   id: string;
@@ -162,6 +164,7 @@ export type SpireRun = {
   nodes: SpireMapNode[];
   roundQuestionIds: string[];
   roundSolvedIds: string[];
+  unknownEncounterMisses: Partial<Record<UnknownEncounterKind, number>>;
 };
 
 export type InventoryItem = {
@@ -176,6 +179,12 @@ export type InventoryItem = {
     level: number;
     stats: Partial<CharacterStats>;
   };
+};
+
+export type InventoryItemPosition = {
+  column: number;
+  row: number;
+  tab: number;
 };
 
 export type ShopConsumableType = "health" | "mana";
@@ -215,6 +224,7 @@ export type StudyState = {
     health: number;
     mana: number;
     rating: number;
+    godMode: boolean;
     statPoints: number;
     statPointsAwardedLevel: number;
     hintsBought: number;
@@ -224,6 +234,7 @@ export type StudyState = {
     skillRanks: Partial<Record<WarriorSkillId, number>>;
     activeSkill: ActiveWarriorSkillId | null;
     inventory: InventoryItem[];
+    inventorySlots: Record<string, InventoryItemPosition>;
     equipment: Record<EquipmentSlot, string | null>;
     shopLastRefreshedAt: number | null;
     shopStock: ShopItem[];
