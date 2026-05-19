@@ -445,7 +445,7 @@ function InventoryGrid(props: { activeTab: number; draggedItemId: string | null;
         event.preventDefault();
         props.setState((previous) => moveInventoryItem(previous, itemId, dropPosition));
       }}
-      style={{ display: "grid", gap: INVENTORY_GRID_GAP, gridTemplateColumns: `repeat(${INVENTORY_GRID_COLUMNS}, ${INVENTORY_GRID_CELL_SIZE}px)`, gridTemplateRows: `repeat(${INVENTORY_GRID_ROWS}, ${INVENTORY_GRID_CELL_SIZE}px)`, left: INVENTORY_GRID_LEFT, position: "absolute", top: INVENTORY_GRID_TOP, width: INVENTORY_GRID_WIDTH }}
+      style={{ display: "grid", gap: INVENTORY_GRID_GAP, gridTemplateColumns: `repeat(${INVENTORY_GRID_COLUMNS}, ${INVENTORY_GRID_CELL_SIZE}px)`, gridTemplateRows: `repeat(${INVENTORY_GRID_ROWS}, ${INVENTORY_GRID_CELL_SIZE}px)`, height: INVENTORY_GRID_HEIGHT, left: INVENTORY_GRID_LEFT, overflow: "hidden", position: "absolute", top: INVENTORY_GRID_TOP, width: INVENTORY_GRID_WIDTH }}
     >
       <InventoryExtraColumnHighlight />
       {cells.map((_, index) => (
@@ -664,6 +664,9 @@ function getAllInventoryPlacements(items: InventoryItem[], inventorySlots: Recor
   for (const item of remainingItems) {
     const footprint = ITEM_FOOTPRINTS[item.slot];
     const position = findPagedPlacement(occupiedByTab, footprint);
+    if (!position) {
+      continue;
+    }
     markPlacement(occupiedByTab[position.tab], position.row, position.column, footprint);
     placements.push({ column: position.column, footprint, item, row: position.row, tab: position.tab });
   }
@@ -725,7 +728,7 @@ function findPagedPlacement(occupiedByTab: boolean[][][], footprint: ItemFootpri
       }
     }
   }
-  return { column: 0, row: 0, tab: occupiedByTab.length - 1 };
+  return null;
 }
 
 function canPlaceItemAt(occupied: boolean[][], row: number, column: number, footprint: ItemFootprint) {
