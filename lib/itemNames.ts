@@ -1,7 +1,10 @@
 import type { CharacterStatKey, EquipmentSlot } from "../types/study";
 import { HERO_SIEGE_ITEM_NAME_COUNT, HERO_SIEGE_ITEM_NAMES_BY_SLOT } from "./heroSiegeItemCatalog";
 
-export const ITEM_BASE_NAMES: Record<EquipmentSlot, string[]> = HERO_SIEGE_ITEM_NAMES_BY_SLOT;
+export const ITEM_BASE_NAMES: Record<EquipmentSlot, string[]> = {
+  ...HERO_SIEGE_ITEM_NAMES_BY_SLOT,
+  ringTwo: HERO_SIEGE_ITEM_NAMES_BY_SLOT.eyewear
+};
 
 export const STAT_NAME_AFFIXES: Record<CharacterStatKey, { prefixes: string[]; suffixes: string[] }> = {
   constitution: {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
-import { applyPassedCombatResult, getMonsterCurrentHealth } from "../lib/combatCore";
+import { applyPassedCombatResult, getMonsterCurrentHealth, getMonsterHit } from "../lib/combatCore";
 import { createDropItem, ITEM_BASE_NAME_COUNT } from "../lib/itemCore";
 import { getEstimatedRating } from "../lib/ratingCore";
 import { WARRIOR_SKILLS, activateWarriorSkill, canUseActiveWarriorSkill, getAvailableWarriorSkillPoints, resetWarriorSkillPoints, spendWarriorSkillPoint } from "../lib/skillCore";
@@ -14,6 +14,7 @@ import {
   applyScheduleResult,
   applyHealthPenalty,
   buyHint,
+  bulkSellItems,
   canBuyHint,
   canEquipItem,
   cloneState,
@@ -32,6 +33,7 @@ import {
   getExperienceReward,
   getHealthLoss,
   getLevelProgress,
+  getItemSellValue,
   getManaReward,
   getMaxHealth,
   getMaxMana,
@@ -47,11 +49,19 @@ import {
   isMasteredCard,
   normalizeStudyState,
   pickQuestion,
+  sellItem,
   setCard,
   equipItem,
   unequipItem,
   spendStatPoint
 } from "../lib/studyCore";
+import type { InventoryItem } from "../types/study";
+
+const ITEM_VISIBLE_MOD_CAPS = { common: 0, epic: 8, legendary: 12, rare: 6, uncommon: 2 };
+
+function getVisibleItemModCount(item: InventoryItem) {
+  return Object.values(item.stats).filter(Boolean).length + (item.modifiers || []).length + (item.wikiStats || []).length;
+}
 
 describe("studyCore", () => {
   it("keeps every question identity and prompt unique", () => {
@@ -146,6 +156,7 @@ describe("studyCore", () => {
   it("applies passed results without spaced-repetition scheduling", () => {
     const question = questions[0];
     let state = defaultState();
+    state.profile.mana = 4;
 
     state = applyScheduleResult(state, question.id, true, "draft", 1000);
     expect(getCard(state, question.id)).toMatchObject({
@@ -159,7 +170,7 @@ describe("studyCore", () => {
     expect(getCard(state, question.id).dueAt).toBe(0);
     expect(state.profile.coins).toBe(getCoinReward(question));
     expect(state.profile.experience).toBe(getExperienceReward(question));
-    expect(state.profile.mana).toBe(getMaxMana(state));
+    expect(state.profile.mana).toBe(4);
     expect(isMasteredCard(getCard(state, question.id))).toBe(true);
     expect(getCard(state, question.id).masteredAt).toBe(1000);
   });
@@ -215,11 +226,13 @@ describe("studyCore", () => {
   it("rewards every successful submit while only mastering on monster defeat", () => {
     const question = questions[0];
     let state = defaultState();
+    state.profile.mana = 3;
     const firstHit = applyPassedCombatResult(state, question.id, "draft", 1000);
 
     expect(firstHit.hit?.defeated).toBe(false);
     expect(firstHit.state.profile.coins).toBeGreaterThan(0);
     expect(firstHit.state.profile.experience).toBeGreaterThan(0);
+    expect(firstHit.state.profile.mana).toBe(3);
     expect(getMonsterCurrentHealth(firstHit.state, question)).toBeLessThan(getMonsterCurrentHealth(state, question));
     expect(getCard(firstHit.state, question.id).correct).toBe(0);
 
@@ -230,6 +243,7 @@ describe("studyCore", () => {
 
     expect(getCard(state, question.id).correct).toBe(1);
     expect(state.profile.coins).toBeGreaterThan(firstHit.state.profile.coins);
+    expect(state.profile.mana).toBe(3);
     expect(getMonsterCurrentHealth(state, question)).toBeGreaterThan(0);
   });
 
@@ -240,7 +254,7 @@ describe("studyCore", () => {
     expect(getLevelProgress(state)).toEqual({
       level: 2,
       currentExperience: 12,
-      nextLevelExperience: EXPERIENCE_PER_LEVEL
+      nextLevelExperience: 200
     });
   });
 
@@ -250,8 +264,8 @@ describe("studyCore", () => {
 
     expect(getLevelProgress(state)).toEqual({
       level: MAX_CHARACTER_LEVEL,
-      currentExperience: EXPERIENCE_PER_LEVEL,
-      nextLevelExperience: EXPERIENCE_PER_LEVEL
+      currentExperience: 53610,
+      nextLevelExperience: 53610
     });
   });
 
@@ -386,19 +400,85 @@ describe("studyCore", () => {
     expect(bloodied.state.profile.health).toBeGreaterThan(healthBefore - 4);
   });
 
+  it("applies passive combat modifiers as real damage and sustain effects", () => {
+    const question = questions[0];
+    let state = defaultState();
+    state.profile.inventory.push({
+      id: "combat-modifier-sword",
+      modifiers: [
+        { key: "physicalDamage", value: 5 },
+        { key: "fireDamage", value: 3 },
+        { key: "lifeStealPercent", value: 20 },
+        { key: "extraAttackChancePercent", value: 100 },
+        { key: "executeChancePercent", value: 100 },
+        { key: "armorPenetrationPercent", value: 100 },
+        { key: "resistancePenetrationPercent", value: 100 }
+      ],
+      name: "Combat Modifier Sword",
+      rarity: "rare",
+      requirements: { level: 1, stats: {} },
+      slot: "mainHand",
+      stats: {}
+    });
+    state = equipItem(state, "combat-modifier-sword");
+    setCard(state, question.id, { ...defaultCard(), monsterHealth: 5 });
+
+    const normal = getMonsterHit(defaultState(), question, 1000);
+    const modified = getMonsterHit(state, question, 1000);
+
+    expect(modified.effects).toEqual(expect.arrayContaining(["Execute proc", "Extra attack"]));
+    expect(modified.hitCount).toBe(normal.hitCount + 1);
+    expect(modified.damage).toBeGreaterThan(normal.damage);
+    expect(modified.lifeRestored).toBeGreaterThan(0);
+  });
+
+  it("hardens monsters when the question takes longer", () => {
+    const question = questions[0];
+    let state = defaultState();
+    state.profile.inventory.push({
+      id: "elemental-pressure-sword",
+      modifiers: [
+        { key: "physicalDamage", value: 12 },
+        { key: "fireDamage", value: 8 }
+      ],
+      name: "Elemental Pressure Sword",
+      rarity: "rare",
+      requirements: { level: 1, stats: {} },
+      slot: "mainHand",
+      stats: {}
+    });
+    state = equipItem(state, "elemental-pressure-sword");
+
+    const fastHit = getMonsterHit(state, question, 1000, { timePressureRatio: 0 });
+    const slowHit = getMonsterHit(state, question, 1000, { timePressureRatio: 1 });
+
+    expect(slowHit.damage).toBeLessThan(fastHit.damage);
+    expect(slowHit.effects).toContain("Time armor");
+  });
+
   it("drops and equips stat bonus items from solved questions", () => {
     const question = questions.find((row) => row.difficulty === 5) || questions[0];
     let state = defaultState();
     state.profile.stats.perception = 40;
+    state.profile.experience = EXPERIENCE_PER_LEVEL * 20;
     const now = 123456;
     const drop = getQuestionDrop(question, state, now);
 
     expect(drop).toBeTruthy();
-    const multiStatDrop = Array.from({ length: 1000 }, (_, index) => getQuestionDrop(question, state, now + index))
-      .find((item) => item && item.rarity !== "common");
-    expect(Object.values(multiStatDrop?.stats || {}).filter(Boolean).length).toBeGreaterThan(1);
+    const normalDrop = createDropItem(question, state.profile.stats, now, { maxItemLevel: 1 });
+    expect(normalDrop.rarity).toBe("common");
+    expect(Object.values(normalDrop.stats || {}).filter(Boolean)).toHaveLength(0);
+    expect(normalDrop.modifiers || []).toHaveLength(0);
+    expect(normalDrop.wikiStats || []).toHaveLength(0);
 
-    state = applyScheduleResult(state, question.id, true, "draft", now);
+    const statDrop = Array.from({ length: 2000 }, (_, index) => {
+      const droppedAt = now + index;
+      const item = getQuestionDrop(question, state, droppedAt);
+      return item && Object.values(item.stats).filter(Boolean).length ? { droppedAt, item } : null;
+    }).find(Boolean);
+    expect(statDrop).toBeTruthy();
+
+    state = applyScheduleResult(state, question.id, true, "draft", statDrop?.droppedAt || now);
     expect(state.profile.inventory).toHaveLength(1);
     state.profile.experience = EXPERIENCE_PER_LEVEL * state.profile.inventory[0].requirements.level;
 
@@ -413,14 +493,68 @@ describe("studyCore", () => {
     expect(unequipped.profile.equipment[state.profile.inventory[0].slot]).toBeNull();
   });
 
-  it("adds special modifiers to rarer item drops", () => {
+  it("allows two rings plus an amulet to be equipped", () => {
+    let state = defaultState();
+    state.profile.inventory.push(
+      { id: "ring-a", modifiers: [], name: "Bronze Ring", rarity: "common", requirements: { level: 1, stats: {} }, slot: "eyewear", stats: { intelligence: 1 } },
+      { id: "ring-b", modifiers: [], name: "Iron Ring", rarity: "common", requirements: { level: 1, stats: {} }, slot: "eyewear", stats: { perception: 1 } },
+      { id: "amulet-a", modifiers: [], name: "Simple Pendant", rarity: "common", requirements: { level: 1, stats: {} }, slot: "headAccessory", stats: { constitution: 1 } }
+    );
+
+    state = equipItem(state, "ring-a");
+    state = equipItem(state, "ring-b");
+    state = equipItem(state, "amulet-a");
+
+    expect(new Set([state.profile.equipment.eyewear, state.profile.equipment.ringTwo])).toEqual(new Set(["ring-a", "ring-b"]));
+    expect(state.profile.equipment.headAccessory).toBe("amulet-a");
+    expect(getEffectiveCharacterStats(state)).toMatchObject({ constitution: 2, intelligence: 2, perception: 2 });
+  });
+
+  it("bulk sells unequipped inventory items for gold", () => {
+    let state = defaultState();
+    const keptItem: InventoryItem = { id: "kept-sword", modifiers: [], name: "Kept Sword", rarity: "common", requirements: { level: 1, stats: {} }, slot: "mainHand", stats: { strength: 1 } };
+    const soldItem: InventoryItem = { id: "sold-ring", modifiers: [{ key: "goldFindPercent", value: 8 }], name: "Sold Ring", rarity: "uncommon", requirements: { level: 1, stats: {} }, slot: "eyewear", stats: { perception: 1 } };
+    const ignoredItem: InventoryItem = { id: "ignored-helm", modifiers: [], name: "Ignored Helm", rarity: "rare", requirements: { level: 1, stats: {} }, slot: "headgear", stats: { constitution: 1 } };
+    state.profile.inventory.push(keptItem, soldItem, ignoredItem);
+    state.profile.inventorySlots = {
+      "sold-ring": { column: 1, row: 1, tab: 0 }
+    };
+    state = equipItem(state, keptItem.id);
+
+    const sold = bulkSellItems(state, [keptItem.id, soldItem.id]);
+
+    expect(sold.profile.coins).toBe(getItemSellValue(soldItem));
+    expect(sold.profile.inventory.map((item) => item.id)).toEqual([keptItem.id, ignoredItem.id]);
+    expect(sold.profile.equipment.mainHand).toBe(keptItem.id);
+    expect(sold.profile.inventorySlots["sold-ring"]).toBeUndefined();
+  });
+
+  it("sells a single unequipped item and keeps equipped items protected", () => {
+    let state = defaultState();
+    const equippedItem: InventoryItem = { id: "equipped-sword", modifiers: [], name: "Equipped Sword", rarity: "common", requirements: { level: 1, stats: {} }, slot: "mainHand", stats: { strength: 1 } };
+    const sellableItem: InventoryItem = { id: "sellable-ring", modifiers: [], name: "Sellable Ring", rarity: "rare", requirements: { level: 1, stats: {} }, slot: "eyewear", stats: { perception: 1 } };
+    state.profile.inventory.push(equippedItem, sellableItem);
+    state = equipItem(state, equippedItem.id);
+
+    expect(sellItem(state, equippedItem.id)).toBe(state);
+    const sold = sellItem(state, sellableItem.id);
+
+    expect(sold.profile.coins).toBe(getItemSellValue(sellableItem));
+    expect(sold.profile.inventory.map((item) => item.id)).toEqual([equippedItem.id]);
+    expect(sold.profile.equipment.mainHand).toBe(equippedItem.id);
+  });
+
+  it("caps item modifier counts by rarity", () => {
     const question = questions.find((row) => row.difficulty === 5) || questions[0];
     const state = defaultState();
     state.profile.stats.perception = 40;
-    const specialDrop = Array.from({ length: 2000 }, (_, index) => getQuestionDrop(question, state, 456000 + index))
-      .find((item) => item && item.rarity !== "common" && item.rarity !== "uncommon" && item.modifiers?.length);
+    const drops = Array.from({ length: 2000 }, (_item, index) => createDropItem(question, state.profile.stats, 456000 + index));
 
-    expect(specialDrop?.modifiers?.length).toBeGreaterThan(0);
+    expect(drops.some((item) => item.rarity === "rare" && (item.modifiers || []).length > 0)).toBe(true);
+    for (const item of drops) {
+      expect(getVisibleItemModCount(item)).toBeLessThanOrEqual(ITEM_VISIBLE_MOD_CAPS[item.rarity]);
+      expect((item.modifiers || []).some((modifier) => modifier.key === "manaOnKill")).toBe(false);
+    }
   });
 
   it("uses god mode for testing drops and failure penalties", () => {
@@ -450,9 +584,9 @@ describe("studyCore", () => {
     expect(lowLevelLegendary?.requirements.level).toBeLessThan(30);
     expect(Object.values(lowLevelLegendary?.stats || {}).filter(Boolean).length).toBeLessThanOrEqual(2);
     expect(Math.max(...Object.values(lowLevelLegendary?.stats || { strength: 0 }))).toBeLessThanOrEqual(1);
-    expect(lowLevelLegendary?.modifiers?.length).toBeLessThanOrEqual(1);
+    expect(lowLevelLegendary?.modifiers?.length).toBeLessThanOrEqual(2);
     expect(endgameLegendary?.requirements.level).toBe(MAX_CHARACTER_LEVEL);
-    expect(endgameLegendary?.modifiers?.length).toBeLessThanOrEqual(3);
+    expect(endgameLegendary?.modifiers?.length).toBeLessThanOrEqual(8);
   });
 
   it("applies equipped special modifiers to rewards and combat math", () => {
@@ -470,7 +604,6 @@ describe("studyCore", () => {
         { key: "lifeOnKill", value: 5 },
         { key: "lightningResistPercent", value: 90 },
         { key: "magicFindPercent", value: 50 },
-        { key: "manaOnKill", value: 3 },
         { key: "maxLife", value: 10 },
         { key: "maxMana", value: 10 }
       ],
@@ -492,7 +625,6 @@ describe("studyCore", () => {
     expect(getCriticalChance(state)).toBeGreaterThan(getCriticalChance(defaultState()));
     expect(getCoinReward(question, state)).toBeGreaterThan(getCoinReward(question, defaultState()));
     expect(getExperienceReward(question, state)).toBeGreaterThan(getExperienceReward(question, defaultState()));
-    expect(getManaReward(question, state)).toBeGreaterThan(getManaReward(question, defaultState()));
   });
 
   it("has a large Diablo-style item base name pool", () => {

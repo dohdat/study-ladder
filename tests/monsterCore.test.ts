@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { getMonsterAttackProfile, getMonsterMaxHealth, getMonsterPlayerDamage, getUniqueMonsterBonusCount, getUniqueMonsterBonuses, getUniqueMonsterName, UNIQUE_MONSTER_BONUSES } from "../lib/monsterCore";
-import { ELEMENTAL_DAMAGE_TYPES } from "../lib/resistanceCore";
+import { getMonsterAttackProfile, getMonsterMaxHealth, getMonsterPlayerDamage, getMonsterResistances, getUniqueMonsterBonusCount, getUniqueMonsterBonuses, getUniqueMonsterName, UNIQUE_MONSTER_BONUSES } from "../lib/monsterCore";
+import { DAMAGE_TYPES, ELEMENTAL_DAMAGE_TYPES } from "../lib/resistanceCore";
 import type { Difficulty, Question } from "../types/study";
 
 describe("monsterCore", () => {
@@ -47,21 +47,37 @@ describe("monsterCore", () => {
     expect(getMonsterPlayerDamage(stoneSkin, 40)).toBeLessThan(40);
   });
 
+  it("gives monsters real damage-type resistances", () => {
+    const stoneSkin = findQuestion((bonuses) => bonuses.includes("Stone Skin"));
+    const magicResistant = findQuestion((bonuses) => bonuses.includes("Magic Resistant"));
+    const fireEnchanted = findQuestion((bonuses) => bonuses.includes("Fire Enchanted"));
+
+    expect(getMonsterResistances(stoneSkin).physical).toBeGreaterThan(0);
+    expect(getMonsterResistances(magicResistant).cold).toBeGreaterThan(0);
+    expect(getMonsterResistances(magicResistant).poison).toBeGreaterThan(0);
+    expect(getMonsterResistances(fireEnchanted).fire).toBeGreaterThan(getMonsterResistances(fireEnchanted).cold);
+    expect(getMonsterPlayerDamage(fireEnchanted, 40, "fire")).toBeLessThan(getMonsterPlayerDamage(fireEnchanted, 40, "physical"));
+    expect(getMonsterPlayerDamage(fireEnchanted, 40, "fire", 100)).toBe(getMonsterPlayerDamage(fireEnchanted, 40, "physical"));
+    expect(getMonsterPlayerDamage(fireEnchanted, 40, "physical", 0, 30)).toBeLessThan(getMonsterPlayerDamage(fireEnchanted, 40, "physical"));
+    expect(getMonsterPlayerDamage(fireEnchanted, 0, "fire")).toBe(0);
+  });
+
   it("rolls elemental attacks more often on higher-rated monsters", () => {
     const low = countElementalAttacks(1, 1000);
     const high = countElementalAttacks(5, 3400);
 
     expect(low).toBeLessThan(40);
     expect(high).toBeGreaterThan(low);
-    const rolledElements = Array.from({ length: 20 }, (_, index) => getMonsterAttackProfile({ ...makeQuestion(5, 3400), id: `element-kind-${index}` }, 8, 1000).element).filter(Boolean);
-    expect(rolledElements.every((element) => ELEMENTAL_DAMAGE_TYPES.includes(element as (typeof ELEMENTAL_DAMAGE_TYPES)[number]))).toBe(true);
+    const rolledElements = Array.from({ length: 20 }, (_, index) => getMonsterAttackProfile({ ...makeQuestion(5, 3400), id: `element-kind-${index}` }, 8, 1000).element);
+    expect(rolledElements.every((element) => DAMAGE_TYPES.includes(element))).toBe(true);
+    expect(rolledElements.some((element) => ELEMENTAL_DAMAGE_TYPES.includes(element as (typeof ELEMENTAL_DAMAGE_TYPES)[number]))).toBe(true);
   });
 });
 
 function countElementalAttacks(difficulty: Difficulty, rating: number) {
   return Array.from({ length: 80 }, (_, index) => {
     return getMonsterAttackProfile({ ...makeQuestion(difficulty, rating), id: `element-${difficulty}-${rating}-${index}` }, 6, 1000).element;
-  }).filter(Boolean).length;
+  }).filter((element) => element !== "physical").length;
 }
 
 function findQuestion(predicate: (bonuses: string[]) => boolean) {

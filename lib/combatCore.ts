@@ -2,12 +2,11 @@ import { questions } from "../data/questions";
 import { getMonsterMaxHealth, getMonsterPlayerDamage } from "./monsterCore";
 import { getActiveWarriorSkill, getWarriorSkillRank } from "./skillCore";
 import {
-  applyScheduleResult, cloneState, getAttackDamage, getCard, getCoinReward, getCriticalChance, getEquipmentModifierTotals,
-  getExperienceReward, getManaReward, getMaxHealth, getMaxMana, getQuestionDrop, getWarriorSkillBonusTotals, grantPendingStatPoints, setCard
+  applyHealingReceived, applyScheduleResult, cloneState, getAttackDamage, getCard, getCoinReward, getCriticalChance, getCriticalDamageMultiplier,
+  getExperienceReward, getMaxHealth, getQuestionDrop, getRunModifierTotals, getWarriorSkillBonusTotals, grantPendingStatPoints, setCard
 } from "./studyCore";
-import type { Question, StudyState } from "../types/study";
+import type { DamageType, Question, StudyState } from "../types/study";
 
-const CRITICAL_DAMAGE_MULTIPLIER = 2;
 const POWER_STRIKE_MULTIPLIER = 2;
 const CLEAVE_HIT_COUNT = 2;
 const CLEAVE_DAMAGE_RATIO = 0.9;
@@ -26,11 +25,19 @@ const DOUBLE_SWING_EXTRA_RATIO_PER_RANK = 0.015;
 const HASH_SEED = 2166136261;
 const HASH_MULTIPLIER = 16777619;
 const HASH_DIVISOR = 4294967296;
+const MAX_TIME_MONSTER_DEFENSE_PERCENT = 20;
+const MAX_TIME_MONSTER_RESISTANCE_PERCENT = 30;
+const PERCENT = 100;
+
+export type MonsterHitOptions = {
+  timePressureRatio?: number;
+};
 
 export type MonsterHitResult = {
   activeSkillName?: string;
   critical: boolean;
   damage: number;
+  damageTypes: DamageType[];
   defeated: boolean;
   effects: string[];
   hitCount: number;
@@ -48,32 +55,85 @@ export const getMonsterCurrentHealth = (state: StudyState, question: Question) =
   return Math.min(getMonsterMaxHealth(question), Math.max(0, storedHealth || 0));
 };
 
-export const getMonsterHit = (state: StudyState, question: Question, now = Date.now()) => {
+export const getMonsterHit = (state: StudyState, question: Question, now = Date.now(), options: MonsterHitOptions = {}) => {
   const activeSkill = getActiveWarriorSkill(state.profile.activeSkill);
   const guaranteedCritical = activeSkill?.id === "sureCrit";
   const critical = guaranteedCritical || getSeededRoll(`${question.id}:${now}:critical`) <= getCriticalChance(state);
   const baseDamage = getAttackDamage(question, state);
-  const criticalDamage = critical ? baseDamage * CRITICAL_DAMAGE_MULTIPLIER : baseDamage;
+  const criticalDamage = critical ? baseDamage * getCriticalDamageMultiplier(state) : baseDamage;
   const activeHit = getActiveSkillHit(state, question, activeSkill?.id ?? null, criticalDamage);
-  const perHitDamage = getMonsterPlayerDamage(question, activeHit.perHitDamage);
+  const modifiers = getRunModifierTotals(state);
+  const currentHealth = getMonsterCurrentHealth(state, question);
+  const executeProc = currentHealth / getMonsterMaxHealth(question) <= EXECUTE_WOUNDED_THRESHOLD && getSeededRoll(`${question.id}:${now}:execute-proc`) <= (modifiers.executeChancePercent || 0) / 100;
+  const extraAttack = getSeededRoll(`${question.id}:${now}:extra-attack`) <= (modifiers.extraAttackChancePercent || 0) / 100 ? 1 : 0;
+  const armorPenetration = (modifiers.armorPenetrationPercent || 0) + (modifiers.reducedEnemyArmorPercent || 0);
+  const resistancePenetration = modifiers.resistancePenetrationPercent || 0;
+  const timeHardening = getTimeHardening(options.timePressureRatio);
+  const physicalDamage = executeProc ? Math.max(activeHit.perHitDamage, currentHealth) : activeHit.perHitDamage;
+  const damageTypes = getPlayerHitDamageTypes(physicalDamage, modifiers);
+  const rawPerHitDamage = getMonsterPlayerDamage(question, physicalDamage, "physical", armorPenetration, timeHardening.resistancePercent)
+    + getElementalDamage(question, modifiers, resistancePenetration, timeHardening.resistancePercent);
+  const perHitDamage = applyTimeDefense(rawPerHitDamage, timeHardening.defensePercent);
+  const totalDamage = perHitDamage * (activeHit.hitCount + extraAttack);
+  const lifeSteal = Math.floor(totalDamage * (modifiers.lifeStealPercent || 0) / 100);
   return {
     activeSkillName: activeSkill?.name,
     critical,
-    damage: perHitDamage * activeHit.hitCount,
-    effects: activeHit.effects,
-    hitCount: activeHit.hitCount,
-    lifeRestored: activeHit.lifeRestored,
+    damage: totalDamage,
+    damageTypes,
+    effects: [...activeHit.effects, ...(timeHardening.defensePercent || timeHardening.resistancePercent ? ["Time armor"] : []), ...(executeProc ? ["Execute proc"] : []), ...(extraAttack ? ["Extra attack"] : [])],
+    hitCount: activeHit.hitCount + extraAttack,
+    lifeRestored: applyHealingReceived(state, activeHit.lifeRestored + lifeSteal),
     perHitDamage
   };
 };
 
-export const applyPassedCombatResult = (state: StudyState, questionId: string, draft: string, now = Date.now()) => {
+function getTimeHardening(timePressureRatio = 0) {
+  const pressure = Math.min(1, Math.max(0, timePressureRatio || 0));
+  return {
+    defensePercent: Math.round(pressure * MAX_TIME_MONSTER_DEFENSE_PERCENT),
+    resistancePercent: Math.round(pressure * MAX_TIME_MONSTER_RESISTANCE_PERCENT)
+  };
+}
+
+function applyTimeDefense(damage: number, defensePercent: number) {
+  if (damage <= 0 || defensePercent <= 0) {
+    return damage;
+  }
+  return Math.max(1, Math.round(damage * (1 - Math.min(MAX_TIME_MONSTER_DEFENSE_PERCENT, defensePercent) / PERCENT)));
+}
+
+function getPlayerHitDamageTypes(physicalDamage: number, modifiers: ReturnType<typeof getRunModifierTotals>): DamageType[] {
+  const damageTypes: DamageType[] = physicalDamage > 0 ? ["physical"] : [];
+  if ((modifiers.fireDamage || 0) > 0) {
+    damageTypes.push("fire");
+  }
+  if ((modifiers.coldDamage || 0) > 0) {
+    damageTypes.push("cold");
+  }
+  if ((modifiers.lightningDamage || 0) > 0) {
+    damageTypes.push("lightning");
+  }
+  if ((modifiers.poisonDamage || 0) > 0) {
+    damageTypes.push("poison");
+  }
+  return damageTypes.length ? damageTypes : ["physical"];
+}
+
+function getElementalDamage(question: Question, modifiers: ReturnType<typeof getRunModifierTotals>, penetration: number, resistanceBonusPercent: number) {
+  return getMonsterPlayerDamage(question, modifiers.fireDamage || 0, "fire", penetration, resistanceBonusPercent)
+    + getMonsterPlayerDamage(question, modifiers.coldDamage || 0, "cold", penetration, resistanceBonusPercent)
+    + getMonsterPlayerDamage(question, modifiers.lightningDamage || 0, "lightning", penetration, resistanceBonusPercent)
+    + getMonsterPlayerDamage(question, modifiers.poisonDamage || 0, "poison", penetration, resistanceBonusPercent);
+}
+
+export const applyPassedCombatResult = (state: StudyState, questionId: string, draft: string, now = Date.now(), options: MonsterHitOptions = {}) => {
   const question = questions.find((row) => row.id === questionId);
   if (!question) {
     return { hit: null, state };
   }
   const currentHealth = getMonsterCurrentHealth(state, question);
-  const hit = getMonsterHit(state, question, now);
+  const hit = getMonsterHit(state, question, now, options);
   const remainingHealth = Math.max(0, currentHealth - hit.damage);
   const defeated = remainingHealth <= 0;
   if (defeated) {
@@ -144,8 +204,8 @@ function applyPartialRewards(next: StudyState, question: Question | undefined, r
   const leveled = grantPendingStatPoints(next);
   next.profile.statPoints = leveled.profile.statPoints;
   next.profile.statPointsAwardedLevel = leveled.profile.statPointsAwardedLevel;
-  next.profile.mana = Math.min(getMaxMana(next), next.profile.mana + getManaReward(question, next));
-  next.profile.health = Math.min(getMaxHealth(next), next.profile.health + getEquipmentModifierTotals(next).lifeOnKill + getWarriorSkillBonusTotals(next).lifeOnKill);
+  const modifiers = getRunModifierTotals(next);
+  next.profile.health = Math.min(getMaxHealth(next), next.profile.health + applyHealingReceived(next, (modifiers.lifeOnKill || 0) + (modifiers.healthRegen || 0) + getWarriorSkillBonusTotals(next).lifeOnKill));
   const drop = getQuestionDrop(question, rewardState, now);
   if (drop) {
     next.profile.inventory.push(drop);

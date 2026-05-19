@@ -9,6 +9,7 @@ import { UserMenu, USER_MENU_SHORTCUTS } from "./UserMenu";
 import type { UserMenuSection } from "./UserMenu";
 import { STUDY_BLOCKER_MS_PER_MINUTE, useStudyBlockerSettings } from "../hooks/useStudyBlocker";
 import type { ActiveWarriorSkillId, CharacterStats, StudyState } from "../types/study";
+import type { CombatImpactVisual } from "./MonsterEncounter";
 
 const PROGRESS_MAX = 100;
 const MINUTES_DECIMAL_PLACES = 1;
@@ -34,6 +35,7 @@ export function AppHeader(props: {
   maxMana: number;
   modeValue: string;
   nextLevelExperience: number;
+  playerImpact?: CombatImpactVisual | null;
   rating: number;
   state: StudyState;
   setState: React.Dispatch<React.SetStateAction<StudyState>>;
@@ -71,6 +73,7 @@ export function AppHeader(props: {
             maxMana={props.maxMana}
             nextLevelExperience={props.nextLevelExperience}
             onOpenStats={() => setActiveSection("stats")}
+            playerImpact={props.playerImpact}
             rating={props.rating}
             state={props.state}
             stats={props.stats}

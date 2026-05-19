@@ -7,9 +7,9 @@ import { InventoryItemTooltip, ItemSummary } from "./InventoryPanel";
 import { RelicIcon } from "./RelicIcon";
 import { getHeroSiegeQualityColor, getRelicQualityLabel } from "../lib/heroSiegeQuality";
 import { formatModifier } from "../lib/modifierFormat";
-import { buyShopItem } from "../lib/shopCore";
+import { buyShopItem, canBuyShopItem, getRandomPotionEffect } from "../lib/shopCore";
 import { getMaxHealth, getMaxMana } from "../lib/studyCore";
-import type { Relic, ShopItem, StudyState } from "../types/study";
+import type { CharacterStatKey, EquipmentSlot, InventoryItem, Relic, ShopItem, StudyState } from "../types/study";
 
 const SHOP_COLUMNS = { base: 1, sm: 2 };
 const SHOP_PANEL_BG = "radial-gradient(circle at 50% 18%, #332f28 0%, #1b1a17 52%, #090909 100%)";
@@ -49,9 +49,10 @@ function ShopGrid(props: { state: StudyState; setState: React.Dispatch<React.Set
 
 function ShopCard(props: { item: ShopItem; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const canAfford = props.state.profile.coins >= props.item.cost;
+  const canBuy = canBuyShopItem(props.state, props.item, getMaxHealth(props.state), getMaxMana(props.state));
   return (
     <Box p="sm" style={{ background: SHOP_CARD_BG, border: SHOP_CARD_BORDER, boxShadow: SHOP_CARD_SHADOW }}>
-      <ShopItemTooltip item={props.item}>
+      <ShopItemTooltip item={props.item} state={props.state}>
         <Box>
           <Group justify="space-between" align="flex-start" gap="xs" wrap="nowrap">
             <ShopItemArt item={props.item} />
@@ -61,7 +62,7 @@ function ShopCard(props: { item: ShopItem; state: StudyState; setState: React.Di
         </Box>
       </ShopItemTooltip>
       <Group justify="flex-end" mt={8}>
-        <HeroSiegeButton disabled={!canAfford} height={26} minWidth={70} onClick={() => buyItem(props)} style={{ fontSize: 10, padding: "0 12px" }}>
+        <HeroSiegeButton disabled={!canBuy} height={26} minWidth={70} onClick={() => buyItem(props)} style={{ fontSize: 10, padding: "0 12px" }}>
           Buy
         </HeroSiegeButton>
       </Group>
@@ -111,9 +112,9 @@ function PotionSummary(props: { item: Extract<ShopItem, { kind: "consumable" }> 
   );
 }
 
-function ShopItemTooltip(props: { children: React.ReactElement; item: ShopItem }) {
+function ShopItemTooltip(props: { children: React.ReactElement; item: ShopItem; state?: StudyState }) {
   if (props.item.kind === "equipment") {
-    return <InventoryItemTooltip item={props.item.item} showRollRanges={false}>{props.children}</InventoryItemTooltip>;
+    return <InventoryItemTooltip compareItem={props.state ? getEquippedComparisonItem(props.state, props.item.item) : null} item={props.item.item} showRollRanges={false}>{props.children}</InventoryItemTooltip>;
   }
   return (
     <Tooltip
@@ -144,8 +145,8 @@ function RelicTooltip(props: { relic: Relic }) {
       <Text size="sm" fw={900} tt="uppercase" c={getHeroSiegeQualityColor(quality)}>{props.relic.name}</Text>
       <Text size="xs" fw={800} c="gray.2">{getRelicSubtitle(props.relic)}</Text>
       <Stack gap={2}>
-        {(props.relic.modifiers || []).map((modifier) => (
-          <Text key={modifier.key} size="xs" fw={900} c="blue.2">{formatModifier(modifier.key, modifier.value)}</Text>
+        {(props.relic.modifiers || []).map((modifier) => ({ key: modifier.key, text: formatModifier(modifier.key, modifier.value) })).filter((modifier) => modifier.text).map((modifier) => (
+          <Text key={modifier.key} size="xs" fw={900} c="blue.2">{modifier.text}</Text>
         ))}
       </Stack>
       <Text size="xs" c="gray.2">{props.relic.description}</Text>
@@ -158,7 +159,7 @@ function PotionTooltip(props: { item: Extract<ShopItem, { kind: "consumable" }> 
     <Stack gap={4} style={{ textAlign: "center", width: 240 }}>
       <Text size="sm" fw={900} tt="uppercase" c={getPotionColor(props.item.type)}>{props.item.name}</Text>
       <Text size="xs" fw={800} c="gray.2">{getPotionEffectText(props.item)}</Text>
-      <Text size="xs" c="dimmed">{props.item.type === "random" ? "Effect is rolled when purchased." : "Used immediately when purchased."}</Text>
+      <Text size="xs" c="dimmed">{props.item.type === "random" ? "Effect lasts for 3 rooms." : "Used immediately when purchased."}</Text>
     </Stack>
   );
 }
@@ -167,22 +168,34 @@ function getPotionColor(type: Extract<ShopItem, { kind: "consumable" }>["type"])
   if (type === "health") {
     return "red.3";
   }
-  return type === "mana" ? "blue.3" : "yellow.3";
+  return "blue.3";
 }
 
 function getPotionEffectText(item: Extract<ShopItem, { kind: "consumable" }>) {
   if (item.type === "health") {
-    return `Restores ${item.amount} Health`;
+    return `Restores ${item.amount}% Health`;
   }
   if (item.type === "mana") {
-    return `Restores ${item.amount} Mana`;
+    return `Restores ${item.amount}% Mana`;
   }
-  return "Grants a random potion buff for 3 rooms";
+  const effect = getRandomPotionEffect(item);
+  return `${effect.name}: ${formatPotionEffectParts(effect)} for ${effect.roomsRemaining} rooms`;
+}
+
+function formatPotionEffectParts(effect: ReturnType<typeof getRandomPotionEffect>) {
+  return [
+    ...effect.modifiers.map((modifier) => formatModifier(modifier.key, modifier.value)),
+    ...Object.entries(effect.stats).filter(([, value]) => value).map(([key, value]) => `+${value} ${formatStatName(key as CharacterStatKey)}`)
+  ].filter(Boolean).join(", ");
+}
+
+function formatStatName(stat: CharacterStatKey) {
+  return stat.charAt(0).toUpperCase() + stat.slice(1);
 }
 
 function formatRelicEffects(relic: Relic) {
-  const modifiers = relic.modifiers || [];
-  return modifiers.length ? modifiers.map((modifier) => formatModifier(modifier.key, modifier.value)).join(", ") : "No listed effect";
+  const modifiers = (relic.modifiers || []).map((modifier) => formatModifier(modifier.key, modifier.value)).filter(Boolean);
+  return modifiers.length ? modifiers.join(", ") : "No listed effect";
 }
 
 function getRelicSubtitle(relic: Relic) {
@@ -202,4 +215,17 @@ function EmptyShop() {
 
 function buyItem(props: { item: ShopItem; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   props.setState((previous) => buyShopItem(previous, props.item.id, getMaxHealth(previous), getMaxMana(previous)));
+}
+
+function getEquippedComparisonItem(state: StudyState, item: InventoryItem) {
+  const slot = getCompatibleInventorySlots(item).find((candidate) => state.profile.equipment[candidate]) || getCompatibleInventorySlots(item)[0];
+  const equippedId = state.profile.equipment[slot];
+  return state.profile.inventory.find((row) => row.id === equippedId) || null;
+}
+
+function getCompatibleInventorySlots(item: InventoryItem) {
+  if (item.slot === "eyewear" || item.slot === "ringTwo") {
+    return ["eyewear", "ringTwo"] as EquipmentSlot[];
+  }
+  return [item.slot];
 }

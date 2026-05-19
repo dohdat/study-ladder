@@ -54,6 +54,7 @@ import {
   HERO_SIEGE_WIKI_ITEM_IMAGE_DISPLAYS,
   HERO_SIEGE_WIKI_ITEMS,
   HERO_SIEGE_WIKI_QUALITY_DISTRIBUTION,
+  getVisibleWikiItemStats,
   getWikiItemQualityLabel,
   getWikiItemPublicPath,
   type HeroSiegeWikiCategory,
@@ -62,7 +63,6 @@ import {
 } from "../lib/heroSiegeWikiCatalog";
 import { RELIC_DEFINITIONS } from "../lib/relicCore";
 import {
-  EXPERIENCE_PER_LEVEL,
   defaultState,
   getAttackDamage,
   getCriticalChance,
@@ -76,7 +76,7 @@ import {
   getWarriorSkillBonusTotals,
   spendStatPoint
 } from "../lib/studyCore";
-import { getMonsterMaxHealth, getUniqueMonsterBonuses } from "../lib/monsterCore";
+import { getMonsterAttackType, getMonsterMaxHealth, getMonsterResistances, getUniqueMonsterBonuses } from "../lib/monsterCore";
 import type { CharacterStatKey, Difficulty, ItemModifierKey, Question, Relic, StudyState } from "../types/study";
 
 const ICON_SIZE = 16;
@@ -122,11 +122,6 @@ const WIKI_MONSTER_PAGE_SIZE = 12;
 const WIKI_RELIC_PAGE_SIZE = 10;
 const WIKI_ITEM_PAGE_SIZE = 24;
 const MONSTER_HEALTH_RANGE_RATIO = 0.1;
-const MONSTER_BASE_RESISTANCE = 0;
-const MONSTER_ENCHANTED_RESISTANCE = 35;
-const MONSTER_MAGIC_RESISTANCE = 25;
-const MONSTER_SPECTRAL_RESISTANCE = 15;
-const MONSTER_STONE_SKIN_PHYSICAL_RESISTANCE = 25;
 const STAT_ROWS: Array<{ key: CharacterStatKey; label: string }> = [
   { key: "strength", label: "Strength" },
   { key: "constitution", label: "Constitution" },
@@ -258,7 +253,7 @@ function ProfilePanel(props: { state: StudyState; setState: React.Dispatch<React
       </Stack>
       <SimpleGrid cols={{ base: 2, sm: 3 }}>
         <StatTile label="Coins" value={<CoinAmount value={props.state.profile.coins} />} />
-        <StatTile label="Level XP" value={`${levelProgress.currentExperience}/${EXPERIENCE_PER_LEVEL}`} />
+        <StatTile label="Level XP" value={`${levelProgress.currentExperience}/${levelProgress.nextLevelExperience}`} />
         <StatTile label="Hints" value={props.state.profile.hintsBought} />
       </SimpleGrid>
       <SimpleGrid cols={{ base: 2, sm: 4 }}>
@@ -467,7 +462,8 @@ function MonsterWikiDetails(props: { monster: (typeof MONSTER_WIKI_ENTRIES)[numb
   const question = createWikiMonsterQuestion(props.monster);
   const bonuses = getUniqueMonsterBonuses(question);
   const health = getMonsterHealthRange(question);
-  const resistances = getMonsterResistanceRows(bonuses);
+  const attackType = getMonsterAttackType(question, bonuses);
+  const resistances = getMonsterResistanceRows(question);
   return (
     <Stack gap={8} style={{ textAlign: "center", width: TOOLTIP_SHEET_WIDTH }}>
       <Box>
@@ -475,6 +471,7 @@ function MonsterWikiDetails(props: { monster: (typeof MONSTER_WIKI_ENTRIES)[numb
         <Text size="sm" fw={800} c="gray.2">Difficulty {props.monster.difficulty} - Rating {props.monster.rating}</Text>
       </Box>
       <TooltipPowerRow label="Health" value={`${health.min}-${health.max}`} range={health} />
+      <Text size="sm" fw={900} style={{ color: getResistanceColor(attackType), lineHeight: 1.18, textShadow: "0 1px 0 #000" }}>Attack Type {formatDamageType(attackType)}</Text>
       <Stack gap={2}>
         {resistances.map((row) => (
           <TooltipAffixLine key={row.label} color={row.color} text={`${row.label} Resistance ${row.value}%`} range={{ min: row.value, max: row.value }} />
@@ -532,46 +529,28 @@ function getMonsterHealthRange(question: Question) {
   };
 }
 
-function getMonsterResistanceRows(bonuses: string[]) {
-  const resistances = {
-    Cold: MONSTER_BASE_RESISTANCE,
-    Fire: MONSTER_BASE_RESISTANCE,
-    Lightning: MONSTER_BASE_RESISTANCE,
-    Magic: bonuses.includes("Magic Resistant") ? MONSTER_MAGIC_RESISTANCE : MONSTER_BASE_RESISTANCE,
-    Physical: bonuses.includes("Stone Skin") ? MONSTER_STONE_SKIN_PHYSICAL_RESISTANCE : MONSTER_BASE_RESISTANCE,
-    Poison: MONSTER_BASE_RESISTANCE
-  };
-  if (bonuses.includes("Fire Enchanted")) {
-    resistances.Fire = MONSTER_ENCHANTED_RESISTANCE;
-  }
-  if (bonuses.includes("Cold Enchanted")) {
-    resistances.Cold = MONSTER_ENCHANTED_RESISTANCE;
-  }
-  if (bonuses.includes("Lightning Enchanted")) {
-    resistances.Lightning = MONSTER_ENCHANTED_RESISTANCE;
-  }
-  if (bonuses.includes("Spectral Hit")) {
-    resistances.Cold = Math.max(resistances.Cold, MONSTER_SPECTRAL_RESISTANCE);
-    resistances.Fire = Math.max(resistances.Fire, MONSTER_SPECTRAL_RESISTANCE);
-    resistances.Lightning = Math.max(resistances.Lightning, MONSTER_SPECTRAL_RESISTANCE);
-    resistances.Poison = Math.max(resistances.Poison, MONSTER_SPECTRAL_RESISTANCE);
-  }
-  return Object.entries(resistances)
+function getMonsterResistanceRows(question: Question) {
+  return Object.entries(getMonsterResistances(question))
     .filter(([, value]) => value > 0)
-    .map(([label, value]) => ({ color: getResistanceColor(label), label, value }));
+    .map(([label, value]) => ({ color: getResistanceColor(label), label: formatDamageType(label), value }));
+}
+
+function formatDamageType(type: string) {
+  return `${type.charAt(0).toUpperCase()}${type.slice(1)}`;
 }
 
 function getResistanceColor(label: string) {
-  if (label === "Fire") {
+  const normalized = label.toLowerCase();
+  if (normalized === "fire") {
     return "#ff8a3d";
   }
-  if (label === "Cold") {
+  if (normalized === "cold") {
     return "#73c7ff";
   }
-  if (label === "Lightning") {
+  if (normalized === "lightning") {
     return "#f0df5f";
   }
-  if (label === "Poison") {
+  if (normalized === "poison") {
     return "#7cff7c";
   }
   return "#6f6ff6";
@@ -579,17 +558,17 @@ function getResistanceColor(label: string) {
 
 function RelicWiki() {
   const [page, setPage] = useState(0);
-  const pageCount = getPageCount(RELIC_DEFINITIONS.length, WIKI_RELIC_PAGE_SIZE);
+  const pageCount = getPageCount(WIKI_RELICS.length, WIKI_RELIC_PAGE_SIZE);
   const safePage = clampPage(page, pageCount);
-  const visibleRelics = getPageItems(RELIC_DEFINITIONS, safePage, WIKI_RELIC_PAGE_SIZE);
+  const visibleRelics = getPageItems(WIKI_RELICS, safePage, WIKI_RELIC_PAGE_SIZE);
   return (
     <Stack gap="md">
       <Group justify="space-between">
         <Box>
           <Title order={4}>Relic Catalog</Title>
-          <Text size="sm" c="dimmed">{RELIC_DEFINITIONS.length} relics across all rarities.</Text>
+          <Text size="sm" c="dimmed">{WIKI_RELICS.length} relics across all rarities.</Text>
         </Box>
-        <WikiPagination page={safePage} pageCount={pageCount} onPageChange={setPage} total={RELIC_DEFINITIONS.length} />
+        <WikiPagination page={safePage} pageCount={pageCount} onPageChange={setPage} total={WIKI_RELICS.length} />
       </Group>
       <SimpleGrid cols={{ base: 1, sm: 2 }}>
         {visibleRelics.map((relic) => (
@@ -610,7 +589,6 @@ function RelicWikiCard(props: { relic: Relic }) {
         <Box>
           <Group gap="xs" mb={2}>
             <Text size="sm" fw={800} c={qualityColor}>{props.relic.name}</Text>
-            <Badge size="xs" variant="outline" style={{ borderColor: qualityColor, color: qualityColor }}>{quality}</Badge>
             {props.relic.source !== "any" && <Badge size="xs" color="red" variant="outline">{props.relic.source}</Badge>}
           </Group>
           <Text size="xs" c="dimmed">{props.relic.description}</Text>
@@ -626,6 +604,8 @@ type WikiItemCategory = HeroSiegeWikiCategory;
 const WIKI_ITEM_CATEGORIES = HERO_SIEGE_WIKI_CATEGORIES;
 const WIKI_ITEMS = [...HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT, ...HERO_SIEGE_WIKI_ITEMS];
 const WIKI_QUALITY_SORT_ORDER = ["Unique", "Set", "Rare", "Magic", "Normal"];
+const WIKI_RELICS = [...RELIC_DEFINITIONS].sort((left, right) => compareWikiQuality(getRelicQualityLabel(left.rarity, left.wikiRarityLabel), getRelicQualityLabel(right.rarity, right.wikiRarityLabel))
+  || left.name.localeCompare(right.name));
 
 function ItemWiki() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<WikiItemCategory["id"]>(WIKI_ITEM_CATEGORIES[0].id);
@@ -684,9 +664,13 @@ function ItemWiki() {
 function getWikiItemsForCategory(category: WikiItemCategory) {
   return WIKI_ITEMS
     .filter((item) => item.category === category.sourcePage)
-    .sort((left, right) => WIKI_QUALITY_SORT_ORDER.indexOf(getWikiItemQualityLabel(left)) - WIKI_QUALITY_SORT_ORDER.indexOf(getWikiItemQualityLabel(right))
+    .sort((left, right) => compareWikiQuality(getWikiItemQualityLabel(left), getWikiItemQualityLabel(right))
       || Number(left.level || 0) - Number(right.level || 0)
       || left.name.localeCompare(right.name));
+}
+
+function compareWikiQuality(left: string, right: string) {
+  return WIKI_QUALITY_SORT_ORDER.indexOf(left) - WIKI_QUALITY_SORT_ORDER.indexOf(right);
 }
 
 function getWikiQualityCounts(items: readonly HeroSiegeWikiItem[]) {
@@ -734,6 +718,7 @@ function WikiItemCard(props: { imageDisplay?: HeroSiegeWikiIconDisplay; item: He
 function WikiItemDetails(props: { imageDisplay?: HeroSiegeWikiIconDisplay; item: HeroSiegeWikiItem }) {
   const item = props.item;
   const quality = getWikiItemQualityLabel(item);
+  const visibleStats = getVisibleWikiItemStats(item);
   return (
     <Stack gap={8} style={{ textAlign: "center", width: TOOLTIP_SHEET_WIDTH }}>
       <Group gap="sm" justify="center" wrap="nowrap">
@@ -750,7 +735,7 @@ function WikiItemDetails(props: { imageDisplay?: HeroSiegeWikiIconDisplay; item:
         {item.dps && <Text size="sm" fw={900} c="#f1dfad">DPS: <Box component="span" c="#6f6ff6">{item.dps}</Box></Text>}
       </Group>
       <Stack gap={2}>
-        {item.stats.length ? item.stats.map((stat, index) => (
+        {visibleStats.length ? visibleStats.map((stat, index) => (
           <Text key={`${stat}-${index}`} size="sm" fw={900} style={{ color: "#6f6ff6", lineHeight: 1.18, textShadow: "0 1px 0 #000" }}>{stat}</Text>
         )) : (
           <Text size="xs" fw={900} c="gray.4">No listed modifiers</Text>

@@ -57,22 +57,18 @@ const MAX_CHARACTER_LEVEL = 100;
 const HASH_SEED = 2166136261;
 const HASH_MULTIPLIER = 16777619;
 const HASH_DIVISOR = 4294967296;
-const REST_HEALTH_RATIO = 0.3;
-const REST_MANA_RATIO = 0.3;
+const REST_HEALTH_RATIO = 0.5;
 const ENEMY_ROOM_ITEM_CHANCE = 0.3;
 const ENEMY_ROOM_POTION_CHANCE = 0.18;
-const TREASURE_ROOM_GOLD_CHANCE = 0.55;
-const TREASURE_ROOM_ITEM_CHANCE = 0.35;
 const ELITE_ROOM_ITEM_COUNT = 1;
 const BOSS_ROOM_ITEM_COUNT = 2;
 export const MERCHANT_UPGRADE_COST = 35;
-const UNKNOWN_EVENT_GOLD_MIN = 18;
-const UNKNOWN_EVENT_GOLD_MAX = 42;
 const POTION_HEALTH_RATIO = 0.25;
 const POTION_MANA_RATIO = 0.35;
-const UNKNOWN_MONSTER_BASE_CHANCE = 0.1;
-const UNKNOWN_TREASURE_BASE_CHANCE = 0.02;
-const UNKNOWN_SHOP_BASE_CHANCE = 0.03;
+const UNKNOWN_MONSTER_WEIGHT = 45;
+const UNKNOWN_TREASURE_WEIGHT = 25;
+const UNKNOWN_SHOP_WEIGHT = 20;
+const UNKNOWN_ELITE_WEIGHT = 10;
 const MAP_X_MIN = 8;
 const MAP_X_SPREAD = 84;
 const FIRST_ROW_Y = 92;
@@ -130,10 +126,10 @@ const ROOM_KIND_WEIGHTS: Array<{ kind: SpireNodeKind; weight: number }> = [
   { kind: "treasure", weight: 4 }
 ];
 const UNKNOWN_ENCOUNTER_WEIGHTS: Record<UnknownEncounterKind, number> = {
-  event: 0,
-  monster: UNKNOWN_MONSTER_BASE_CHANCE,
-  shop: UNKNOWN_SHOP_BASE_CHANCE,
-  treasure: UNKNOWN_TREASURE_BASE_CHANCE
+  elite: UNKNOWN_ELITE_WEIGHT,
+  monster: UNKNOWN_MONSTER_WEIGHT,
+  shop: UNKNOWN_SHOP_WEIGHT,
+  treasure: UNKNOWN_TREASURE_WEIGHT
 };
 const ROOM_REWARD_ITEM_RARITY: Record<"enemy" | "elite" | "boss" | "treasure", { minRarity?: ItemRarity; rarityBonus: number }> = {
   boss: { minRarity: "rare", rarityBonus: 0.24 },
@@ -143,6 +139,7 @@ const ROOM_REWARD_ITEM_RARITY: Record<"enemy" | "elite" | "boss" | "treasure", {
 };
 const ITEM_RARITY_ORDER: ItemRarity[] = ["common", "uncommon", "rare", "epic", "legendary"];
 const MAX_MERCHANT_UPGRADE_RARITY: ItemRarity = "rare";
+export type RestSpecialAction = "smith" | "dig";
 const CONSECUTIVE_BLOCKED_KINDS: SpireNodeKind[] = ["elite", "merchant", "rest"];
 const GUARANTEED_TREASURE_FLOORS = new Set([GUARANTEED_TREASURE_MIN_FLOOR_INDEX, GUARANTEED_TREASURE_MIN_FLOOR_INDEX + 1, GUARANTEED_TREASURE_MAX_FLOOR_INDEX]);
 
@@ -163,6 +160,7 @@ export function createSpireRun(seed = Date.now()): SpireRun {
     mapOpen: true,
     mapSeed: seed,
     nodes,
+    roomRewardClaims: {},
     roundQuestionIds: [],
     roundSolvedIds: [],
     tierIndex: FIRST_TIER,
@@ -173,31 +171,36 @@ export function createSpireRun(seed = Date.now()): SpireRun {
 // eslint-disable-next-line complexity
 export function normalizeSpireRun(run: Partial<SpireRun> | undefined): SpireRun {
   const normalizedNodes = normalizeForcedRoomKinds(run?.nodes || []);
-  if (!normalizedNodes.length || !isValidBranchingMap(normalizedNodes)) {
+  if (!normalizedNodes.length || !hasRequiredSpireFloors(normalizedNodes)) {
     return createSpireRun(run?.mapSeed || Date.now());
   }
   const sourceRun = run || {};
   const currentNode = normalizedNodes.find((node) => node.id === sourceRun.currentNodeId) || normalizedNodes[0];
   const availableNodeIds = (sourceRun.availableNodeIds?.length ? sourceRun.availableNodeIds : normalizedNodes.filter((node) => node.rating === SPIRE_RATINGS[FIRST_TIER]).map((node) => node.id))
     .filter((id) => normalizedNodes.some((node) => node.id === id));
-  const roundQuestionIds: string[] = [];
+  const knownQuestionIds = new Set(questions.map((question) => question.id));
+  const roundQuestionIds = (sourceRun.roundQuestionIds || []).filter((id) => knownQuestionIds.has(id));
+  const roundSolvedIds = (sourceRun.roundSolvedIds || []).filter((id) => roundQuestionIds.includes(id));
   return {
     availableNodeIds,
     completedNodeIds: sourceRun.completedNodeIds || [],
     currentNodeId: currentNode.id,
-    mapOpen: true,
+    mapOpen: typeof sourceRun.mapOpen === "boolean" ? sourceRun.mapOpen : true,
     mapSeed: Number.isFinite(sourceRun.mapSeed) ? sourceRun.mapSeed || Date.now() : Date.now(),
     nodes: normalizedNodes,
+    roomRewardClaims: normalizeRoomRewardClaims(sourceRun.roomRewardClaims),
     roundQuestionIds,
-    roundSolvedIds: [],
+    roundSolvedIds,
     tierIndex: Math.min(SPIRE_RATINGS.length - 1, Math.max(FIRST_TIER, Math.floor(sourceRun.tierIndex || FIRST_TIER))),
     unknownEncounterMisses: normalizeUnknownEncounterMisses(sourceRun.unknownEncounterMisses)
   };
 }
 
-function createDefaultUnknownEncounterMisses(): Record<UnknownEncounterKind, number> {
-  return { event: 0, monster: 0, shop: 0, treasure: 0 };
+function hasRequiredSpireFloors(nodes: SpireMapNode[]) {
+  return SPIRE_RATINGS.every((rating) => nodes.some((node) => node.rating === rating));
 }
+
+function createDefaultUnknownEncounterMisses(): Record<UnknownEncounterKind, number> { return { elite: 0, monster: 0, shop: 0, treasure: 0 }; }
 
 function normalizeUnknownEncounterMisses(misses: Partial<Record<UnknownEncounterKind, number>> | undefined) {
   const fallback = createDefaultUnknownEncounterMisses();
@@ -205,6 +208,17 @@ function normalizeUnknownEncounterMisses(misses: Partial<Record<UnknownEncounter
     kind,
     Math.max(0, Math.floor(Number(misses?.[kind as UnknownEncounterKind]) || value))
   ])) as Record<UnknownEncounterKind, number>;
+}
+
+function normalizeRoomRewardClaims(claims: SpireRun["roomRewardClaims"] | undefined) {
+  return Object.fromEntries(Object.entries(claims || {}).map(([nodeId, claim]) => [
+    nodeId,
+    {
+      gold: Number.isFinite(claim.gold) ? Math.max(0, Math.floor(claim.gold || 0)) : undefined,
+      itemIds: Array.isArray(claim.itemIds) ? claim.itemIds.filter(Boolean) : undefined,
+      relicIds: Array.isArray(claim.relicIds) ? claim.relicIds.filter(Boolean) : undefined
+    }
+  ])) as SpireRun["roomRewardClaims"];
 }
 
 function normalizeForcedRoomKinds(nodes: SpireMapNode[]) {
@@ -502,9 +516,6 @@ export function claimSpireNodeReward(state: StudyState, now = Date.now()) {
   if (currentNode.kind === "unknown") {
     return state;
   }
-  if (currentNode.kind === "event") {
-    return applyUnknownEventReward(state, currentNode, now);
-  }
   if (currentNode.kind === "enemy") {
     return applyEnemyRoomReward(state, currentNode, now);
   }
@@ -547,9 +558,21 @@ function applyBossRoomReward(state: StudyState, node: SpireMapNode, now: number)
 }
 
 function applyTreasureRoomReward(state: StudyState, node: SpireMapNode, now: number) {
-  const withRelic = grantRelic(state, rollRelic(state, `${node.id}:${now}:treasure-relic`, { maxItemLevel: getStateLevel(state) }));
-  const withGold = getRoll(`${node.id}:${now}:treasure-gold`) <= TREASURE_ROOM_GOLD_CHANCE ? grantRoomGold(withRelic, node, "treasure", now) : withRelic;
-  return maybeGrantRoomItem(withGold, node, now, "treasure", TREASURE_ROOM_ITEM_CHANCE);
+  const gold = rollRoomGold(node, "treasure", now);
+  const rewardKind = getRoll(`${node.id}:${now}:treasure-kind`) < 0.5 ? "relic" : "equipment";
+  if (rewardKind === "relic") {
+    const relic = rollRelic(state, `${node.id}:${now}:treasure-relic`, { maxItemLevel: getStateLevel(state) });
+    return recordRoomRewardClaim(addRoomGold(grantRelic(state, relic), gold), node.id, { gold, relicIds: [relic.id] });
+  }
+  const item = createRoomRewardItem(state, node, now, "treasure", 0);
+  return recordRoomRewardClaim({
+    ...state,
+    profile: {
+      ...state.profile,
+      coins: state.profile.coins + gold,
+      inventory: [...state.profile.inventory, item]
+    }
+  }, node.id, { gold, itemIds: [item.id] });
 }
 
 function applyMerchantRoomReward(state: StudyState, node: SpireMapNode, now: number) {
@@ -566,15 +589,19 @@ function applyMerchantRoomReward(state: StudyState, node: SpireMapNode, now: num
 
 function applyRestRoomReward(state: StudyState) {
   const maxHealth = getMaxHealth(state);
-  const maxMana = getMaxMana(state);
   return {
     ...state,
     profile: {
       ...state.profile,
-      health: Math.min(maxHealth, state.profile.health + Math.floor(maxHealth * REST_HEALTH_RATIO)),
-      mana: Math.min(maxMana, state.profile.mana + Math.floor(maxMana * REST_MANA_RATIO))
+      health: Math.min(maxHealth, state.profile.health + Math.floor(maxHealth * REST_HEALTH_RATIO))
     }
   };
+}
+
+export function getRestSpecialAction(state: StudyState): RestSpecialAction {
+  const currentNode = getCurrentSpireNode(state);
+  const seed = `${state.profile.spireRun.mapSeed}:${currentNode?.id || "rest"}:rest-special`;
+  return getRoll(seed) < 0.5 ? "smith" : "dig";
 }
 
 export function canUpgradeSpireInventoryItem(state: StudyState) {
@@ -616,34 +643,21 @@ function upgradeItemTier(item: InventoryItem): InventoryItem {
   };
 }
 
-function applyUnknownEventReward(state: StudyState, node: SpireMapNode, now: number) {
-  const gold = UNKNOWN_EVENT_GOLD_MIN + Math.floor(getRoll(`${node.id}:${now}:event-gold`) * (UNKNOWN_EVENT_GOLD_MAX - UNKNOWN_EVENT_GOLD_MIN + 1));
-  const withGold = {
-    ...state,
-    profile: {
-      ...state.profile,
-      coins: state.profile.coins + gold
-    }
-  };
-  return maybeApplyPotionReward(withGold, node, now, "unknown-event");
-}
-
 function rollUnknownEncounter(state: StudyState, node: SpireMapNode, now: number): UnknownEncounterKind {
   const misses = normalizeUnknownEncounterMisses(state.profile.spireRun.unknownEncounterMisses);
-  if (getRoll(`${node.id}:${now}:unknown-monster`) <= getUnknownEncounterChance("monster", misses)) {
-    return "monster";
+  const weightedOutcomes = (Object.keys(UNKNOWN_ENCOUNTER_WEIGHTS) as UnknownEncounterKind[]).map((kind) => ({
+    kind,
+    weight: UNKNOWN_ENCOUNTER_WEIGHTS[kind] * (misses[kind] + 1)
+  }));
+  const totalWeight = weightedOutcomes.reduce((sum, outcome) => sum + outcome.weight, 0);
+  let cursor = getRoll(`${node.id}:${now}:unknown-encounter`) * totalWeight;
+  for (const outcome of weightedOutcomes) {
+    cursor -= outcome.weight;
+    if (cursor <= 0) {
+      return outcome.kind;
+    }
   }
-  if (getRoll(`${node.id}:${now}:unknown-treasure`) <= getUnknownEncounterChance("treasure", misses)) {
-    return "treasure";
-  }
-  if (getRoll(`${node.id}:${now}:unknown-shop`) <= getUnknownEncounterChance("shop", misses)) {
-    return "shop";
-  }
-  return "event";
-}
-
-function getUnknownEncounterChance(kind: Exclude<UnknownEncounterKind, "event">, misses: Record<UnknownEncounterKind, number>) {
-  return Math.min(1, UNKNOWN_ENCOUNTER_WEIGHTS[kind] * (misses[kind] + 1));
+  return "monster";
 }
 
 function updateUnknownEncounterMisses(state: StudyState, seen: UnknownEncounterKind): StudyState {
@@ -665,14 +679,37 @@ function updateUnknownEncounterMisses(state: StudyState, seen: UnknownEncounterK
 }
 
 function grantRoomGold(state: StudyState, node: SpireMapNode, kind: SpireNodeKind, now: number) {
+  return addRoomGold(state, rollRoomGold(node, kind, now));
+}
+
+function rollRoomGold(node: SpireMapNode, kind: SpireNodeKind, now: number) {
   const base = getRoomGoldBase(node, kind);
   const spread = Math.max(4, Math.floor(base * 0.35));
-  const gold = base + Math.floor(getRoll(`${node.id}:${now}:${kind}:gold`) * (spread + 1));
+  return base + Math.floor(getRoll(`${node.id}:${now}:${kind}:gold`) * (spread + 1));
+}
+
+function addRoomGold(state: StudyState, gold: number) {
   return {
     ...state,
     profile: {
       ...state.profile,
       coins: state.profile.coins + gold
+    }
+  };
+}
+
+function recordRoomRewardClaim(state: StudyState, nodeId: string, claim: SpireRun["roomRewardClaims"][string]) {
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      spireRun: {
+        ...state.profile.spireRun,
+        roomRewardClaims: {
+          ...state.profile.spireRun.roomRewardClaims,
+          [nodeId]: claim
+        }
+      }
     }
   };
 }
@@ -805,6 +842,12 @@ export function upgradeCurrentSpireRoomItem(state: StudyState) {
   if (!currentNode || state.profile.spireRun.mapOpen || (currentNode.kind !== "rest" && currentNode.kind !== "merchant") || !canUpgradeSpireInventoryItem(state)) {
     return state;
   }
+  if (isSpireRoomRewardClaimed(state, currentNode.id)) {
+    return state;
+  }
+  if (currentNode.kind === "rest" && getRestSpecialAction(state) !== "smith") {
+    return state;
+  }
   if (currentNode.kind === "merchant" && state.profile.coins < MERCHANT_UPGRADE_COST) {
     return state;
   }
@@ -812,7 +855,16 @@ export function upgradeCurrentSpireRoomItem(state: StudyState) {
     ? { ...state, profile: { ...state.profile, coins: state.profile.coins - MERCHANT_UPGRADE_COST } }
     : state;
   const upgraded = upgradeRandomEligibleItem(charged);
-  return currentNode.kind === "rest" ? markSpireRoomRewardClaimed(upgraded, currentNode.id) : upgraded;
+  return markSpireRoomRewardClaimed(upgraded, currentNode.id);
+}
+
+export function digCurrentSpireRoomRelic(state: StudyState, now = Date.now()) {
+  const currentNode = getCurrentSpireNode(state);
+  if (!currentNode || currentNode.kind !== "rest" || state.profile.spireRun.mapOpen || isSpireRoomRewardClaimed(state, currentNode.id) || getRestSpecialAction(state) !== "dig") {
+    return state;
+  }
+  const relic = rollRelic(state, `${currentNode.id}:${now}:rest-dig-relic`, { maxItemLevel: getStateLevel(state) });
+  return markSpireRoomRewardClaimed(grantRelic(state, relic), currentNode.id);
 }
 
 export function smithSpireNode(state: StudyState, now = Date.now()) {
@@ -881,13 +933,16 @@ function getRevealedNodeKind(encounter: UnknownEncounterKind): SpireNodeKind {
   if (encounter === "monster") {
     return "enemy";
   }
+  if (encounter === "elite") {
+    return "elite";
+  }
   if (encounter === "shop") {
     return "merchant";
   }
   if (encounter === "treasure") {
     return "treasure";
   }
-  return "event";
+  return "enemy";
 }
 
 function replaceSpireNodeKind(state: StudyState, nodeId: string, kind: SpireNodeKind) {

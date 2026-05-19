@@ -24,11 +24,11 @@ const LEGENDARY_ROLL_MAX = 0.03;
 const EPIC_ROLL_MAX = 0.1;
 const RARE_ROLL_MAX = 0.24;
 const UNCOMMON_ROLL_MAX = 0.48;
-const RARITY_AFFIX_COUNTS: Record<ItemRarity, number> = { common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 4 };
+const RARITY_AFFIX_COUNTS: Record<ItemRarity, number> = { common: 0, uncommon: 2, rare: 3, epic: 4, legendary: 4 };
 const RARITY_STAT_MAX: Record<ItemRarity, number> = { common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 5 };
 const RARITY_LEVEL_OFFSET: Record<ItemRarity, number> = { common: 0, uncommon: 2, rare: 5, epic: 9, legendary: 14 };
 const RARITY_STAT_REQUIREMENTS: Record<ItemRarity, number> = { common: 0, uncommon: 2, rare: 4, epic: 7, legendary: 10 };
-const RARITY_MODIFIER_COUNTS: Record<ItemRarity, number> = { common: 0, uncommon: 0, rare: 1, epic: 2, legendary: 3 };
+const RARITY_MODIFIER_COUNTS: Record<ItemRarity, number> = { common: 0, uncommon: 0, rare: 3, epic: 4, legendary: 8 };
 const RARITY_ORDER: ItemRarity[] = ["common", "uncommon", "rare", "epic", "legendary"];
 const SET_DROP_CHANCE = 0;
 const MIN_SET_DIFFICULTY: Question["difficulty"] = 2;
@@ -38,45 +38,73 @@ const RARE_MAX_LEVEL = 20;
 const EPIC_MAX_LEVEL = 40;
 const STAT_KEYS: CharacterStatKey[] = ["strength", "constitution", "perception", "intelligence"];
 const MODIFIER_POOLS: Array<{ key: ItemModifierKey; min: number; max: number }> = [
+  { key: "accuracyPercent", min: 2, max: 10 },
+  { key: "armor", min: 1, max: 8 },
+  { key: "armorPenetrationPercent", min: 3, max: 20 },
+  { key: "blockChancePercent", min: 2, max: 8 },
+  { key: "bonusDamageVsElitesPercent", min: 5, max: 25 },
+  { key: "bonusDamageWhileFullHealthPercent", min: 5, max: 20 },
+  { key: "bonusDamageWhileLowHealthPercent", min: 5, max: 25 },
   { key: "bonusXpPercent", min: 5, max: 20 },
   { key: "coldResistPercent", min: 5, max: 30 },
+  { key: "coldDamage", min: 1, max: 10 },
   { key: "criticalChancePercent", min: 2, max: 8 },
+  { key: "criticalDamagePercent", min: 10, max: 40 },
   { key: "damageReduction", min: 1, max: 4 },
+  { key: "dodgeChancePercent", min: 2, max: 8 },
+  { key: "eliteDropBonusPercent", min: 5, max: 20 },
   { key: "enhancedDamagePercent", min: 8, max: 30 },
+  { key: "executeChancePercent", min: 2, max: 8 },
+  { key: "extraAttackChancePercent", min: 2, max: 8 },
   { key: "fireResistPercent", min: 5, max: 30 },
+  { key: "fireDamage", min: 1, max: 10 },
   { key: "goldFindPercent", min: 8, max: 35 },
+  { key: "healthRegen", min: 1, max: 5 },
+  { key: "increasedHealingReceivedPercent", min: 5, max: 25 },
+  { key: "increasedLootDropChancePercent", min: 5, max: 25 },
+  { key: "increasedRareDropChancePercent", min: 3, max: 12 },
   { key: "lifeOnKill", min: 2, max: 8 },
+  { key: "lifeStealPercent", min: 1, max: 6 },
   { key: "lightningResistPercent", min: 5, max: 30 },
+  { key: "lightningDamage", min: 1, max: 10 },
   { key: "magicFindPercent", min: 5, max: 25 },
-  { key: "manaOnKill", min: 2, max: 8 },
   { key: "maxLife", min: 5, max: 20 },
   { key: "maxMana", min: 5, max: 20 },
-  { key: "poisonResistPercent", min: 5, max: 30 }
+  { key: "parryChancePercent", min: 2, max: 8 },
+  { key: "physicalDamage", min: 1, max: 12 },
+  { key: "physicalResistPercent", min: 3, max: 20 },
+  { key: "poisonDamage", min: 1, max: 10 },
+  { key: "poisonResistPercent", min: 5, max: 30 },
+  { key: "reducedEnemyArmorPercent", min: 3, max: 20 },
+  { key: "reducedEnemyDamagePercent", min: 3, max: 15 },
+  { key: "resistancePenetrationPercent", min: 3, max: 20 }
 ];
 
 export const ITEM_BASE_NAME_COUNT = ITEM_NAME_POOL_COUNT;
-export const EQUIPMENT_SLOTS: EquipmentSlot[] = ["mainHand", "offHand", "headgear", "armor", "headAccessory", "eyewear", "bodyAccessory", "backAccessory", "feet"];
+export const EQUIPMENT_SLOTS: EquipmentSlot[] = ["mainHand", "offHand", "headgear", "armor", "headAccessory", "eyewear", "ringTwo", "bodyAccessory", "backAccessory", "feet"];
 const LOW_LEVEL_ITEM_BASE_NAMES: Record<EquipmentSlot, string[]> = {
   armor: ["Padded Armor", "Leather Coat", "Studded Leather", "Tunic", "Hide Vest", "Chain Shirt"],
-  backAccessory: ["Small Charm", "Lucky Pebble", "Cloth Pouch", "Old Token", "Carved Charm", "Scout's Satchel"],
-  bodyAccessory: ["Leather Gloves", "Cloth Wraps", "Sash", "Leather Belt", "Heavy Gloves", "Chain Gloves"],
+  backAccessory: ["Sash", "Leather Belt", "Heavy Belt", "Woven Belt", "War Belt", "Girdle"],
+  bodyAccessory: ["Leather Gloves", "Cloth Wraps", "Heavy Gloves", "Chain Gloves", "Gauntlets", "Bracers"],
   eyewear: ["Bronze Ring", "Iron Ring", "Copper Band", "Socket Ring", "Plain Ring", "Silver Loop"],
   feet: ["Boots", "Heavy Boots", "Cloth Shoes", "Chain Boots", "Light Plated Boots", "Trail Boots"],
   headAccessory: ["Amulet", "Locket", "Talisman", "Pearls", "Carcanet", "Simple Pendant"],
   headgear: ["Cap", "Casque", "Leather Hood", "War Hat", "Great Helm", "Basinet"],
   mainHand: ["Hand Axe", "Hatchet", "Cudgel", "Mace", "Dagger", "Short Sword", "Sabre", "Gnarled Staff", "Wand", "Short Spear"],
-  offHand: ["Wooden Shield", "Buckler", "Round Shield", "Small Crescent", "Bone Shield", "Tribal Ward"]
+  offHand: ["Wooden Shield", "Buckler", "Round Shield", "Small Crescent", "Bone Shield", "Tribal Ward"],
+  ringTwo: ["Bronze Ring", "Iron Ring", "Copper Band", "Socket Ring", "Plain Ring", "Silver Loop"]
 };
 export const SLOT_LABELS: Record<EquipmentSlot, string> = {
   armor: "Armor",
-  backAccessory: "Back Accessory",
-  bodyAccessory: "Body Accessory",
-  eyewear: "Eyewear",
+  backAccessory: "Belt",
+  bodyAccessory: "Gloves",
+  eyewear: "Ring",
   feet: "Boots",
-  headAccessory: "Head Accessory",
+  headAccessory: "Amulet",
   headgear: "Headgear",
   mainHand: "Main-hand Item",
-  offHand: "Off-hand Item"
+  offHand: "Off-hand Item",
+  ringTwo: "Ring"
 };
 export const SLOT_STAT_BIAS: Record<EquipmentSlot, CharacterStatKey> = {
   armor: "constitution",
@@ -87,7 +115,8 @@ export const SLOT_STAT_BIAS: Record<EquipmentSlot, CharacterStatKey> = {
   headAccessory: "perception",
   headgear: "intelligence",
   mainHand: "strength",
-  offHand: "strength"
+  offHand: "strength",
+  ringTwo: "intelligence"
 };
 
 export const ITEM_SET_DEFINITIONS = [
@@ -120,14 +149,32 @@ export function createDropItem(question: Question, stats: CharacterStats, now: n
   const setPieceName = setDefinition ? pickFrom([...setDefinition.pieces], seededRandom(`${seed}:set-piece`)) : null;
   return applyWikiItemData({
     id: `item-${question.id}-${now}-${Math.floor(seededRandom(`${seed}:id`) * HASH_SEED).toString(ITEM_ID_RADIX)}`,
-    modifiers: mergeItemModifiers(rollItemModifiers(rarity, itemLevel, seed), createWikiModifiers(wikiItem?.stats || [])).slice(0, getLevelModifierCap(itemLevel)),
+    modifiers: mergeItemModifiers(rollItemModifiers(rarity, itemLevel, seed), createWikiModifiers(wikiItem?.stats || [])).slice(0, getModifierCountCap(rarity, itemLevel)),
     name: setPieceName || createItemName(slot, itemLevel, seed),
+    flavorText: createItemFlavorText(slot, rarity),
     requirements: rollItemRequirements(rarity, primaryStat, itemLevel, seed),
     rarity,
     setId: setDefinition?.id,
     slot,
     stats: Object.values(wikiStats).some(Boolean) ? limitStatsForRarity({ ...itemStats, ...wikiStats }, rarity, itemLevel) : itemStats
   }, wikiItem);
+}
+
+function createItemFlavorText(slot: EquipmentSlot, rarity: ItemRarity) {
+  const slotNoun = SLOT_LABELS[slot].replace("Main-hand Item", "weapon").replace("Off-hand Item", "ward").toLowerCase();
+  if (rarity === "common") {
+    return `Plain ${slotNoun} gear carried by early travelers.`;
+  }
+  if (rarity === "uncommon") {
+    return `A tuned ${slotNoun} with a faint magical edge.`;
+  }
+  if (rarity === "rare") {
+    return `A proven ${slotNoun} tempered for dangerous routes.`;
+  }
+  if (rarity === "epic") {
+    return `A matched ${slotNoun} piece from a named war set.`;
+  }
+  return `A singular ${slotNoun} with power old enough to have a name.`;
 }
 
 function getCappedItemLevel(itemLevel: number, maxItemLevel: number | undefined) {
@@ -200,8 +247,11 @@ function rollItemRequirements(rarity: ItemRarity, primaryStat: CharacterStatKey,
 
 function rollItemStats(slot: EquipmentSlot, rarity: ItemRarity, itemLevel: number, seed: string): Partial<CharacterStats> {
   const itemStats: Partial<CharacterStats> = {};
-  const chosen = [SLOT_STAT_BIAS[slot]];
   const affixCount = Math.min(RARITY_AFFIX_COUNTS[rarity], getLevelAffixCap(itemLevel));
+  if (affixCount <= 0) {
+    return itemStats;
+  }
+  const chosen = [SLOT_STAT_BIAS[slot]];
   for (let index = FIRST_STAT_LEVEL; index < affixCount; index += FIRST_STAT_LEVEL) {
     const candidate = pickFrom(STAT_KEYS, seededRandom(`${seed}:affix:${index}`));
     chosen.push(chosen.includes(candidate) ? pickFallbackStat(chosen, index) : candidate);
@@ -222,7 +272,7 @@ function rollStatValue(rarity: ItemRarity, itemLevel: number, seed: string) {
 }
 
 function rollItemModifiers(rarity: ItemRarity, itemLevel: number, seed: string) {
-  const modifierCount = Math.min(RARITY_MODIFIER_COUNTS[rarity], getLevelModifierCap(itemLevel));
+  const modifierCount = getModifierCountCap(rarity, itemLevel);
   const picked: ItemModifierKey[] = [];
   for (let index = 0; index < modifierCount; index += FIRST_STAT_LEVEL) {
     const poolItem = pickAvailableModifier(picked, `${seed}:modifier:${index}`);
@@ -247,6 +297,10 @@ function mergeItemModifiers(base: InventoryItem["modifiers"], wikiModifiers: Inv
 function limitStatsForRarity(stats: Partial<CharacterStats>, rarity: ItemRarity, itemLevel: number) {
   const maxStats = Math.min(RARITY_AFFIX_COUNTS[rarity], getLevelAffixCap(itemLevel));
   return Object.fromEntries(Object.entries(stats).slice(0, maxStats)) as Partial<CharacterStats>;
+}
+
+function getModifierCountCap(rarity: ItemRarity, itemLevel: number) {
+  return Math.min(RARITY_MODIFIER_COUNTS[rarity], getLevelModifierCap(itemLevel));
 }
 
 function pickAvailableModifier(picked: ItemModifierKey[], seed: string) {
@@ -278,9 +332,9 @@ function getLevelAffixCap(itemLevel: number) {
 }
 
 function getLevelModifierCap(itemLevel: number) {
-  const LOW_LEVEL_MODIFIER_CAP = 1;
-  const MID_LEVEL_MODIFIER_CAP = 2;
-  const HIGH_LEVEL_MODIFIER_CAP = 3;
+  const LOW_LEVEL_MODIFIER_CAP = 2;
+  const MID_LEVEL_MODIFIER_CAP = 4;
+  const HIGH_LEVEL_MODIFIER_CAP = 8;
   if (itemLevel < LOW_LEVEL_MODIFIER_MAX_LEVEL) {
     return LOW_LEVEL_MODIFIER_CAP;
   }

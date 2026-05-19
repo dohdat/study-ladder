@@ -1,8 +1,9 @@
-import type { ElementalDamageType, ItemModifierKey } from "../types/study";
+import type { DamageType, ElementalDamageType, ItemModifierKey } from "../types/study";
 
 export type ElementalResistances = Record<ElementalDamageType, number>;
 
 export const ELEMENTAL_DAMAGE_TYPES: ElementalDamageType[] = ["fire", "cold", "lightning", "poison"];
+export const DAMAGE_TYPES: DamageType[] = ["physical", ...ELEMENTAL_DAMAGE_TYPES];
 export const MAX_ELEMENTAL_RESISTANCE_PERCENT = 75;
 const PERCENT = 100;
 
@@ -26,8 +27,8 @@ export function getResistancesFromModifiers(modifiers: Record<ItemModifierKey, n
   };
 }
 
-export function applyElementalResistance(amount: number, element: ElementalDamageType | null | undefined, resistances: ElementalResistances) {
-  if (!element) {
+export function applyElementalResistance(amount: number, element: DamageType | null | undefined, resistances: ElementalResistances) {
+  if (!element || element === "physical") {
     return amount;
   }
   return Math.max(1, Math.round(amount * (1 - resistances[element] / PERCENT)));

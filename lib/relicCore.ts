@@ -1,5 +1,5 @@
-import { createWikiRelicDefinitions } from "./heroSiegeWikiCatalog";
-import { getRelicQualityLabel } from "./heroSiegeQuality";
+import { HERO_SIEGE_RELIC_MOD_RULES, createWikiRelicDefinitions } from "./heroSiegeWikiCatalog";
+import { getRelicQualityLabel, type HeroSiegeQuality } from "./heroSiegeQuality";
 import type { ItemModifierKey, Relic, RelicRarity, StudyState } from "../types/study";
 
 const HASH_SEED = 2166136261;
@@ -15,21 +15,51 @@ const UNIQUE_EFFECT_START_VALUE = 1;
 const UNIQUE_EFFECT_SEARCH_LIMIT = 200;
 const LOW_LEVEL_WIKI_RELIC_MAX_LEVEL = 20;
 const HIGH_POWER_WIKI_RELIC_GROUPS = new Set(["Satanic", "Satanic Set", "Heroic", "Unholy", "Angelic"]);
-
 type RelicSeed = Omit<Relic, "id"> & { id?: string };
 
 const UNIQUE_EFFECT_KEYS: ItemModifierKey[] = [
+  "accuracyPercent",
+  "armor",
+  "armorPenetrationPercent",
+  "blockChancePercent",
+  "bonusDamageVsElitesPercent",
+  "bonusDamageWhileFullHealthPercent",
+  "bonusDamageWhileLowHealthPercent",
   "bonusXpPercent",
+  "coldDamage",
+  "coldResistPercent",
   "goldFindPercent",
   "magicFindPercent",
   "maxLife",
   "maxMana",
   "enhancedDamagePercent",
   "criticalChancePercent",
+  "criticalDamagePercent",
+  "damageReduction",
+  "dodgeChancePercent",
+  "eliteDropBonusPercent",
+  "executeChancePercent",
+  "extraAttackChancePercent",
+  "fireDamage",
+  "fireResistPercent",
+  "healthRegen",
+  "increasedHealingReceivedPercent",
+  "increasedLootDropChancePercent",
+  "increasedRareDropChancePercent",
   "lifeOnKill",
-  "manaOnKill",
-  "damageReduction"
+  "lifeStealPercent",
+  "lightningDamage",
+  "lightningResistPercent",
+  "parryChancePercent",
+  "physicalDamage",
+  "physicalResistPercent",
+  "poisonDamage",
+  "poisonResistPercent",
+  "reducedEnemyArmorPercent",
+  "reducedEnemyDamagePercent",
+  "resistancePenetrationPercent"
 ];
+const RELIC_TOTAL_KEYS: ItemModifierKey[] = [...UNIQUE_EFFECT_KEYS, "manaOnKill"];
 
 const relic = (name: string, rarity: RelicRarity, description: string, modifiers: Partial<Record<ItemModifierKey, number>>, source: Relic["source"] = "any"): Relic => ({
   description,
@@ -55,12 +85,12 @@ const LEGACY_RELIC_DEFINITIONS: Relic[] = [
   relic("Charon's Ashes", "rare", "Every exhausted attempt leaves extra burn damage behind.", { enhancedDamagePercent: 18 }, "ironclad"),
   relic("Magic Flower", "rare", "Healing effects are stronger.", { lifeOnKill: 5, maxLife: 8 }, "ironclad"),
   relic("Mark of Pain", "boss", "Gain raw power, but the run becomes more volatile.", { enhancedDamagePercent: 28, maxMana: -4 }, "ironclad"),
-  relic("Runic Cube", "boss", "Pain becomes insight and mana.", { maxMana: 10, manaOnKill: 2 }, "ironclad"),
+  relic("Runic Cube", "boss", "Pain becomes insight and mana capacity.", { maxMana: 12 }, "ironclad"),
   relic("Brimstone", "shop", "Huge offense at the cost of taking riskier fights.", { enhancedDamagePercent: 30, damageReduction: -1 }, "ironclad"),
   relic("Akabeko", "common", "Your first strike in each fight lands heavier.", { enhancedDamagePercent: 6 }),
   relic("Anchor", "common", "Start fights protected.", { damageReduction: 1 }),
   relic("Ancient Tea Set", "common", "Resting improves the next fight's mana economy.", { maxMana: 4 }),
-  relic("Art of War", "common", "Patient turns become resource advantage.", { manaOnKill: 1 }),
+  relic("Art of War", "common", "Patient turns become resource advantage.", { maxMana: 3 }),
   relic("Bag of Marbles", "common", "Open fights by making monsters easier to burst.", { enhancedDamagePercent: 5 }),
   relic("Bag of Preparation", "common", "Better preparation improves learning speed.", { bonusXpPercent: 4 }),
   relic("Blood Vial", "common", "A small source of sustain after wins.", { lifeOnKill: 2 }),
@@ -68,12 +98,12 @@ const LEGACY_RELIC_DEFINITIONS: Relic[] = [
   relic("Centennial Puzzle", "common", "Taking damage teaches you faster.", { bonusXpPercent: 5 }),
   relic("Ceramic Fish", "common", "New rewards bring extra gold.", { goldFindPercent: 8 }),
   relic("Dream Catcher", "common", "Rest sites improve future rewards.", { magicFindPercent: 5 }),
-  relic("Happy Flower", "common", "Steady rhythm improves mana recovery.", { manaOnKill: 1 }),
+  relic("Happy Flower", "common", "Steady rhythm improves mana capacity.", { maxMana: 3 }),
   relic("Juzu Bracelet", "common", "Fewer ambushes means steadier progress.", { damageReduction: 1 }),
   relic("Lantern", "common", "Start with extra energy.", { maxMana: 5 }),
   relic("Maw Bank", "common", "Saving coins becomes easier.", { goldFindPercent: 10 }),
   relic("Meal Ticket", "common", "Shops are safer to visit.", { lifeOnKill: 3 }),
-  relic("Nunchaku", "common", "Repeated attacks refund mana.", { manaOnKill: 1, enhancedDamagePercent: 4 }),
+  relic("Nunchaku", "common", "Repeated attacks add pressure.", { enhancedDamagePercent: 4 }),
   relic("Oddly Smooth Stone", "common", "A small permanent defense boost.", { damageReduction: 1 }),
   relic("Omamori", "common", "Protects the run from bad luck.", { maxLife: 4 }),
   relic("Orichalcum", "common", "Reliable fallback armor.", { damageReduction: 1, maxLife: 3 }),
@@ -94,9 +124,9 @@ const LEGACY_RELIC_DEFINITIONS: Relic[] = [
   relic("Darkstone Periapt", "uncommon", "Bad luck turns into health.", { maxLife: 6 }),
   relic("Eternal Feather", "uncommon", "Long runs recover better.", { lifeOnKill: 4 }),
   relic("Frozen Egg", "uncommon", "Power rewards improve faster.", { bonusXpPercent: 7 }),
-  relic("Gremlin Horn", "uncommon", "Defeating enemies returns energy.", { manaOnKill: 2 }),
+  relic("Gremlin Horn", "uncommon", "Defeating enemies improves momentum.", { maxMana: 5 }),
   relic("Horn Cleat", "uncommon", "Second-wave pressure is easier to block.", { damageReduction: 1, maxLife: 4 }),
-  relic("Ink Bottle", "uncommon", "Repeated plays create insight.", { bonusXpPercent: 5, manaOnKill: 1 }),
+  relic("Ink Bottle", "uncommon", "Repeated plays create insight.", { bonusXpPercent: 5 }),
   relic("Kunai", "uncommon", "Multi-hit builds become safer.", { damageReduction: 1, criticalChancePercent: 3 }),
   relic("Letter Opener", "uncommon", "Skill-heavy turns deal splash damage.", { enhancedDamagePercent: 8 }),
   relic("Matryoshka", "uncommon", "Treasure rooms are more rewarding.", { magicFindPercent: 10 }),
@@ -109,10 +139,10 @@ const LEGACY_RELIC_DEFINITIONS: Relic[] = [
   relic("Shuriken", "uncommon", "Attack chains scale strength.", { enhancedDamagePercent: 10 }),
   relic("Singing Bowl", "uncommon", "Skipped rewards become max health.", { maxLife: 6 }),
   relic("Strike Dummy", "uncommon", "Basic strikes hit harder.", { enhancedDamagePercent: 7 }),
-  relic("Sundial", "uncommon", "Long loops refund mana.", { manaOnKill: 2 }),
+  relic("Sundial", "uncommon", "Long loops improve mana capacity.", { maxMana: 6 }),
   relic("The Courier", "uncommon", "Merchants stock better goods.", { goldFindPercent: 10, magicFindPercent: 5 }),
   relic("Toxic Egg", "uncommon", "Skill rewards mature faster.", { bonusXpPercent: 7 }),
-  relic("White Beast Statue", "uncommon", "More potion-like recovery appears.", { lifeOnKill: 3, manaOnKill: 1 }),
+  relic("White Beast Statue", "uncommon", "More potion-like recovery appears.", { lifeOnKill: 3 }),
   relic("Black Star", "rare", "Elites drop better treasure.", { magicFindPercent: 18 }),
   relic("Girya", "rare", "Resting can become permanent strength.", { enhancedDamagePercent: 14 }),
   relic("Ice Cream", "rare", "Unused mana carries momentum.", { maxMana: 12 }),
@@ -124,7 +154,7 @@ const LEGACY_RELIC_DEFINITIONS: Relic[] = [
   relic("Torii", "rare", "Small hits are reduced sharply.", { damageReduction: 2 }),
   relic("Tungsten Rod", "rare", "All health loss is reduced.", { damageReduction: 1 }),
   relic("Turnip", "rare", "Resist frailty and pressure.", { maxLife: 7, damageReduction: 1 }),
-  relic("Unceasing Top", "rare", "Empty-handed turns find more options.", { manaOnKill: 2, bonusXpPercent: 5 }),
+  relic("Unceasing Top", "rare", "Empty-handed turns find more options.", { bonusXpPercent: 5, maxMana: 6 }),
   relic("Wing Boots", "rare", "Route flexibility increases rewards.", { magicFindPercent: 12 }),
   relic("Astrolabe", "boss", "Transform weak habits into stronger ones.", { bonusXpPercent: 15 }),
   createRelic({ description: "Elite fights become much more profitable.", id: "black-star-ascendant", modifiers: [{ key: "magicFindPercent", value: 20 }], name: "Black Star Ascendant", rarity: "boss", source: "any" }),
@@ -137,7 +167,7 @@ const LEGACY_RELIC_DEFINITIONS: Relic[] = [
   relic("Philosopher's Stone", "boss", "More energy, more danger.", { maxMana: 10, damageReduction: -1 }),
   relic("Runic Dome", "boss", "Power with hidden danger.", { maxMana: 10, maxLife: -5 }),
   relic("Runic Pyramid", "boss", "Keep more options between fights.", { maxMana: 8, bonusXpPercent: 8 }),
-  relic("Sacred Bark", "boss", "Recovery effects are stronger.", { lifeOnKill: 8, manaOnKill: 1 }),
+  relic("Sacred Bark", "boss", "Recovery effects are stronger.", { lifeOnKill: 8, maxLife: 6 }),
   relic("Snecko Eye", "boss", "Confusing, powerful draw.", { maxMana: 10, criticalChancePercent: 6 }),
   relic("Sozu", "boss", "Energy without potions.", { maxMana: 12, lifeOnKill: -2 }),
   relic("Tiny House", "boss", "A little bit of everything.", { bonusXpPercent: 5, goldFindPercent: 5, maxLife: 5, maxMana: 5 }),
@@ -155,32 +185,17 @@ const LEGACY_RELIC_DEFINITIONS: Relic[] = [
 ];
 
 const WIKI_RELIC_DEFINITIONS = createWikiRelicDefinitions();
-export const RELIC_DEFINITIONS: Relic[] = makeRelicEffectsUnique([...WIKI_RELIC_DEFINITIONS, ...addLegacyIconFilters(LEGACY_RELIC_DEFINITIONS)]);
+export const RELIC_DEFINITIONS: Relic[] = enforceRelicModifierCaps(makeRelicEffectsUnique([...WIKI_RELIC_DEFINITIONS, ...addLegacyIconFilters(LEGACY_RELIC_DEFINITIONS)]));
 
 export function getOwnedRelicIds(state: StudyState) {
   return new Set(state.profile.relics.map((relic) => relic.id));
 }
 
 export function getRelicModifierTotals(state: StudyState) {
-  const totals: Record<ItemModifierKey, number> = {
-    bonusXpPercent: 0,
-    coldResistPercent: 0,
-    criticalChancePercent: 0,
-    damageReduction: 0,
-    enhancedDamagePercent: 0,
-    fireResistPercent: 0,
-    goldFindPercent: 0,
-    lifeOnKill: 0,
-    lightningResistPercent: 0,
-    magicFindPercent: 0,
-    manaOnKill: 0,
-    maxLife: 0,
-    maxMana: 0,
-    poisonResistPercent: 0
-  };
+  const totals = Object.fromEntries(RELIC_TOTAL_KEYS.map((key) => [key, 0])) as Record<ItemModifierKey, number>;
   for (const relic of state.profile.relics) {
     for (const modifier of relic.modifiers || []) {
-      totals[modifier.key] += modifier.value;
+      totals[modifier.key] = (totals[modifier.key] || 0) + modifier.value;
     }
   }
   return totals;
@@ -282,6 +297,54 @@ function addLegacyIconFilters(relics: Relic[]) {
     wikiImageFilter: relicItem.wikiImageFilter || getRelicIconFilter(relicItem.id, index),
     wikiRarityLabel: relicItem.wikiRarityLabel || getLegacyRelicQualityLabel(relicItem.rarity)
   }));
+}
+
+function enforceRelicModifierCaps(relics: Relic[]) {
+  return relics.map((relicItem) => {
+    const quality = getRelicQualityLabel(relicItem.rarity, relicItem.wikiRarityLabel);
+    const rule = HERO_SIEGE_RELIC_MOD_RULES[quality];
+    const modifiers = getRelicModifiersForRule(relicItem, rule, quality);
+    return {
+      ...relicItem,
+      modifiers
+    };
+  });
+}
+
+function getRelicModifiersForRule(relicItem: Relic, rule: { max: number; min: number }, quality: HeroSiegeQuality) {
+  const modifiers = [...(relicItem.modifiers || [])].slice(0, rule.max);
+  if (modifiers.length >= rule.min) {
+    return modifiers;
+  }
+
+  const usedKeys = new Set(modifiers.map((modifier) => modifier.key));
+  for (let attempt = 0; modifiers.length < rule.min && attempt < UNIQUE_EFFECT_SEARCH_LIMIT; attempt += 1) {
+    const key = UNIQUE_EFFECT_KEYS[Math.floor(getRelicSeedRoll(`${relicItem.id}:${quality}:fill-key:${attempt}`) * UNIQUE_EFFECT_KEYS.length) % UNIQUE_EFFECT_KEYS.length];
+    if (usedKeys.has(key)) {
+      continue;
+    }
+    usedKeys.add(key);
+    modifiers.push({
+      key,
+      value: getRelicBackfillValue(relicItem.id, key, quality, attempt)
+    });
+  }
+  return modifiers.slice(0, rule.max);
+}
+
+function getRelicBackfillValue(id: string, key: ItemModifierKey, quality: HeroSiegeQuality, attempt: number) {
+  const roll = getRelicSeedRoll(`${id}:${quality}:${key}:fill-value:${attempt}`);
+  const baseValue = quality === "Unique" ? 2 : 1;
+  if (key === "maxLife" || key === "maxMana" || key === "goldFindPercent" || key === "magicFindPercent" || key === "enhancedDamagePercent" || key === "criticalDamagePercent" || key === "increasedLootDropChancePercent") {
+    return baseValue + Math.floor(roll * 4);
+  }
+  if (key === "criticalChancePercent" || key === "executeChancePercent" || key === "extraAttackChancePercent" || key === "lifeStealPercent" || key === "increasedRareDropChancePercent") {
+    return baseValue + Math.floor(roll * 3);
+  }
+  if (key === "physicalDamage" || key === "fireDamage" || key === "coldDamage" || key === "lightningDamage" || key === "poisonDamage" || key === "armor" || key === "healthRegen") {
+    return baseValue + Math.floor(roll * 5);
+  }
+  return baseValue + Math.floor(roll * 2);
 }
 
 function getLegacyRelicQualityLabel(rarity: RelicRarity) {

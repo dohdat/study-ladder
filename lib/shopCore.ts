@@ -5,13 +5,15 @@ import type { ActivePotionEffect, CharacterStats, Difficulty, Question, ShopItem
 const HASH_SEED = 2166136261;
 const HASH_MULTIPLIER = 16777619;
 const HASH_DIVISOR = 4294967296;
-const HEALTH_POTION_BASE_AMOUNT = 20;
-const MANA_POTION_BASE_AMOUNT = 12;
+const HEALTH_POTION_PERCENT = 20;
+const MANA_POTION_PERCENT = 40;
 const RANDOM_POTION_BASE_AMOUNT = 14;
 const HEALTH_POTION_COST = 16;
 const MANA_POTION_COST = 12;
 const RANDOM_POTION_COST = 20;
-const POTION_DIFFICULTY_AMOUNT = 4;
+const PERCENT_DIVISOR = 100;
+const POTION_LEVEL_COST_MULTIPLIER = 2;
+const RELIC_LEVEL_COST_MULTIPLIER = 4;
 const EQUIPMENT_STOCK_COUNT = 5;
 const RELIC_STOCK_COUNT = 3;
 const RANDOM_POTION_DURATION_ROOMS = 3;
@@ -38,9 +40,9 @@ export function createShopStock(question: Question, stats: CharacterStats, now: 
   const resolvedOptions = { ...options, maxItemLevel: options.maxItemLevel ?? 1 };
   const relics = createShopRelics(question, now, resolvedOptions);
   return [
-    createHealthPotion(question, now),
-    createManaPotion(question, now),
-    createRandomPotion(question, now),
+    createHealthPotion(question, now, resolvedOptions),
+    createManaPotion(question, now, resolvedOptions),
+    createRandomPotion(question, now, resolvedOptions),
     ...createShopEquipmentStock(question, stats, now, resolvedOptions),
     ...relics
   ];
@@ -48,7 +50,7 @@ export function createShopStock(question: Question, stats: CharacterStats, now: 
 
 export function buyShopItem(state: StudyState, shopItemId: string, maxHealth: number, maxMana: number): StudyState {
   const listing = state.profile.shopStock.find((item) => item.id === shopItemId);
-  if (!listing || state.profile.coins < listing.cost) {
+  if (!listing || !canBuyShopItem(state, listing, maxHealth, maxMana)) {
     return state;
   }
   const next = cloneShopState(state);
@@ -63,6 +65,22 @@ export function buyShopItem(state: StudyState, shopItemId: string, maxHealth: nu
   }
   applyConsumable(next, listing, maxHealth, maxMana);
   return next;
+}
+
+export function canBuyShopItem(state: StudyState, listing: ShopItem, maxHealth: number, maxMana: number) {
+  if (state.profile.coins < listing.cost) {
+    return false;
+  }
+  if (listing.kind !== "consumable") {
+    return true;
+  }
+  if (listing.type === "health") {
+    return state.profile.health < maxHealth;
+  }
+  if (listing.type === "mana") {
+    return state.profile.mana < maxMana;
+  }
+  return true;
 }
 
 export function normalizeShopStock(items: ShopItem[] | undefined): ShopItem[] {
@@ -82,19 +100,17 @@ function isValidShopItem(item: ShopItem) {
   return Boolean(item.relic);
 }
 
-function createHealthPotion(question: Question, now: number): ShopItem {
-  const amount = HEALTH_POTION_BASE_AMOUNT + question.difficulty * POTION_DIFFICULTY_AMOUNT;
-  return { amount, cost: HEALTH_POTION_COST + question.difficulty, id: `shop-health-${question.id}-${now}`, kind: "consumable", name: "Minor Healing Potion", type: "health" };
+function createHealthPotion(question: Question, now: number, options: ShopStockOptions): ShopItem {
+  return { amount: HEALTH_POTION_PERCENT, cost: getScaledShopCost(HEALTH_POTION_COST + question.difficulty, options), id: `shop-health-${question.id}-${now}`, kind: "consumable", name: "Minor Healing Potion", type: "health" };
 }
 
-function createManaPotion(question: Question, now: number): ShopItem {
-  const amount = MANA_POTION_BASE_AMOUNT + question.difficulty * POTION_DIFFICULTY_AMOUNT;
-  return { amount, cost: MANA_POTION_COST + question.difficulty, id: `shop-mana-${question.id}-${now}`, kind: "consumable", name: "Minor Mana Potion", type: "mana" };
+function createManaPotion(question: Question, now: number, options: ShopStockOptions): ShopItem {
+  return { amount: MANA_POTION_PERCENT, cost: getScaledShopCost(MANA_POTION_COST + question.difficulty, options), id: `shop-mana-${question.id}-${now}`, kind: "consumable", name: "Minor Mana Potion", type: "mana" };
 }
 
-function createRandomPotion(question: Question, now: number): ShopItem {
-  const amount = RANDOM_POTION_BASE_AMOUNT + question.difficulty * POTION_DIFFICULTY_AMOUNT;
-  return { amount, cost: RANDOM_POTION_COST + question.difficulty, id: `shop-random-${question.id}-${now}`, kind: "consumable", name: "Unstable Potion", type: "random" };
+function createRandomPotion(question: Question, now: number, options: ShopStockOptions): ShopItem {
+  const amount = RANDOM_POTION_BASE_AMOUNT + Math.max(0, (options.maxItemLevel || 1) - 1);
+  return { amount, cost: getScaledShopCost(RANDOM_POTION_COST + question.difficulty, options), id: `shop-random-${question.id}-${now}`, kind: "consumable", name: "Unstable Potion", type: "random" };
 }
 
 function createShopEquipment(question: Question, stats: CharacterStats, now: number, index: number, options: ShopStockOptions): ShopItem {
@@ -128,7 +144,7 @@ function createShopEquipmentStock(question: Question, stats: CharacterStats, now
 
 function createShopRelic(question: Question, now: number, index: number, options: ShopStockOptions): ShopItem {
   const relic = rollRelic({ profile: { relics: [] } } as unknown as StudyState, `${question.id}:${now}:shop-relic:${index}`, { includeShop: true, maxItemLevel: options.maxItemLevel, minRarity: [...MERCHANT_RELIC_RARITIES] });
-  return { cost: getRelicCost(relic), id: `shop-relic-${relic.id}-${now}-${index}`, kind: "relic", name: relic.name, relic };
+  return { cost: getScaledShopCost(getRelicCost(relic), options, RELIC_LEVEL_COST_MULTIPLIER), id: `shop-relic-${relic.id}-${now}-${index}`, kind: "relic", name: relic.name, relic };
 }
 
 function createShopRelics(question: Question, now: number, options: ShopStockOptions) {
@@ -185,19 +201,24 @@ function getEquipmentCost(item: Extract<ShopItem, { kind: "equipment" }>["item"]
   return RARITY_COSTS[item.rarity] + item.requirements.level * ITEM_LEVEL_COST_MULTIPLIER + statTotal * ITEM_STAT_COST_MULTIPLIER;
 }
 
+function getScaledShopCost(baseCost: number, options: ShopStockOptions, levelMultiplier = POTION_LEVEL_COST_MULTIPLIER) {
+  const level = Math.max(1, Math.floor(options.maxItemLevel || 1));
+  return Math.max(1, Math.round(baseCost + (level - 1) * levelMultiplier));
+}
+
 function applyConsumable(state: StudyState, item: Extract<ShopItem, { kind: "consumable" }>, maxHealth: number, maxMana: number) {
   if (item.type === "health") {
-    state.profile.health = Math.min(maxHealth, state.profile.health + item.amount);
+    state.profile.health = Math.min(maxHealth, state.profile.health + Math.max(1, Math.floor(maxHealth * item.amount / PERCENT_DIVISOR)));
     return;
   }
   if (item.type === "mana") {
-    state.profile.mana = Math.min(maxMana, state.profile.mana + item.amount);
+    state.profile.mana = Math.min(maxMana, state.profile.mana + Math.max(1, Math.floor(maxMana * item.amount / PERCENT_DIVISOR)));
     return;
   }
-  state.profile.activePotionEffects = [...(state.profile.activePotionEffects || []), createRandomPotionEffect(item, state.profile.spireRun.currentNodeId)];
+  state.profile.activePotionEffects = [...(state.profile.activePotionEffects || []), getRandomPotionEffect(item, state.profile.spireRun.currentNodeId)];
 }
 
-function createRandomPotionEffect(item: Extract<ShopItem, { kind: "consumable" }>, sourceNodeId: string): ActivePotionEffect {
+export function getRandomPotionEffect(item: Extract<ShopItem, { kind: "consumable" }>, sourceNodeId = ""): ActivePotionEffect {
   const roll = getShopSeedRoll(`${item.id}:effect`);
   const base = {
     id: `${item.id}-effect`,

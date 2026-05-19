@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { MONSTER_WIKI_ENTRIES } from "../components/MonsterEncounter";
-import { HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT, HERO_SIEGE_WIKI_CATEGORIES, HERO_SIEGE_WIKI_ITEM_IMAGE_DISPLAYS, HERO_SIEGE_WIKI_ITEMS, getWikiItemPublicPath, getWikiItemQualityLabel } from "../lib/heroSiegeWikiCatalog";
+import { HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT, HERO_SIEGE_MOD_RULES, HERO_SIEGE_WIKI_CATEGORIES, HERO_SIEGE_WIKI_CHARMS, HERO_SIEGE_WIKI_ITEM_IMAGE_DISPLAYS, HERO_SIEGE_WIKI_ITEMS, getVisibleWikiItemStats, getVisibleWikiRelicStats, getWikiItemPublicPath, getWikiItemQualityLabel, getWikiRelicQualityLabel, pickWikiEquipmentItem } from "../lib/heroSiegeWikiCatalog";
 import { getRelicQualityLabel } from "../lib/heroSiegeQuality";
 import { RELIC_DEFINITIONS } from "../lib/relicCore";
 
@@ -83,20 +83,68 @@ describe("wiki icon uniqueness", () => {
     expect(labels).toEqual(new Set(["Normal", "Magic", "Rare", "Set", "Unique"]));
   });
 
-  it("does not display set relics or non-boss unique relics", () => {
-    for (const relic of RELIC_DEFINITIONS) {
-      const quality = getRelicQualityLabel(relic.rarity, relic.wikiRarityLabel);
-      expect(quality).not.toBe("Set");
-      if (quality === "Unique") {
-        expect(relic.rarity).toBe("boss");
-      }
-    }
+  it("assigns wiki relics with the same weighted quality order as wiki items", () => {
+    const counts = HERO_SIEGE_WIKI_CHARMS.reduce<Record<string, number>>((result, item) => {
+      const quality = getWikiRelicQualityLabel(item);
+      result[quality] = (result[quality] || 0) + 1;
+      return result;
+    }, {});
+
+    expect(counts.Normal).toBeGreaterThan(counts.Magic);
+    expect(counts.Magic).toBeGreaterThan(counts.Rare);
+    expect(counts.Rare).toBeGreaterThan(counts.Set);
+    expect(counts.Set).toBeGreaterThan(counts.Unique);
+    expect(counts.Unique).toBeGreaterThanOrEqual(1);
   });
 
   it("provides normal wiki-derived equipment for early levels", () => {
     expect(HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT.length).toBeGreaterThan(40);
     expect(HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT.every((item) => getWikiItemQualityLabel(item) === "Normal")).toBe(true);
     expect(HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT.every((item) => Number(item.level) < 20)).toBe(true);
+  });
+
+  it("keeps charms out of equippable item slots and maps belt and glove categories distinctly", () => {
+    expect(HERO_SIEGE_WIKI_CATEGORIES.some((category) => category.sourcePage === "Charms")).toBe(false);
+    expect(HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT.some((item) => item.category === "Charms" || /charm/i.test(item.name))).toBe(false);
+
+    const belt = pickWikiEquipmentItem("backAccessory", "test-belt", { maxItemLevel: 10 });
+    const gloves = pickWikiEquipmentItem("bodyAccessory", "test-gloves", { maxItemLevel: 10 });
+
+    expect(belt?.category).toBe("Belts");
+    expect(gloves?.category).toBe("Gloves");
+  });
+
+  it("caps wiki item tooltip modifiers by display rarity", () => {
+    const items = [...HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT, ...HERO_SIEGE_WIKI_ITEMS];
+    const normalItemWithSourceStats = HERO_SIEGE_WIKI_ITEMS.find((item) => getWikiItemQualityLabel(item) === "Normal" && item.stats.length > 0);
+
+    expect(normalItemWithSourceStats).toBeTruthy();
+    expect(getVisibleWikiItemStats(normalItemWithSourceStats!)).toHaveLength(0);
+
+    for (const item of items) {
+      const quality = getWikiItemQualityLabel(item);
+      expect(getVisibleWikiItemStats(item).length).toBeLessThanOrEqual(HERO_SIEGE_MOD_RULES[quality].max);
+    }
+  });
+
+  it("pads rare and unique wiki item displays with playable affixes", () => {
+    const richQualities = new Set(["Rare", "Unique"]);
+    const items = HERO_SIEGE_WIKI_ITEMS.filter((item) => richQualities.has(getWikiItemQualityLabel(item)));
+
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of items) {
+      const quality = getWikiItemQualityLabel(item);
+      expect(getVisibleWikiItemStats(item).length).toBeGreaterThanOrEqual(HERO_SIEGE_MOD_RULES[quality].min);
+    }
+  });
+
+  it("does not expose unsupported Hero Siege source mechanics as wiki modifiers", () => {
+    const disallowed = /(all attributes|all skills|arcane|attack rating|attack speed|cast rate|chance to cast|chance when|defense ignored|enemy |energy|movement speed|skill damage|stamina|target defense|vitality|value1|value2)/i;
+    const visibleItemStats = [...HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT, ...HERO_SIEGE_WIKI_ITEMS].flatMap((item) => getVisibleWikiItemStats(item));
+    const visibleRelicStats = HERO_SIEGE_WIKI_CHARMS.flatMap((item) => getVisibleWikiRelicStats(item));
+
+    expect([...visibleItemStats, ...visibleRelicStats].some((stat) => disallowed.test(stat))).toBe(false);
+    expect(RELIC_DEFINITIONS.flatMap((relic) => relic.modifiers || []).some((modifier) => modifier.key === "manaOnKill")).toBe(false);
   });
 
   it("does not expose socketed wiki stats", () => {

@@ -12,6 +12,10 @@ import { ACTIVE_WARRIOR_SKILLS, canUseActiveWarriorSkill, getActiveWarriorSkill,
 import type { ActiveWarriorSkillId, CharacterStats, StudyState } from "../types/study";
 import { CoinIcon } from "./CoinIcon";
 import { HeroSiegeSkillIcon } from "./HeroSiegeSkillIcon";
+import { ImpactEffects, type CombatImpactVisual } from "./MonsterEncounter";
+import { RelicIcon } from "./RelicIcon";
+import { formatModifier } from "../lib/modifierFormat";
+import type { Relic } from "../types/study";
 
 const PERCENT_MAX = 100;
 const RATING_MAX = 3500;
@@ -25,6 +29,8 @@ const AVATAR_ART_SIZE = 118;
 const ACTIVE_SKILL_BUTTON_SIZE = 36;
 const ACTIVE_SKILL_ICON_SIZE = 30;
 const ACTIVE_SKILL_SLOT_COUNT = 3;
+const RELIC_ICON_SIZE = 26;
+const RELIC_VISIBLE_COUNT = 8;
 const RESOURCE_BAR_HEIGHT = 18;
 const RESOURCE_BAR_BORDER = "1px solid rgba(12, 10, 14, 0.98)";
 const PLAYER_PANEL_BG = "linear-gradient(180deg, rgba(10, 9, 12, 0.76), rgba(4, 4, 5, 0.8))";
@@ -47,6 +53,7 @@ export function PlayerStatus(props: {
   maxMana: number;
   nextLevelExperience: number;
   onOpenStats?: () => void;
+  playerImpact?: CombatImpactVisual | null;
   rating: number;
   state: StudyState;
   stats: CharacterStats;
@@ -80,7 +87,7 @@ export function PlayerStatus(props: {
         textAlign: "left"
         }}
     >
-      <AvatarIllustration level={props.level} />
+      <AvatarIllustration impact={props.playerImpact} level={props.level} />
       <Box style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
         <Group justify="space-between" gap="xs" wrap="nowrap" mb={5}>
           <Box>
@@ -109,8 +116,36 @@ export function PlayerStatus(props: {
             <MiniStat label="INT" value={props.stats.intelligence} />
           </Group>
         </Group>
+        {props.state.profile.relics.length > 0 && <RelicStrip relics={props.state.profile.relics} />}
       </Box>
     </Paper>
+  );
+}
+
+function RelicStrip(props: { relics: Relic[] }) {
+  const visible = props.relics.slice(0, RELIC_VISIBLE_COUNT);
+  const remaining = props.relics.length - visible.length;
+  return (
+    <Group gap={4} mt={6} wrap="nowrap" onClick={(event) => event.stopPropagation()}>
+      {visible.map((relic) => (
+        <Tooltip key={relic.id} label={<RelicMiniTooltip relic={relic} />} withArrow>
+          <Box style={{ filter: "drop-shadow(0 2px 2px rgba(0, 0, 0, 0.75))" }}>
+            <RelicIcon relic={relic} size={RELIC_ICON_SIZE} unframed />
+          </Box>
+        </Tooltip>
+      ))}
+      {remaining > 0 && <Text size="10px" fw={900} c="gray.3">+{remaining}</Text>}
+    </Group>
+  );
+}
+
+function RelicMiniTooltip(props: { relic: Relic }) {
+  const effects = (props.relic.modifiers || []).map((modifier) => formatModifier(modifier.key, modifier.value)).filter(Boolean);
+  return (
+    <Box maw={220}>
+      <Text size="xs" fw={900}>{props.relic.name}</Text>
+      <Text size="xs" c="gray.3">{effects.join(", ") || props.relic.description}</Text>
+    </Box>
   );
 }
 
@@ -203,7 +238,7 @@ function getRatingColor(rating: number) {
   return "green";
 }
 
-function AvatarIllustration(props: { level: number }) {
+function AvatarIllustration(props: { impact?: CombatImpactVisual | null; level: number }) {
   return (
     <Box
       aria-hidden="true"
@@ -242,6 +277,8 @@ function AvatarIllustration(props: { level: number }) {
             width: AVATAR_ART_SIZE
           }}
         />
+        {props.impact && <ImpactEffects key={`${props.impact.id}-player-impact`} damageTypes={props.impact.damageTypes} />}
+        {props.impact && <PlayerDamagePop key={props.impact.id} impact={props.impact} />}
       </Box>
       <Box
         style={{
@@ -262,6 +299,28 @@ function AvatarIllustration(props: { level: number }) {
       >
         <Text size="sm" fw={900} lh={1} style={{ textShadow: "0 2px 0 #000" }}>{props.level}</Text>
       </Box>
+    </Box>
+  );
+}
+
+function PlayerDamagePop(props: { impact: CombatImpactVisual }) {
+  const hitCount = (props.impact.hitCount || 0) > 1 ? ` x${props.impact.hitCount}` : "";
+  return (
+    <Box
+      style={{
+        animation: "monster-damage-pop 820ms ease-out both",
+        color: "#ff7070",
+        fontSize: 18,
+        fontWeight: 900,
+        left: 54,
+        pointerEvents: "none",
+        position: "absolute",
+        textShadow: "0 2px 0 #000, 0 0 8px rgba(255, 0, 0, 0.82)",
+        top: 2,
+        zIndex: 8
+      }}
+    >
+      -{props.impact.amount || 0}{hitCount}
     </Box>
   );
 }

@@ -50,6 +50,7 @@ export type CharacterStats = {
 export type CharacterStatKey = keyof CharacterStats;
 
 export type ElementalDamageType = "fire" | "cold" | "lightning" | "poison";
+export type DamageType = "physical" | ElementalDamageType;
 
 export type ActiveWarriorSkillId =
   | "bloodForBlood"
@@ -100,6 +101,7 @@ export type EquipmentSlot =
   | "armor"
   | "headAccessory"
   | "eyewear"
+  | "ringTwo"
   | "bodyAccessory"
   | "backAccessory"
   | "feet";
@@ -107,20 +109,47 @@ export type EquipmentSlot =
 export type ItemRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 
 export type ItemModifierKey =
+  | "accuracyPercent"
+  | "armor"
+  | "armorPenetrationPercent"
+  | "blockChancePercent"
+  | "bonusDamageVsElitesPercent"
+  | "bonusDamageWhileFullHealthPercent"
+  | "bonusDamageWhileLowHealthPercent"
   | "bonusXpPercent"
   | "coldResistPercent"
+  | "coldDamage"
   | "criticalChancePercent"
+  | "criticalDamagePercent"
   | "damageReduction"
+  | "dodgeChancePercent"
+  | "eliteDropBonusPercent"
   | "enhancedDamagePercent"
+  | "executeChancePercent"
+  | "extraAttackChancePercent"
   | "fireResistPercent"
+  | "fireDamage"
   | "goldFindPercent"
+  | "healthRegen"
+  | "increasedHealingReceivedPercent"
+  | "increasedLootDropChancePercent"
+  | "increasedRareDropChancePercent"
   | "lifeOnKill"
+  | "lifeStealPercent"
   | "lightningResistPercent"
+  | "lightningDamage"
   | "magicFindPercent"
   | "manaOnKill"
   | "maxLife"
   | "maxMana"
-  | "poisonResistPercent";
+  | "parryChancePercent"
+  | "physicalDamage"
+  | "physicalResistPercent"
+  | "poisonDamage"
+  | "poisonResistPercent"
+  | "reducedEnemyArmorPercent"
+  | "reducedEnemyDamagePercent"
+  | "resistancePenetrationPercent";
 
 export type ItemModifier = {
   key: ItemModifierKey;
@@ -150,7 +179,7 @@ export type Relic = {
 
 export type SpireNodeKind = "unknown" | "merchant" | "treasure" | "rest" | "enemy" | "elite" | "boss" | "event";
 
-export type UnknownEncounterKind = "event" | "monster" | "shop" | "treasure";
+export type UnknownEncounterKind = "elite" | "monster" | "shop" | "treasure";
 
 export type SpireMapNode = {
   column: number;
@@ -170,6 +199,11 @@ export type SpireRun = {
   mapOpen: boolean;
   mapSeed: number;
   nodes: SpireMapNode[];
+  roomRewardClaims: Record<string, {
+    gold?: number;
+    itemIds?: string[];
+    relicIds?: string[];
+  }>;
   roundQuestionIds: string[];
   roundSolvedIds: string[];
   unknownEncounterMisses: Partial<Record<UnknownEncounterKind, number>>;
@@ -198,6 +232,7 @@ export type InventoryItem = {
   wikiStats?: string[];
   wikiTier?: string;
   wikiTierGroup?: string;
+  flavorText?: string;
 };
 
 export type InventoryItemPosition = {

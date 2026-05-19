@@ -1,5 +1,5 @@
-import { ELEMENTAL_DAMAGE_TYPES } from "./resistanceCore";
-import type { ElementalDamageType, Question } from "../types/study";
+import { DAMAGE_TYPES, ELEMENTAL_DAMAGE_TYPES } from "./resistanceCore";
+import type { DamageType, ElementalDamageType, Question } from "../types/study";
 
 const HASH_OFFSET = 2166136261;
 const HASH_PRIME = 16777619;
@@ -30,8 +30,11 @@ const DEFAULT_HIT_COUNT = 1;
 const EXTRA_FAST_HIT_COUNT_BONUS = 1;
 const MANA_BURN_DAMAGE_RATIO = 0.5;
 const TELEPORTING_DAMAGE_REDUCTION = 0.25;
-const STONE_SKIN_DAMAGE_REDUCTION = 0.25;
-const MAGIC_RESISTANT_DAMAGE_REDUCTION = 0.15;
+const MONSTER_ENCHANTED_RESISTANCE = 35;
+const MONSTER_MAGIC_RESISTANT_ELEMENTAL_RESISTANCE = 25;
+const MONSTER_SPECTRAL_RESISTANCE = 15;
+const MONSTER_STONE_SKIN_PHYSICAL_RESISTANCE = 25;
+const PERCENT = 100;
 const MAX_ELEMENTAL_ATTACK_CHANCE = 0.74;
 const ELEMENTAL_RATING_CHANCE_STEP = 0.04;
 const ELEMENTAL_RATING_CHANCE_DIVISOR = 400;
@@ -206,7 +209,7 @@ export function getMonsterMaxHealth(question: Question) {
 
 export function getMonsterAttackProfile(question: Question, baseDamage: number, now = Date.now()) {
   const bonuses = getUniqueMonsterBonuses(question);
-  const element = getMonsterAttackElement(question, bonuses, now);
+  const element = getMonsterAttackType(question, bonuses);
   const hitCount = (bonuses.includes("Multi-Shot") ? MULTI_SHOT_HIT_COUNT : DEFAULT_HIT_COUNT) + (bonuses.includes("Extra Fast") ? EXTRA_FAST_HIT_COUNT_BONUS : 0);
   const perHitDamage = Math.max(DEFAULT_HIT_COUNT, baseDamage + getBonusDamage(bonuses, question, now));
   const damage = perHitDamage * hitCount;
@@ -220,9 +223,45 @@ export function getMonsterAttackProfile(question: Question, baseDamage: number, 
   };
 }
 
-export function getMonsterPlayerDamage(question: Question, damage: number) {
-  const reduction = getUniqueMonsterBonuses(question).reduce((total, bonus) => total + getDamageReduction(bonus), 0);
-  return Math.max(DEFAULT_HIT_COUNT, Math.round(damage * (1 - Math.min(reduction, TELEPORTING_DAMAGE_REDUCTION + STONE_SKIN_DAMAGE_REDUCTION))));
+export function getMonsterPlayerDamage(question: Question, damage: number, damageType: DamageType = "physical", penetrationPercent = 0, resistanceBonusPercent = 0) {
+  const bonuses = getUniqueMonsterBonuses(question);
+  const reduction = bonuses.reduce((total, bonus) => total + getDamageReduction(bonus), 0);
+  const reducedDamage = Math.round(damage * (1 - Math.min(reduction, TELEPORTING_DAMAGE_REDUCTION)));
+  return applyMonsterResistance(reducedDamage, damageType, getMonsterResistances(question), penetrationPercent, resistanceBonusPercent);
+}
+
+export function getMonsterResistances(question: Question): Record<DamageType, number> {
+  const bonuses = getUniqueMonsterBonuses(question);
+  const resistances: Record<DamageType, number> = {
+    cold: 0,
+    fire: 0,
+    lightning: 0,
+    physical: 0,
+    poison: 0
+  };
+  if (bonuses.includes("Stone Skin")) {
+    resistances.physical = MONSTER_STONE_SKIN_PHYSICAL_RESISTANCE;
+  }
+  if (bonuses.includes("Magic Resistant")) {
+    for (const element of ELEMENTAL_DAMAGE_TYPES) {
+      resistances[element] = Math.max(resistances[element], MONSTER_MAGIC_RESISTANT_ELEMENTAL_RESISTANCE);
+    }
+  }
+  if (bonuses.includes("Fire Enchanted")) {
+    resistances.fire = Math.max(resistances.fire, MONSTER_ENCHANTED_RESISTANCE);
+  }
+  if (bonuses.includes("Cold Enchanted")) {
+    resistances.cold = Math.max(resistances.cold, MONSTER_ENCHANTED_RESISTANCE);
+  }
+  if (bonuses.includes("Lightning Enchanted")) {
+    resistances.lightning = Math.max(resistances.lightning, MONSTER_ENCHANTED_RESISTANCE);
+  }
+  if (bonuses.includes("Spectral Hit")) {
+    for (const element of ELEMENTAL_DAMAGE_TYPES) {
+      resistances[element] = Math.max(resistances[element], MONSTER_SPECTRAL_RESISTANCE);
+    }
+  }
+  return resistances;
 }
 
 function getBonusDamage(bonuses: string[], question: Question, now: number) {
@@ -254,20 +293,20 @@ function getBonusDamageAmount(bonus: string, question: Question, now: number) {
   return 0;
 }
 
-function getMonsterAttackElement(question: Question, bonuses: string[], now: number): ElementalDamageType | null {
-  const forced = getForcedElement(bonuses, question, now);
+export function getMonsterAttackType(question: Question, bonuses = getUniqueMonsterBonuses(question)): DamageType {
+  const forced = getForcedElement(bonuses, question);
   if (forced) {
     return forced;
   }
   const ratingSteps = Math.max(0, Math.floor((question.rating - RATING_MIN) / ELEMENTAL_RATING_CHANCE_DIVISOR));
   const chance = Math.min(MAX_ELEMENTAL_ATTACK_CHANCE, ELEMENTAL_ATTACK_CHANCES[question.difficulty] + ratingSteps * ELEMENTAL_RATING_CHANCE_STEP);
-  if (getSeededRoll(`${getMonsterSeed(question)}:${now}:elemental-chance`) >= chance) {
-    return null;
+  if (getSeededRoll(`${getMonsterSeed(question)}:elemental-chance`) >= chance) {
+    return "physical";
   }
-  return pickSeeded(ELEMENTAL_DAMAGE_TYPES, `${getMonsterSeed(question)}:${now}:elemental-type`);
+  return pickSeeded(ELEMENTAL_DAMAGE_TYPES, `${getMonsterSeed(question)}:elemental-type`);
 }
 
-function getForcedElement(bonuses: string[], question: Question, now: number): ElementalDamageType | null {
+function getForcedElement(bonuses: string[], question: Question): ElementalDamageType | null {
   if (bonuses.includes("Fire Enchanted")) {
     return "fire";
   }
@@ -278,20 +317,22 @@ function getForcedElement(bonuses: string[], question: Question, now: number): E
     return "lightning";
   }
   if (bonuses.includes("Spectral Hit")) {
-    return pickSeeded(ELEMENTAL_DAMAGE_TYPES, `${getMonsterSeed(question)}:${now}:spectral-element`);
+    return pickSeeded(ELEMENTAL_DAMAGE_TYPES, `${getMonsterSeed(question)}:spectral-element`);
   }
   return null;
+}
+
+function applyMonsterResistance(amount: number, type: DamageType, resistances: Record<DamageType, number>, penetrationPercent = 0, resistanceBonusPercent = 0) {
+  if (amount <= 0) {
+    return 0;
+  }
+  const effectiveResistance = Math.max(0, resistances[type] + Math.max(0, resistanceBonusPercent || 0) - Math.max(0, penetrationPercent || 0));
+  return Math.max(DEFAULT_HIT_COUNT, Math.round(amount * (1 - effectiveResistance / PERCENT)));
 }
 
 function getDamageReduction(bonus: string) {
   if (bonus === "Teleporting") {
     return TELEPORTING_DAMAGE_REDUCTION;
-  }
-  if (bonus === "Stone Skin") {
-    return STONE_SKIN_DAMAGE_REDUCTION;
-  }
-  if (bonus === "Magic Resistant") {
-    return MAGIC_RESISTANT_DAMAGE_REDUCTION;
   }
   return 0;
 }

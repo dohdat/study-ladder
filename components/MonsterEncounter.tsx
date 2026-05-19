@@ -1,9 +1,10 @@
+import { useEffect, useMemo, useState } from "react";
 import { Badge, Box, Group, Paper, Progress, Text, Tooltip } from "@mantine/core";
 type StaticImageData = string;
 
 import { getMonsterCurrentHealth } from "../lib/combatCore";
-import { getMonsterMaxHealth, getUniqueMonsterBonusDescription, getUniqueMonsterBonuses, getUniqueMonsterName } from "../lib/monsterCore";
-import type { Difficulty, Question, StudyState } from "../types/study";
+import { getMonsterAttackType, getMonsterMaxHealth, getMonsterResistances, getUniqueMonsterBonusDescription, getUniqueMonsterBonuses, getUniqueMonsterName } from "../lib/monsterCore";
+import type { DamageType, Difficulty, Question, StudyState } from "../types/study";
 import batArt from "../assets/hero_siege_monsters/bat.png";
 import bigEntArt from "../assets/hero_siege_monsters/big-ent.png";
 import bogMushroomArt from "../assets/hero_siege_monsters/bog-mushroom.png";
@@ -53,6 +54,7 @@ const HASH_MULTIPLIER = 31;
 const HASH_MODULUS = 1000000007;
 const DAMAGE_POP_TOP = 4;
 const DAMAGE_POP_RIGHT = 2;
+const HEALTH_ANIMATION_START_DELAY_MS = 40;
 
 type MonsterDefinition = {
   art: StaticImageData;
@@ -66,10 +68,23 @@ export type MonsterWikiEntry = MonsterDefinition & {
   rating: number;
 };
 
+export type CombatImpactType = DamageType | "bleed";
+
 export type MonsterDamagePop = {
   amount: number;
   critical: boolean;
+  damageTypes: CombatImpactType[];
   hitCount: number;
+  id: string;
+  maxHealth: number;
+  questionId: string;
+  remainingHealth: number;
+};
+
+export type CombatImpactVisual = {
+  amount?: number;
+  damageTypes: CombatImpactType[];
+  hitCount?: number;
   id: string;
 };
 
@@ -155,14 +170,18 @@ export const MONSTER_WIKI_ENTRIES: MonsterWikiEntry[] = Object.entries(MONSTERS)
 
 export function MonsterEncounter(props: { damagePop?: MonsterDamagePop | null; question: Question; state: StudyState }) {
   const maxHealth = getMonsterMaxHealth(props.question);
-  const health = getMonsterCurrentHealth(props.state, props.question);
+  const currentHealth = getMonsterCurrentHealth(props.state, props.question);
+  const activeDamage = props.damagePop?.questionId === props.question.id ? props.damagePop : null;
+  const health = useAnimatedMonsterHealth({ currentHealth, damagePop: activeDamage, maxHealth });
   const monster = getMonsterDefinition(props.question);
   const uniqueName = getUniqueMonsterName(props.question);
   const bonuses = getUniqueMonsterBonuses(props.question);
+  const attackType = getMonsterAttackType(props.question, bonuses);
+  const resistances = getMonsterResistances(props.question);
   return (
     <Paper withBorder p="xs" mt="md" bg="dark.7" style={{ overflow: "visible" }}>
       <Group gap="sm" wrap="nowrap" align="center" style={{ overflow: "visible" }}>
-        <MonsterAvatar damagePop={props.damagePop} monster={monster} />
+        <MonsterAvatar damagePop={activeDamage} monster={monster} />
         <Box flex={1} style={{ overflow: "visible" }}>
           <Group justify="space-between" gap="xs" mb={4}>
             <Box>
@@ -170,16 +189,65 @@ export function MonsterEncounter(props: { damagePop?: MonsterDamagePop | null; q
               <Text size="xs" c="dimmed">{monster.name}</Text>
             </Box>
           </Group>
+          <Group gap={4} mb={6}>
+            <Badge size="xs" variant="filled" color={getDamageTypeBadgeColor(attackType)}>Attack: {formatDamageType(attackType)}</Badge>
+            {Object.entries(resistances).filter(([, value]) => value > 0).map(([type, value]) => (
+              <Badge key={type} size="xs" variant="outline" color={getDamageTypeBadgeColor(type)}>{formatDamageType(type)} Res {value}%</Badge>
+            ))}
+          </Group>
           <UniqueBonusBadges bonuses={bonuses} color={getRatingColor(props.question.rating)} />
           <Group justify="space-between" gap="xs" mb={4}>
             <Text size="xs" c="dimmed" fw={700}>Enemy Health</Text>
-            <Text size="xs" fw={700}>{health}/{maxHealth}</Text>
+            <Text size="xs" fw={700}>{Math.round(health)}/{maxHealth}</Text>
           </Group>
-          <Progress value={(health / maxHealth) * PERCENT_MAX} color="red" size="sm" />
+          <Progress value={(health / maxHealth) * PERCENT_MAX} color="red" size="sm" styles={{ section: { transition: "width 620ms cubic-bezier(0.2, 0.9, 0.22, 1)" } }} />
         </Box>
       </Group>
     </Paper>
   );
+}
+
+function formatDamageType(type: string) {
+  return `${type.charAt(0).toUpperCase()}${type.slice(1)}`;
+}
+
+function getDamageTypeBadgeColor(type: string) {
+  if (type === "fire") {
+    return "orange";
+  }
+  if (type === "cold") {
+    return "cyan";
+  }
+  if (type === "lightning") {
+    return "yellow";
+  }
+  if (type === "poison") {
+    return "green";
+  }
+  return "gray";
+}
+
+function useAnimatedMonsterHealth(params: { currentHealth: number; damagePop: MonsterDamagePop | null; maxHealth: number }) {
+  const targetHealth = params.damagePop ? params.damagePop.remainingHealth : params.currentHealth;
+  const startHealth = useMemo(() => {
+    if (!params.damagePop) {
+      return targetHealth;
+    }
+    return Math.min(params.maxHealth, params.damagePop.remainingHealth + params.damagePop.amount);
+  }, [params.damagePop, params.maxHealth, targetHealth]);
+  const [health, setHealth] = useState(targetHealth);
+
+  useEffect(() => {
+    if (!params.damagePop) {
+      setHealth(params.currentHealth);
+      return undefined;
+    }
+    setHealth(startHealth);
+    const timer = window.setTimeout(() => setHealth(targetHealth), HEALTH_ANIMATION_START_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [params.currentHealth, params.damagePop, startHealth, targetHealth]);
+
+  return health;
 }
 
 function UniqueBonusBadges(props: { bonuses: string[]; color: string }) {
@@ -207,6 +275,7 @@ function UniqueBonusBadge(props: { bonus: string; color: string }) {
 }
 
 function MonsterAvatar(props: { damagePop?: MonsterDamagePop | null; monster: MonsterDefinition }) {
+  const damageTypes = props.damagePop?.damageTypes || [];
   return (
     <Box
       aria-hidden
@@ -237,9 +306,82 @@ function MonsterAvatar(props: { damagePop?: MonsterDamagePop | null; monster: Mo
           width: "100%"
         }}
       />
+      {props.damagePop && <ImpactEffects key={`${props.damagePop.id}-effects`} damageTypes={damageTypes} />}
       {props.damagePop && <DamagePop key={props.damagePop.id} damage={props.damagePop} />}
     </Box>
   );
+}
+
+export function ImpactEffects(props: { damageTypes: CombatImpactType[] }) {
+  const fallbackTypes: CombatImpactType[] = ["physical"];
+  const uniqueTypes = Array.from(new Set(props.damageTypes.length ? props.damageTypes : fallbackTypes));
+  return (
+    <>
+      {uniqueTypes.includes("physical") && <HitSlash />}
+      {uniqueTypes.map((type) => type === "physical" ? null : <ElementalImpact key={type} type={type} />)}
+    </>
+  );
+}
+
+function HitSlash() {
+  return (
+    <Box
+      style={{
+        animation: "monster-hit-slash 460ms ease-out both",
+        background: "linear-gradient(90deg, transparent 0%, rgba(255, 37, 37, 0.1) 10%, #ff2020 38%, #fff1f1 50%, #ff2020 62%, rgba(255, 37, 37, 0.1) 90%, transparent 100%)",
+        boxShadow: "0 0 10px rgba(255, 0, 0, 0.82)",
+        height: 8,
+        left: 6,
+        pointerEvents: "none",
+        position: "absolute",
+        top: 40,
+        transform: "rotate(-28deg)",
+        transformOrigin: "center",
+        width: 78,
+        zIndex: 4
+      }}
+    />
+  );
+}
+
+function ElementalImpact(props: { type: CombatImpactType }) {
+  const style = getElementalImpactStyle(props.type);
+  return (
+    <Box
+      style={{
+        animation: `${style.animation} 620ms ease-out both`,
+        background: style.background,
+        borderRadius: style.borderRadius,
+        boxShadow: style.boxShadow,
+        height: style.height,
+        left: style.left,
+        mixBlendMode: "screen",
+        opacity: 0,
+        pointerEvents: "none",
+        position: "absolute",
+        top: style.top,
+        transform: style.transform,
+        width: style.width,
+        zIndex: 5
+      }}
+    />
+  );
+}
+
+function getElementalImpactStyle(type: CombatImpactType) {
+  if (type === "fire") {
+    return { animation: "combat-impact-burn", background: "radial-gradient(circle, rgba(255, 236, 130, 0.92) 0%, rgba(255, 103, 24, 0.78) 38%, rgba(170, 18, 8, 0) 72%)", borderRadius: "50%", boxShadow: "0 0 18px rgba(255, 71, 18, 0.9)", height: 72, left: 8, top: 8, transform: "scale(0.6)", width: 72 };
+  }
+  if (type === "cold") {
+    return { animation: "combat-impact-freeze", background: "linear-gradient(135deg, rgba(205, 248, 255, 0.9), rgba(67, 187, 255, 0.55) 45%, rgba(12, 39, 76, 0))", borderRadius: 6, boxShadow: "0 0 16px rgba(120, 229, 255, 0.9)", height: 78, left: 6, top: 5, transform: "scale(0.8)", width: 78 };
+  }
+  if (type === "lightning") {
+    return { animation: "combat-impact-lightning", background: "linear-gradient(110deg, transparent 0%, #fff8a6 28%, #f4d91e 36%, transparent 43%, transparent 55%, #fff 60%, #70d7ff 68%, transparent 78%)", borderRadius: 0, boxShadow: "0 0 14px rgba(255, 238, 79, 0.95)", height: 86, left: 16, top: 0, transform: "skewX(-18deg)", width: 48 };
+  }
+  if (type === "poison") {
+    return { animation: "combat-impact-poison", background: "radial-gradient(circle, rgba(165, 255, 77, 0.82) 0%, rgba(55, 204, 58, 0.58) 42%, rgba(18, 102, 31, 0) 74%)", borderRadius: "50%", boxShadow: "0 0 16px rgba(89, 255, 91, 0.82)", height: 74, left: 7, top: 7, transform: "scale(0.55)", width: 74 };
+  }
+  return { animation: "combat-impact-bleed", background: "linear-gradient(90deg, transparent, rgba(255, 0, 24, 0.9), transparent)", borderRadius: 999, boxShadow: "0 0 12px rgba(255, 0, 30, 0.9)", height: 8, left: 6, top: 40, transform: "rotate(-28deg)", width: 78 };
 }
 
 function DamagePop(props: { damage: MonsterDamagePop }) {

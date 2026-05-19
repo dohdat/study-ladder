@@ -7,7 +7,8 @@ import { applyElementalResistance, getResistancesFromModifiers } from "./resista
 import { getWarriorSkillBonuses, normalizeWarriorSkillRanks } from "./skillCore";
 import { createShopStock, normalizeShopStock } from "./shopCore";
 import { createSpireRun, normalizeSpireRun } from "./spireMapCore";
-import type { ActivePotionEffect, CardState, CharacterStatKey, CharacterStats, ElementalDamageType, EquipmentSlot, InventoryItem, InventoryItemPosition, ItemModifierKey, Question, StudyState } from "../types/study";
+import { getUniqueMonsterBonuses } from "./monsterCore";
+import type { ActivePotionEffect, CardState, CharacterStatKey, CharacterStats, DamageType, EquipmentSlot, InventoryItem, InventoryItemPosition, ItemModifierKey, Question, StudyState } from "../types/study";
 
 const MS_PER_MINUTE = 60000;
 const EASY_MINUTES = 10;
@@ -58,20 +59,46 @@ const STARTER_SHOP_REFRESH_AT = 0;
 const DIFFICULTY_RATING_STEP = 500;
 const RATING_TARGET_OFFSET = 100;
 const MODIFIER_KEYS: ItemModifierKey[] = [
+  "accuracyPercent",
+  "armor",
+  "armorPenetrationPercent",
+  "blockChancePercent",
+  "bonusDamageVsElitesPercent",
+  "bonusDamageWhileFullHealthPercent",
+  "bonusDamageWhileLowHealthPercent",
   "bonusXpPercent",
   "coldResistPercent",
+  "coldDamage",
   "criticalChancePercent",
+  "criticalDamagePercent",
   "damageReduction",
+  "dodgeChancePercent",
+  "eliteDropBonusPercent",
   "enhancedDamagePercent",
+  "executeChancePercent",
+  "extraAttackChancePercent",
   "fireResistPercent",
+  "fireDamage",
   "goldFindPercent",
+  "healthRegen",
+  "increasedHealingReceivedPercent",
+  "increasedLootDropChancePercent",
+  "increasedRareDropChancePercent",
   "lifeOnKill",
   "lightningResistPercent",
+  "lifeStealPercent",
+  "lightningDamage",
   "magicFindPercent",
-  "manaOnKill",
   "maxLife",
   "maxMana",
-  "poisonResistPercent"
+  "parryChancePercent",
+  "physicalDamage",
+  "physicalResistPercent",
+  "poisonDamage",
+  "poisonResistPercent",
+  "reducedEnemyArmorPercent",
+  "reducedEnemyDamagePercent",
+  "resistancePenetrationPercent"
 ];
 
 export const HINT_COST = 0;
@@ -143,7 +170,11 @@ export const cloneState = (state: StudyState): StudyState => ({
 });
 
 function cloneProfile(state: StudyState): StudyState["profile"] {
-  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, activePotionEffects: cloneActivePotionEffects(state.profile.activePotionEffects), equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), inventorySlots: cloneInventorySlots(state.profile.inventorySlots), relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, spireRun: { ...state.profile.spireRun, availableNodeIds: [...state.profile.spireRun.availableNodeIds], completedNodeIds: [...state.profile.spireRun.completedNodeIds], nodes: state.profile.spireRun.nodes.map((node) => ({ ...node, nextIds: [...node.nextIds] })), roundQuestionIds: [...state.profile.spireRun.roundQuestionIds], roundSolvedIds: [...state.profile.spireRun.roundSolvedIds], unknownEncounterMisses: { ...state.profile.spireRun.unknownEncounterMisses } }, stats: { ...state.profile.stats } };
+  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, activePotionEffects: cloneActivePotionEffects(state.profile.activePotionEffects), equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), inventorySlots: cloneInventorySlots(state.profile.inventorySlots), relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, spireRun: { ...state.profile.spireRun, availableNodeIds: [...state.profile.spireRun.availableNodeIds], completedNodeIds: [...state.profile.spireRun.completedNodeIds], nodes: state.profile.spireRun.nodes.map((node) => ({ ...node, nextIds: [...node.nextIds] })), roomRewardClaims: cloneRoomRewardClaims(state.profile.spireRun.roomRewardClaims), roundQuestionIds: [...state.profile.spireRun.roundQuestionIds], roundSolvedIds: [...state.profile.spireRun.roundSolvedIds], unknownEncounterMisses: { ...state.profile.spireRun.unknownEncounterMisses } }, stats: { ...state.profile.stats } };
+}
+
+function cloneRoomRewardClaims(claims: StudyState["profile"]["spireRun"]["roomRewardClaims"]) {
+  return Object.fromEntries(Object.entries(claims || {}).map(([nodeId, claim]) => [nodeId, { ...claim, itemIds: [...(claim.itemIds || [])], relicIds: [...(claim.relicIds || [])] }]));
 }
 
 function cloneActivePotionEffects(effects: ActivePotionEffect[] | undefined) {
@@ -388,6 +419,10 @@ function applyPercentBonus(value: number, bonusPercent: number) {
   return Math.round(value * (1 + bonusPercent / MODIFIER_PERCENT_BASE));
 }
 
+function applyPercentReduction(value: number, reductionPercent: number) {
+  return value * (1 - Math.min(95, Math.max(0, reductionPercent || 0)) / MODIFIER_PERCENT_BASE);
+}
+
 export const getMaxHealth = (state: StudyState) => {
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getRunModifierTotals(state);
@@ -402,16 +437,22 @@ export const getMaxMana = (state: StudyState) => {
   return BASE_MANA + (stats.intelligence - FIRST_STAT_LEVEL) * MANA_PER_INTELLIGENCE + modifiers.maxMana + skills.maxMana;
 };
 
-export const getHealthLoss = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, element?: ElementalDamageType | null) => {
+export const getHealthLoss = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, element?: DamageType | null) => {
   if (state.profile.godMode) {
     return 0;
   }
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getRunModifierTotals(state);
   const skills = getWarriorSkillBonusTotals(state);
-  const resistedAmount = applyElementalResistance(amount, element, getResistancesFromModifiers(addSkillResistances(modifiers, skills)));
+  const reducedEnemyDamage = amount * (1 - Math.min(75, Math.max(0, modifiers.reducedEnemyDamagePercent || 0)) / MODIFIER_PERCENT_BASE);
+  const physicalResistedAmount = element === "physical"
+    ? applyPercentReduction(reducedEnemyDamage, modifiers.physicalResistPercent)
+    : reducedEnemyDamage;
+  const resistedAmount = applyElementalResistance(physicalResistedAmount, element, getResistancesFromModifiers(addSkillResistances(modifiers, skills)));
+  const avoidance = Math.min(60, (modifiers.dodgeChancePercent || 0) + (modifiers.blockChancePercent || 0) + (modifiers.parryChancePercent || 0));
+  const avoidedAmount = applyPercentReduction(resistedAmount, avoidance);
   const defense = Math.floor(stats.constitution / CONSTITUTION_LEVEL_INTERVAL) * DEFENSE_PER_THREE_CONSTITUTION;
-  return Math.max(1, resistedAmount - defense - modifiers.damageReduction - skills.damageReduction);
+  return Math.max(1, Math.round(avoidedAmount) - defense - (modifiers.armor || 0) - modifiers.damageReduction - skills.damageReduction);
 };
 
 export const getMonsterLevel = (question: Question) => {
@@ -429,15 +470,32 @@ export const getAttackDamage = (question: Question, state: StudyState) => {
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getRunModifierTotals(state);
   const skills = getWarriorSkillBonusTotals(state);
-  return applyPercentBonus(question.difficulty * DAMAGE_PER_DIFFICULTY + stats.strength * DAMAGE_PER_STRENGTH, modifiers.enhancedDamagePercent + skills.enhancedDamagePercent);
+  const baseDamage = question.difficulty * DAMAGE_PER_DIFFICULTY + stats.strength * DAMAGE_PER_STRENGTH + (modifiers.physicalDamage || 0);
+  const eliteBonus = getUniqueMonsterBonuses(question).length ? modifiers.bonusDamageVsElitesPercent || 0 : 0;
+  const healthRatio = state.profile.health / Math.max(1, getMaxHealth(state));
+  const lowHealthBonus = healthRatio <= 0.35 ? modifiers.bonusDamageWhileLowHealthPercent || 0 : 0;
+  const fullHealthBonus = healthRatio >= 1 ? modifiers.bonusDamageWhileFullHealthPercent || 0 : 0;
+  return applyPercentBonus(baseDamage, modifiers.enhancedDamagePercent + skills.enhancedDamagePercent + eliteBonus + lowHealthBonus + fullHealthBonus);
 };
 
 export const getCriticalChance = (state: StudyState) => {
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getRunModifierTotals(state);
   const skills = getWarriorSkillBonusTotals(state);
-  return Math.min(MAX_CRITICAL_CHANCE, BASE_CRITICAL_CHANCE + stats.strength * CRITICAL_CHANCE_PER_STRENGTH + (modifiers.criticalChancePercent + skills.criticalChancePercent) / MODIFIER_PERCENT_BASE);
+  return Math.min(MAX_CRITICAL_CHANCE, BASE_CRITICAL_CHANCE + stats.strength * CRITICAL_CHANCE_PER_STRENGTH + (modifiers.criticalChancePercent + modifiers.accuracyPercent + skills.criticalChancePercent) / MODIFIER_PERCENT_BASE);
 };
+
+export const getCriticalDamageMultiplier = (state: StudyState) => {
+  const modifiers = getRunModifierTotals(state);
+  return 2 + (modifiers.criticalDamagePercent || 0) / MODIFIER_PERCENT_BASE;
+};
+
+export const getHealingMultiplier = (state: StudyState) => {
+  const modifiers = getRunModifierTotals(state);
+  return 1 + Math.max(0, modifiers.increasedHealingReceivedPercent || 0) / MODIFIER_PERCENT_BASE;
+};
+
+export const applyHealingReceived = (state: StudyState, amount: number) => Math.max(0, Math.round(amount * getHealingMultiplier(state)));
 
 export const getCoinReward = (question: Question, state?: StudyState) => {
   const baseReward = question.difficulty * COINS_PER_DIFFICULTY;
@@ -465,19 +523,26 @@ export const getManaReward = (question: Question, state: StudyState) => {
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getRunModifierTotals(state);
   const skills = getWarriorSkillBonusTotals(state);
-  return question.difficulty * MANA_PER_DIFFICULTY + Math.floor(stats.intelligence / MANA_BONUS_PER_INTELLIGENCE) + modifiers.manaOnKill + skills.manaOnKill;
+  return question.difficulty * MANA_PER_DIFFICULTY + Math.floor(stats.intelligence / MANA_BONUS_PER_INTELLIGENCE) + skills.manaOnKill;
 };
 
 export const getLevelProgress = (state: StudyState) => {
-  const totalExperience = state.profile.experience;
+  const totalExperience = Math.max(0, state.profile.experience);
   const level = Math.min(MAX_CHARACTER_LEVEL, Math.floor(totalExperience / EXPERIENCE_PER_LEVEL) + 1);
   const isCapped = level >= MAX_CHARACTER_LEVEL;
+  const nextLevelExperience = getLevelExperienceRequirement(level);
   return {
     level,
-    currentExperience: isCapped ? EXPERIENCE_PER_LEVEL : totalExperience % EXPERIENCE_PER_LEVEL,
-    nextLevelExperience: EXPERIENCE_PER_LEVEL
+    currentExperience: isCapped ? nextLevelExperience : totalExperience % EXPERIENCE_PER_LEVEL,
+    nextLevelExperience
   };
 };
+
+export function getLevelExperienceRequirement(level: number) {
+  const normalizedLevel = Math.max(FIRST_STAT_LEVEL, Math.floor(level || FIRST_STAT_LEVEL));
+  const levelOffset = normalizedLevel - FIRST_STAT_LEVEL;
+  return EXPERIENCE_PER_LEVEL + levelOffset * 45 + levelOffset * levelOffset * 5;
+}
 
 export const grantPendingStatPoints = (state: StudyState): StudyState => {
   const level = getLevelProgress(state).level;
@@ -509,7 +574,13 @@ export const equipItem = (state: StudyState, itemId: string): StudyState => {
     return state;
   }
   const next = cloneState(state);
-  next.profile.equipment[item.slot] = item.id;
+  for (const slot of EQUIPMENT_SLOTS) {
+    if (next.profile.equipment[slot] === item.id) {
+      next.profile.equipment[slot] = null;
+    }
+  }
+  const slot = getPreferredEquipSlot(next, item);
+  next.profile.equipment[slot] = item.id;
   next.profile.health = Math.min(next.profile.health, getMaxHealth(next));
   next.profile.mana = Math.min(next.profile.mana, getMaxMana(next));
   return next;
@@ -541,6 +612,55 @@ export const discardItem = (state: StudyState, itemId: string): StudyState => {
   return next;
 };
 
+export const getItemSellValue = (item: InventoryItem) => {
+  const rarityValue: Record<InventoryItem["rarity"], number> = {
+    common: 4,
+    epic: 45,
+    legendary: 70,
+    rare: 26,
+    uncommon: 12
+  };
+  const statTotal = Object.values(item.stats).reduce((sum, value) => sum + (value || 0), 0);
+  const modifierTotal = (item.modifiers || []).reduce((sum, modifier) => sum + Math.max(1, Math.ceil(Math.abs(modifier.value) / 4)), 0);
+  const levelValue = Math.max(1, Math.ceil(item.requirements.level / 2));
+  return Math.max(1, rarityValue[item.rarity] + levelValue + statTotal * 3 + modifierTotal);
+};
+
+export const sellItem = (state: StudyState, itemId: string): StudyState => {
+  const item = state.profile.inventory.find((row) => row.id === itemId);
+  if (!item || Object.values(state.profile.equipment).includes(itemId)) {
+    return state;
+  }
+  const next = discardItem(state, itemId);
+  return {
+    ...next,
+    profile: {
+      ...next.profile,
+      coins: next.profile.coins + getItemSellValue(item)
+    }
+  };
+};
+
+export const bulkSellItems = (state: StudyState, itemIds: string[]): StudyState => {
+  const ids = new Set(itemIds);
+  if (!ids.size) {
+    return state;
+  }
+  const equippedIds = new Set(Object.values(state.profile.equipment).filter(Boolean));
+  const soldItems = state.profile.inventory.filter((item) => ids.has(item.id) && !equippedIds.has(item.id));
+  if (!soldItems.length) {
+    return state;
+  }
+  const soldIds = new Set(soldItems.map((item) => item.id));
+  const next = cloneState(state);
+  next.profile.coins += soldItems.reduce((sum, item) => sum + getItemSellValue(item), 0);
+  next.profile.inventory = next.profile.inventory.filter((item) => !soldIds.has(item.id));
+  for (const itemId of soldIds) {
+    delete next.profile.inventorySlots[itemId];
+  }
+  return next;
+};
+
 export const moveInventoryItem = (state: StudyState, itemId: string, position: InventoryItemPosition): StudyState => {
   if (!state.profile.inventory.some((item) => item.id === itemId)) {
     return state;
@@ -560,21 +680,35 @@ export const canEquipItem = (state: StudyState, item: InventoryItem) => {
   });
 };
 
+function getPreferredEquipSlot(state: StudyState, item: InventoryItem): EquipmentSlot {
+  const compatibleSlots = getCompatibleEquipSlots(item);
+  return compatibleSlots.find((slot) => !state.profile.equipment[slot]) || compatibleSlots[0];
+}
+
+function getCompatibleEquipSlots(item: InventoryItem): EquipmentSlot[] {
+  if (item.slot === "eyewear" || item.slot === "ringTwo") {
+    return ["eyewear", "ringTwo"];
+  }
+  return [item.slot];
+}
+
 export const getQuestionDrop = (question: Question, state: StudyState, now = Date.now()) => {
   const stats = getEffectiveCharacterStats(state);
   const maxItemLevel = getRewardItemLevelCap(state);
-  if (state.profile.godMode) {
-    return createDropItem(question, stats, now, { maxItemLevel });
-  }
   const modifiers = getRunModifierTotals(state);
+  const eliteBonus = getUniqueMonsterBonuses(question).length ? modifiers.eliteDropBonusPercent || 0 : 0;
+  const rarityBonus = ((modifiers.increasedRareDropChancePercent || 0) + eliteBonus) / MODIFIER_PERCENT_BASE;
+  if (state.profile.godMode) {
+    return createDropItem(question, stats, now, { maxItemLevel, rarityBonus });
+  }
   const skills = getWarriorSkillBonusTotals(state);
   const baseChance = DROP_CHANCES[question.difficulty] + (stats.perception - FIRST_STAT_LEVEL) * DROP_PERCEPTION_BONUS;
-  const chance = Math.min(MAX_DROP_CHANCE, baseChance * (1 + (modifiers.magicFindPercent + skills.magicFindPercent) / MODIFIER_PERCENT_BASE));
+  const chance = Math.min(MAX_DROP_CHANCE, baseChance * (1 + (modifiers.magicFindPercent + modifiers.increasedLootDropChancePercent + eliteBonus + skills.magicFindPercent) / MODIFIER_PERCENT_BASE));
   const roll = getDropRoll(question.id, now);
   if (roll > chance) {
     return null;
   }
-  return createDropItem(question, stats, now, { maxItemLevel });
+  return createDropItem(question, stats, now, { maxItemLevel, rarityBonus });
 };
 
 export function getRewardItemLevelCap(state: StudyState) {
@@ -594,7 +728,7 @@ function getSeededRoll(seed: string) {
   return (hash >>> 0) / HASH_DIVISOR;
 }
 
-export const applyHealthPenalty = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, manaDamage = 0, questionId?: string, draft?: string, now = Date.now(), element?: ElementalDamageType | null): StudyState => {
+export const applyHealthPenalty = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, manaDamage = 0, questionId?: string, draft?: string, now = Date.now(), element?: DamageType | null): StudyState => {
   const next = cloneState(state);
   next.profile.health = Math.max(0, next.profile.health - getHealthLoss(state, amount, element));
   next.profile.mana = state.profile.godMode ? next.profile.mana : Math.max(0, next.profile.mana - manaDamage);
@@ -708,7 +842,7 @@ export const getTopicStats = (state: StudyState) => {
   });
 };
 
-export const applyScheduleResult = (state: StudyState, questionId: string, passed: boolean, draft: string, now = Date.now(), failureDamage = HEALTH_LOSS_PER_FAIL, failureManaDamage = 0, failureElement?: ElementalDamageType | null) => {
+export const applyScheduleResult = (state: StudyState, questionId: string, passed: boolean, draft: string, now = Date.now(), failureDamage = HEALTH_LOSS_PER_FAIL, failureManaDamage = 0, failureElement?: DamageType | null) => {
   const next = cloneState(state);
   const card = { ...getCard(next, questionId) };
   const wasMastered = isMasteredCard(card);
@@ -757,8 +891,8 @@ function applyQuestionRewards(next: StudyState, question: Question | undefined) 
   const leveled = grantPendingStatPoints(next);
   next.profile.statPoints = leveled.profile.statPoints;
   next.profile.statPointsAwardedLevel = leveled.profile.statPointsAwardedLevel;
-  next.profile.mana = Math.min(getMaxMana(next), next.profile.mana + getManaReward(question, next));
-  next.profile.health = Math.min(getMaxHealth(next), next.profile.health + getEquipmentModifierTotals(next).lifeOnKill + getWarriorSkillBonusTotals(next).lifeOnKill);
+  const modifiers = getRunModifierTotals(next);
+  next.profile.health = Math.min(getMaxHealth(next), next.profile.health + applyHealingReceived(next, (modifiers.lifeOnKill || 0) + (modifiers.healthRegen || 0) + getWarriorSkillBonusTotals(next).lifeOnKill));
 }
 
 function applyQuestionDrop(next: StudyState, question: Question | undefined, state: StudyState, now: number) {
@@ -776,7 +910,7 @@ function applyShopRefresh(next: StudyState, question: Question | undefined, now:
   next.profile.shopLastRefreshedAt = now;
 }
 
-function applyFailedSchedule(next: StudyState, card: CardState, questionId: string, state: StudyState, now: number, failureDamage: number, failureManaDamage: number, failureElement?: ElementalDamageType | null) {
+function applyFailedSchedule(next: StudyState, card: CardState, questionId: string, state: StudyState, now: number, failureDamage: number, failureManaDamage: number, failureElement?: DamageType | null) {
   next.profile.health = Math.max(0, next.profile.health - getHealthLoss(state, failureDamage, failureElement));
   next.profile.mana = state.profile.godMode ? next.profile.mana : Math.max(0, next.profile.mana - failureManaDamage);
   next.streak = 0;

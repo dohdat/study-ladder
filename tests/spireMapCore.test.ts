@@ -170,6 +170,25 @@ describe("spireMapCore", () => {
     expect(state.profile.spireRun.roundQuestionIds.length).toBeLessThanOrEqual(3);
   });
 
+  it("keeps the active room when a saved run is normalized after refresh", () => {
+    let state = defaultState();
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
+    const nodeId = state.profile.spireRun.availableNodeIds[0];
+    state = selectSpireNode(state, nodeId);
+    state = enterSpireNode(state, 2000);
+    const savedRun = {
+      ...state.profile.spireRun,
+      roundSolvedIds: [state.profile.spireRun.roundQuestionIds[0]]
+    };
+
+    const normalized = normalizeSpireRun(savedRun);
+
+    expect(normalized.currentNodeId).toBe(nodeId);
+    expect(normalized.mapOpen).toBe(false);
+    expect(normalized.roundQuestionIds).toEqual(savedRun.roundQuestionIds);
+    expect(normalized.roundSolvedIds).toEqual(savedRun.roundSolvedIds);
+  });
+
   it("reopens the map after every enemy in the selected room is solved", () => {
     let state = defaultState();
     state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
@@ -244,14 +263,14 @@ describe("spireMapCore", () => {
     expect(state.profile.inventory.some((item) => ["rare", "epic", "legendary"].includes(item.rarity))).toBe(true);
   });
 
-  it("rests for 30 percent of max health rounded down", () => {
+  it("rests for 50 percent of max health rounded down", () => {
     let state = defaultState();
     state.profile.health = 10;
     state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(3500) } };
     const rest = state.profile.spireRun.nodes.find((node) => node.kind === "rest") || state.profile.spireRun.nodes[0];
     state.profile.spireRun.availableNodeIds = [rest.id];
     state = selectSpireNode(state, rest.id);
-    const expectedHealth = state.profile.health + Math.floor(getMaxHealth(state) * 0.3);
+    const expectedHealth = state.profile.health + Math.floor(getMaxHealth(state) * 0.5);
 
     state = advanceSpireNode(state, 3000);
 
@@ -346,7 +365,11 @@ describe("spireMapCore", () => {
     expect(state.profile.relics).toHaveLength(0);
 
     state = claimCurrentSpireRoomReward(state, 4200);
-    expect(state.profile.relics).toHaveLength(1);
+    expect(state.profile.coins).toBeGreaterThan(0);
+    const rewardClaim = state.profile.spireRun.roomRewardClaims[treasure.id];
+    expect(rewardClaim?.gold).toBeGreaterThan(0);
+    expect((rewardClaim?.relicIds?.length || 0) + (rewardClaim?.itemIds?.length || 0)).toBe(1);
+    expect(state.profile.relics.length + state.profile.inventory.length).toBe(1);
     expect(state.profile.spireRun.mapOpen).toBe(false);
 
     state = leaveSpireRoom(state, 4300);
@@ -368,6 +391,23 @@ describe("spireMapCore", () => {
     expect(state.profile.spireRun.mapOpen).toBe(false);
     expect(Object.values(misses).some((value) => value === 0)).toBe(true);
     expect(Object.values(misses).filter((value) => value === 1).length).toBe(3);
+  });
+
+  it("reveals unknown rooms only as monster treasure shop or elite rooms", () => {
+    let baseState = defaultState();
+    baseState = { ...baseState, profile: { ...baseState.profile, spireRun: createSpireRun(3500) } };
+    const unknown = baseState.profile.spireRun.nodes.find((node) => node.kind === "unknown") || baseState.profile.spireRun.nodes[0];
+    baseState.profile.spireRun.availableNodeIds = [unknown.id];
+    baseState = selectSpireNode(baseState, unknown.id);
+
+    const revealedKinds = new Set<SpireNodeKind>();
+    for (let offset = 0; offset < 80; offset += 1) {
+      const entered = enterSpireNode(baseState, 7000 + offset);
+      revealedKinds.add(getCurrentSpireNode(entered)?.kind || "unknown");
+    }
+
+    expect([...revealedKinds].every((kind) => ["enemy", "treasure", "merchant", "elite"].includes(kind))).toBe(true);
+    expect(revealedKinds).toEqual(new Set(["enemy", "treasure", "merchant", "elite"]));
   });
 
   it("lets god mode select and enter rooms outside the current route", () => {

@@ -24,7 +24,7 @@ export const RELIC_RARITY_TO_QUALITY: Record<RelicRarity, HeroSiegeQuality> = {
   common: "Normal",
   event: "Rare",
   rare: "Rare",
-  shop: "Rare",
+  shop: "Set",
   special: "Rare",
   starter: "Normal",
   uncommon: "Magic"
@@ -39,10 +39,7 @@ export function getItemQuality(item: InventoryItem) {
 }
 
 export function getRelicQualityLabel(rarity: RelicRarity, wikiRarityLabel?: string) {
-  if (rarity === "boss") {
-    return "Unique";
-  }
-  if (wikiRarityLabel === "Normal" || wikiRarityLabel === "Magic" || wikiRarityLabel === "Rare") {
+  if (wikiRarityLabel === "Normal" || wikiRarityLabel === "Magic" || wikiRarityLabel === "Rare" || wikiRarityLabel === "Set" || wikiRarityLabel === "Unique") {
     return wikiRarityLabel;
   }
   return RELIC_RARITY_TO_QUALITY[rarity];

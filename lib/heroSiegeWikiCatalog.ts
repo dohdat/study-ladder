@@ -1,6 +1,6 @@
 import heroSiegeWikiItems from "../data/heroSiegeWikiItems.json";
 import { HERO_SIEGE_ITEM_CATEGORIES } from "./heroSiegeItemCatalog";
-import { getRelicQualityLabel, ITEM_RARITY_TO_QUALITY, type HeroSiegeQuality } from "./heroSiegeQuality";
+import { ITEM_RARITY_TO_QUALITY, type HeroSiegeQuality } from "./heroSiegeQuality";
 import type { CharacterStatKey, CharacterStats, EquipmentSlot, InventoryItem, ItemModifier, ItemModifierKey, ItemRarity, Relic, RelicRarity } from "../types/study";
 
 const HASH_SEED = 2166136261;
@@ -21,6 +21,40 @@ const WIKI_QUALITY_TO_RARITY: Record<HeroSiegeQuality, ItemRarity> = {
   Rare: "rare",
   Set: "epic",
   Unique: "legendary"
+};
+export const HERO_SIEGE_MOD_RULES: Record<HeroSiegeQuality, { max: number; min: number }> = {
+  Magic: { max: 2, min: 0 },
+  Normal: { max: 0, min: 0 },
+  Rare: { max: 6, min: 3 },
+  Set: { max: 8, min: 3 },
+  Unique: { max: 12, min: 4 }
+};
+const WIKI_ITEM_FALLBACK_STATS = [
+  "+12% Enhanced Damage",
+  "+2 Strength",
+  "+2 Perception",
+  "+10 Max Health",
+  "+6% Critical Hit Chance",
+  "+12% Critical Hit Damage",
+  "+4 Armor",
+  "+8% Fire Resistance",
+  "+8% Cold Resistance",
+  "+8% Lightning Resistance",
+  "+8% Poison Resistance",
+  "+6% Physical Resistance",
+  "+8% Gold Find",
+  "+8% Magic Find"
+] as const;
+export const HERO_SIEGE_RELIC_MOD_RULES: Record<HeroSiegeQuality, { max: number; min: number }> = {
+  ...HERO_SIEGE_MOD_RULES,
+  Normal: { max: 1, min: 1 }
+};
+const ITEM_VISIBLE_MOD_CAPS: Record<ItemRarity, number> = {
+  common: HERO_SIEGE_MOD_RULES.Normal.max,
+  epic: HERO_SIEGE_MOD_RULES.Set.max,
+  legendary: HERO_SIEGE_MOD_RULES.Unique.max,
+  rare: HERO_SIEGE_MOD_RULES.Rare.max,
+  uncommon: HERO_SIEGE_MOD_RULES.Magic.max
 };
 export const HERO_SIEGE_WIKI_QUALITY_DISTRIBUTION: readonly { cutoff: number; label: HeroSiegeQuality }[] = [
   { cutoff: 0.52, label: "Normal" },
@@ -107,17 +141,18 @@ const WIKI_ITEM_DATA = heroSiegeWikiItems as {
   items: HeroSiegeWikiItem[];
 };
 
-export const HERO_SIEGE_WIKI_CATEGORIES: readonly HeroSiegeWikiCategory[] = WIKI_ITEM_DATA.categories;
+export const HERO_SIEGE_WIKI_CATEGORIES: readonly HeroSiegeWikiCategory[] = WIKI_ITEM_DATA.categories.filter((category) => category.sourcePage !== "Charms");
 export const HERO_SIEGE_WIKI_ITEMS: readonly HeroSiegeWikiItem[] = WIKI_ITEM_DATA.items;
 export const HERO_SIEGE_WIKI_EQUIPMENT = HERO_SIEGE_WIKI_ITEMS.filter((item) => item.category !== "Charms");
 export const HERO_SIEGE_WIKI_CHARMS = HERO_SIEGE_WIKI_ITEMS.filter((item) => item.category === "Charms");
 export const HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT = createLowLevelWikiEquipment();
 export const HERO_SIEGE_WIKI_ITEM_QUALITIES = createWikiItemQualities(HERO_SIEGE_WIKI_ITEMS);
+export const HERO_SIEGE_WIKI_RELIC_QUALITIES = createWikiItemQualities(HERO_SIEGE_WIKI_CHARMS);
 export const HERO_SIEGE_WIKI_ITEM_IMAGE_DISPLAYS = getUniqueWikiItemImageDisplays([...HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT, ...HERO_SIEGE_WIKI_ITEMS]);
 export const HERO_SIEGE_WIKI_CHARM_IMAGE_DISPLAYS = getUniqueWikiItemImageDisplays(HERO_SIEGE_WIKI_CHARMS);
 
 export function pickWikiEquipmentItem(slot: EquipmentSlot, seed: string, options: { maxItemLevel?: number; rarity?: ItemRarity } = {}) {
-  const candidates = getWikiEquipmentCandidates(slot, options);
+  const candidates = getWikiEquipmentCandidates(getWikiLookupSlot(slot), options);
   return candidates.length ? candidates[Math.floor(getCatalogRoll(seed) * candidates.length)] : null;
 }
 
@@ -159,15 +194,30 @@ export function getWikiItemQualityLabel(item: Pick<HeroSiegeWikiItem, "id" | "ti
   return HERO_SIEGE_WIKI_ITEM_QUALITIES.get(item.id) || getRolledWikiQuality(item.id);
 }
 
+export function getWikiRelicQualityLabel(item: Pick<HeroSiegeWikiItem, "id">): HeroSiegeQuality {
+  return HERO_SIEGE_WIKI_RELIC_QUALITIES.get(item.id) || getRolledWikiQuality(item.id);
+}
+
+export function getVisibleWikiItemStats(item: Pick<HeroSiegeWikiItem, "id" | "stats" | "tierGroup">) {
+  const quality = getWikiItemQualityLabel(item);
+  return fillMinimumWikiItemStats(item, quality, getPlayableWikiStats(item.stats)).slice(0, HERO_SIEGE_MOD_RULES[quality].max);
+}
+
+export function getVisibleWikiRelicStats(item: Pick<HeroSiegeWikiItem, "id" | "stats">) {
+  const quality = getWikiRelicQualityLabel(item);
+  return getPlayableWikiStats(item.stats).slice(0, HERO_SIEGE_RELIC_MOD_RULES[quality].max);
+}
+
 export function createWikiRelicDefinitions() {
   const imageDisplays = HERO_SIEGE_WIKI_CHARM_IMAGE_DISPLAYS;
   return HERO_SIEGE_WIKI_CHARMS.map((item) => {
-    const wikiStats = getPlayableWikiStats(item.stats);
-    const modifiers = createWikiModifiers(wikiStats, RELIC_STAT_DIVISOR);
     const imageDisplay = imageDisplays.get(item.id);
-    const rarity = getWikiRelicRarity(item);
+    const quality = getWikiRelicQualityLabel(item);
+    const rarity = getWikiRelicRarity(quality);
+    const wikiStats = getVisibleWikiRelicStats(item);
+    const modifiers = createWikiModifiers(wikiStats, RELIC_STAT_DIVISOR);
     return {
-      description: wikiStats.slice(0, 3).join(", ") || `${item.tierGroup} charm.`,
+      description: `${quality} ${item.category.toLowerCase()} relic.`,
       id: item.id,
       modifiers: modifiers.length ? modifiers : [{ key: "magicFindPercent", value: 1 }],
       name: item.name,
@@ -177,7 +227,7 @@ export function createWikiRelicDefinitions() {
       wikiImageFilter: imageDisplay?.filter,
       wikiImagePath: imageDisplay?.imagePath || getWikiItemPublicPath(item),
       wikiLevel: getWikiItemLevel(item),
-      wikiRarityLabel: getRelicQualityLabel(rarity),
+      wikiRarityLabel: quality,
       wikiStats,
       wikiTier: item.tier,
       wikiTierGroup: item.tierGroup
@@ -190,7 +240,9 @@ export function applyWikiItemData(item: InventoryItem, wikiItem: HeroSiegeWikiIt
     return item;
   }
   const imageDisplay = HERO_SIEGE_WIKI_ITEM_IMAGE_DISPLAYS.get(wikiItem.id);
-  const wikiStats = getPlayableWikiStats(wikiItem.stats);
+  const visibleModCount = (item.modifiers || []).length + Object.values(item.stats).filter(Boolean).length;
+  const quality = ITEM_RARITY_TO_QUALITY[item.rarity];
+  const wikiStats = fillMinimumWikiItemStats(wikiItem, quality, getPlayableWikiStats(wikiItem.stats)).slice(0, Math.max(0, ITEM_VISIBLE_MOD_CAPS[item.rarity] - visibleModCount));
   return {
     ...item,
     name: wikiItem.name,
@@ -201,11 +253,27 @@ export function applyWikiItemData(item: InventoryItem, wikiItem: HeroSiegeWikiIt
     wikiImageFilter: imageDisplay?.filter,
     wikiImagePath: imageDisplay?.imagePath || getWikiItemPublicPath(wikiItem),
     wikiLevel: getWikiItemLevel(wikiItem),
-    wikiRarityLabel: ITEM_RARITY_TO_QUALITY[item.rarity],
+    wikiRarityLabel: quality,
     wikiStats,
     wikiTier: wikiItem.tier,
     wikiTierGroup: wikiItem.tierGroup
   };
+}
+
+function fillMinimumWikiItemStats(item: Pick<HeroSiegeWikiItem, "id">, quality: HeroSiegeQuality, stats: string[]) {
+  const rule = HERO_SIEGE_MOD_RULES[quality];
+  if (rule.min <= 0 || stats.length >= rule.min) {
+    return stats;
+  }
+  const filled = [...stats];
+  const startIndex = Math.floor(getCatalogRoll(`${item.id}:fallback-stat-start`) * WIKI_ITEM_FALLBACK_STATS.length) % WIKI_ITEM_FALLBACK_STATS.length;
+  for (let index = 0; filled.length < rule.min && index < WIKI_ITEM_FALLBACK_STATS.length; index += 1) {
+    const candidate = WIKI_ITEM_FALLBACK_STATS[(startIndex + index) % WIKI_ITEM_FALLBACK_STATS.length];
+    if (!filled.includes(candidate)) {
+      filled.push(candidate);
+    }
+  }
+  return filled;
 }
 
 export function createWikiMechanicalStats(slot: EquipmentSlot, wikiItem: HeroSiegeWikiItem | null): Partial<CharacterStats> {
@@ -221,6 +289,10 @@ export function createWikiMechanicalStats(slot: EquipmentSlot, wikiItem: HeroSie
     stats[stat] = Math.max(stats[stat] || 0, scaleWikiValue(line, EQUIPMENT_STAT_DIVISOR));
   }
   return stats;
+}
+
+function getWikiLookupSlot(slot: EquipmentSlot): EquipmentSlot {
+  return slot === "ringTwo" ? "eyewear" : slot;
 }
 
 export function createWikiModifiers(stats: string[], divisor = EQUIPMENT_STAT_DIVISOR): ItemModifier[] {
@@ -239,7 +311,7 @@ function getWikiEquipmentCandidates(slot: EquipmentSlot, options: { maxItemLevel
   const sourceItems = maxItemLevel && maxItemLevel < 20
     ? [...HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT, ...HERO_SIEGE_WIKI_EQUIPMENT]
     : [...HERO_SIEGE_WIKI_EQUIPMENT, ...HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT];
-  const bySlot = sourceItems.filter((item) => item.slot === slot && (item.imagePath || item.tierGroup === "Normal"));
+  const bySlot = sourceItems.filter((item) => isWikiItemForEquipmentSlot(item, slot) && (item.imagePath || item.tierGroup === "Normal"));
   const byLevel = maxItemLevel ? bySlot.filter((item) => getWikiItemLevel(item) <= maxItemLevel && isWikiItemAllowedForLevel(item, maxItemLevel)) : bySlot;
   if (!byLevel.length) {
     return [];
@@ -249,7 +321,7 @@ function getWikiEquipmentCandidates(slot: EquipmentSlot, options: { maxItemLevel
 
 function createLowLevelWikiEquipment(): HeroSiegeWikiItem[] {
   return HERO_SIEGE_ITEM_CATEGORIES
-    .filter((category) => !category.id.includes("unique") && category.id !== "charms-unique" && category.id !== "weapon-universal")
+    .filter((category) => !category.id.includes("unique") && category.id !== "charms" && category.id !== "charms-unique" && category.id !== "weapon-universal")
     .flatMap((category) => category.names.slice(0, 8).map((name, index) => {
       const image = getRegularWikiItemImage(category.id, name);
       return {
@@ -263,7 +335,7 @@ function createLowLevelWikiEquipment(): HeroSiegeWikiItem[] {
         imageWidth: image.width,
         level: String(Math.min(19, 1 + Math.floor(index / 2))),
         name,
-        slot: category.slot,
+        slot: getEquipmentSlotForCategory(category.id, category.slot),
         stats: [],
         tier: "",
         tierGroup: "Normal"
@@ -271,8 +343,67 @@ function createLowLevelWikiEquipment(): HeroSiegeWikiItem[] {
     }));
 }
 
+function getEquipmentSlotForCategory(categoryId: string, fallback: EquipmentSlot): EquipmentSlot {
+  if (categoryId === "belts") {
+    return "backAccessory";
+  }
+  if (categoryId === "gloves") {
+    return "bodyAccessory";
+  }
+  return fallback;
+}
+
+function isWikiItemForEquipmentSlot(item: HeroSiegeWikiItem, slot: EquipmentSlot) {
+  if (item.category === "Charms") {
+    return false;
+  }
+  if (slot === "backAccessory") {
+    return item.category === "Belts";
+  }
+  if (slot === "bodyAccessory") {
+    return item.category === "Gloves";
+  }
+  if (slot === "headAccessory") {
+    return item.category === "Amulets";
+  }
+  if (slot === "eyewear") {
+    return item.category === "Rings";
+  }
+  return item.slot === slot;
+}
+
 function getPlayableWikiStats(stats: readonly string[]) {
-  return stats.filter((stat) => !stat.toLowerCase().includes("socketed"));
+  return stats.filter(isSupportedWikiStat);
+}
+
+function isSupportedWikiStat(stat: string) {
+  const normalized = stat.toLowerCase();
+  if (
+    normalized.includes("socketed")
+    || normalized.includes("value1")
+    || normalized.includes("value2")
+    || normalized.includes("all attributes")
+    || normalized.includes("all stats")
+    || normalized.includes("all skills")
+    || normalized.includes("arcane")
+    || normalized.includes("attack rating")
+    || normalized.includes("attack speed")
+    || normalized.includes("cast rate")
+    || normalized.includes("chance to cast")
+    || normalized.includes("chance when")
+    || normalized.includes("defense ignored")
+    || normalized.includes("enemy ")
+    || normalized.includes("energy")
+    || normalized.includes("master cast")
+    || normalized.includes("movement speed")
+    || normalized.includes("skill damage")
+    || normalized.includes("stamina")
+    || normalized.includes("target defense")
+    || normalized.includes("vitality")
+  ) {
+    return false;
+  }
+  return Boolean(getWikiModifier(stat, EQUIPMENT_STAT_DIVISOR) || getWikiCharacterStat(stat, "mainHand"));
 }
 
 function createWikiItemQualities(items: readonly HeroSiegeWikiItem[]) {
@@ -407,34 +538,31 @@ function isWikiItemAllowedForLevel(item: HeroSiegeWikiItem, maxItemLevel: number
   return true;
 }
 
-function getWikiRelicRarity(item: HeroSiegeWikiItem): RelicRarity {
-  if (item.tierGroup === "Heroic" || item.tierGroup === "Unholy" || item.tierGroup === "Angelic" || item.tier === "SS") {
+function getWikiRelicRarity(quality: HeroSiegeQuality): RelicRarity {
+  if (quality === "Unique") {
     return "boss";
   }
-  if (item.tierGroup === "Satanic Set") {
+  if (quality === "Set") {
     return "shop";
   }
-  if (item.tier === "S" || item.tier === "A") {
+  if (quality === "Rare") {
     return "rare";
   }
-  return item.tier === "B" ? "uncommon" : "common";
+  return quality === "Magic" ? "uncommon" : "common";
 }
 
 function getWikiCharacterStat(line: string, slot: EquipmentSlot): CharacterStatKey | null {
   const normalized = line.toLowerCase();
-  if (normalized.includes("all attributes") || normalized.includes("all stats")) {
-    return slot === "mainHand" ? "strength" : "constitution";
-  }
-  if (normalized.includes("strength") || normalized.includes("attack damage")) {
+  if (normalized.includes("strength")) {
     return "strength";
   }
-  if (normalized.includes("vitality") || normalized.includes("stamina") || normalized.includes("defense") || normalized.includes("life")) {
+  if (normalized.includes("constitution")) {
     return "constitution";
   }
-  if (normalized.includes("intelligence") || normalized.includes("energy") || normalized.includes("mana") || normalized.includes("cast rate")) {
+  if (normalized.includes("intelligence")) {
     return "intelligence";
   }
-  if (normalized.includes("movement") || normalized.includes("magic find") || normalized.includes("gold") || normalized.includes("attack rating")) {
+  if (normalized.includes("perception")) {
     return "perception";
   }
   return null;
@@ -442,7 +570,10 @@ function getWikiCharacterStat(line: string, slot: EquipmentSlot): CharacterStatK
 
 function getWikiModifier(line: string, divisor: number): ItemModifier | null {
   const normalized = line.toLowerCase();
-  if (normalized.includes("enhanced damage") || normalized.includes("attack damage increased") || normalized.includes("skill damage increased")) {
+  if (normalized.includes("critical strike damage") || normalized.includes("critical hit damage")) {
+    return { key: "criticalDamagePercent", value: scaleWikiPercent(line, divisor) };
+  }
+  if (normalized.includes("enhanced damage") || normalized.includes("attack damage increased")) {
     return { key: "enhancedDamagePercent", value: scaleWikiPercent(line, divisor) };
   }
   if (normalized.includes("crit")) {
@@ -454,11 +585,11 @@ function getWikiModifier(line: string, divisor: number): ItemModifier | null {
   if (normalized.includes("gold")) {
     return { key: "goldFindPercent", value: scaleWikiPercent(line, divisor) };
   }
-  if (normalized.includes("life after each kill") || normalized.includes("replenish life")) {
+  if (normalized.includes("life after each kill")) {
     return { key: "lifeOnKill", value: scaleWikiValue(line, divisor) };
   }
-  if (normalized.includes("mana after each kill") || normalized.includes("replenish mana")) {
-    return { key: "manaOnKill", value: scaleWikiValue(line, divisor) };
+  if (normalized.includes("replenish life")) {
+    return { key: "healthRegen", value: scaleWikiValue(line, divisor) };
   }
   if (normalized.includes(" to life") || normalized.includes("life increased")) {
     return { key: "maxLife", value: scaleWikiValue(line, divisor) };
@@ -468,6 +599,9 @@ function getWikiModifier(line: string, divisor: number): ItemModifier | null {
   }
   if (normalized.includes("physical damage taken reduced") || normalized.includes("magic damage taken reduced")) {
     return { key: "damageReduction", value: scaleWikiValue(line, divisor) };
+  }
+  if (normalized.includes("physical resistance")) {
+    return { key: "physicalResistPercent", value: scaleWikiPercent(line, divisor) };
   }
   if (normalized.includes("fire resistance")) {
     return { key: "fireResistPercent", value: scaleWikiPercent(line, divisor) };
@@ -480,6 +614,21 @@ function getWikiModifier(line: string, divisor: number): ItemModifier | null {
   }
   if (normalized.includes("poison resistance")) {
     return { key: "poisonResistPercent", value: scaleWikiPercent(line, divisor) };
+  }
+  if (normalized.includes("physical damage")) {
+    return { key: "physicalDamage", value: scaleWikiValue(line, divisor) };
+  }
+  if (normalized.includes("fire damage")) {
+    return { key: "fireDamage", value: scaleWikiValue(line, divisor) };
+  }
+  if (normalized.includes("cold damage")) {
+    return { key: "coldDamage", value: scaleWikiValue(line, divisor) };
+  }
+  if (normalized.includes("lightning damage")) {
+    return { key: "lightningDamage", value: scaleWikiValue(line, divisor) };
+  }
+  if (normalized.includes("poison damage")) {
+    return { key: "poisonDamage", value: scaleWikiValue(line, divisor) };
   }
   if (normalized.includes("increased experience")) {
     return { key: "bonusXpPercent", value: scaleWikiPercent(line, divisor) };

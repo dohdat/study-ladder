@@ -3,8 +3,11 @@ type StaticImageData = string;
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { HeroSiegeButton, getHeroSiegeMenuButtonAsset } from "./HeroSiegeUi";
+import { CoinIcon } from "./CoinIcon";
+import { HeroSiegeEquipmentIcon } from "./HeroSiegeItemIcon";
 import { ShopPanel } from "./ShopPanel";
-import { canUpgradeSpireInventoryItem, claimCurrentSpireRoomReward, enterSpireNode, getCurrentSpireNode, isCombatNode, leaveSpireRoom, MERCHANT_UPGRADE_COST, selectSpireNode, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
+import { RelicIcon } from "./RelicIcon";
+import { canUpgradeSpireInventoryItem, claimCurrentSpireRoomReward, digCurrentSpireRoomRelic, enterSpireNode, getCurrentSpireNode, getRestSpecialAction, isCombatNode, leaveSpireRoom, MERCHANT_UPGRADE_COST, selectSpireNode, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
 import type { SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
 import campfireArt from "../assets/hero_siege_map/campfire.png";
 import chestArt from "../assets/hero_siege_map/chest.png";
@@ -283,17 +286,33 @@ function CompactRoomPanel(props: { node: SpireMapNode | undefined; solved: numbe
 }
 
 function MerchantRoomPanel(props: { setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
-  const canUpgrade = canUpgradeSpireInventoryItem(props.state) && props.state.profile.coins >= MERCHANT_UPGRADE_COST;
+  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
+  const currentNode = getCurrentSpireNode(props.state);
+  const upgraded = Boolean(currentNode && props.state.profile.spireRun.completedNodeIds.includes(currentNode.id));
+  const canUpgrade = !upgraded && canUpgradeSpireInventoryItem(props.state) && props.state.profile.coins >= MERCHANT_UPGRADE_COST;
+  const upgradeItem = () => {
+    props.setState((previous) => {
+      const beforeItems = previous.profile.inventory;
+      const next = upgradeCurrentSpireRoomItem(previous);
+      const changed = next.profile.inventory.find((item) => {
+        const before = beforeItems.find((row) => row.id === item.id);
+        return before && (before.rarity !== item.rarity || JSON.stringify(before.stats) !== JSON.stringify(item.stats));
+      });
+      setUpgradeMessage(changed ? `${changed.name} upgraded to ${changed.rarity}.` : "No eligible item was upgraded.");
+      return next;
+    });
+  };
   return (
     <Stack gap="sm">
       <ShopPanel state={props.state} setState={props.setState} />
       <Group justify="space-between" wrap="nowrap" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "10px 14px" }}>
         <Box>
           <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>Merchant Services</Text>
-          <Text size="xs" c="dimmed">Upgrade a random item up to Rare for {MERCHANT_UPGRADE_COST} gold.</Text>
+          <Text size="xs" c="dimmed">{upgraded ? "Merchant upgrade used. You can still shop, then continue." : `Upgrade one random item up to Rare for ${MERCHANT_UPGRADE_COST} gold.`}</Text>
+          {upgradeMessage && <Text size="xs" c="yellow.3" fw={800}>{upgradeMessage}</Text>}
         </Box>
         <Group gap={8} wrap="nowrap">
-          <HeroSiegeButton disabled={!canUpgrade} onClick={() => props.setState((previous) => upgradeCurrentSpireRoomItem(previous))} minWidth={132}>Upgrade Item</HeroSiegeButton>
+          <HeroSiegeButton disabled={!canUpgrade} onClick={upgradeItem} minWidth={132}>Upgrade Item</HeroSiegeButton>
           <HeroSiegeButton onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
         </Group>
       </Group>
@@ -303,13 +322,15 @@ function MerchantRoomPanel(props: { setState: React.Dispatch<React.SetStateActio
 
 function TreasureRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
   const opened = props.state.profile.spireRun.completedNodeIds.includes(props.node.id);
+  const rewardClaim = props.state.profile.spireRun.roomRewardClaims[props.node.id];
   return (
     <Group justify="space-between" wrap="nowrap" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "14px 16px" }}>
       <Group gap="sm" wrap="nowrap">
         <NodeIcon kind="treasure" size={46} />
         <Box>
           <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>{opened ? "Treasure Opened" : "Treasure Chest"}</Text>
-          <Text size="xs" c="dimmed">{opened ? "Claimed treasure rewards. Continue to choose the next route." : "Open the chest to claim relics, gold, and possible equipment."}</Text>
+          <Text size="xs" c="dimmed">{opened ? "Continue to choose the next route." : "Open the chest to claim gold and a random relic or equipment reward."}</Text>
+          {rewardClaim && <TreasureRewardIcons claim={rewardClaim} state={props.state} />}
         </Box>
       </Group>
       <Group gap={8} wrap="nowrap">
@@ -320,20 +341,53 @@ function TreasureRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch
   );
 }
 
+function TreasureRewardIcons(props: { claim: StudyState["profile"]["spireRun"]["roomRewardClaims"][string]; state: StudyState }) {
+  const relics = (props.claim.relicIds || []).map((id) => props.state.profile.relics.find((relic) => relic.id === id)).filter(Boolean);
+  const items = (props.claim.itemIds || []).map((id) => props.state.profile.inventory.find((item) => item.id === id)).filter(Boolean);
+  return (
+    <Group gap={8} mt={6} wrap="nowrap">
+      {props.claim.gold ? (
+        <Group gap={4} wrap="nowrap">
+          <CoinIcon size={18} />
+          <Text size="xs" fw={900} c="yellow.3">+{props.claim.gold} gold</Text>
+        </Group>
+      ) : null}
+      {relics.map((relic) => relic && (
+        <Group key={relic.id} gap={4} wrap="nowrap">
+          <RelicIcon relic={relic} size={26} unframed />
+          <Text size="xs" fw={900} c="cyan.3">{relic.name}</Text>
+        </Group>
+      ))}
+      {items.map((item) => item && (
+        <Group key={item.id} gap={4} wrap="nowrap">
+          <HeroSiegeEquipmentIcon item={item} size={28} unframed />
+          <Text size="xs" fw={900} c="#f1dfad">{item.name}</Text>
+        </Group>
+      ))}
+    </Group>
+  );
+}
+
 function RestRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
   const used = props.state.profile.spireRun.completedNodeIds.includes(props.node.id);
+  const specialAction = getRestSpecialAction(props.state);
+  const specialText = specialAction === "smith" ? "Smith upgrades one random item up to Rare." : "Dig finds one random relic.";
   return (
     <Group justify="space-between" wrap="nowrap" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "14px 16px" }}>
       <Group gap="sm" wrap="nowrap">
         <NodeIcon kind="rest" size={46} />
         <Box>
           <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>{used ? "Rest Site Used" : "Rest Site"}</Text>
-          <Text size="xs" c="dimmed">{used ? "Continue to choose the next route." : "Rest to recover or smith your lowest-tier item."}</Text>
+          <Text size="xs" c="dimmed">{used ? "Continue to choose the next route." : `Rest heals 50% health. ${specialText}`}</Text>
         </Box>
       </Group>
       <Group gap={8} wrap="nowrap">
         <HeroSiegeButton disabled={used} onClick={() => props.setState((previous) => claimCurrentSpireRoomReward(previous))} minWidth={104}>Rest</HeroSiegeButton>
-        <HeroSiegeButton disabled={used || !canUpgradeSpireInventoryItem(props.state)} onClick={() => props.setState((previous) => upgradeCurrentSpireRoomItem(previous))} minWidth={104}>Smith</HeroSiegeButton>
+        {specialAction === "smith" ? (
+          <HeroSiegeButton disabled={used || !canUpgradeSpireInventoryItem(props.state)} onClick={() => props.setState((previous) => upgradeCurrentSpireRoomItem(previous))} minWidth={104}>Smith</HeroSiegeButton>
+        ) : (
+          <HeroSiegeButton disabled={used} onClick={() => props.setState((previous) => digCurrentSpireRoomRelic(previous))} minWidth={104}>Dig</HeroSiegeButton>
+        )}
         <HeroSiegeButton disabled={!used} onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
       </Group>
     </Group>

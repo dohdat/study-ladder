@@ -1382,7 +1382,7 @@ export const HERO_SIEGE_ITEM_CATEGORIES = [
   }
 ] as const satisfies readonly HeroSiegeItemCategory[];
 
-export const HERO_SIEGE_ITEM_NAMES_BY_SLOT: Record<EquipmentSlot, string[]> = {
+export const HERO_SIEGE_ITEM_NAMES_BY_SLOT: Record<Exclude<EquipmentSlot, "ringTwo">, string[]> = {
   "mainHand": [
     "Hand Axe",
     "Hatchet",

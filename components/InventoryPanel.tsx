@@ -1,13 +1,13 @@
 import { ActionIcon, Badge, Box, Group, Stack, Text, Tooltip } from "@mantine/core";
 type StaticImageData = string;
 import { useState } from "react";
-import { IconTrash } from "@tabler/icons-react";
+import { IconCoins } from "@tabler/icons-react";
 
 import { HeroSiegeButton } from "./HeroSiegeUi";
 import { HERO_ITEM_RARITY_COLORS, HeroSiegeEquipmentIcon } from "./HeroSiegeItemIcon";
 import { getHeroSiegeQualityColor, getItemQuality } from "../lib/heroSiegeQuality";
 import { MODIFIER_FORMATTERS } from "../lib/modifierFormat";
-import { canEquipItem, discardItem, EQUIPMENT_SLOT_LABELS, equipItem, getActiveSetBonuses, moveInventoryItem, unequipItem } from "../lib/studyCore";
+import { bulkSellItems, canEquipItem, EQUIPMENT_SLOT_LABELS, equipItem, getActiveSetBonuses, getItemSellValue, moveInventoryItem, sellItem, unequipItem } from "../lib/studyCore";
 import { ITEM_BASE_NAMES } from "../lib/itemNames";
 import type { EquipmentSlot, InventoryItem, InventoryItemPosition, ItemModifierKey, StudyState } from "../types/study";
 import inventoryGamepadBg from "../assets/hero_siege_inventory/inventory-gamepad.png";
@@ -50,7 +50,9 @@ const INVENTORY_GRID_CELL_SIZE = 32;
 const INVENTORY_GRID_WIDTH = 464;
 const INVENTORY_GRID_HEIGHT = INVENTORY_GRID_ROWS * INVENTORY_GRID_CELL_SIZE + (INVENTORY_GRID_ROWS - 1) * INVENTORY_GRID_GAP;
 const INVENTORY_BACKGROUND_GHOST_TOP = INVENTORY_GRID_TOP + INVENTORY_GRID_HEIGHT + INVENTORY_GRID_GAP;
-const SORT_BUTTON_WIDTH = 180;
+const SORT_BUTTON_WIDTH = 132;
+const BULK_SELL_BUTTON_WIDTH = 132;
+const BULK_SELL_BUTTON_GAP = 8;
 const SORT_BUTTON_HEIGHT = 35;
 const SORT_BUTTON_RIGHT = 24;
 const SORT_BUTTON_TOP = INVENTORY_GRID_TOP + INVENTORY_GRID_HEIGHT + INVENTORY_GRID_GAP + 4;
@@ -67,13 +69,13 @@ const DISCARD_ICON_SIZE = 13;
 const DISCARD_BUTTON_SIZE = 18;
 const LOCKED_ITEM_OPACITY = 0.52;
 const ITEM_TILE_RARITY_BG: Record<InventoryItem["rarity"], string> = {
-  common: "radial-gradient(circle at 45% 28%, rgba(74, 74, 74, 0.72), rgba(7, 7, 7, 0.96) 72%)",
-  epic: "radial-gradient(circle at 45% 28%, rgba(88, 43, 130, 0.7), rgba(12, 5, 18, 0.96) 72%)",
-  legendary: "radial-gradient(circle at 45% 28%, rgba(121, 84, 28, 0.76), rgba(16, 9, 3, 0.96) 72%)",
-  rare: "radial-gradient(circle at 45% 28%, rgba(33, 73, 126, 0.72), rgba(5, 10, 18, 0.96) 72%)",
-  uncommon: "radial-gradient(circle at 45% 28%, rgba(28, 100, 56, 0.7), rgba(4, 13, 7, 0.96) 72%)"
+  common: "radial-gradient(circle at 45% 26%, rgba(245, 245, 245, 0.2), rgba(72, 72, 72, 0.48) 38%, rgba(7, 7, 7, 0.96) 82%)",
+  epic: "radial-gradient(circle at 45% 26%, rgba(39, 245, 70, 0.34), rgba(12, 88, 26, 0.58) 38%, rgba(3, 14, 5, 0.96) 82%)",
+  legendary: "radial-gradient(circle at 45% 26%, rgba(255, 225, 105, 0.4), rgba(145, 103, 25, 0.64) 40%, rgba(17, 10, 3, 0.96) 82%)",
+  rare: "radial-gradient(circle at 45% 26%, rgba(255, 246, 84, 0.38), rgba(118, 101, 16, 0.58) 40%, rgba(15, 13, 2, 0.96) 82%)",
+  uncommon: "radial-gradient(circle at 45% 26%, rgba(57, 171, 255, 0.38), rgba(13, 74, 126, 0.58) 40%, rgba(2, 9, 17, 0.96) 82%)"
 };
-const ITEM_TILE_INSET_SHADOW = "inset 0 0 0 1px rgba(0, 0, 0, 0.82), inset 0 0 18px rgba(0, 0, 0, 0.46)";
+const ITEM_TILE_INSET_SHADOW = "inset 0 0 18px rgba(0, 0, 0, 0.58), inset 0 -5px 10px rgba(0, 0, 0, 0.34)";
 const DETAILS_WIDTH = 260;
 const DETAILS_SHEET_WIDTH = 420;
 const DETAILS_BG = "linear-gradient(180deg, rgba(35, 13, 13, 0.98), rgba(9, 6, 5, 0.99))";
@@ -98,14 +100,15 @@ const ITEM_ARMOR_SPREAD = 3;
 
 const SLOT_POWER_PROFILES: Record<EquipmentSlot, { damage?: [number, number]; defense?: [number, number]; tier: string }> = {
   armor: { defense: [12, 18], tier: "Armor" },
-  backAccessory: { defense: [3, 6], tier: "Back" },
+  backAccessory: { defense: [3, 6], tier: "Belt" },
   bodyAccessory: { defense: [4, 7], tier: "Gloves" },
   eyewear: { defense: [1, 3], tier: "Ring" },
   feet: { defense: [4, 8], tier: "Boots" },
   headAccessory: { defense: [1, 3], tier: "Amulet" },
   headgear: { defense: [6, 10], tier: "Helmet" },
   mainHand: { damage: [6, 12], tier: "1-Handed" },
-  offHand: { defense: [8, 14], tier: "Shield" }
+  offHand: { defense: [8, 14], tier: "Shield" },
+  ringTwo: { defense: [1, 3], tier: "Ring" }
 };
 
 const STAT_DISPLAY_NAMES: Record<keyof typeof STAT_LABELS, string> = {
@@ -115,21 +118,47 @@ const STAT_DISPLAY_NAMES: Record<keyof typeof STAT_LABELS, string> = {
   strength: "Strength"
 };
 
-const MODIFIER_DETAILS: Record<ItemModifierKey, { color: string; label: (value: number) => string; range: [number, number] }> = {
+const MODIFIER_DETAILS: Partial<Record<ItemModifierKey, { color: string; label: (value: number) => string; range: [number, number] }>> = {
+  accuracyPercent: { color: "#6f6ff6", label: (value) => `+${value}% Accuracy`, range: [2, 10] },
+  armor: { color: "#73c7ff", label: (value) => `+${value} Armor`, range: [1, 8] },
+  armorPenetrationPercent: { color: "#6f6ff6", label: (value) => `+${value}% Armor Penetration`, range: [3, 20] },
+  blockChancePercent: { color: "#73c7ff", label: (value) => `+${value}% Block Chance`, range: [2, 8] },
+  bonusDamageVsElitesPercent: { color: "#6f6ff6", label: (value) => `+${value}% Damage vs Elites`, range: [5, 25] },
+  bonusDamageWhileFullHealthPercent: { color: "#6f6ff6", label: (value) => `+${value}% Damage While Full Health`, range: [5, 20] },
+  bonusDamageWhileLowHealthPercent: { color: "#6f6ff6", label: (value) => `+${value}% Damage While Low Health`, range: [5, 25] },
   bonusXpPercent: { color: "#6f6ff6", label: (value) => `+${value}% Increased Experience`, range: [5, 20] },
   coldResistPercent: { color: "#73c7ff", label: (value) => `+${value}% Cold Resistance`, range: [5, 30] },
+  coldDamage: { color: "#73c7ff", label: (value) => `+${value} Cold Damage`, range: [1, 10] },
   criticalChancePercent: { color: "#6f6ff6", label: (value) => `+${value}% Increased Critical Strike Chance`, range: [2, 8] },
+  criticalDamagePercent: { color: "#6f6ff6", label: (value) => `+${value}% Critical Strike Damage`, range: [10, 40] },
   damageReduction: { color: "#6f6ff6", label: (value) => `-${value} Damage Taken`, range: [1, 4] },
+  dodgeChancePercent: { color: "#73c7ff", label: (value) => `+${value}% Dodge Chance`, range: [2, 8] },
+  eliteDropBonusPercent: { color: "#d6a94b", label: (value) => `+${value}% Elite Drop Bonus`, range: [5, 20] },
   enhancedDamagePercent: { color: "#6f6ff6", label: (value) => `+${value}% Enhanced Damage`, range: [8, 30] },
+  executeChancePercent: { color: "#6f6ff6", label: (value) => `+${value}% Execute Chance`, range: [2, 8] },
+  extraAttackChancePercent: { color: "#6f6ff6", label: (value) => `+${value}% Extra Attack Chance`, range: [2, 8] },
   fireResistPercent: { color: "#ff8a3d", label: (value) => `+${value}% Fire Resistance`, range: [5, 30] },
+  fireDamage: { color: "#ff8a3d", label: (value) => `+${value} Fire Damage`, range: [1, 10] },
   goldFindPercent: { color: "#d6a94b", label: (value) => `+${value}% Gold Find`, range: [8, 35] },
+  healthRegen: { color: "#7cff7c", label: (value) => `+${value} Health Regeneration`, range: [1, 5] },
+  increasedHealingReceivedPercent: { color: "#7cff7c", label: (value) => `+${value}% Increased Healing Received`, range: [5, 25] },
+  increasedLootDropChancePercent: { color: "#d6a94b", label: (value) => `+${value}% Loot Drop Chance`, range: [5, 25] },
+  increasedRareDropChancePercent: { color: "#d6a94b", label: (value) => `+${value}% Rare Drop Chance`, range: [3, 12] },
   lifeOnKill: { color: "#7cff7c", label: (value) => `+${value} Life on Complete`, range: [2, 8] },
+  lifeStealPercent: { color: "#7cff7c", label: (value) => `+${value}% Life Steal`, range: [1, 6] },
   lightningResistPercent: { color: "#f0df5f", label: (value) => `+${value}% Lightning Resistance`, range: [5, 30] },
+  lightningDamage: { color: "#f0df5f", label: (value) => `+${value} Lightning Damage`, range: [1, 10] },
   magicFindPercent: { color: "#d6a94b", label: (value) => `+${value}% Magic Find`, range: [5, 25] },
-  manaOnKill: { color: "#73a7ff", label: (value) => `+${value} Mana on Complete`, range: [2, 8] },
   maxLife: { color: "#7cff7c", label: (value) => `+${value} Maximum Life`, range: [5, 20] },
   maxMana: { color: "#73a7ff", label: (value) => `+${value} Maximum Mana`, range: [5, 20] },
-  poisonResistPercent: { color: "#7cff7c", label: (value) => `+${value}% Poison Resistance`, range: [5, 30] }
+  parryChancePercent: { color: "#73c7ff", label: (value) => `+${value}% Parry Chance`, range: [2, 8] },
+  physicalDamage: { color: "#6f6ff6", label: (value) => `+${value} Physical Damage`, range: [1, 12] },
+  physicalResistPercent: { color: "#73c7ff", label: (value) => `+${value}% Physical Resistance`, range: [3, 20] },
+  poisonDamage: { color: "#7cff7c", label: (value) => `+${value} Poison Damage`, range: [1, 10] },
+  poisonResistPercent: { color: "#7cff7c", label: (value) => `+${value}% Poison Resistance`, range: [5, 30] },
+  reducedEnemyArmorPercent: { color: "#6f6ff6", label: (value) => `-${value}% Enemy Armor`, range: [3, 20] },
+  reducedEnemyDamagePercent: { color: "#73c7ff", label: (value) => `-${value}% Enemy Damage`, range: [3, 15] },
+  resistancePenetrationPercent: { color: "#6f6ff6", label: (value) => `+${value}% Resistance Penetration`, range: [3, 20] }
 };
 
 type EquipmentSpriteLayout = { asset: StaticImageData; height: number; iconSize: number; label: string; left: number; top: number; width: number };
@@ -146,7 +175,8 @@ const ITEM_FOOTPRINTS: Record<EquipmentSlot, ItemFootprint> = {
   headAccessory: { columns: 1, rows: 1 },
   headgear: { columns: 2, rows: 2 },
   mainHand: { columns: 2, rows: 3 },
-  offHand: { columns: 2, rows: 3 }
+  offHand: { columns: 2, rows: 3 },
+  ringTwo: { columns: 1, rows: 1 }
 };
 
 const EQUIPMENT_LAYOUT: Record<EquipmentSlot, EquipmentSpriteLayout> = {
@@ -155,10 +185,11 @@ const EQUIPMENT_LAYOUT: Record<EquipmentSlot, EquipmentSpriteLayout> = {
   bodyAccessory: { asset: inventorySlotGlovesBg, height: 67, iconSize: MEDIUM_EQUIPPED_ICON_SIZE, label: "Gloves", left: 82, top: 292, width: 66 },
   eyewear: { asset: inventorySlotRingBg, height: 35, iconSize: SMALL_EQUIPPED_ICON_SIZE, label: "Ring", left: 318, top: 300, width: 34 },
   feet: { asset: inventorySlotBootsBg, height: 67, iconSize: MEDIUM_EQUIPPED_ICON_SIZE, label: "Boots", left: 380, top: 292, width: 66 },
-  headAccessory: { asset: inventorySlotAmuletBg, height: 35, iconSize: SMALL_EQUIPPED_ICON_SIZE, label: "Amulet", left: 166, top: 300, width: 34 },
+  headAccessory: { asset: inventorySlotAmuletBg, height: 35, iconSize: SMALL_EQUIPPED_ICON_SIZE, label: "Amulet", left: 302, top: 92, width: 34 },
   headgear: { asset: inventorySlotHelmetBg, height: 67, iconSize: MEDIUM_EQUIPPED_ICON_SIZE, label: "Helmet", left: 226, top: 74, width: 66 },
   mainHand: { asset: inventorySlotWeaponBg, height: 131, iconSize: WEAPON_EQUIPPED_ICON_SIZE, label: "Weapon", left: 80, top: 136, width: 98 },
-  offHand: { asset: inventorySlotShieldBg, height: 131, iconSize: WEAPON_EQUIPPED_ICON_SIZE, label: "Shield", left: 340, top: 136, width: 98 }
+  offHand: { asset: inventorySlotShieldBg, height: 131, iconSize: WEAPON_EQUIPPED_ICON_SIZE, label: "Shield", left: 340, top: 136, width: 98 },
+  ringTwo: { asset: inventorySlotRingBg, height: 35, iconSize: SMALL_EQUIPPED_ICON_SIZE, label: "Ring", left: 126, top: 300, width: 34 }
 };
 
 const TAB_BUTTONS = [
@@ -187,17 +218,18 @@ export function InventoryPanel(props: { state: StudyState; setState: React.Dispa
 
 function EquipmentBoard(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const [activeTab, setActiveTab] = useState(0);
+  const [highlightedSlot, setHighlightedSlot] = useState<EquipmentSlot | null>(null);
   return (
     <Box style={{ backgroundImage: `url(${inventoryGamepadBg})`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%", height: INVENTORY_PANEL_HEIGHT, imageRendering: "pixelated", position: "relative", width: INVENTORY_PANEL_WIDTH }}>
       <EquipmentStage />
       {Object.entries(EQUIPMENT_LAYOUT).map(([slotKey, layout]) => {
         const slot = slotKey as EquipmentSlot;
         const item = props.state.profile.inventory.find((row) => row.id === props.state.profile.equipment[slot]);
-        return <EquipmentSlotCell key={slot} item={item} layout={layout} slot={slot} onUnequip={() => props.setState((previous) => unequipItem(previous, slot))} />;
+        return <EquipmentSlotCell key={slot} highlighted={isCompatibleSlotHighlight(highlightedSlot, slot)} item={item} layout={layout} slot={slot} onUnequip={() => props.setState((previous) => unequipItem(previous, slot))} />;
       })}
-      <InventoryGrid activeTab={activeTab} state={props.state} setState={props.setState} />
+      <InventoryGrid activeTab={activeTab} state={props.state} setState={props.setState} onHoverSlot={setHighlightedSlot} />
       <InventoryBackgroundGhostMask />
-      <InventorySortButton setState={props.setState} />
+      <InventoryActions activeTab={activeTab} state={props.state} setState={props.setState} />
       <InventoryTabs activeTab={activeTab} onChange={setActiveTab} />
     </Box>
   );
@@ -241,9 +273,9 @@ function InventoryBackgroundGhostMask() {
   );
 }
 
-function EquipmentSlotCell(props: { item?: InventoryItem; layout: EquipmentSpriteLayout; onUnequip: () => void; slot: EquipmentSlot }) {
+function EquipmentSlotCell(props: { highlighted: boolean; item?: InventoryItem; layout: EquipmentSpriteLayout; onUnequip: () => void; slot: EquipmentSlot }) {
   const content = (
-    <Box component={props.item ? "button" : "div"} onClick={props.item ? props.onUnequip : undefined} style={{ backgroundColor: "transparent", backgroundImage: `url(${props.layout.asset})`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%", border: 0, boxShadow: "none", cursor: props.item ? "pointer" : "default", height: props.layout.height, imageRendering: "pixelated", left: props.layout.left, outline: "none", padding: 0, position: "absolute", top: props.layout.top, width: props.layout.width, zIndex: 2 }}>
+    <Box component={props.item ? "button" : "div"} onClick={props.item ? props.onUnequip : undefined} style={{ backgroundColor: "transparent", backgroundImage: `url(${props.layout.asset})`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%", border: 0, boxShadow: props.highlighted ? "0 0 0 2px rgba(255, 242, 154, 0.9), 0 0 18px rgba(255, 225, 90, 0.55)" : "none", cursor: props.item ? "pointer" : "default", filter: props.highlighted ? "brightness(1.22)" : "none", height: props.layout.height, imageRendering: "pixelated", left: props.layout.left, outline: "none", padding: 0, position: "absolute", top: props.layout.top, width: props.layout.width, zIndex: props.highlighted ? 4 : 2 }}>
       {props.item ? (
         <Box style={{ alignItems: "center", display: "flex", height: "100%", justifyContent: "center", width: "100%" }}>
           <HeroSiegeEquipmentIcon item={props.item} size={props.layout.iconSize} unframed />
@@ -258,7 +290,7 @@ function EquipmentSlotCell(props: { item?: InventoryItem; layout: EquipmentSprit
   ) : content;
 }
 
-function InventoryGrid(props: { activeTab: number; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
+function InventoryGrid(props: { activeTab: number; onHoverSlot: (slot: EquipmentSlot | null) => void; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [dropPreview, setDropPreview] = useState<InventoryDropPreview | null>(null);
   const placements = getAllInventoryPlacements(props.state.profile.inventory, props.state.profile.inventorySlots);
@@ -320,15 +352,17 @@ function InventoryGrid(props: { activeTab: number; state: StudyState; setState: 
         <InventoryItemCell
           key={placement.item.id}
           canEquip={canEquipItem(props.state, placement.item)}
-          equipped={props.state.profile.equipment[placement.item.slot] === placement.item.id}
+          equipped={isItemEquipped(props.state, placement.item)}
           item={placement.item}
           footprint={placement.footprint}
           isDragging={draggedItemId === placement.item.id}
+          compareItem={getEquippedComparisonItem(props.state, placement.item)}
           onEquip={() => props.setState((previous) => equipItem(previous, placement.item.id))}
-          onUnequip={() => props.setState((previous) => unequipItem(previous, placement.item.slot))}
-          onDiscard={() => props.setState((previous) => discardItem(previous, placement.item.id))}
+          onUnequip={() => props.setState((previous) => unequipItem(previous, getEquippedSlot(previous, placement.item) || placement.item.slot))}
+          onSell={() => props.setState((previous) => sellItem(previous, placement.item.id))}
           onDragEnd={clearDragState}
           onDragStart={(itemId) => setDraggedItemId(itemId)}
+          onHoverSlot={props.onHoverSlot}
           placement={placement}
           tooltipDisabled={draggedItemId !== null}
         />
@@ -394,13 +428,18 @@ function clampDropPreviewPosition(position: InventoryItemPosition, footprint: It
   };
 }
 
-function InventoryItemCell(props: { canEquip: boolean; equipped: boolean; footprint: ItemFootprint; isDragging: boolean; item: InventoryItem; onDiscard: () => void; onDragEnd: () => void; onDragStart: (itemId: string) => void; onEquip: () => void; onUnequip: () => void; placement: InventoryPlacement; tooltipDisabled: boolean }) {
+function InventoryItemCell(props: { canEquip: boolean; compareItem?: InventoryItem | null; equipped: boolean; footprint: ItemFootprint; isDragging: boolean; item: InventoryItem; onDragEnd: () => void; onDragStart: (itemId: string) => void; onEquip: () => void; onHoverSlot: (slot: EquipmentSlot | null) => void; onSell: () => void; onUnequip: () => void; placement: InventoryPlacement; tooltipDisabled: boolean }) {
   const [hovered, setHovered] = useState(false);
   const action = props.equipped ? props.onUnequip : props.onEquip;
   const iconSize = getInventoryItemIconSize(props.footprint);
   const rarityColor = RARITY_COLORS[props.item.rarity];
+  const stateGlow = props.equipped
+    ? `0 0 10px color-mix(in srgb, ${rarityColor} 58%, transparent)`
+    : hovered
+      ? `0 0 8px color-mix(in srgb, ${rarityColor} 36%, transparent)`
+      : "none";
   return (
-    <InventoryItemTooltip canEquip={props.canEquip} disabled={props.tooltipDisabled} equipped={props.equipped} item={props.item}>
+    <InventoryItemTooltip canEquip={props.canEquip} compareItem={props.compareItem} disabled={props.tooltipDisabled} equipped={props.equipped} item={props.item}>
       <Box
         draggable
         onDragEnd={props.onDragEnd}
@@ -409,14 +448,20 @@ function InventoryItemCell(props: { canEquip: boolean; equipped: boolean; footpr
           event.dataTransfer.setData("text/plain", props.item.id);
           props.onDragStart(props.item.id);
         }}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
+        onMouseEnter={() => {
+          setHovered(true);
+          props.onHoverSlot(props.item.slot);
+        }}
+        onMouseLeave={() => {
+          setHovered(false);
+          props.onHoverSlot(null);
+        }}
         style={{ gridColumn: `${props.placement.column + 1} / span ${props.footprint.columns}`, gridRow: `${props.placement.row + 1} / span ${props.footprint.rows}`, opacity: props.isDragging ? 0.42 : 1, position: "relative", zIndex: 5 }}
       >
         <Box
           aria-disabled={!props.equipped && !props.canEquip}
           component="button"
-          onClick={() => {
+          onDoubleClick={() => {
             if (props.equipped || props.canEquip) {
               action();
             }
@@ -424,12 +469,12 @@ function InventoryItemCell(props: { canEquip: boolean; equipped: boolean; footpr
           style={{
             alignItems: "center",
             backgroundColor: "#08080b",
-            backgroundImage: `${ITEM_TILE_RARITY_BG[props.item.rarity]}, url(${inventoryGridBg})`,
-            backgroundRepeat: "no-repeat, repeat",
-            backgroundSize: `100% 100%, ${INVENTORY_GRID_CELL_SIZE}px ${INVENTORY_GRID_CELL_SIZE}px`,
-            border: `1px solid ${rarityColor}`,
-            boxShadow: `${ITEM_TILE_INSET_SHADOW}, 0 0 8px color-mix(in srgb, ${rarityColor} 34%, transparent)`,
-            cursor: "move",
+            backgroundImage: ITEM_TILE_RARITY_BG[props.item.rarity],
+            backgroundRepeat: "no-repeat",
+            backgroundSize: "100% 100%",
+            border: 0,
+            boxShadow: `${ITEM_TILE_INSET_SHADOW}, ${stateGlow}`,
+            cursor: "grab",
             display: "flex",
             height: "100%",
             imageRendering: "pixelated",
@@ -442,22 +487,64 @@ function InventoryItemCell(props: { canEquip: boolean; equipped: boolean; footpr
         >
           <HeroSiegeEquipmentIcon item={props.item} size={iconSize} unframed />
         </Box>
+        <HeroSiegeButton
+          disabled={!props.equipped && !props.canEquip}
+          height={18}
+          minWidth={48}
+          onClick={() => {
+            if (props.equipped || props.canEquip) {
+              action();
+            }
+          }}
+          style={{ bottom: 2, fontSize: 9, opacity: hovered ? 1 : 0, padding: "0 6px", pointerEvents: hovered ? "auto" : "none", position: "absolute", right: 2 }}
+        >
+          {props.equipped ? "Unequip" : "Equip"}
+        </HeroSiegeButton>
         <ActionIcon
-          aria-label={`Discard ${props.item.name}`}
-          color="red"
+          aria-label={`Sell ${props.item.name} for ${getItemSellValue(props.item)} gold`}
+          color="yellow"
+          disabled={props.equipped}
           onClick={(event) => {
             event.stopPropagation();
-            props.onDiscard();
+            props.onSell();
           }}
           size={DISCARD_BUTTON_SIZE}
-          style={{ background: "rgba(28, 6, 7, 0.94)", border: "1px solid rgba(255, 160, 130, 0.64)", opacity: hovered ? 1 : 0, pointerEvents: hovered ? "auto" : "none", position: "absolute", right: 2, top: 2 }}
+          style={{ background: "rgba(31, 21, 4, 0.94)", border: "1px solid rgba(255, 222, 130, 0.68)", opacity: hovered && !props.equipped ? 1 : 0, pointerEvents: hovered && !props.equipped ? "auto" : "none", position: "absolute", right: 2, top: 2 }}
           variant="filled"
         >
-          <IconTrash size={DISCARD_ICON_SIZE} />
+          <IconCoins size={DISCARD_ICON_SIZE} />
         </ActionIcon>
       </Box>
     </InventoryItemTooltip>
   );
+}
+
+function isItemEquipped(state: StudyState, item: InventoryItem) {
+  return Boolean(getEquippedSlot(state, item));
+}
+
+function getEquippedSlot(state: StudyState, item: InventoryItem): EquipmentSlot | null {
+  return (Object.entries(state.profile.equipment).find(([, itemId]) => itemId === item.id)?.[0] as EquipmentSlot | undefined) || null;
+}
+
+function getEquippedComparisonItem(state: StudyState, item: InventoryItem) {
+  const slot = getCompatibleInventorySlots(item).find((candidate) => state.profile.equipment[candidate]) || getCompatibleInventorySlots(item)[0];
+  const equippedId = state.profile.equipment[slot];
+  return state.profile.inventory.find((row) => row.id === equippedId) || null;
+}
+
+function isCompatibleSlotHighlight(sourceSlot: EquipmentSlot | null, targetSlot: EquipmentSlot) {
+  if (!sourceSlot) {
+    return false;
+  }
+  return getCompatibleInventorySlots({ slot: sourceSlot } as InventoryItem).includes(targetSlot);
+}
+
+function getCompatibleInventorySlots(item: InventoryItem) {
+  if (item.slot === "eyewear" || item.slot === "ringTwo") {
+    return ["eyewear", "ringTwo"] as EquipmentSlot[];
+  }
+  return [item.slot];
 }
 
 function getAllInventoryPlacements(items: InventoryItem[], inventorySlots: Record<string, InventoryItemPosition>) {
@@ -568,6 +655,58 @@ function getInventoryItemIconSize(footprint: ItemFootprint) {
   return Math.max(INVENTORY_ITEM_ICON_SIZE, Math.min(width, height) - 8);
 }
 
+function InventoryActions(props: { activeTab: number; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
+  const sellableItems = getBulkSellItemsForTab(props.state, props.activeTab);
+  const sellValue = sellableItems.reduce((sum, item) => sum + getItemSellValue(item), 0);
+  return (
+    <>
+      <HeroSiegeButton
+        onClick={() => props.setState(sortInventory)}
+        width={SORT_BUTTON_WIDTH}
+        height={SORT_BUTTON_HEIGHT}
+        style={{
+          position: "absolute",
+          right: SORT_BUTTON_RIGHT,
+          top: SORT_BUTTON_TOP,
+          zIndex: 4
+        }}
+      >
+        Sort Tab
+      </HeroSiegeButton>
+      <HeroSiegeButton
+        disabled={!sellableItems.length}
+        onClick={() => {
+          if (!sellableItems.length) {
+            return;
+          }
+          const confirmed = window.confirm(`Sell ${sellableItems.length} unequipped item${sellableItems.length === 1 ? "" : "s"} from this tab for ${sellValue} gold?`);
+          if (confirmed) {
+            props.setState((previous) => bulkSellItems(previous, sellableItems.map((item) => item.id)));
+          }
+        }}
+        width={BULK_SELL_BUTTON_WIDTH}
+        height={SORT_BUTTON_HEIGHT}
+        style={{
+          opacity: sellableItems.length ? 1 : 0.5,
+          position: "absolute",
+          right: SORT_BUTTON_RIGHT + SORT_BUTTON_WIDTH + BULK_SELL_BUTTON_GAP,
+          top: SORT_BUTTON_TOP,
+          zIndex: 4
+        }}
+      >
+        Bulk Sell
+      </HeroSiegeButton>
+    </>
+  );
+}
+
+function getBulkSellItemsForTab(state: StudyState, tab: number) {
+  const equippedIds = new Set(Object.values(state.profile.equipment).filter(Boolean));
+  return getAllInventoryPlacements(state.profile.inventory, state.profile.inventorySlots)
+    .filter((placement) => placement.tab === tab && !equippedIds.has(placement.item.id))
+    .map((placement) => placement.item);
+}
+
 function InventorySortButton(props: { setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   return (
     <HeroSiegeButton
@@ -647,10 +786,6 @@ function compareInventoryItems(state: StudyState) {
   };
 }
 
-function isItemEquipped(state: StudyState, item: InventoryItem) {
-  return state.profile.equipment[item.slot] === item.id;
-}
-
 export function ItemSummary(props: { compact?: boolean; item: InventoryItem; large?: boolean; showIcon?: boolean }) {
   const nameSize = props.large ? "sm" : props.compact ? "10px" : "xs";
   const detailSize = props.large ? "12px" : "10px";
@@ -674,11 +809,11 @@ function ItemPixelIcon(props: { item: InventoryItem }) {
   return <HeroSiegeEquipmentIcon item={props.item} size={ITEM_ICON_SIZE} />;
 }
 
-export function InventoryItemTooltip(props: { canEquip?: boolean; children: React.ReactNode; disabled?: boolean; equipped?: boolean; item: InventoryItem; showRollRanges?: boolean }) {
+export function InventoryItemTooltip(props: { canEquip?: boolean; children: React.ReactNode; compareItem?: InventoryItem | null; disabled?: boolean; equipped?: boolean; item: InventoryItem; showRollRanges?: boolean }) {
   return (
     <Tooltip
       disabled={props.disabled}
-      label={<ItemDetails canEquip={props.canEquip} equipped={props.equipped} item={props.item} showRollRanges={props.showRollRanges} />}
+      label={<ItemDetails canEquip={props.canEquip} compareItem={props.compareItem} equipped={props.equipped} item={props.item} showRollRanges={props.showRollRanges} />}
       multiline
       withArrow
       color="dark"
@@ -698,7 +833,7 @@ export function InventoryItemTooltip(props: { canEquip?: boolean; children: Reac
   );
 }
 
-function ItemDetails(props: { canEquip?: boolean; equipped?: boolean; item: InventoryItem; showRollRanges?: boolean }) {
+function ItemDetails(props: { canEquip?: boolean; compareItem?: InventoryItem | null; equipped?: boolean; item: InventoryItem; showRollRanges?: boolean }) {
   const baseName = getBaseItemName(props.item);
   const powerProfile = SLOT_POWER_PROFILES[props.item.slot];
   const level = props.item.requirements.level;
@@ -734,6 +869,9 @@ function ItemDetails(props: { canEquip?: boolean; equipped?: boolean; item: Inve
         <Stack gap={2}>
           {props.item.modifiers.map((modifier) => {
             const details = MODIFIER_DETAILS[modifier.key];
+            if (!details) {
+              return null;
+            }
             const range = getScaledModifierRange(details.range, level);
             return <TooltipAffixLine key={modifier.key} color={details.color} showRollRange={showRollRanges} text={details.label(modifier.value)} range={range} />;
           })}
@@ -746,6 +884,10 @@ function ItemDetails(props: { canEquip?: boolean; equipped?: boolean; item: Inve
           ))}
         </Stack>
       ) : null}
+      {props.item.flavorText && <Text size="xs" fs="italic" c="gray.3">{props.item.flavorText}</Text>}
+      {props.compareItem && !props.equipped && (
+        <ComparisonSummary current={props.item} equipped={props.compareItem} />
+      )}
       <Stack gap={2}>
         {Object.entries(props.item.stats).filter(([, value]) => value).map(([key, value]) => {
           const stat = key as keyof typeof STAT_DISPLAY_NAMES;
@@ -767,6 +909,26 @@ function ItemDetails(props: { canEquip?: boolean; equipped?: boolean; item: Inve
         {!props.equipped && props.canEquip === false && <Badge size="xs" color="red" variant="light">locked</Badge>}
       </Group>
     </Stack>
+  );
+}
+
+function ComparisonSummary(props: { current: InventoryItem; equipped: InventoryItem }) {
+  const statDeltas = (Object.keys(STAT_DISPLAY_NAMES) as Array<keyof typeof STAT_DISPLAY_NAMES>)
+    .map((stat) => ({ label: STAT_LABELS[stat], value: (props.current.stats[stat] || 0) - (props.equipped.stats[stat] || 0) }))
+    .filter((row) => row.value !== 0);
+  return (
+    <Box mt={2} p={6} style={{ background: "rgba(0, 0, 0, 0.34)", border: "1px solid rgba(241, 223, 173, 0.2)" }}>
+      <Text size="xs" fw={900} c="gray.2">Equipped: {props.equipped.name}</Text>
+      {statDeltas.length ? (
+        <Group gap={6} justify="center" mt={3}>
+          {statDeltas.map((delta) => (
+            <Text key={delta.label} size="xs" fw={900} c={delta.value > 0 ? "green.3" : "red.3"}>{delta.label} {delta.value > 0 ? "+" : ""}{delta.value}</Text>
+          ))}
+        </Group>
+      ) : (
+        <Text size="xs" c="dimmed" mt={3}>No base stat change.</Text>
+      )}
+    </Box>
   );
 }
 
@@ -844,7 +1006,7 @@ function formatWikiItemSubtitle(item: InventoryItem) {
 }
 
 function formatItemModifiers(item: InventoryItem) {
-  return (item.modifiers || []).map((modifier) => MODIFIER_FORMATTERS[modifier.key](modifier.value)).join(", ");
+  return (item.modifiers || []).map((modifier) => MODIFIER_FORMATTERS[modifier.key]?.(modifier.value) || "").filter(Boolean).join(", ");
 }
 
 function getItemEffectLine(item: InventoryItem) {

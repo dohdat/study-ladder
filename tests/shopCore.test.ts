@@ -55,7 +55,7 @@ describe("shopCore", () => {
     const healthPotion = state.profile.shopStock.find((item) => item.kind === "consumable" && item.type === "health");
     expect(healthPotion).toBeTruthy();
     state = buyShopItem(state, healthPotion?.id || "", getMaxHealth(state), getMaxMana(state));
-    expect(state.profile.health).toBe(MAX_HEALTH);
+    expect(state.profile.health).toBe(MAX_HEALTH - 10);
     expect(state.profile.shopStock.some((item) => item.id === healthPotion?.id)).toBe(false);
 
     const randomPotion = state.profile.shopStock.find((item) => item.kind === "consumable" && item.type === "random");

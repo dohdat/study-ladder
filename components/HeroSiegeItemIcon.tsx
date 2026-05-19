@@ -159,7 +159,8 @@ const EQUIPMENT_ASSETS: Record<EquipmentSlot, StaticImageData> = {
   headAccessory: amuletArt,
   headgear: helmetArt,
   mainHand: swordArt,
-  offHand: shieldArt
+  offHand: shieldArt,
+  ringTwo: ringArt
 };
 
 const RELIC_FALLBACK_ASSETS = [
@@ -413,7 +414,7 @@ function getEquipmentAsset(item: InventoryItem) {
     }
     return amuletArt;
   }
-  if (item.slot === "eyewear") {
+  if (item.slot === "eyewear" || item.slot === "ringTwo") {
     if (matchesItemName(name, ["demon", "spectral", "wraith", "abyss", "bone", "chaos", "eye", "satanic"])) {
       return relicOrbArt;
     }
