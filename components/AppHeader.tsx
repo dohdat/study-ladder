@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Box, Group, Text } from "@mantine/core";
 
 import menuButtonBg from "../assets/hero_siege_inventory/menu-button.png";
 import tabSquareBg from "../assets/hero_siege_inventory/tab-square.png";
 import { HeroSiegeModeSwitch } from "./HeroSiegeUi";
 import { PlayerStatus } from "./PlayerStatus";
-import { UserMenu } from "./UserMenu";
+import { UserMenu, USER_MENU_SHORTCUTS } from "./UserMenu";
 import type { UserMenuSection } from "./UserMenu";
 import { STUDY_BLOCKER_MS_PER_MINUTE, useStudyBlockerSettings } from "../hooks/useStudyBlocker";
 import type { ActiveWarriorSkillId, CharacterStats, StudyState } from "../types/study";
@@ -41,6 +41,22 @@ export function AppHeader(props: {
   useActiveSkill: (skillId: ActiveWarriorSkillId) => void;
 }) {
   const [activeSection, setActiveSection] = useState<UserMenuSection | null>(null);
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.repeat || isEditableShortcutTarget(event.target)) {
+        return;
+      }
+      const shortcut = USER_MENU_SHORTCUTS.find((item) => item.key === event.key.toLowerCase());
+      if (!shortcut) {
+        return;
+      }
+      event.preventDefault();
+      setActiveSection(shortcut.section);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   return (
     <Group justify="space-between" align="flex-start" wrap="wrap">
       <Group align="flex-start" gap="md" wrap="wrap">
@@ -69,6 +85,14 @@ export function AppHeader(props: {
       </Group>
     </Group>
   );
+}
+
+function isEditableShortcutTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  const tagName = target.tagName.toLowerCase();
+  return target.isContentEditable || ["input", "select", "textarea"].includes(tagName) || Boolean(target.closest("[contenteditable='true'], [role='textbox'], .monaco-editor"));
 }
 
 function TodayProgress() {

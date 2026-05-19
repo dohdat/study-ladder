@@ -55,19 +55,23 @@ const MEDIUM_EQUIPPED_ICON_SIZE = 52;
 const LARGE_EQUIPPED_ICON_SIZE = 44;
 const WEAPON_EQUIPPED_ICON_SIZE = 64;
 const INVENTORY_GRID_COLUMNS = 13;
-const INVENTORY_GRID_ROWS = 6;
+const INVENTORY_GRID_ROWS = 5;
 const INVENTORY_TAB_COUNT = 3;
+const INVENTORY_EXTRA_COLUMNS = 3;
 const INVENTORY_GRID_GAP = 4;
 const INVENTORY_GRID_LEFT = 44;
 const INVENTORY_GRID_TOP = 404;
 const INVENTORY_GRID_CELL_SIZE = 32;
 const INVENTORY_GRID_WIDTH = 464;
+const INVENTORY_GRID_HEIGHT = INVENTORY_GRID_ROWS * INVENTORY_GRID_CELL_SIZE + (INVENTORY_GRID_ROWS - 1) * INVENTORY_GRID_GAP;
+const INVENTORY_BACKGROUND_GHOST_TOP = INVENTORY_GRID_TOP + INVENTORY_GRID_HEIGHT + INVENTORY_GRID_GAP;
 const SORT_BUTTON_WIDTH = 180;
 const SORT_BUTTON_HEIGHT = 35;
 const SORT_BUTTON_RIGHT = 24;
-const SORT_BUTTON_TOP = 632;
+const SORT_BUTTON_TOP = INVENTORY_GRID_TOP + INVENTORY_GRID_HEIGHT + INVENTORY_GRID_GAP + 4;
 const TAB_ROW_LEFT = 254;
-const TAB_ROW_TOP = 676;
+const TAB_ROW_TOP = SORT_BUTTON_TOP + SORT_BUTTON_HEIGHT + 9;
+const INVENTORY_BACKGROUND_GHOST_HEIGHT = TAB_ROW_TOP - INVENTORY_BACKGROUND_GHOST_TOP - INVENTORY_GRID_GAP;
 const TAB_GAP = 4;
 const TAB_MAIN_WIDTH = 96;
 const TAB_EXTRA_WIDTH = 76;
@@ -215,6 +219,7 @@ function EquipmentBoard(props: { state: StudyState; setState: React.Dispatch<Rea
         return <EquipmentSlotCell key={slot} item={item} layout={layout} slot={slot} onUnequip={() => props.setState((previous) => unequipItem(previous, slot))} />;
       })}
       <InventoryGrid activeTab={activeTab} state={props.state} setState={props.setState} />
+      <InventoryBackgroundGhostMask />
       <InventorySortButton setState={props.setState} />
       <InventoryTabs activeTab={activeTab} onChange={setActiveTab} />
     </Box>
@@ -236,6 +241,24 @@ function EquipmentStage() {
         top: EQUIPMENT_STAGE_TOP,
         width: EQUIPMENT_STAGE_WIDTH,
         zIndex: 1
+      }}
+    />
+  );
+}
+
+function InventoryBackgroundGhostMask() {
+  return (
+    <Box
+      aria-hidden="true"
+      style={{
+        background: "#050303",
+        height: INVENTORY_BACKGROUND_GHOST_HEIGHT,
+        left: INVENTORY_GRID_LEFT,
+        pointerEvents: "none",
+        position: "absolute",
+        top: INVENTORY_BACKGROUND_GHOST_TOP,
+        width: INVENTORY_GRID_WIDTH,
+        zIndex: 2
       }}
     />
   );
@@ -275,7 +298,7 @@ function InventoryGrid(props: { activeTab: number; state: StudyState; setState: 
           return;
         }
         const draggedPlacement = placements.find((placement) => placement.item.id === draggedItemId);
-        const position = getDropInventoryPosition(event.currentTarget, event, props.activeTab);
+        const position = getDropInventoryPosition(event.currentTarget, event, props.activeTab, draggedPlacement?.footprint);
         if (!position || !draggedPlacement) {
           setDropPreview(null);
           return;
@@ -300,7 +323,7 @@ function InventoryGrid(props: { activeTab: number; state: StudyState; setState: 
       onDrop={(event) => {
         const itemId = event.dataTransfer.getData("text/plain") || draggedItemId;
         const draggedPlacement = placements.find((placement) => placement.item.id === itemId);
-        const position = getDropInventoryPosition(event.currentTarget, event, props.activeTab);
+        const position = getDropInventoryPosition(event.currentTarget, event, props.activeTab, draggedPlacement?.footprint);
         const dropPosition = position && draggedPlacement ? clampDropPreviewPosition(position, draggedPlacement.footprint) : null;
         clearDragState();
         if (!itemId || !dropPosition || !canMoveItemToPosition(itemId, dropPosition, placements)) {
@@ -311,6 +334,7 @@ function InventoryGrid(props: { activeTab: number; state: StudyState; setState: 
       }}
       style={{ display: "grid", gap: INVENTORY_GRID_GAP, gridTemplateColumns: `repeat(${INVENTORY_GRID_COLUMNS}, ${INVENTORY_GRID_CELL_SIZE}px)`, gridTemplateRows: `repeat(${INVENTORY_GRID_ROWS}, ${INVENTORY_GRID_CELL_SIZE}px)`, left: INVENTORY_GRID_LEFT, position: "absolute", top: INVENTORY_GRID_TOP, width: INVENTORY_GRID_WIDTH }}
     >
+      <InventoryExtraColumnHighlight />
       {cells.map((_, index) => (
         <InventoryEmptyCell key={`empty-${index}`} />
       ))}
@@ -340,6 +364,27 @@ function InventoryEmptyCell() {
   return <Box style={{ backgroundImage: `url(${inventoryGridBg})`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%", height: INVENTORY_GRID_CELL_SIZE, imageRendering: "pixelated", width: INVENTORY_GRID_CELL_SIZE }} />;
 }
 
+function InventoryExtraColumnHighlight() {
+  const width = INVENTORY_EXTRA_COLUMNS * INVENTORY_GRID_CELL_SIZE + (INVENTORY_EXTRA_COLUMNS - 1) * INVENTORY_GRID_GAP;
+  const left = (INVENTORY_GRID_COLUMNS - INVENTORY_EXTRA_COLUMNS) * (INVENTORY_GRID_CELL_SIZE + INVENTORY_GRID_GAP);
+  return (
+    <Box
+      aria-hidden="true"
+      style={{
+        border: "1px solid rgba(154, 91, 7, 0.95)",
+        boxShadow: "inset 0 0 0 1px rgba(32, 15, 2, 0.92), inset 0 0 14px rgba(173, 103, 5, 0.18)",
+        height: INVENTORY_GRID_HEIGHT,
+        left,
+        pointerEvents: "none",
+        position: "absolute",
+        top: 0,
+        width,
+        zIndex: 1
+      }}
+    />
+  );
+}
+
 function InventoryDropPreviewOverlay(props: { preview: InventoryDropPreview }) {
   const color = props.preview.valid ? "#fff6c4" : "#d84d4d";
   const width = props.preview.footprint.columns * INVENTORY_GRID_CELL_SIZE + (props.preview.footprint.columns - 1) * INVENTORY_GRID_GAP;
@@ -366,8 +411,8 @@ function InventoryDropPreviewOverlay(props: { preview: InventoryDropPreview }) {
 
 function clampDropPreviewPosition(position: InventoryItemPosition, footprint: ItemFootprint): InventoryItemPosition {
   return {
-    column: Math.min(position.column, INVENTORY_GRID_COLUMNS - footprint.columns),
-    row: Math.min(position.row, INVENTORY_GRID_ROWS - footprint.rows),
+    column: Math.max(0, Math.min(position.column, INVENTORY_GRID_COLUMNS - footprint.columns)),
+    row: Math.max(0, Math.min(position.row, INVENTORY_GRID_ROWS - footprint.rows)),
     tab: position.tab
   };
 }
@@ -479,15 +524,17 @@ function isPositionInBounds(position: InventoryItemPosition, footprint: ItemFoot
   return position.row >= 0 && position.column >= 0 && position.row + footprint.rows <= INVENTORY_GRID_ROWS && position.column + footprint.columns <= INVENTORY_GRID_COLUMNS;
 }
 
-function getDropInventoryPosition(element: HTMLElement, event: React.DragEvent<HTMLElement>, tab: number): InventoryItemPosition | null {
+function getDropInventoryPosition(element: HTMLElement, event: React.DragEvent<HTMLElement>, tab: number, footprint?: ItemFootprint): InventoryItemPosition | null {
   const rect = element.getBoundingClientRect();
   const x = event.clientX - rect.left;
   const y = event.clientY - rect.top;
-  const column = Math.floor(x / (INVENTORY_GRID_CELL_SIZE + INVENTORY_GRID_GAP));
-  const row = Math.floor(y / (INVENTORY_GRID_CELL_SIZE + INVENTORY_GRID_GAP));
-  if (row < 0 || row >= INVENTORY_GRID_ROWS || column < 0 || column >= INVENTORY_GRID_COLUMNS) {
+  const rawColumn = Math.floor(x / (INVENTORY_GRID_CELL_SIZE + INVENTORY_GRID_GAP));
+  const rawRow = Math.floor(y / (INVENTORY_GRID_CELL_SIZE + INVENTORY_GRID_GAP));
+  if (rawRow < 0 || rawRow >= INVENTORY_GRID_ROWS || rawColumn < 0 || rawColumn >= INVENTORY_GRID_COLUMNS) {
     return null;
   }
+  const column = footprint ? rawColumn - Math.floor((footprint.columns - 1) / 2) : rawColumn;
+  const row = footprint ? rawRow - Math.floor((footprint.rows - 1) / 2) : rawRow;
   return { column, row, tab };
 }
 
@@ -553,7 +600,8 @@ function InventorySortButton(props: { setState: React.Dispatch<React.SetStateAct
       style={{
         position: "absolute",
         right: SORT_BUTTON_RIGHT,
-        top: SORT_BUTTON_TOP
+        top: SORT_BUTTON_TOP,
+        zIndex: 4
       }}
     >
       Sort Tab

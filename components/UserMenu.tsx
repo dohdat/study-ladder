@@ -130,17 +130,22 @@ const STAT_DESCRIPTIONS: Record<CharacterStatKey, string> = {
   strength: "Increases damage against monsters and raises critical strike chance."
 };
 
-const USER_MENU_ITEMS = [
-  { id: "profile", icon: IconUser, label: "Profile" },
-  { id: "inventory", icon: IconBackpack, label: "Inventory" },
-  { id: "skills", icon: IconSword, label: "Skills" },
-  { id: "stats", icon: IconChartBar, label: "Stats" },
-  { id: "achievements", icon: IconTrophy, label: "Achievements" },
-  { id: "wiki", icon: IconBook, label: "Wiki" },
-  { id: "settings", icon: IconSettings, label: "Settings" }
+export const USER_MENU_ITEMS = [
+  { id: "profile", icon: IconUser, label: "Profile", shortcut: "P" },
+  { id: "inventory", icon: IconBackpack, label: "Inventory", shortcut: "I" },
+  { id: "skills", icon: IconSword, label: "Skills", shortcut: "K" },
+  { id: "stats", icon: IconChartBar, label: "Stats", shortcut: "S" },
+  { id: "achievements", icon: IconTrophy, label: "Achievements", shortcut: "A" },
+  { id: "wiki", icon: IconBook, label: "Wiki", shortcut: "W" },
+  { id: "settings", icon: IconSettings, label: "Settings", shortcut: "O" }
 ] as const;
 
 export type UserMenuSection = typeof USER_MENU_ITEMS[number]["id"];
+
+export const USER_MENU_SHORTCUTS: ReadonlyArray<{ key: string; section: UserMenuSection }> = USER_MENU_ITEMS.map((item) => ({
+  key: item.shortcut.toLowerCase(),
+  section: item.id
+}));
 
 export function UserMenu(props: { activeSection: UserMenuSection | null; setActiveSection: (section: UserMenuSection | null) => void; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const modalTitle = USER_MENU_ITEMS.find((item) => item.id === props.activeSection)?.label || "User";
@@ -152,7 +157,13 @@ export function UserMenu(props: { activeSection: UserMenuSection | null; setActi
         </Menu.Target>
         <Menu.Dropdown style={{ background: MENU_DROPDOWN_BG, border: MENU_DROPDOWN_BORDER, borderRadius: 2, boxShadow: MODAL_SHADOW }}>
           {USER_MENU_ITEMS.map((item) => (
-            <Menu.Item key={item.label} leftSection={<item.icon size={ICON_SIZE} />} onClick={() => props.setActiveSection(item.id)} style={{ color: MENU_ITEM_COLOR, fontWeight: 800 }}>
+            <Menu.Item
+              key={item.label}
+              leftSection={<item.icon size={ICON_SIZE} />}
+              onClick={() => props.setActiveSection(item.id)}
+              rightSection={<Text size="10px" fw={900} style={{ color: "#9f8352", textShadow: "0 1px 0 #000" }}>{item.shortcut}</Text>}
+              style={{ color: MENU_ITEM_COLOR, fontWeight: 800 }}
+            >
               {item.label}
             </Menu.Item>
           ))}
