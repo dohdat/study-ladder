@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { getRelicQualityLabel } from "../lib/heroSiegeQuality";
+import { HERO_SIEGE_RELIC_MOD_RULES } from "../lib/heroSiegeWikiCatalog";
 import { RELIC_DEFINITIONS } from "../lib/relicCore";
 
 describe("relicCore", () => {
@@ -13,18 +14,10 @@ describe("relicCore", () => {
   });
 
   it("caps relic modifiers by displayed quality", () => {
-    const rules = {
-      Magic: { max: 2, min: 0 },
-      Normal: { max: 1, min: 1 },
-      Rare: { max: 6, min: 0 },
-      Set: { max: 8, min: 3 },
-      Unique: { max: 12, min: 4 }
-    };
-
     for (const relic of RELIC_DEFINITIONS) {
       const quality = getRelicQualityLabel(relic.rarity, relic.wikiRarityLabel);
-      expect((relic.modifiers || []).length).toBeGreaterThanOrEqual(rules[quality].min);
-      expect((relic.modifiers || []).length).toBeLessThanOrEqual(rules[quality].max);
+      expect((relic.modifiers || []).length).toBeGreaterThanOrEqual(HERO_SIEGE_RELIC_MOD_RULES[quality].min);
+      expect((relic.modifiers || []).length).toBeLessThanOrEqual(HERO_SIEGE_RELIC_MOD_RULES[quality].max);
     }
   });
 });

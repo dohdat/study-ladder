@@ -103,6 +103,16 @@ describe("wiki icon uniqueness", () => {
     expect(HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT.every((item) => Number(item.level) < 20)).toBe(true);
   });
 
+  it("uses category-appropriate icons for low-level weapon fallbacks", () => {
+    const longBow = HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT.find((item) => item.name === "Long Bow");
+    const feralClaws = HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT.find((item) => item.name === "Feral Claws");
+
+    expect(longBow?.imagePath).toMatch(/Bow/i);
+    expect(longBow?.imagePath).not.toMatch(/weapon-sword/i);
+    expect(feralClaws?.imagePath).toMatch(/Claw/i);
+    expect(feralClaws?.imagePath).not.toMatch(/weapon-sword/i);
+  });
+
   it("keeps charms out of equippable item slots and maps belt and glove categories distinctly", () => {
     expect(HERO_SIEGE_WIKI_CATEGORIES.some((category) => category.sourcePage === "Charms")).toBe(false);
     expect(HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT.some((item) => item.category === "Charms" || /charm/i.test(item.name))).toBe(false);
@@ -127,14 +137,15 @@ describe("wiki icon uniqueness", () => {
     }
   });
 
-  it("pads rare and unique wiki item displays with playable affixes", () => {
-    const richQualities = new Set(["Rare", "Unique"]);
-    const items = HERO_SIEGE_WIKI_ITEMS.filter((item) => richQualities.has(getWikiItemQualityLabel(item)));
+  it("enforces wiki item modifier counts by rarity", () => {
+    const enforcedQualities = new Set(["Magic", "Rare", "Set", "Unique"]);
+    const items = [...HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT, ...HERO_SIEGE_WIKI_ITEMS].filter((item) => enforcedQualities.has(getWikiItemQualityLabel(item)));
 
     expect(items.length).toBeGreaterThan(0);
     for (const item of items) {
       const quality = getWikiItemQualityLabel(item);
       expect(getVisibleWikiItemStats(item).length).toBeGreaterThanOrEqual(HERO_SIEGE_MOD_RULES[quality].min);
+      expect(getVisibleWikiItemStats(item).length).toBeLessThanOrEqual(HERO_SIEGE_MOD_RULES[quality].max);
     }
   });
 

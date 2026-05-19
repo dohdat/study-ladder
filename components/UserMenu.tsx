@@ -121,6 +121,7 @@ const WIKI_GRID_MIN_WIDTH = 220;
 const WIKI_MONSTER_PAGE_SIZE = 12;
 const WIKI_RELIC_PAGE_SIZE = 10;
 const WIKI_ITEM_PAGE_SIZE = 24;
+const WIKI_QUESTION_PAGE_SIZE = 12;
 const MONSTER_HEALTH_RANGE_RATIO = 0.1;
 const STAT_ROWS: Array<{ key: CharacterStatKey; label: string }> = [
   { key: "strength", label: "Strength" },
@@ -403,6 +404,7 @@ function WikiPanel() {
         <Tabs.Tab value="monsters">Monsters</Tabs.Tab>
         <Tabs.Tab value="relics">Relics</Tabs.Tab>
         <Tabs.Tab value="items">Items</Tabs.Tab>
+        <Tabs.Tab value="questions">LeetCode Bank</Tabs.Tab>
       </Tabs.List>
       <Tabs.Panel value="monsters">
         <MonsterWiki />
@@ -413,8 +415,91 @@ function WikiPanel() {
       <Tabs.Panel value="items">
         <ItemWiki />
       </Tabs.Panel>
+      <Tabs.Panel value="questions">
+        <QuestionBankWiki />
+      </Tabs.Panel>
     </Tabs>
   );
+}
+
+function QuestionBankWiki() {
+  const [page, setPage] = useState(0);
+  const sortedQuestions = useMemo(() => [...questions].sort((left, right) => left.rating - right.rating || left.title.localeCompare(right.title)), []);
+  const pageCount = getPageCount(sortedQuestions.length, WIKI_QUESTION_PAGE_SIZE);
+  const safePage = clampPage(page, pageCount);
+  const visibleQuestions = getPageItems(sortedQuestions, safePage, WIKI_QUESTION_PAGE_SIZE);
+  return (
+    <Stack gap="md">
+      <Group justify="space-between">
+        <Box>
+          <Title order={4}>LeetCode Question Bank</Title>
+          <Text size="sm" c="dimmed">{sortedQuestions.length} questions sorted by rating.</Text>
+        </Box>
+        <WikiPagination page={safePage} pageCount={pageCount} onPageChange={setPage} total={sortedQuestions.length} unit="questions" />
+      </Group>
+      <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }}>
+        {visibleQuestions.map((question) => (
+          <QuestionWikiCard key={question.id} question={question} />
+        ))}
+      </SimpleGrid>
+    </Stack>
+  );
+}
+
+function QuestionWikiCard(props: { question: Question }) {
+  return (
+    <Tooltip label={<QuestionWikiDetails question={props.question} />} multiline withArrow color="dark" styles={{ tooltip: { background: TOOLTIP_BG, border: TOOLTIP_BORDER, borderRadius: 2, boxShadow: TOOLTIP_SHADOW, color: "#f1dfad", padding: TOOLTIP_PADDING } }}>
+      <Box p="sm" style={{ background: "var(--mantine-color-dark-7)", border: "1px solid var(--mantine-color-dark-4)", borderRadius: 6, minHeight: 116 }}>
+        <Stack gap={6}>
+          <Group justify="space-between" gap="xs" wrap="nowrap">
+            <Text size="sm" fw={900} c={getDifficultyColor(props.question.difficulty)} lineClamp={2}>{props.question.title}</Text>
+            <Badge size="sm" variant="outline">{props.question.rating}</Badge>
+          </Group>
+          <Text size="xs" c="dimmed">Difficulty {props.question.difficulty} - {props.question.functionName}</Text>
+          <Group gap={4}>
+            {props.question.topics.slice(0, 3).map((topic) => (
+              <Badge key={topic} size="xs" variant="light">{topic}</Badge>
+            ))}
+            {props.question.topics.length > 3 && <Badge size="xs" variant="outline">+{props.question.topics.length - 3}</Badge>}
+          </Group>
+        </Stack>
+      </Box>
+    </Tooltip>
+  );
+}
+
+function QuestionWikiDetails(props: { question: Question }) {
+  return (
+    <Stack gap={8} style={{ textAlign: "left", width: TOOLTIP_SHEET_WIDTH }}>
+      <Box>
+        <Text size="lg" fw={900} style={{ color: getDifficultyColor(props.question.difficulty), lineHeight: 1.15, textShadow: "0 2px 0 #000" }}>{props.question.title}</Text>
+        <Text size="sm" fw={800} c="gray.2">Difficulty {props.question.difficulty} - Rating {props.question.rating}</Text>
+      </Box>
+      <Text size="xs" c="gray.3" lineClamp={6}>{props.question.prompt || "No prompt text."}</Text>
+      <Group gap={4}>
+        {props.question.topics.map((topic) => (
+          <Badge key={topic} size="xs" variant="light">{topic}</Badge>
+        ))}
+      </Group>
+      {props.question.examples[0] && (
+        <Box p={6} style={{ background: "rgba(0, 0, 0, 0.28)", border: "1px solid rgba(241, 223, 173, 0.18)" }}>
+          <Text size="xs" fw={900} c="gray.2">Example</Text>
+          <Text size="xs" c="gray.3">Input: {props.question.examples[0].input}</Text>
+          <Text size="xs" c="gray.3">Output: {props.question.examples[0].output}</Text>
+        </Box>
+      )}
+    </Stack>
+  );
+}
+
+function getDifficultyColor(difficulty: Difficulty) {
+  if (difficulty <= 2) {
+    return "#4cff78";
+  }
+  if (difficulty === 3) {
+    return "#f0df5f";
+  }
+  return "#ff5f5f";
 }
 
 function MonsterWiki() {

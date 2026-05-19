@@ -23,11 +23,11 @@ const WIKI_QUALITY_TO_RARITY: Record<HeroSiegeQuality, ItemRarity> = {
   Unique: "legendary"
 };
 export const HERO_SIEGE_MOD_RULES: Record<HeroSiegeQuality, { max: number; min: number }> = {
-  Magic: { max: 2, min: 0 },
+  Magic: { max: 2, min: 2 },
   Normal: { max: 0, min: 0 },
-  Rare: { max: 6, min: 3 },
-  Set: { max: 8, min: 3 },
-  Unique: { max: 12, min: 4 }
+  Rare: { max: 6, min: 6 },
+  Set: { max: 8, min: 6 },
+  Unique: { max: 12, min: 10 }
 };
 const WIKI_ITEM_FALLBACK_STATS = [
   "+12% Enhanced Damage",
@@ -42,12 +42,15 @@ const WIKI_ITEM_FALLBACK_STATS = [
   "+8% Lightning Resistance",
   "+8% Poison Resistance",
   "+6% Physical Resistance",
+  "+5% Dodge Chance",
+  "+5% Block Chance",
+  "+4% Life Steal",
+  "+8% Increased Healing Received",
   "+8% Gold Find",
   "+8% Magic Find"
 ] as const;
 export const HERO_SIEGE_RELIC_MOD_RULES: Record<HeroSiegeQuality, { max: number; min: number }> = {
-  ...HERO_SIEGE_MOD_RULES,
-  Normal: { max: 1, min: 1 }
+  ...HERO_SIEGE_MOD_RULES
 };
 const ITEM_VISIBLE_MOD_CAPS: Record<ItemRarity, number> = {
   common: HERO_SIEGE_MOD_RULES.Normal.max,
@@ -200,12 +203,14 @@ export function getWikiRelicQualityLabel(item: Pick<HeroSiegeWikiItem, "id">): H
 
 export function getVisibleWikiItemStats(item: Pick<HeroSiegeWikiItem, "id" | "stats" | "tierGroup">) {
   const quality = getWikiItemQualityLabel(item);
-  return fillMinimumWikiItemStats(item, quality, getPlayableWikiStats(item.stats)).slice(0, HERO_SIEGE_MOD_RULES[quality].max);
+  const rule = HERO_SIEGE_MOD_RULES[quality];
+  return fillMinimumWikiStats(item, rule, getPlayableWikiStats(item.stats)).slice(0, rule.max);
 }
 
 export function getVisibleWikiRelicStats(item: Pick<HeroSiegeWikiItem, "id" | "stats">) {
   const quality = getWikiRelicQualityLabel(item);
-  return getPlayableWikiStats(item.stats).slice(0, HERO_SIEGE_RELIC_MOD_RULES[quality].max);
+  const rule = HERO_SIEGE_RELIC_MOD_RULES[quality];
+  return fillMinimumWikiStats(item, rule, getPlayableWikiStats(item.stats)).slice(0, rule.max);
 }
 
 export function createWikiRelicDefinitions() {
@@ -219,7 +224,7 @@ export function createWikiRelicDefinitions() {
     return {
       description: `${quality} ${item.category.toLowerCase()} relic.`,
       id: item.id,
-      modifiers: modifiers.length ? modifiers : [{ key: "magicFindPercent", value: 1 }],
+      modifiers,
       name: item.name,
       rarity,
       source: "any",
@@ -242,7 +247,7 @@ export function applyWikiItemData(item: InventoryItem, wikiItem: HeroSiegeWikiIt
   const imageDisplay = HERO_SIEGE_WIKI_ITEM_IMAGE_DISPLAYS.get(wikiItem.id);
   const visibleModCount = (item.modifiers || []).length + Object.values(item.stats).filter(Boolean).length;
   const quality = ITEM_RARITY_TO_QUALITY[item.rarity];
-  const wikiStats = fillMinimumWikiItemStats(wikiItem, quality, getPlayableWikiStats(wikiItem.stats)).slice(0, Math.max(0, ITEM_VISIBLE_MOD_CAPS[item.rarity] - visibleModCount));
+  const wikiStats = fillMinimumWikiStats(wikiItem, HERO_SIEGE_MOD_RULES[quality], getPlayableWikiStats(wikiItem.stats)).slice(0, Math.max(0, ITEM_VISIBLE_MOD_CAPS[item.rarity] - visibleModCount));
   return {
     ...item,
     name: wikiItem.name,
@@ -260,8 +265,7 @@ export function applyWikiItemData(item: InventoryItem, wikiItem: HeroSiegeWikiIt
   };
 }
 
-function fillMinimumWikiItemStats(item: Pick<HeroSiegeWikiItem, "id">, quality: HeroSiegeQuality, stats: string[]) {
-  const rule = HERO_SIEGE_MOD_RULES[quality];
+function fillMinimumWikiStats(item: Pick<HeroSiegeWikiItem, "id">, rule: { max: number; min: number }, stats: string[]) {
   if (rule.min <= 0 || stats.length >= rule.min) {
     return stats;
   }
@@ -491,6 +495,10 @@ function getRegularWikiItemImage(categoryId: string, name: string) {
   if (categoryId === "charms") {
     return REGULAR_WIKI_ITEM_IMAGES.charm;
   }
+  const categoryImage = getWikiCategoryRepresentativeImage(categoryId);
+  if (categoryImage) {
+    return categoryImage;
+  }
   if (categoryId === "normal-axes" || categoryId === "normal-maces" || categoryId === "weapon-throwing" || categoryId === "weapon-chainsaw") {
     return REGULAR_WIKI_ITEM_IMAGES.axe;
   }
@@ -498,6 +506,24 @@ function getRegularWikiItemImage(categoryId: string, name: string) {
     return getSpellWeaponImage(name);
   }
   return REGULAR_WIKI_ITEM_IMAGES.sword;
+}
+
+function getWikiCategoryRepresentativeImage(categoryId: string) {
+  const sourcePage = LOW_LEVEL_CATEGORY_PAGE_BY_ID[categoryId];
+  if (!sourcePage || sourcePage === "Swords") {
+    return null;
+  }
+  const representative = HERO_SIEGE_WIKI_ITEMS
+    .filter((item) => item.category === sourcePage && item.imagePath)
+    .sort((left, right) => Number(left.level || 999) - Number(right.level || 999) || left.name.localeCompare(right.name))[0];
+  if (!representative?.imagePath) {
+    return null;
+  }
+  return {
+    height: representative.imageHeight || 34,
+    imagePath: representative.imagePath,
+    width: representative.imageWidth || 34
+  };
 }
 
 function getSpellWeaponCategory(name: string) {

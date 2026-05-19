@@ -52,15 +52,15 @@ function ShopCard(props: { item: ShopItem; state: StudyState; setState: React.Di
   const canBuy = canBuyShopItem(props.state, props.item, getMaxHealth(props.state), getMaxMana(props.state));
   return (
     <Box p="sm" style={{ background: SHOP_CARD_BG, border: SHOP_CARD_BORDER, boxShadow: SHOP_CARD_SHADOW }}>
-      <ShopItemTooltip item={props.item} state={props.state}>
-        <Box>
-          <Group justify="space-between" align="flex-start" gap="xs" wrap="nowrap">
+      <Group justify="space-between" align="flex-start" gap="xs" wrap="nowrap">
+        <ShopItemTooltip item={props.item} state={props.state}>
+          <Group align="flex-start" gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
             <ShopItemArt item={props.item} />
             <Box flex={1} style={{ minWidth: 0 }}>{getShopSummary(props.item)}</Box>
-            <Badge variant="light" color={canAfford ? "yellow" : "gray"}>{props.item.cost}</Badge>
           </Group>
-        </Box>
-      </ShopItemTooltip>
+        </ShopItemTooltip>
+        <Badge variant="light" color={canAfford ? "yellow" : "gray"}>{props.item.cost}</Badge>
+      </Group>
       <Group justify="flex-end" mt={8}>
         <HeroSiegeButton disabled={!canBuy} height={26} minWidth={70} onClick={() => buyItem(props)} style={{ fontSize: 10, padding: "0 12px" }}>
           Buy
@@ -114,7 +114,7 @@ function PotionSummary(props: { item: Extract<ShopItem, { kind: "consumable" }> 
 
 function ShopItemTooltip(props: { children: React.ReactElement; item: ShopItem; state?: StudyState }) {
   if (props.item.kind === "equipment") {
-    return <InventoryItemTooltip compareItem={props.state ? getEquippedComparisonItem(props.state, props.item.item) : null} item={props.item.item} showRollRanges={false}>{props.children}</InventoryItemTooltip>;
+    return <InventoryItemTooltip compareItem={props.state ? getEquippedComparisonItem(props.state, props.item.item) : null} item={props.item.item} offset={4} showRollRanges={false}>{props.children}</InventoryItemTooltip>;
   }
   return (
     <Tooltip
@@ -122,6 +122,8 @@ function ShopItemTooltip(props: { children: React.ReactElement; item: ShopItem; 
       multiline
       withArrow
       color="dark"
+      offset={12}
+      position="right-start"
       styles={{
         tooltip: {
           background: SHOP_TOOLTIP_BG,

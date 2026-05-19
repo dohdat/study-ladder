@@ -1,6 +1,7 @@
 import { ActionIcon, Badge, Box, Group, Stack, Text, Tooltip } from "@mantine/core";
 type StaticImageData = string;
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { MouseEvent } from "react";
 import { IconCoins } from "@tabler/icons-react";
 
 import { HeroSiegeButton } from "./HeroSiegeUi";
@@ -77,7 +78,11 @@ const ITEM_TILE_RARITY_BG: Record<InventoryItem["rarity"], string> = {
 };
 const ITEM_TILE_INSET_SHADOW = "inset 0 0 18px rgba(0, 0, 0, 0.58), inset 0 -5px 10px rgba(0, 0, 0, 0.34)";
 const DETAILS_WIDTH = 260;
-const DETAILS_SHEET_WIDTH = 420;
+const DETAILS_SHEET_WIDTH = 300;
+const DETAILS_COMPARE_GAP = 8;
+const INVENTORY_SIDE_PANEL_GAP = 58;
+const INVENTORY_SIDE_PANEL_VIEWPORT_PADDING = 18;
+const INVENTORY_SIDE_PANEL_MAX_WIDTH = DETAILS_SHEET_WIDTH * 2 + DETAILS_COMPARE_GAP;
 const DETAILS_BG = "linear-gradient(180deg, rgba(35, 13, 13, 0.98), rgba(9, 6, 5, 0.99))";
 const DETAILS_BORDER = "1px solid #9f2d4e";
 const DETAILS_SHADOW = "inset 0 0 0 1px rgba(0, 0, 0, 0.86), 0 12px 28px rgba(0, 0, 0, 0.62)";
@@ -165,6 +170,7 @@ type EquipmentSpriteLayout = { asset: StaticImageData; height: number; iconSize:
 type ItemFootprint = { columns: number; rows: number };
 type InventoryPlacement = { column: number; footprint: ItemFootprint; item: InventoryItem; row: number; tab: number };
 type InventoryDropPreview = { footprint: ItemFootprint; position: InventoryItemPosition; valid: boolean };
+type InventoryPreview = { canEquip?: boolean; compareItem?: InventoryItem | null; equipped?: boolean; item: InventoryItem };
 
 const ITEM_FOOTPRINTS: Record<EquipmentSlot, ItemFootprint> = {
   armor: { columns: 2, rows: 2 },
@@ -189,7 +195,7 @@ const EQUIPMENT_LAYOUT: Record<EquipmentSlot, EquipmentSpriteLayout> = {
   headgear: { asset: inventorySlotHelmetBg, height: 67, iconSize: MEDIUM_EQUIPPED_ICON_SIZE, label: "Helmet", left: 226, top: 74, width: 66 },
   mainHand: { asset: inventorySlotWeaponBg, height: 131, iconSize: WEAPON_EQUIPPED_ICON_SIZE, label: "Weapon", left: 80, top: 136, width: 98 },
   offHand: { asset: inventorySlotShieldBg, height: 131, iconSize: WEAPON_EQUIPPED_ICON_SIZE, label: "Shield", left: 340, top: 136, width: 98 },
-  ringTwo: { asset: inventorySlotRingBg, height: 35, iconSize: SMALL_EQUIPPED_ICON_SIZE, label: "Ring", left: 126, top: 300, width: 34 }
+  ringTwo: { asset: inventorySlotRingBg, height: 35, iconSize: SMALL_EQUIPPED_ICON_SIZE, label: "Ring", left: 164, top: 300, width: 34 }
 };
 
 const TAB_BUTTONS = [
@@ -219,20 +225,88 @@ export function InventoryPanel(props: { state: StudyState; setState: React.Dispa
 function EquipmentBoard(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const [activeTab, setActiveTab] = useState(0);
   const [highlightedSlot, setHighlightedSlot] = useState<EquipmentSlot | null>(null);
+  const [preview, setPreview] = useState<InventoryPreview | null>(null);
+  const shiftHeld = useShiftKeyPressed();
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const [previewAnchor, setPreviewAnchor] = useState<{ left: number; top: number } | null>(null);
+  useEffect(() => {
+    if (!preview || !boardRef.current) {
+      setPreviewAnchor(null);
+      return undefined;
+    }
+    const updateAnchor = () => {
+      if (!boardRef.current) {
+        return;
+      }
+      const rect = boardRef.current.getBoundingClientRect();
+      setPreviewAnchor({
+        left: Math.max(INVENTORY_SIDE_PANEL_VIEWPORT_PADDING, Math.min(rect.right + INVENTORY_SIDE_PANEL_GAP, window.innerWidth - INVENTORY_SIDE_PANEL_MAX_WIDTH - INVENTORY_SIDE_PANEL_VIEWPORT_PADDING)),
+        top: Math.max(rect.top, INVENTORY_SIDE_PANEL_VIEWPORT_PADDING)
+      });
+    };
+    updateAnchor();
+    window.addEventListener("resize", updateAnchor);
+    window.addEventListener("scroll", updateAnchor, true);
+    return () => {
+      window.removeEventListener("resize", updateAnchor);
+      window.removeEventListener("scroll", updateAnchor, true);
+    };
+  }, [preview]);
   return (
-    <Box style={{ backgroundImage: `url(${inventoryGamepadBg})`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%", height: INVENTORY_PANEL_HEIGHT, imageRendering: "pixelated", position: "relative", width: INVENTORY_PANEL_WIDTH }}>
+    <Box ref={boardRef} style={{ backgroundImage: `url(${inventoryGamepadBg})`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%", height: INVENTORY_PANEL_HEIGHT, imageRendering: "pixelated", position: "relative", width: INVENTORY_PANEL_WIDTH }}>
+      <InventoryComparisonSidePanel anchor={previewAnchor} compareEnabled={shiftHeld} preview={preview} />
       <EquipmentStage />
       {Object.entries(EQUIPMENT_LAYOUT).map(([slotKey, layout]) => {
         const slot = slotKey as EquipmentSlot;
         const item = props.state.profile.inventory.find((row) => row.id === props.state.profile.equipment[slot]);
-        return <EquipmentSlotCell key={slot} highlighted={isCompatibleSlotHighlight(highlightedSlot, slot)} item={item} layout={layout} slot={slot} onUnequip={() => props.setState((previous) => unequipItem(previous, slot))} />;
+        return <EquipmentSlotCell key={slot} highlighted={isCompatibleSlotHighlight(highlightedSlot, slot)} item={item} layout={layout} onPreview={setPreview} slot={slot} onUnequip={() => props.setState((previous) => unequipItem(previous, slot))} />;
       })}
-      <InventoryGrid activeTab={activeTab} state={props.state} setState={props.setState} onHoverSlot={setHighlightedSlot} />
+      <InventoryGrid activeTab={activeTab} state={props.state} setState={props.setState} onHoverItem={setPreview} onHoverSlot={setHighlightedSlot} />
       <InventoryBackgroundGhostMask />
       <InventoryActions activeTab={activeTab} state={props.state} setState={props.setState} />
       <InventoryTabs activeTab={activeTab} onChange={setActiveTab} />
     </Box>
   );
+}
+
+function InventoryComparisonSidePanel(props: { anchor: { left: number; top: number } | null; compareEnabled: boolean; preview: InventoryPreview | null }) {
+  if (!props.preview || !props.anchor) {
+    return null;
+  }
+  return (
+    <Box
+      aria-live="polite"
+      style={{
+        left: props.anchor.left,
+        maxHeight: `calc(100vh - ${props.anchor.top + INVENTORY_SIDE_PANEL_VIEWPORT_PADDING}px)`,
+        overflow: "hidden",
+        pointerEvents: "none",
+        position: "fixed",
+        top: props.anchor.top,
+        transform: "translateX(0)",
+        zIndex: 2200
+      }}
+    >
+      <ItemComparisonDetails {...props.preview} compareEnabled={props.compareEnabled} />
+    </Box>
+  );
+}
+
+function useShiftKeyPressed() {
+  const [shiftHeld, setShiftHeld] = useState(false);
+  useEffect(() => {
+    const updateFromKeyboard = (event: KeyboardEvent) => setShiftHeld(event.shiftKey);
+    const clearShift = () => setShiftHeld(false);
+    window.addEventListener("keydown", updateFromKeyboard);
+    window.addEventListener("keyup", updateFromKeyboard);
+    window.addEventListener("blur", clearShift);
+    return () => {
+      window.removeEventListener("keydown", updateFromKeyboard);
+      window.removeEventListener("keyup", updateFromKeyboard);
+      window.removeEventListener("blur", clearShift);
+    };
+  }, []);
+  return shiftHeld;
 }
 
 function EquipmentStage() {
@@ -273,9 +347,23 @@ function InventoryBackgroundGhostMask() {
   );
 }
 
-function EquipmentSlotCell(props: { highlighted: boolean; item?: InventoryItem; layout: EquipmentSpriteLayout; onUnequip: () => void; slot: EquipmentSlot }) {
+function EquipmentSlotCell(props: { highlighted: boolean; item?: InventoryItem; layout: EquipmentSpriteLayout; onPreview: (preview: InventoryPreview | null) => void; onUnequip: () => void; slot: EquipmentSlot }) {
   const content = (
-    <Box component={props.item ? "button" : "div"} onClick={props.item ? props.onUnequip : undefined} style={{ backgroundColor: "transparent", backgroundImage: `url(${props.layout.asset})`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%", border: 0, boxShadow: props.highlighted ? "0 0 0 2px rgba(255, 242, 154, 0.9), 0 0 18px rgba(255, 225, 90, 0.55)" : "none", cursor: props.item ? "pointer" : "default", filter: props.highlighted ? "brightness(1.22)" : "none", height: props.layout.height, imageRendering: "pixelated", left: props.layout.left, outline: "none", padding: 0, position: "absolute", top: props.layout.top, width: props.layout.width, zIndex: props.highlighted ? 4 : 2 }}>
+    <Box
+      component="button"
+      disabled={!props.item}
+      onClick={props.item ? (event: MouseEvent<HTMLButtonElement>) => {
+        if (!event.shiftKey) {
+          return;
+        }
+        event.preventDefault();
+        props.onUnequip();
+      } : undefined}
+      onMouseEnter={() => props.item && props.onPreview({ equipped: true, item: props.item })}
+      onMouseLeave={() => props.onPreview(null)}
+      style={{ backgroundColor: "transparent", backgroundImage: `url(${props.layout.asset})`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%", border: 0, boxShadow: props.highlighted ? "0 0 0 2px rgba(255, 242, 154, 0.9), 0 0 18px rgba(255, 225, 90, 0.55)" : "none", cursor: props.item ? "pointer" : "default", filter: props.highlighted ? "brightness(1.22)" : "none", height: props.layout.height, imageRendering: "pixelated", left: props.layout.left, outline: "none", padding: 0, position: "absolute", top: props.layout.top, width: props.layout.width, zIndex: props.highlighted ? 4 : 2 }}
+      type="button"
+    >
       {props.item ? (
         <Box style={{ alignItems: "center", display: "flex", height: "100%", justifyContent: "center", width: "100%" }}>
           <HeroSiegeEquipmentIcon item={props.item} size={props.layout.iconSize} unframed />
@@ -283,14 +371,10 @@ function EquipmentSlotCell(props: { highlighted: boolean; item?: InventoryItem; 
       ) : null}
     </Box>
   );
-  return props.item ? (
-    <InventoryItemTooltip item={props.item} equipped>
-      {content}
-    </InventoryItemTooltip>
-  ) : content;
+  return content;
 }
 
-function InventoryGrid(props: { activeTab: number; onHoverSlot: (slot: EquipmentSlot | null) => void; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
+function InventoryGrid(props: { activeTab: number; onHoverItem: (preview: InventoryPreview | null) => void; onHoverSlot: (slot: EquipmentSlot | null) => void; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [dropPreview, setDropPreview] = useState<InventoryDropPreview | null>(null);
   const placements = getAllInventoryPlacements(props.state.profile.inventory, props.state.profile.inventorySlots);
@@ -362,6 +446,7 @@ function InventoryGrid(props: { activeTab: number; onHoverSlot: (slot: Equipment
           onSell={() => props.setState((previous) => sellItem(previous, placement.item.id))}
           onDragEnd={clearDragState}
           onDragStart={(itemId) => setDraggedItemId(itemId)}
+          onHoverItem={props.onHoverItem}
           onHoverSlot={props.onHoverSlot}
           placement={placement}
           tooltipDisabled={draggedItemId !== null}
@@ -428,7 +513,7 @@ function clampDropPreviewPosition(position: InventoryItemPosition, footprint: It
   };
 }
 
-function InventoryItemCell(props: { canEquip: boolean; compareItem?: InventoryItem | null; equipped: boolean; footprint: ItemFootprint; isDragging: boolean; item: InventoryItem; onDragEnd: () => void; onDragStart: (itemId: string) => void; onEquip: () => void; onHoverSlot: (slot: EquipmentSlot | null) => void; onSell: () => void; onUnequip: () => void; placement: InventoryPlacement; tooltipDisabled: boolean }) {
+function InventoryItemCell(props: { canEquip: boolean; compareItem?: InventoryItem | null; equipped: boolean; footprint: ItemFootprint; isDragging: boolean; item: InventoryItem; onDragEnd: () => void; onDragStart: (itemId: string) => void; onEquip: () => void; onHoverItem: (preview: InventoryPreview | null) => void; onHoverSlot: (slot: EquipmentSlot | null) => void; onSell: () => void; onUnequip: () => void; placement: InventoryPlacement; tooltipDisabled: boolean }) {
   const [hovered, setHovered] = useState(false);
   const action = props.equipped ? props.onUnequip : props.onEquip;
   const iconSize = getInventoryItemIconSize(props.footprint);
@@ -439,83 +524,76 @@ function InventoryItemCell(props: { canEquip: boolean; compareItem?: InventoryIt
       ? `0 0 8px color-mix(in srgb, ${rarityColor} 36%, transparent)`
       : "none";
   return (
-    <InventoryItemTooltip canEquip={props.canEquip} compareItem={props.compareItem} disabled={props.tooltipDisabled} equipped={props.equipped} item={props.item}>
+    <Box
+      draggable
+      onDragEnd={props.onDragEnd}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", props.item.id);
+        props.onDragStart(props.item.id);
+        props.onHoverItem(null);
+      }}
+      onMouseEnter={() => {
+        setHovered(true);
+        props.onHoverSlot(props.item.slot);
+        props.onHoverItem(props.tooltipDisabled ? null : { canEquip: props.canEquip, compareItem: props.compareItem, equipped: props.equipped, item: props.item });
+      }}
+      onMouseLeave={() => {
+        setHovered(false);
+        props.onHoverSlot(null);
+        props.onHoverItem(null);
+      }}
+      style={{ gridColumn: `${props.placement.column + 1} / span ${props.footprint.columns}`, gridRow: `${props.placement.row + 1} / span ${props.footprint.rows}`, opacity: props.isDragging ? 0.42 : 1, position: "relative", zIndex: 5 }}
+    >
       <Box
-        draggable
-        onDragEnd={props.onDragEnd}
-        onDragStart={(event) => {
-          event.dataTransfer.effectAllowed = "move";
-          event.dataTransfer.setData("text/plain", props.item.id);
-          props.onDragStart(props.item.id);
+        aria-disabled={!props.equipped && !props.canEquip}
+        component="button"
+        onClick={(event) => {
+          if (!event.shiftKey) {
+            return;
+          }
+          event.preventDefault();
+          event.stopPropagation();
+          if (props.equipped || props.canEquip) {
+            action();
+          }
         }}
-        onMouseEnter={() => {
-          setHovered(true);
-          props.onHoverSlot(props.item.slot);
+        style={{
+          alignItems: "center",
+          backgroundColor: "#08080b",
+          backgroundImage: ITEM_TILE_RARITY_BG[props.item.rarity],
+          backgroundRepeat: "no-repeat",
+          backgroundSize: "100% 100%",
+          border: 0,
+          boxShadow: `${ITEM_TILE_INSET_SHADOW}, ${stateGlow}`,
+          cursor: "grab",
+          display: "flex",
+          height: "100%",
+          imageRendering: "pixelated",
+          justifyContent: "center",
+          opacity: props.equipped || props.canEquip ? 1 : LOCKED_ITEM_OPACITY,
+          padding: 0,
+          width: "100%"
         }}
-        onMouseLeave={() => {
-          setHovered(false);
-          props.onHoverSlot(null);
-        }}
-        style={{ gridColumn: `${props.placement.column + 1} / span ${props.footprint.columns}`, gridRow: `${props.placement.row + 1} / span ${props.footprint.rows}`, opacity: props.isDragging ? 0.42 : 1, position: "relative", zIndex: 5 }}
+        type="button"
       >
-        <Box
-          aria-disabled={!props.equipped && !props.canEquip}
-          component="button"
-          onDoubleClick={() => {
-            if (props.equipped || props.canEquip) {
-              action();
-            }
-          }}
-          style={{
-            alignItems: "center",
-            backgroundColor: "#08080b",
-            backgroundImage: ITEM_TILE_RARITY_BG[props.item.rarity],
-            backgroundRepeat: "no-repeat",
-            backgroundSize: "100% 100%",
-            border: 0,
-            boxShadow: `${ITEM_TILE_INSET_SHADOW}, ${stateGlow}`,
-            cursor: "grab",
-            display: "flex",
-            height: "100%",
-            imageRendering: "pixelated",
-            justifyContent: "center",
-            opacity: props.equipped || props.canEquip ? 1 : LOCKED_ITEM_OPACITY,
-            padding: 0,
-            width: "100%"
-          }}
-          type="button"
-        >
-          <HeroSiegeEquipmentIcon item={props.item} size={iconSize} unframed />
-        </Box>
-        <HeroSiegeButton
-          disabled={!props.equipped && !props.canEquip}
-          height={18}
-          minWidth={48}
-          onClick={() => {
-            if (props.equipped || props.canEquip) {
-              action();
-            }
-          }}
-          style={{ bottom: 2, fontSize: 9, opacity: hovered ? 1 : 0, padding: "0 6px", pointerEvents: hovered ? "auto" : "none", position: "absolute", right: 2 }}
-        >
-          {props.equipped ? "Unequip" : "Equip"}
-        </HeroSiegeButton>
-        <ActionIcon
-          aria-label={`Sell ${props.item.name} for ${getItemSellValue(props.item)} gold`}
-          color="yellow"
-          disabled={props.equipped}
-          onClick={(event) => {
-            event.stopPropagation();
-            props.onSell();
-          }}
-          size={DISCARD_BUTTON_SIZE}
-          style={{ background: "rgba(31, 21, 4, 0.94)", border: "1px solid rgba(255, 222, 130, 0.68)", opacity: hovered && !props.equipped ? 1 : 0, pointerEvents: hovered && !props.equipped ? "auto" : "none", position: "absolute", right: 2, top: 2 }}
-          variant="filled"
-        >
-          <IconCoins size={DISCARD_ICON_SIZE} />
-        </ActionIcon>
+        <HeroSiegeEquipmentIcon item={props.item} size={iconSize} unframed />
       </Box>
-    </InventoryItemTooltip>
+      <ActionIcon
+        aria-label={`Sell ${props.item.name} for ${getItemSellValue(props.item)} gold`}
+        color="yellow"
+        disabled={props.equipped}
+        onClick={(event) => {
+          event.stopPropagation();
+          props.onSell();
+        }}
+        size={DISCARD_BUTTON_SIZE}
+        style={{ background: "rgba(31, 21, 4, 0.94)", border: "1px solid rgba(255, 222, 130, 0.68)", opacity: hovered && !props.equipped ? 1 : 0, pointerEvents: hovered && !props.equipped ? "auto" : "none", position: "absolute", right: 2, top: 2 }}
+        variant="filled"
+      >
+        <IconCoins size={DISCARD_ICON_SIZE} />
+      </ActionIcon>
+    </Box>
   );
 }
 
@@ -809,14 +887,19 @@ function ItemPixelIcon(props: { item: InventoryItem }) {
   return <HeroSiegeEquipmentIcon item={props.item} size={ITEM_ICON_SIZE} />;
 }
 
-export function InventoryItemTooltip(props: { canEquip?: boolean; children: React.ReactNode; compareItem?: InventoryItem | null; disabled?: boolean; equipped?: boolean; item: InventoryItem; showRollRanges?: boolean }) {
+export function InventoryItemTooltip(props: { canEquip?: boolean; children: React.ReactNode; compareItem?: InventoryItem | null; disabled?: boolean; equipped?: boolean; item: InventoryItem; offset?: number; showRollRanges?: boolean }) {
+  const shiftHeld = useShiftKeyPressed();
+  const [pointerShiftHeld, setPointerShiftHeld] = useState(false);
+  const compareEnabled = shiftHeld || pointerShiftHeld;
   return (
     <Tooltip
       disabled={props.disabled}
-      label={<ItemDetails canEquip={props.canEquip} compareItem={props.compareItem} equipped={props.equipped} item={props.item} showRollRanges={props.showRollRanges} />}
+      label={<ItemComparisonDetails canEquip={props.canEquip} compareEnabled={compareEnabled} compareItem={props.compareItem} equipped={props.equipped} item={props.item} showRollRanges={props.showRollRanges} />}
       multiline
       withArrow
       color="dark"
+      offset={props.offset ?? 14}
+      position="right"
       styles={{
         tooltip: {
           background: DETAILS_BG,
@@ -828,12 +911,30 @@ export function InventoryItemTooltip(props: { canEquip?: boolean; children: Reac
         }
       }}
     >
-      {props.children}
+      <Box
+        onMouseEnter={(event) => setPointerShiftHeld(event.shiftKey)}
+        onMouseLeave={() => setPointerShiftHeld(false)}
+        onMouseMove={(event) => setPointerShiftHeld(event.shiftKey)}
+      >
+        {props.children}
+      </Box>
     </Tooltip>
   );
 }
 
-function ItemDetails(props: { canEquip?: boolean; compareItem?: InventoryItem | null; equipped?: boolean; item: InventoryItem; showRollRanges?: boolean }) {
+function ItemComparisonDetails(props: { canEquip?: boolean; compareEnabled?: boolean; compareItem?: InventoryItem | null; equipped?: boolean; item: InventoryItem; showRollRanges?: boolean }) {
+  if (props.compareEnabled && props.compareItem && !props.equipped) {
+    return (
+      <Group align="flex-start" gap={DETAILS_COMPARE_GAP} wrap="nowrap">
+        <ItemDetails canEquip={props.canEquip} item={props.item} showRollRanges={props.showRollRanges} titlePrefix="New" />
+        <ItemDetails equipped item={props.compareItem} showRollRanges={props.showRollRanges} titlePrefix="Equipped" />
+      </Group>
+    );
+  }
+  return <ItemDetails canEquip={props.canEquip} compareAvailable={Boolean(props.compareItem && !props.equipped)} equipped={props.equipped} item={props.item} showRollRanges={props.showRollRanges} />;
+}
+
+function ItemDetails(props: { canEquip?: boolean; compareAvailable?: boolean; equipped?: boolean; item: InventoryItem; showRollRanges?: boolean; titlePrefix?: string }) {
   const baseName = getBaseItemName(props.item);
   const powerProfile = SLOT_POWER_PROFILES[props.item.slot];
   const level = props.item.requirements.level;
@@ -842,8 +943,9 @@ function ItemDetails(props: { canEquip?: boolean; compareItem?: InventoryItem | 
   const damageRange = powerProfile.damage ? getScaledPowerRange(powerProfile.damage, level, ITEM_DAMAGE_LEVEL_FACTOR, ITEM_DAMAGE_SPREAD) : null;
   const defenseRange = powerProfile.defense ? getScaledPowerRange(powerProfile.defense, level, ITEM_ARMOR_LEVEL_FACTOR, ITEM_ARMOR_SPREAD) : null;
   return (
-    <Stack gap={8} style={{ textAlign: "center", width: DETAILS_SHEET_WIDTH }}>
+    <Stack gap={8} style={{ background: DETAILS_BG, border: DETAILS_BORDER, boxShadow: DETAILS_SHADOW, color: "#f1dfad", padding: DETAILS_PADDING, textAlign: "center", width: DETAILS_SHEET_WIDTH }}>
       <Box>
+        {props.titlePrefix && <Text size="xs" fw={900} c={props.equipped ? "yellow.3" : "green.3"} tt="uppercase">{props.titlePrefix}</Text>}
         <Text size="lg" fw={900} tt="uppercase" style={{ color: getHeroSiegeQualityColor(getItemQuality(props.item)), letterSpacing: 0, textShadow: "0 2px 0 #000" }}>
           {props.item.name}
         </Text>
@@ -885,9 +987,6 @@ function ItemDetails(props: { canEquip?: boolean; compareItem?: InventoryItem | 
         </Stack>
       ) : null}
       {props.item.flavorText && <Text size="xs" fs="italic" c="gray.3">{props.item.flavorText}</Text>}
-      {props.compareItem && !props.equipped && (
-        <ComparisonSummary current={props.item} equipped={props.compareItem} />
-      )}
       <Stack gap={2}>
         {Object.entries(props.item.stats).filter(([, value]) => value).map(([key, value]) => {
           const stat = key as keyof typeof STAT_DISPLAY_NAMES;
@@ -908,27 +1007,13 @@ function ItemDetails(props: { canEquip?: boolean; compareItem?: InventoryItem | 
         {props.equipped && <Badge size="xs" color="yellow" variant="light">equipped</Badge>}
         {!props.equipped && props.canEquip === false && <Badge size="xs" color="red" variant="light">locked</Badge>}
       </Group>
+      <Stack gap={2} mt={2}>
+        {(props.equipped || props.canEquip === true) && (
+          <Text size="10px" fw={700} c="dimmed" opacity={0.62} tt="uppercase">Shift + Left Click to {props.equipped ? "Unequip" : "Equip"}</Text>
+        )}
+        {props.compareAvailable && <Text size="10px" fw={700} c="dimmed" opacity={0.62} tt="uppercase">Hold Shift to Compare</Text>}
+      </Stack>
     </Stack>
-  );
-}
-
-function ComparisonSummary(props: { current: InventoryItem; equipped: InventoryItem }) {
-  const statDeltas = (Object.keys(STAT_DISPLAY_NAMES) as Array<keyof typeof STAT_DISPLAY_NAMES>)
-    .map((stat) => ({ label: STAT_LABELS[stat], value: (props.current.stats[stat] || 0) - (props.equipped.stats[stat] || 0) }))
-    .filter((row) => row.value !== 0);
-  return (
-    <Box mt={2} p={6} style={{ background: "rgba(0, 0, 0, 0.34)", border: "1px solid rgba(241, 223, 173, 0.2)" }}>
-      <Text size="xs" fw={900} c="gray.2">Equipped: {props.equipped.name}</Text>
-      {statDeltas.length ? (
-        <Group gap={6} justify="center" mt={3}>
-          {statDeltas.map((delta) => (
-            <Text key={delta.label} size="xs" fw={900} c={delta.value > 0 ? "green.3" : "red.3"}>{delta.label} {delta.value > 0 ? "+" : ""}{delta.value}</Text>
-          ))}
-        </Group>
-      ) : (
-        <Text size="xs" c="dimmed" mt={3}>No base stat change.</Text>
-      )}
-    </Box>
   );
 }
 
