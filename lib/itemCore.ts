@@ -1,4 +1,5 @@
 import { ITEM_BASE_NAMES, ITEM_NAME_POOL_COUNT } from "./itemNames";
+import { applyWikiItemData, createWikiMechanicalStats, createWikiModifiers, pickWikiEquipmentItem } from "./heroSiegeWikiCatalog";
 import type { CharacterStatKey, CharacterStats, EquipmentSlot, InventoryItem, ItemModifierKey, ItemRarity, Question } from "../types/study";
 
 const FIRST_STAT_LEVEL = 1;
@@ -31,6 +32,10 @@ const RARITY_MODIFIER_COUNTS: Record<ItemRarity, number> = { common: 0, uncommon
 const RARITY_ORDER: ItemRarity[] = ["common", "uncommon", "rare", "epic", "legendary"];
 const SET_DROP_CHANCE = 0;
 const MIN_SET_DIFFICULTY: Question["difficulty"] = 2;
+const COMMON_ONLY_MAX_LEVEL = 3;
+const UNCOMMON_MAX_LEVEL = 8;
+const RARE_MAX_LEVEL = 20;
+const EPIC_MAX_LEVEL = 40;
 const STAT_KEYS: CharacterStatKey[] = ["strength", "constitution", "perception", "intelligence"];
 const MODIFIER_POOLS: Array<{ key: ItemModifierKey; min: number; max: number }> = [
   { key: "bonusXpPercent", min: 5, max: 20 },
@@ -51,6 +56,17 @@ const MODIFIER_POOLS: Array<{ key: ItemModifierKey; min: number; max: number }> 
 
 export const ITEM_BASE_NAME_COUNT = ITEM_NAME_POOL_COUNT;
 export const EQUIPMENT_SLOTS: EquipmentSlot[] = ["mainHand", "offHand", "headgear", "armor", "headAccessory", "eyewear", "bodyAccessory", "backAccessory", "feet"];
+const LOW_LEVEL_ITEM_BASE_NAMES: Record<EquipmentSlot, string[]> = {
+  armor: ["Padded Armor", "Leather Coat", "Studded Leather", "Tunic", "Hide Vest", "Chain Shirt"],
+  backAccessory: ["Small Charm", "Lucky Pebble", "Cloth Pouch", "Old Token", "Carved Charm", "Scout's Satchel"],
+  bodyAccessory: ["Leather Gloves", "Cloth Wraps", "Sash", "Leather Belt", "Heavy Gloves", "Chain Gloves"],
+  eyewear: ["Bronze Ring", "Iron Ring", "Copper Band", "Socket Ring", "Plain Ring", "Silver Loop"],
+  feet: ["Boots", "Heavy Boots", "Cloth Shoes", "Chain Boots", "Light Plated Boots", "Trail Boots"],
+  headAccessory: ["Amulet", "Locket", "Talisman", "Pearls", "Carcanet", "Simple Pendant"],
+  headgear: ["Cap", "Casque", "Leather Hood", "War Hat", "Great Helm", "Basinet"],
+  mainHand: ["Hand Axe", "Hatchet", "Cudgel", "Mace", "Dagger", "Short Sword", "Sabre", "Gnarled Staff", "Wand", "Short Spear"],
+  offHand: ["Wooden Shield", "Buckler", "Round Shield", "Small Crescent", "Bone Shield", "Tribal Ward"]
+};
 export const SLOT_LABELS: Record<EquipmentSlot, string> = {
   armor: "Armor",
   backAccessory: "Back Accessory",
@@ -84,29 +100,41 @@ export const ITEM_SET_DEFINITIONS = [
 ] as const;
 
 export type DropItemOptions = {
+  maxItemLevel?: number;
   minRarity?: ItemRarity;
   rarityBonus?: number;
+  slot?: EquipmentSlot;
 };
 
 export function createDropItem(question: Question, stats: CharacterStats, now: number, options: DropItemOptions = {}): InventoryItem {
   const seed = `${question.id}:${now}`;
-  const slot = pickFrom(EQUIPMENT_SLOTS, seededRandom(`${seed}:slot`));
-  const rarity = getDropRarity(question, stats, seed, options);
-  const itemLevel = getItemLevelRequirement(question, rarity);
+  const slot = options.slot || pickFrom(EQUIPMENT_SLOTS, seededRandom(`${seed}:slot`));
+  const rarity = capRarityForLevel(getDropRarity(question, stats, seed, options), options.maxItemLevel, options.minRarity);
+  const itemLevel = getCappedItemLevel(getItemLevelRequirement(question, rarity), options.maxItemLevel);
   const itemStats = rollItemStats(slot, rarity, itemLevel, seed);
+  const wikiItem = pickWikiEquipmentItem(slot, `${seed}:wiki`, { maxItemLevel: options.maxItemLevel ?? itemLevel, rarity })
+    || pickWikiEquipmentItem(slot, `${seed}:wiki-fallback`, { maxItemLevel: MAX_ITEM_LEVEL });
+  const wikiStats = createWikiMechanicalStats(slot, wikiItem);
   const primaryStat = getStrongestItemStat(itemStats) || SLOT_STAT_BIAS[slot];
   const setDefinition = getDropSet(question, seed);
   const setPieceName = setDefinition ? pickFrom([...setDefinition.pieces], seededRandom(`${seed}:set-piece`)) : null;
-  return {
+  return applyWikiItemData({
     id: `item-${question.id}-${now}-${Math.floor(seededRandom(`${seed}:id`) * HASH_SEED).toString(ITEM_ID_RADIX)}`,
-    modifiers: rollItemModifiers(rarity, itemLevel, seed),
-    name: setPieceName || createItemName(slot, seed),
+    modifiers: mergeItemModifiers(rollItemModifiers(rarity, itemLevel, seed), createWikiModifiers(wikiItem?.stats || [])).slice(0, getLevelModifierCap(itemLevel)),
+    name: setPieceName || createItemName(slot, itemLevel, seed),
     requirements: rollItemRequirements(rarity, primaryStat, itemLevel, seed),
     rarity,
     setId: setDefinition?.id,
     slot,
-    stats: itemStats
-  };
+    stats: Object.values(wikiStats).some(Boolean) ? limitStatsForRarity({ ...itemStats, ...wikiStats }, rarity, itemLevel) : itemStats
+  }, wikiItem);
+}
+
+function getCappedItemLevel(itemLevel: number, maxItemLevel: number | undefined) {
+  if (!Number.isFinite(maxItemLevel)) {
+    return itemLevel;
+  }
+  return Math.min(itemLevel, Math.max(MIN_ITEM_LEVEL, Math.floor(maxItemLevel || MIN_ITEM_LEVEL)));
 }
 
 export function getActiveSetBonusesForItems(items: InventoryItem[]) {
@@ -124,9 +152,35 @@ function getDropSet(question: Question, seed: string) {
   return pickFrom([...ITEM_SET_DEFINITIONS], seededRandom(`${seed}:set-id`));
 }
 
-function createItemName(slot: EquipmentSlot, seed: string) {
-  const baseName = pickFrom(ITEM_BASE_NAMES[slot], seededRandom(`${seed}:base-name`));
+function createItemName(slot: EquipmentSlot, itemLevel: number, seed: string) {
+  const pool = itemLevel < LOW_LEVEL_AFFIX_MAX_LEVEL ? LOW_LEVEL_ITEM_BASE_NAMES[slot] : ITEM_BASE_NAMES[slot];
+  const baseName = pickFrom(pool, seededRandom(`${seed}:base-name`));
   return baseName;
+}
+
+function capRarityForLevel(rarity: ItemRarity, maxItemLevel: number | undefined, minRarity: ItemRarity | undefined) {
+  const preserveMinimum = (capped: ItemRarity) => enforceMinimumRarity(capped, minRarity);
+  if (!Number.isFinite(maxItemLevel)) {
+    return preserveMinimum(rarity);
+  }
+  const maxLevel = Math.max(MIN_ITEM_LEVEL, Math.floor(maxItemLevel || MIN_ITEM_LEVEL));
+  if (maxLevel <= COMMON_ONLY_MAX_LEVEL) {
+    return preserveMinimum(capRarity(rarity, "common"));
+  }
+  if (maxLevel <= UNCOMMON_MAX_LEVEL) {
+    return preserveMinimum(capRarity(rarity, "uncommon"));
+  }
+  if (maxLevel <= RARE_MAX_LEVEL) {
+    return preserveMinimum(capRarity(rarity, "rare"));
+  }
+  if (maxLevel <= EPIC_MAX_LEVEL) {
+    return preserveMinimum(capRarity(rarity, "epic"));
+  }
+  return preserveMinimum(rarity);
+}
+
+function capRarity(rarity: ItemRarity, maxRarity: ItemRarity) {
+  return RARITY_ORDER[Math.min(RARITY_ORDER.indexOf(rarity), RARITY_ORDER.indexOf(maxRarity))] || rarity;
 }
 
 function getItemLevelRequirement(question: Question, rarity: ItemRarity) {
@@ -178,6 +232,21 @@ function rollItemModifiers(rarity: ItemRarity, itemLevel: number, seed: string) 
     const poolItem = MODIFIER_POOLS.find((modifier) => modifier.key === key) || MODIFIER_POOLS[0];
     return { key, value: rollModifierValue(poolItem, itemLevel, `${seed}:modifier-value:${key}:${index}`) };
   });
+}
+
+function mergeItemModifiers(base: InventoryItem["modifiers"], wikiModifiers: InventoryItem["modifiers"]) {
+  const merged = [...(base || [])];
+  for (const modifier of wikiModifiers || []) {
+    if (!merged.some((row) => row.key === modifier.key)) {
+      merged.push(modifier);
+    }
+  }
+  return merged;
+}
+
+function limitStatsForRarity(stats: Partial<CharacterStats>, rarity: ItemRarity, itemLevel: number) {
+  const maxStats = Math.min(RARITY_AFFIX_COUNTS[rarity], getLevelAffixCap(itemLevel));
+  return Object.fromEntries(Object.entries(stats).slice(0, maxStats)) as Partial<CharacterStats>;
 }
 
 function pickAvailableModifier(picked: ItemModifierKey[], seed: string) {

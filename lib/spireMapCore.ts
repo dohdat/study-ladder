@@ -4,7 +4,7 @@ import { getUniqueMonsterBonusCount } from "./monsterCore";
 import { grantRelic, rollRelic } from "./relicCore";
 import { createShopStock } from "./shopCore";
 import { getMaxHealth, getMaxMana } from "./studyCore";
-import type { CharacterStats, Difficulty, InventoryItem, ItemRarity, Question, SpireMapNode, SpireNodeKind, SpireRun, StudyState, UnknownEncounterKind } from "../types/study";
+import type { Difficulty, InventoryItem, ItemRarity, Question, SpireMapNode, SpireNodeKind, SpireRun, StudyState, UnknownEncounterKind } from "../types/study";
 
 const RATING_FLOOR_1 = 1500;
 const RATING_FLOOR_2 = 1650;
@@ -42,12 +42,18 @@ export const SPIRE_RATINGS = [
 const FIRST_TIER = 0;
 const FIRST_NODE_ID = "tier-0-start";
 const FLOOR_ONE_INDEX = 0;
+const FLOOR_FOUR_INDEX = 3;
+const FLOOR_FIVE_INDEX = 4;
 const FLOOR_SIX_INDEX = 5;
-const TREASURE_FLOOR_INDEX = 8;
+const FLOOR_SEVEN_INDEX = 6;
+const GUARANTEED_TREASURE_MIN_FLOOR_INDEX = 7;
+const GUARANTEED_TREASURE_MAX_FLOOR_INDEX = 9;
 const FLOOR_FOURTEEN_INDEX = 13;
 const BOSS_FLOOR_INDEX = 14;
 const MIN_ROUND_QUESTION_COUNT = 2;
 const MAX_ROUND_QUESTION_COUNT = 3;
+const EXPERIENCE_PER_LEVEL = 150;
+const MAX_CHARACTER_LEVEL = 100;
 const HASH_SEED = 2166136261;
 const HASH_MULTIPLIER = 16777619;
 const HASH_DIVISOR = 4294967296;
@@ -59,19 +65,22 @@ const TREASURE_ROOM_GOLD_CHANCE = 0.55;
 const TREASURE_ROOM_ITEM_CHANCE = 0.35;
 const ELITE_ROOM_ITEM_COUNT = 1;
 const BOSS_ROOM_ITEM_COUNT = 2;
+export const MERCHANT_UPGRADE_COST = 35;
 const UNKNOWN_EVENT_GOLD_MIN = 18;
 const UNKNOWN_EVENT_GOLD_MAX = 42;
 const POTION_HEALTH_RATIO = 0.25;
 const POTION_MANA_RATIO = 0.35;
-const UNKNOWN_PITY_STEP = 8;
+const UNKNOWN_MONSTER_BASE_CHANCE = 0.1;
+const UNKNOWN_TREASURE_BASE_CHANCE = 0.02;
+const UNKNOWN_SHOP_BASE_CHANCE = 0.03;
 const MAP_X_MIN = 8;
 const MAP_X_SPREAD = 84;
 const FIRST_ROW_Y = 92;
 const TOP_ROW_Y = 8;
 const MAP_COLUMN_COUNT = 7;
-const PATH_COUNT = 6;
-const DISTINCT_START_PATH_COUNT = 4;
-const NODE_X_JITTER = 4;
+const MIN_RANDOM_WALK_PATHS = 7;
+const MAX_RANDOM_WALK_PATHS = 8;
+const NODE_X_JITTER = 2;
 const MAX_PATH_STEP = 1;
 const MAX_NODE_NEXT_IDS = 3;
 const MAX_STRAIGHT_CHAIN_EDGES = 1;
@@ -92,27 +101,39 @@ const RANDOM_CENTER = 0.5;
 const VARIED_PATH_MIN_SPAN = 2;
 const STRAIGHT_CHAIN_SCORE_PENALTY = 10;
 const EDGE_COLUMN_SCORE_PENALTY = 6;
-const START_COLUMN_ORDER = [COLUMN_1, COLUMN_3, COLUMN_5, COLUMN_2, COLUMN_4, COLUMN_0, COLUMN_6] as const;
+const START_COLUMN_ORDER = [COLUMN_0, COLUMN_1, COLUMN_2, COLUMN_3, COLUMN_4, COLUMN_5, COLUMN_6] as const;
+const START_NODE_COLUMNS = [COLUMN_1, COLUMN_3, COLUMN_5, COLUMN_2] as const;
 const PATH_OFFSETS = [PATH_STEP_LEFT, PATH_STEP_STRAIGHT, PATH_STEP_RIGHT] as const;
+const STRAIGHT_STEP_CHANCE = 0.45;
+const DIAGONAL_STEP_CHANCE = 0.275;
+const BRANCHING_TARGET_MIN = 1.8;
+const BRANCHING_TARGET_MAX = 2.4;
+const BRANCHING_VALID_MIN = 1.4;
+const BRANCHING_VALID_MAX = 2.8;
+const MIN_OCCUPANCY_RATIO = 0.5;
+const MAX_OCCUPANCY_RATIO = 0.62;
+const MIN_ADJACENT_CONNECTIVITY_RATIO = 0.85;
+const MAP_GENERATION_ATTEMPTS = 80;
+const MAP_ATTEMPT_SEED_STEP = 7919;
 const ELITE_RATING_BOOST = 300;
 const RATING_FIT_BASE = 5000;
 const ELITE_BONUS_SORT_WEIGHT = 1000;
-const MIN_ELITE_ROOM_COUNT = 3;
-const MIN_REST_ROOM_COUNT = 2;
+const MIN_ELITE_ROOM_COUNT = 4;
+const MIN_REST_ROOM_COUNT = 4;
 const UNKNOWN_ROOM_RATIO_CAP = 0.2;
 const ROOM_KIND_WEIGHTS: Array<{ kind: SpireNodeKind; weight: number }> = [
-  { kind: "enemy", weight: 45 },
-  { kind: "unknown", weight: 10 },
-  { kind: "elite", weight: 20 },
-  { kind: "rest", weight: 12 },
-  { kind: "merchant", weight: 5 },
-  { kind: "treasure", weight: 0 }
+  { kind: "enemy", weight: 52 },
+  { kind: "unknown", weight: 22 },
+  { kind: "rest", weight: 8 },
+  { kind: "merchant", weight: 6 },
+  { kind: "elite", weight: 7 },
+  { kind: "treasure", weight: 4 }
 ];
 const UNKNOWN_ENCOUNTER_WEIGHTS: Record<UnknownEncounterKind, number> = {
-  event: 25,
-  monster: 35,
-  shop: 18,
-  treasure: 22
+  event: 0,
+  monster: UNKNOWN_MONSTER_BASE_CHANCE,
+  shop: UNKNOWN_SHOP_BASE_CHANCE,
+  treasure: UNKNOWN_TREASURE_BASE_CHANCE
 };
 const ROOM_REWARD_ITEM_RARITY: Record<"enemy" | "elite" | "boss" | "treasure", { minRarity?: ItemRarity; rarityBonus: number }> = {
   boss: { minRarity: "rare", rarityBonus: 0.24 },
@@ -121,7 +142,9 @@ const ROOM_REWARD_ITEM_RARITY: Record<"enemy" | "elite" | "boss" | "treasure", {
   treasure: { rarityBonus: 0.08 }
 };
 const ITEM_RARITY_ORDER: ItemRarity[] = ["common", "uncommon", "rare", "epic", "legendary"];
+const MAX_MERCHANT_UPGRADE_RARITY: ItemRarity = "rare";
 const CONSECUTIVE_BLOCKED_KINDS: SpireNodeKind[] = ["elite", "merchant", "rest"];
+const GUARANTEED_TREASURE_FLOORS = new Set([GUARANTEED_TREASURE_MIN_FLOOR_INDEX, GUARANTEED_TREASURE_MIN_FLOOR_INDEX + 1, GUARANTEED_TREASURE_MAX_FLOOR_INDEX]);
 
 type PathEdge = {
   fromColumn: number;
@@ -212,7 +235,12 @@ function getMapValidators() {
     hasRequiredRoomDistribution,
     hasForcedRoomKinds,
     hasSingleBossRoom,
-    hasValidNodeFanOut
+    hasValidNodeFanOut,
+    hasValidOccupancy,
+    hasEnoughAdjacentConnectivity,
+    hasAverageBranchingInRange,
+    hasEveryStartReachBoss,
+    hasRequiredRouteRiskMix
   ];
 }
 
@@ -223,7 +251,13 @@ function hasValidNodeFanOut(nodes: SpireMapNode[]) {
 function hasRequiredRoomDistribution(nodes: SpireMapNode[]) {
   return nodes.filter((node) => node.kind === "elite").length >= MIN_ELITE_ROOM_COUNT
     && nodes.filter((node) => node.kind === "rest").length >= MIN_REST_ROOM_COUNT
-    && nodes.filter((node) => node.kind === "unknown").length <= getUnknownRoomCap(nodes);
+    && nodes.filter((node) => node.kind === "unknown").length <= getUnknownRoomCap(nodes)
+    && hasSingleGuaranteedTreasure(nodes)
+    && hasNoEarlySpecialRooms(nodes)
+    && hasValidShopSpacing(nodes)
+    && hasValidCampfireSpacing(nodes)
+    && hasSupportedEliteRooms(nodes)
+    && hasNoConsecutiveSpecialRooms(nodes);
 }
 
 function hasForcedRoomKinds(nodes: SpireMapNode[]) {
@@ -239,6 +273,86 @@ function hasSingleBossRoom(nodes: SpireMapNode[]) { const bossNodes = nodes.filt
 function getUnknownRoomCap(nodes: SpireMapNode[]) { return Math.max(1, Math.floor(nodes.length * UNKNOWN_ROOM_RATIO_CAP)); }
 
 function hasValidColumns(nodes: SpireMapNode[]) { return nodes.every((node) => Number.isInteger(node.column) && node.column >= 0 && node.column < MAP_COLUMN_COUNT); }
+
+function hasValidOccupancy(nodes: SpireMapNode[]) {
+  const occupancy = nodes.length / (SPIRE_RATINGS.length * MAP_COLUMN_COUNT);
+  return occupancy >= MIN_OCCUPANCY_RATIO && occupancy <= MAX_OCCUPANCY_RATIO;
+}
+
+function hasEnoughAdjacentConnectivity(nodes: SpireMapNode[]) {
+  const connectedPairs = SPIRE_RATINGS.slice(FIRST_TIER, EXCLUDE_LAST_FLOOR).filter((rating) => {
+    const currentFloorNodes = nodes.filter((node) => node.rating === rating);
+    const nextRating = SPIRE_RATINGS[SPIRE_RATINGS.findIndex((row) => row === rating) + 1];
+    const nextFloorIds = new Set(nodes.filter((node) => node.rating === nextRating).map((node) => node.id));
+    return currentFloorNodes.length > 0 && currentFloorNodes.every((node) => node.nextIds.some((id) => nextFloorIds.has(id)));
+  }).length;
+  return connectedPairs / Math.max(1, SPIRE_RATINGS.length - 1) >= MIN_ADJACENT_CONNECTIVITY_RATIO;
+}
+
+function hasAverageBranchingInRange(nodes: SpireMapNode[]) {
+  const average = getAverageBranchingFactor(nodes);
+  return average >= BRANCHING_VALID_MIN && average <= BRANCHING_VALID_MAX;
+}
+
+function getAverageBranchingFactor(nodes: SpireMapNode[]) {
+  const branchingNodes = nodes.filter((node) => node.rating !== SPIRE_RATINGS[BOSS_FLOOR_INDEX]);
+  return branchingNodes.reduce((sum, node) => sum + node.nextIds.length, 0) / Math.max(1, branchingNodes.length);
+}
+
+function hasSingleGuaranteedTreasure(nodes: SpireMapNode[]) {
+  return nodes.filter((node) => GUARANTEED_TREASURE_FLOORS.has(getTierIndex(node.rating)) && node.kind === "treasure").length === 1;
+}
+
+function hasNoEarlySpecialRooms(nodes: SpireMapNode[]) {
+  return nodes.every((node) => {
+    const tierIndex = getTierIndex(node.rating);
+    if ((node.kind === "elite" || node.kind === "rest") && tierIndex < FLOOR_SIX_INDEX) {
+      return false;
+    }
+    if (node.kind === "treasure" && tierIndex < FLOOR_FIVE_INDEX) {
+      return false;
+    }
+    if (node.kind === "merchant" && tierIndex < FLOOR_FOUR_INDEX) {
+      return false;
+    }
+    return !(node.kind === "elite" && tierIndex < FLOOR_SEVEN_INDEX);
+  });
+}
+
+function hasValidShopSpacing(nodes: SpireMapNode[]) {
+  return SPIRE_RATINGS.every((_rating, tierIndex) => {
+    const spanStart = Math.max(FIRST_TIER, tierIndex - 4);
+    return nodes.filter((node) => {
+      const nodeTier = getTierIndex(node.rating);
+      return node.kind === "merchant" && nodeTier >= spanStart && nodeTier <= tierIndex;
+    }).length <= 2;
+  });
+}
+
+function hasValidCampfireSpacing(nodes: SpireMapNode[]) {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  return nodes.every((node) => node.kind !== "rest" || !getAncestorNodesWithinFloors(nodes, node, 2).some((ancestor) => ancestor.kind === "rest") && !node.nextIds.some((id) => {
+    const next = byId.get(id);
+    return next?.kind === "rest";
+  }));
+}
+
+function hasSupportedEliteRooms(nodes: SpireMapNode[]) {
+  const elites = nodes.filter((node) => node.kind === "elite");
+  if (!elites.length) {
+    return false;
+  }
+  const supported = elites.filter((node) => getAncestorNodesWithinFloors(nodes, node, 3).some((ancestor) => ancestor.kind === "rest"));
+  return supported.length / elites.length >= 0.6;
+}
+
+function hasNoConsecutiveSpecialRooms(nodes: SpireMapNode[]) {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  return nodes.every((node) => !CONSECUTIVE_BLOCKED_KINDS.includes(node.kind) || node.nextIds.every((id) => {
+    const next = byId.get(id);
+    return !next || next.rating >= SPIRE_RATINGS[BOSS_FLOOR_INDEX] || !CONSECUTIVE_BLOCKED_KINDS.includes(next.kind);
+  }));
+}
 
 function hasVariedPathLinks(nodes: SpireMapNode[]) {
   const byId = new Map(nodes.map((node) => [node.id, node]));
@@ -295,6 +409,55 @@ function hasNoDeadRooms(nodes: SpireMapNode[]) {
 
 function hasNoHangingRooms(nodes: SpireMapNode[]) { return nodes.every((node) => node.rating === SPIRE_RATINGS[BOSS_FLOOR_INDEX] || node.nextIds.length > 0); }
 
+function hasEveryStartReachBoss(nodes: SpireMapNode[]) {
+  return getStartNodes(nodes).every((node) => canReachBoss(nodes, node.id));
+}
+
+function hasRequiredRouteRiskMix(nodes: SpireMapNode[]) {
+  const starts = getStartNodes(nodes);
+  const requiredLowRiskStarts = Math.ceil(starts.length * 0.25);
+  const requiredOptionalEliteStarts = Math.ceil(starts.length * 0.3);
+  const lowRiskStarts = starts.filter((node) => canReachBoss(nodes, node.id, { avoidElite: true })).length;
+  const optionalEliteStarts = starts.filter((node) => canReachBoss(nodes, node.id, { requireElite: true }) && canReachBoss(nodes, node.id, { avoidElite: true })).length;
+  return lowRiskStarts >= requiredLowRiskStarts && optionalEliteStarts >= requiredOptionalEliteStarts;
+}
+
+function getStartNodes(nodes: SpireMapNode[]) {
+  return nodes.filter((node) => node.rating === SPIRE_RATINGS[FIRST_TIER]);
+}
+
+function canReachBoss(nodes: SpireMapNode[], startId: string, options: { avoidElite?: boolean; requireElite?: boolean } = {}) {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const stack = [{ id: startId, seenElite: false }];
+  const visited = new Set<string>();
+  while (stack.length) {
+    const current = stack.pop();
+    if (!current) {
+      continue;
+    }
+    const node = byId.get(current.id);
+    if (!node) {
+      continue;
+    }
+    const seenElite = current.seenElite || node.kind === "elite";
+    if (options.avoidElite && seenElite) {
+      continue;
+    }
+    const key = `${node.id}:${seenElite}`;
+    if (visited.has(key)) {
+      continue;
+    }
+    visited.add(key);
+    if (node.kind === "boss") {
+      return !options.requireElite || seenElite;
+    }
+    for (const nextId of node.nextIds) {
+      stack.push({ id: nextId, seenElite });
+    }
+  }
+  return false;
+}
+
 export function getCurrentSpireNode(state: StudyState) { return state.profile.spireRun.nodes.find((node) => node.id === state.profile.spireRun.currentNodeId) || state.profile.spireRun.nodes[0]; }
 
 export function getCurrentRoundQuestion(state: StudyState, currentQuestion: Question | null) {
@@ -337,7 +500,10 @@ export function claimSpireNodeReward(state: StudyState, now = Date.now()) {
     return state;
   }
   if (currentNode.kind === "unknown") {
-    return applyUnknownEncounterReward(state, currentNode, now);
+    return state;
+  }
+  if (currentNode.kind === "event") {
+    return applyUnknownEventReward(state, currentNode, now);
   }
   if (currentNode.kind === "enemy") {
     return applyEnemyRoomReward(state, currentNode, now);
@@ -367,21 +533,21 @@ function applyEnemyRoomReward(state: StudyState, node: SpireMapNode, now: number
 }
 
 function applyEliteRoomReward(state: StudyState, node: SpireMapNode, now: number) {
-  const withRelic = grantRelic(state, rollRelic(state, `${node.id}:${now}:elite-relic`, { minRarity: ["uncommon", "rare", "boss"] }));
+  const withRelic = grantRelic(state, rollRelic(state, `${node.id}:${now}:elite-relic`, { maxItemLevel: getStateLevel(state), minRarity: ["uncommon", "rare", "boss"] }));
   const withGold = grantRoomGold(withRelic, node, "elite", now);
   const withItems = grantRoomItems(withGold, node, now, "elite", ELITE_ROOM_ITEM_COUNT);
   return maybeApplyPotionReward(withItems, node, now, "elite");
 }
 
 function applyBossRoomReward(state: StudyState, node: SpireMapNode, now: number) {
-  const withRelic = grantRelic(state, rollRelic(state, `${node.id}:${now}:boss-relic`, { minRarity: ["boss"] }));
+  const withRelic = grantRelic(state, rollRelic(state, `${node.id}:${now}:boss-relic`, { maxItemLevel: getStateLevel(state), minRarity: ["boss"] }));
   const withGold = grantRoomGold(withRelic, node, "boss", now);
   const withItems = grantRoomItems(withGold, node, now, "boss", BOSS_ROOM_ITEM_COUNT);
   return applyPotionReward(withItems, "health", node, now, "boss-health");
 }
 
 function applyTreasureRoomReward(state: StudyState, node: SpireMapNode, now: number) {
-  const withRelic = grantRelic(state, rollRelic(state, `${node.id}:${now}:treasure-relic`));
+  const withRelic = grantRelic(state, rollRelic(state, `${node.id}:${now}:treasure-relic`, { maxItemLevel: getStateLevel(state) }));
   const withGold = getRoll(`${node.id}:${now}:treasure-gold`) <= TREASURE_ROOM_GOLD_CHANCE ? grantRoomGold(withRelic, node, "treasure", now) : withRelic;
   return maybeGrantRoomItem(withGold, node, now, "treasure", TREASURE_ROOM_ITEM_CHANCE);
 }
@@ -393,7 +559,7 @@ function applyMerchantRoomReward(state: StudyState, node: SpireMapNode, now: num
     profile: {
       ...state.profile,
       shopLastRefreshedAt: now,
-      shopStock: createShopStock(question, state.profile.stats, now)
+      shopStock: createShopStock(question, state.profile.stats, now, { maxItemLevel: getStateLevel(state) })
     }
   };
 }
@@ -411,8 +577,13 @@ function applyRestRoomReward(state: StudyState) {
   };
 }
 
-function upgradeLowestTierItem(state: StudyState): StudyState {
-  const item = [...state.profile.inventory].sort(compareSmithCandidates)[0];
+export function canUpgradeSpireInventoryItem(state: StudyState) {
+  return state.profile.inventory.some(canUpgradeItemRarity);
+}
+
+function upgradeRandomEligibleItem(state: StudyState): StudyState {
+  const candidates = state.profile.inventory.filter(canUpgradeItemRarity);
+  const item = candidates[Math.floor(getRoll(`${state.profile.spireRun.currentNodeId || "inventory"}:${state.profile.coins}:${candidates.length}:upgrade`) * candidates.length)];
   if (!item) {
     return state;
   }
@@ -426,15 +597,14 @@ function upgradeLowestTierItem(state: StudyState): StudyState {
   };
 }
 
-function compareSmithCandidates(left: InventoryItem, right: InventoryItem) {
-  return ITEM_RARITY_ORDER.indexOf(left.rarity) - ITEM_RARITY_ORDER.indexOf(right.rarity)
-    || left.requirements.level - right.requirements.level
-    || left.name.localeCompare(right.name);
+function canUpgradeItemRarity(item: InventoryItem) {
+  return ITEM_RARITY_ORDER.indexOf(item.rarity) < ITEM_RARITY_ORDER.indexOf(MAX_MERCHANT_UPGRADE_RARITY);
 }
 
 function upgradeItemTier(item: InventoryItem): InventoryItem {
   const currentIndex = ITEM_RARITY_ORDER.indexOf(item.rarity);
-  const nextRarity = ITEM_RARITY_ORDER[Math.min(ITEM_RARITY_ORDER.length - 1, Math.max(0, currentIndex) + 1)] || item.rarity;
+  const maxIndex = ITEM_RARITY_ORDER.indexOf(MAX_MERCHANT_UPGRADE_RARITY);
+  const nextRarity = ITEM_RARITY_ORDER[Math.min(maxIndex, Math.max(0, currentIndex) + 1)] || item.rarity;
   const primaryStat = SLOT_STAT_BIAS[item.slot];
   return {
     ...item,
@@ -444,21 +614,6 @@ function upgradeItemTier(item: InventoryItem): InventoryItem {
       [primaryStat]: (item.stats[primaryStat] || 0) + 1
     }
   };
-}
-
-function applyUnknownEncounterReward(state: StudyState, node: SpireMapNode, now: number) {
-  const encounter = rollUnknownEncounter(state, node, now);
-  const withMisses = updateUnknownEncounterMisses(state, encounter);
-  if (encounter === "monster") {
-    return applyEnemyRoomReward(withMisses, node, now);
-  }
-  if (encounter === "shop") {
-    return applyMerchantRoomReward(withMisses, node, now);
-  }
-  if (encounter === "treasure") {
-    return applyTreasureRoomReward(withMisses, node, now);
-  }
-  return applyUnknownEventReward(withMisses, node, now);
 }
 
 function applyUnknownEventReward(state: StudyState, node: SpireMapNode, now: number) {
@@ -475,19 +630,20 @@ function applyUnknownEventReward(state: StudyState, node: SpireMapNode, now: num
 
 function rollUnknownEncounter(state: StudyState, node: SpireMapNode, now: number): UnknownEncounterKind {
   const misses = normalizeUnknownEncounterMisses(state.profile.spireRun.unknownEncounterMisses);
-  const weighted = (Object.keys(UNKNOWN_ENCOUNTER_WEIGHTS) as UnknownEncounterKind[]).map((kind) => ({
-    kind,
-    weight: UNKNOWN_ENCOUNTER_WEIGHTS[kind] + misses[kind] * UNKNOWN_PITY_STEP
-  }));
-  const total = weighted.reduce((sum, entry) => sum + entry.weight, 0);
-  let roll = getRoll(`${node.id}:${now}:unknown-encounter`) * total;
-  for (const entry of weighted) {
-    roll -= entry.weight;
-    if (roll <= 0) {
-      return entry.kind;
-    }
+  if (getRoll(`${node.id}:${now}:unknown-monster`) <= getUnknownEncounterChance("monster", misses)) {
+    return "monster";
   }
-  return "monster";
+  if (getRoll(`${node.id}:${now}:unknown-treasure`) <= getUnknownEncounterChance("treasure", misses)) {
+    return "treasure";
+  }
+  if (getRoll(`${node.id}:${now}:unknown-shop`) <= getUnknownEncounterChance("shop", misses)) {
+    return "shop";
+  }
+  return "event";
+}
+
+function getUnknownEncounterChance(kind: Exclude<UnknownEncounterKind, "event">, misses: Record<UnknownEncounterKind, number>) {
+  return Math.min(1, UNKNOWN_ENCOUNTER_WEIGHTS[kind] * (misses[kind] + 1));
 }
 
 function updateUnknownEncounterMisses(state: StudyState, seen: UnknownEncounterKind): StudyState {
@@ -543,7 +699,7 @@ function maybeGrantRoomItem(state: StudyState, node: SpireMapNode, now: number, 
 }
 
 function grantRoomItems(state: StudyState, node: SpireMapNode, now: number, kind: "enemy" | "elite" | "boss" | "treasure", count: number) {
-  const items = Array.from({ length: count }, (_unused, index) => createRoomRewardItem(state.profile.stats, node, now, kind, index));
+  const items = Array.from({ length: count }, (_unused, index) => createRoomRewardItem(state, node, now, kind, index));
   return {
     ...state,
     profile: {
@@ -553,10 +709,14 @@ function grantRoomItems(state: StudyState, node: SpireMapNode, now: number, kind
   };
 }
 
-function createRoomRewardItem(stats: CharacterStats, node: SpireMapNode, now: number, kind: "enemy" | "elite" | "boss" | "treasure", index: number) {
+function createRoomRewardItem(state: StudyState, node: SpireMapNode, now: number, kind: "enemy" | "elite" | "boss" | "treasure", index: number) {
   const question = createRoomRewardQuestion(node, kind, now, `${kind}-item-${index}`);
   const rarity = ROOM_REWARD_ITEM_RARITY[kind];
-  return createDropItem(question, stats, now + index, rarity);
+  return createDropItem(question, state.profile.stats, now + index, { ...rarity, maxItemLevel: getStateLevel(state) });
+}
+
+function getStateLevel(state: StudyState) {
+  return Math.min(MAX_CHARACTER_LEVEL, Math.floor(Math.max(0, state.profile.experience) / EXPERIENCE_PER_LEVEL) + 1);
 }
 
 function createRoomRewardQuestion(node: SpireMapNode, kind: string, now: number, suffix: string): Question {
@@ -621,17 +781,51 @@ export function advanceSpireNode(state: StudyState, now = Date.now()) {
   return completeSpireNode(state, currentNode, now);
 }
 
-export function smithSpireNode(state: StudyState, now = Date.now()) {
+export function leaveSpireRoom(state: StudyState, now = Date.now()) {
   const currentNode = getCurrentSpireNode(state);
-  if (!currentNode || currentNode.kind !== "rest" || !state.profile.spireRun.mapOpen || !state.profile.spireRun.availableNodeIds.includes(currentNode.id)) {
+  if (!currentNode || state.profile.spireRun.mapOpen) {
     return state;
   }
-  return completeSpireNode(upgradeLowestTierItem(state), currentNode, now, false);
+  return completeSpireNode(markSpireRoomRewardClaimed(state, currentNode.id), currentNode, now, false);
+}
+
+export function claimCurrentSpireRoomReward(state: StudyState, now = Date.now()) {
+  const currentNode = getCurrentSpireNode(state);
+  if (!currentNode || state.profile.spireRun.mapOpen || isSpireRoomRewardClaimed(state, currentNode.id)) {
+    return state;
+  }
+  if (currentNode.kind === "merchant") {
+    return markSpireRoomRewardClaimed(state, currentNode.id);
+  }
+  return markSpireRoomRewardClaimed(claimSpireNodeReward(state, now), currentNode.id);
+}
+
+export function upgradeCurrentSpireRoomItem(state: StudyState) {
+  const currentNode = getCurrentSpireNode(state);
+  if (!currentNode || state.profile.spireRun.mapOpen || (currentNode.kind !== "rest" && currentNode.kind !== "merchant") || !canUpgradeSpireInventoryItem(state)) {
+    return state;
+  }
+  if (currentNode.kind === "merchant" && state.profile.coins < MERCHANT_UPGRADE_COST) {
+    return state;
+  }
+  const charged = currentNode.kind === "merchant"
+    ? { ...state, profile: { ...state.profile, coins: state.profile.coins - MERCHANT_UPGRADE_COST } }
+    : state;
+  const upgraded = upgradeRandomEligibleItem(charged);
+  return currentNode.kind === "rest" ? markSpireRoomRewardClaimed(upgraded, currentNode.id) : upgraded;
+}
+
+export function smithSpireNode(state: StudyState, now = Date.now()) {
+  const currentNode = getCurrentSpireNode(state);
+  if (!currentNode || currentNode.kind !== "rest" || !state.profile.spireRun.mapOpen || !canUseSpireNode(state, currentNode.id)) {
+    return state;
+  }
+  return completeSpireNode(upgradeRandomEligibleItem(state), currentNode, now, false);
 }
 
 export function selectSpireNode(state: StudyState, nodeId: string) {
   const node = state.profile.spireRun.nodes.find((row) => row.id === nodeId);
-  if (!node || !state.profile.spireRun.mapOpen || !state.profile.spireRun.availableNodeIds.includes(nodeId)) {
+  if (!node || !state.profile.spireRun.mapOpen || !canUseSpireNode(state, nodeId)) {
     return state;
   }
   return {
@@ -653,29 +847,85 @@ export function selectSpireNode(state: StudyState, nodeId: string) {
 
 export function enterSpireNode(state: StudyState, now = Date.now()) {
   const node = getCurrentSpireNode(state);
-  if (!node || !state.profile.spireRun.mapOpen || !state.profile.spireRun.availableNodeIds.includes(node.id) || !isCombatNode(node)) {
+  if (!node || !state.profile.spireRun.mapOpen || !canUseSpireNode(state, node.id)) {
     return state;
   }
+  const revealedState = node.kind === "unknown" ? revealUnknownSpireNode(state, node, now) : state;
+  const enteredNode = getCurrentSpireNode(revealedState);
+  const enteredState = enteredNode?.kind === "merchant" ? applyMerchantRoomReward(revealedState, enteredNode, now) : revealedState;
   return {
-    ...state,
+    ...enteredState,
     currentId: null,
     profile: {
-      ...state.profile,
+      ...enteredState.profile,
       spireRun: {
-        ...state.profile.spireRun,
+        ...enteredState.profile.spireRun,
         mapOpen: false,
-        roundQuestionIds: pickRoundQuestions(node, state.profile.spireRun.mapSeed + now, state.profile.spireRun.roundQuestionIds, getRoundQuestionCount(node, now)),
+        roundQuestionIds: isCombatNode(enteredNode) ? pickRoundQuestions(enteredNode, state.profile.spireRun.mapSeed + now, state.profile.spireRun.roundQuestionIds, getRoundQuestionCount(enteredNode, now)) : [],
         roundSolvedIds: [],
-        tierIndex: getTierIndex(node.rating)
+        tierIndex: getTierIndex(enteredNode?.rating || node.rating)
       }
     }
   };
 }
 
-export function isCombatNode(node: SpireMapNode | undefined) { return Boolean(node && (node.kind === "enemy" || node.kind === "elite" || node.kind === "unknown" || node.kind === "boss")); }
+export function isCombatNode(node: SpireMapNode | undefined) { return Boolean(node && (node.kind === "enemy" || node.kind === "elite" || node.kind === "boss")); }
+
+function revealUnknownSpireNode(state: StudyState, node: SpireMapNode, now: number) {
+  const encounter = rollUnknownEncounter(state, node, now);
+  const withMisses = updateUnknownEncounterMisses(state, encounter);
+  return replaceSpireNodeKind(withMisses, node.id, getRevealedNodeKind(encounter));
+}
+
+function getRevealedNodeKind(encounter: UnknownEncounterKind): SpireNodeKind {
+  if (encounter === "monster") {
+    return "enemy";
+  }
+  if (encounter === "shop") {
+    return "merchant";
+  }
+  if (encounter === "treasure") {
+    return "treasure";
+  }
+  return "event";
+}
+
+function replaceSpireNodeKind(state: StudyState, nodeId: string, kind: SpireNodeKind) {
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      spireRun: {
+        ...state.profile.spireRun,
+        nodes: state.profile.spireRun.nodes.map((node) => node.id === nodeId ? { ...node, kind } : node)
+      }
+    }
+  };
+}
+
+function canUseSpireNode(state: StudyState, nodeId: string) {
+  return state.profile.godMode || state.profile.spireRun.availableNodeIds.includes(nodeId);
+}
+
+function isSpireRoomRewardClaimed(state: StudyState, nodeId: string) {
+  return state.profile.spireRun.completedNodeIds.includes(nodeId);
+}
+
+function markSpireRoomRewardClaimed(state: StudyState, nodeId: string) {
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      spireRun: {
+        ...state.profile.spireRun,
+        completedNodeIds: Array.from(new Set([...state.profile.spireRun.completedNodeIds, nodeId]))
+      }
+    }
+  };
+}
 
 function completeSpireNode(state: StudyState, node: SpireMapNode, now: number, shouldClaimReward = true) {
-  const rewarded = shouldClaimReward ? claimSpireNodeReward(state, now) : state;
+  const rewarded = tickActivePotionEffects(shouldClaimReward ? claimSpireNodeReward(state, now) : state, node.id);
   const nextIds = node.nextIds;
   return {
     ...rewarded,
@@ -695,15 +945,40 @@ function completeSpireNode(state: StudyState, node: SpireMapNode, now: number, s
   };
 }
 
+function tickActivePotionEffects(state: StudyState, completedNodeId: string): StudyState {
+  const activePotionEffects = (state.profile.activePotionEffects || [])
+    .map((effect) => effect.sourceNodeId === completedNodeId ? { ...effect, sourceNodeId: undefined } : { ...effect, roomsRemaining: effect.roomsRemaining - 1, sourceNodeId: undefined })
+    .filter((effect) => effect.roomsRemaining > 0);
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      activePotionEffects,
+      health: Math.min(state.profile.health, getMaxHealth({ ...state, profile: { ...state.profile, activePotionEffects } })),
+      mana: Math.min(state.profile.mana, getMaxMana({ ...state, profile: { ...state.profile, activePotionEffects } }))
+    }
+  };
+}
+
 function createSpireNodes(seed: number) {
-  const linkedRows = createPathRows(seed);
-  return assignRoomKinds(seed, linkedRows).flat();
+  for (let attempt = 0; attempt < MAP_GENERATION_ATTEMPTS; attempt += 1) {
+    const attemptSeed = seed + attempt * MAP_ATTEMPT_SEED_STEP;
+    const nodes = assignRoomKinds(attemptSeed, createPathRows(attemptSeed)).flat();
+    if (isValidBranchingMap(nodes)) {
+      return nodes;
+    }
+  }
+  return assignRoomKinds(seed, createPathRows(seed)).flat();
 }
 
 function createPathRows(seed: number) {
   const rowColumns = SPIRE_RATINGS.map(() => new Set<number>());
   const edges: PathEdge[] = [];
-  for (const pathIndex of Array.from({ length: PATH_COUNT }, (_unused, index) => index)) {
+  const pathCount = getRandomWalkPathCount(seed);
+  for (const column of START_NODE_COLUMNS) {
+    rowColumns[FIRST_TIER].add(column);
+  }
+  for (const pathIndex of Array.from({ length: pathCount }, (_unused, index) => index)) {
     let column = getPathStartColumn(seed, pathIndex);
     const pathColumns = [column];
     rowColumns[FIRST_TIER].add(column);
@@ -715,8 +990,18 @@ function createPathRows(seed: number) {
       column = nextColumn;
     }
   }
+  ensureAllStartsConnected(rowColumns, edges);
+  dedupeEdges(edges);
   normalizeBossFloor(rowColumns, edges);
+  ensureTargetOccupancy(seed, rowColumns);
+  ensureNodeConnectivity(rowColumns, edges);
+  dedupeEdges(edges);
+  addStrategicBranches(seed, rowColumns, edges);
   return rowColumns.map((columns, tierIndex) => createTierNodesFromColumns(seed, tierIndex, [...columns].sort((a, b) => a - b), edges));
+}
+
+function getRandomWalkPathCount(seed: number) {
+  return MIN_RANDOM_WALK_PATHS + Math.floor(getRoll(`${seed}:path-count`) * (MAX_RANDOM_WALK_PATHS - MIN_RANDOM_WALK_PATHS + 1));
 }
 
 function normalizeBossFloor(rowColumns: Array<Set<number>>, edges: PathEdge[]) {
@@ -727,10 +1012,10 @@ function normalizeBossFloor(rowColumns: Array<Set<number>>, edges: PathEdge[]) {
 
 function getPathStartColumn(seed: number, pathIndex: number): number {
   const shuffled = getShuffledColumns(seed, `start:${pathIndex}`);
-  if (pathIndex < DISTINCT_START_PATH_COUNT) {
-    return shuffled[pathIndex] ?? START_COLUMN_ORDER[pathIndex];
+  if (pathIndex < START_NODE_COLUMNS.length) {
+    return START_NODE_COLUMNS[pathIndex] ?? START_NODE_COLUMNS[DEFAULT_FIRST_SLOT];
   }
-  return shuffled[Math.floor(getRoll(`${seed}:start-repeat:${pathIndex}`) * shuffled.length)] ?? START_COLUMN_ORDER[DEFAULT_FIRST_SLOT];
+  return START_NODE_COLUMNS[Math.floor(getRoll(`${seed}:start-repeat:${pathIndex}`) * START_NODE_COLUMNS.length)] ?? START_NODE_COLUMNS[DEFAULT_FIRST_SLOT];
 }
 
 function getShuffledColumns(seed: number, key: string): number[] {
@@ -739,17 +1024,29 @@ function getShuffledColumns(seed: number, key: string): number[] {
 
 function getNextPathColumn(seed: number, pathIndex: number, tierIndex: number, column: number, edges: PathEdge[], pathColumns: number[]) {
   const candidates = getNextColumnCandidates(seed, pathIndex, tierIndex, column, pathColumns);
-  const nonStraightCandidates = candidates.filter((candidate) => candidate !== column);
-  return nonStraightCandidates.find((candidate) => !wouldCrossExistingEdge(edges, tierIndex, column, candidate))
+  return candidates.find((candidate) => !wouldCrossExistingEdge(edges, tierIndex, column, candidate))
     ?? candidates.find((candidate) => !wouldCrossExistingEdge(edges, tierIndex, column, candidate))
     ?? column;
 }
 
 function getNextColumnCandidates(seed: number, pathIndex: number, tierIndex: number, column: number, pathColumns: number[]) {
-  return [...PATH_OFFSETS]
+  const preferredOffset = getWeightedPathOffset(seed, pathIndex, tierIndex);
+  const offsets = [preferredOffset, PATH_STEP_STRAIGHT, preferredOffset < 0 ? PATH_STEP_RIGHT : PATH_STEP_LEFT, preferredOffset < 0 ? PATH_STEP_LEFT : PATH_STEP_RIGHT];
+  return Array.from(new Set(offsets))
     .map((offset) => column + offset)
     .filter((candidate) => candidate >= 0 && candidate < MAP_COLUMN_COUNT)
     .sort((a, b) => getPathCandidateScore(seed, pathIndex, tierIndex, column, a, pathColumns) - getPathCandidateScore(seed, pathIndex, tierIndex, column, b, pathColumns));
+}
+
+function getWeightedPathOffset(seed: number, pathIndex: number, tierIndex: number) {
+  const roll = getRoll(`${seed}:weighted-step:${pathIndex}:${tierIndex}`);
+  if (roll < STRAIGHT_STEP_CHANCE) {
+    return PATH_STEP_STRAIGHT;
+  }
+  if (roll < STRAIGHT_STEP_CHANCE + DIAGONAL_STEP_CHANCE) {
+    return PATH_STEP_LEFT;
+  }
+  return PATH_STEP_RIGHT;
 }
 
 function getPathCandidateScore(seed: number, pathIndex: number, tierIndex: number, column: number, candidate: number, pathColumns: number[]) {
@@ -761,6 +1058,124 @@ function getPathCandidateScore(seed: number, pathIndex: number, tierIndex: numbe
     score += EDGE_COLUMN_SCORE_PENALTY;
   }
   return score;
+}
+
+function ensureAllStartsConnected(rowColumns: Array<Set<number>>, edges: PathEdge[]) {
+  for (const column of START_NODE_COLUMNS) {
+    if (edges.some((edge) => edge.fromTier === FIRST_TIER && edge.fromColumn === column)) {
+      continue;
+    }
+    const nextColumn = getClosestAvailableColumn(column, rowColumns[FIRST_TIER + 1]);
+    rowColumns[FIRST_TIER + 1].add(nextColumn);
+    edges.push({ fromColumn: column, fromTier: FIRST_TIER, toColumn: nextColumn });
+  }
+}
+
+function dedupeEdges(edges: PathEdge[]) {
+  const seen = new Set<string>();
+  for (let index = edges.length - 1; index >= 0; index -= 1) {
+    const edge = edges[index];
+    const key = `${edge.fromTier}:${edge.fromColumn}:${edge.toColumn}`;
+    if (seen.has(key)) {
+      edges.splice(index, 1);
+    }
+    seen.add(key);
+  }
+}
+
+function ensureTargetOccupancy(seed: number, rowColumns: Array<Set<number>>) {
+  const totalSlots = SPIRE_RATINGS.length * MAP_COLUMN_COUNT;
+  const target = Math.ceil(totalSlots * (MIN_OCCUPANCY_RATIO + getRoll(`${seed}:occupancy-target`) * (MAX_OCCUPANCY_RATIO - MIN_OCCUPANCY_RATIO - 0.03)));
+  const candidates = SPIRE_RATINGS
+    .slice(FIRST_TIER + 1, BOSS_FLOOR_INDEX)
+    .flatMap((_rating, tierOffset) => {
+      const tierIndex = tierOffset + 1;
+      return START_COLUMN_ORDER
+        .filter((column) => !rowColumns[tierIndex].has(column) && hasNearbyColumn(rowColumns[tierIndex - 1], column) && (tierIndex === FLOOR_FOURTEEN_INDEX || hasNearbyColumn(rowColumns[tierIndex + 1], column)))
+        .map((column) => ({ column, tierIndex }));
+    })
+    .sort((a, b) => getRoll(`${seed}:occupancy:${a.tierIndex}:${a.column}`) - getRoll(`${seed}:occupancy:${b.tierIndex}:${b.column}`));
+  for (const candidate of candidates) {
+    if (getGridNodeCount(rowColumns) >= target) {
+      return;
+    }
+    rowColumns[candidate.tierIndex].add(candidate.column);
+  }
+}
+
+function hasNearbyColumn(columns: Set<number>, column: number) {
+  return [column - 1, column, column + 1].some((candidate) => columns.has(candidate));
+}
+
+function getGridNodeCount(rowColumns: Array<Set<number>>) {
+  return rowColumns.reduce((sum, columns) => sum + columns.size, 0);
+}
+
+function ensureNodeConnectivity(rowColumns: Array<Set<number>>, edges: PathEdge[]) {
+  for (let tierIndex = FIRST_TIER + 1; tierIndex <= BOSS_FLOOR_INDEX; tierIndex += 1) {
+    for (const column of rowColumns[tierIndex]) {
+      if (edges.some((edge) => edge.fromTier === tierIndex - 1 && edge.toColumn === column)) {
+        continue;
+      }
+      const fromColumn = getClosestConnectableColumn(rowColumns[tierIndex - 1], column, tierIndex === BOSS_FLOOR_INDEX);
+      edges.push({ fromColumn, fromTier: tierIndex - 1, toColumn: column });
+    }
+  }
+  for (let tierIndex = FIRST_TIER; tierIndex < BOSS_FLOOR_INDEX; tierIndex += 1) {
+    for (const column of rowColumns[tierIndex]) {
+      if (edges.some((edge) => edge.fromTier === tierIndex && edge.fromColumn === column)) {
+        continue;
+      }
+      const toColumn = getClosestConnectableColumn(rowColumns[tierIndex + 1], column, tierIndex + 1 === BOSS_FLOOR_INDEX);
+      edges.push({ fromColumn: column, fromTier: tierIndex, toColumn });
+    }
+  }
+}
+
+function getClosestConnectableColumn(columns: Set<number>, column: number, allowBossLink: boolean) {
+  const candidates = Array.from(columns)
+    .filter((candidate) => allowBossLink || Math.abs(candidate - column) <= MAX_PATH_STEP)
+    .sort((a, b) => Math.abs(a - column) - Math.abs(b - column) || a - b);
+  return candidates[DEFAULT_FIRST_SLOT] ?? column;
+}
+
+function getClosestAvailableColumn(column: number, columns: Set<number>) {
+  const candidates = [column, column - 1, column + 1].filter((candidate) => candidate >= 0 && candidate < MAP_COLUMN_COUNT);
+  return candidates.find((candidate) => columns.has(candidate)) ?? candidates[DEFAULT_FIRST_SLOT] ?? column;
+}
+
+function addStrategicBranches(seed: number, rowColumns: Array<Set<number>>, edges: PathEdge[]) {
+  const target = BRANCHING_TARGET_MIN + getRoll(`${seed}:branching-target`) * (BRANCHING_TARGET_MAX - BRANCHING_TARGET_MIN);
+  const candidates = getBranchCandidates(seed, rowColumns, edges);
+  for (const candidate of candidates) {
+    if (getProjectedBranchingFactor(rowColumns, edges) >= target) {
+      return;
+    }
+    if (canAddBranchEdge(edges, candidate)) {
+      edges.push(candidate);
+    }
+  }
+}
+
+function getBranchCandidates(seed: number, rowColumns: Array<Set<number>>, edges: PathEdge[]) {
+  return SPIRE_RATINGS.slice(FIRST_TIER, FLOOR_FOURTEEN_INDEX).flatMap((_rating, tierIndex) => Array.from(rowColumns[tierIndex]).flatMap((fromColumn) => {
+    const existingNextColumns = new Set(edges.filter((edge) => edge.fromTier === tierIndex && edge.fromColumn === fromColumn).map((edge) => edge.toColumn));
+    return Array.from(rowColumns[tierIndex + 1])
+      .filter((toColumn) => Math.abs(toColumn - fromColumn) <= MAX_PATH_STEP && !existingNextColumns.has(toColumn))
+      .map((toColumn) => ({ fromColumn, fromTier: tierIndex, toColumn }));
+  })).sort((a, b) => getRoll(`${seed}:branch:${a.fromTier}:${a.fromColumn}:${a.toColumn}`) - getRoll(`${seed}:branch:${b.fromTier}:${b.fromColumn}:${b.toColumn}`));
+}
+
+function canAddBranchEdge(edges: PathEdge[], candidate: PathEdge) {
+  const outgoingCount = edges.filter((edge) => edge.fromTier === candidate.fromTier && edge.fromColumn === candidate.fromColumn).length;
+  return outgoingCount < MAX_NODE_NEXT_IDS
+    && !edges.some((edge) => edge.fromTier === candidate.fromTier && edge.fromColumn === candidate.fromColumn && edge.toColumn === candidate.toColumn)
+    && !wouldCrossExistingEdge(edges, candidate.fromTier, candidate.fromColumn, candidate.toColumn);
+}
+
+function getProjectedBranchingFactor(rowColumns: Array<Set<number>>, edges: PathEdge[]) {
+  const branchingNodeCount = rowColumns.slice(FIRST_TIER, BOSS_FLOOR_INDEX).reduce((sum, columns) => sum + columns.size, 0);
+  return edges.length / Math.max(1, branchingNodeCount);
 }
 
 function getStraightChainLength(pathColumns: number[], column: number) {
@@ -805,11 +1220,14 @@ function getNodeId(tierIndex: number, column: number) { return `tier-${tierIndex
 
 function assignRoomKinds(seed: number, rows: SpireMapNode[][]) {
   const assignedByOrigin = new Map<string, Set<SpireNodeKind>>();
-  const assignedRows: SpireMapNode[][] = [];
+  const assignedRows: SpireMapNode[][] = rows.map((row, tierIndex) => row.map((node) => ({ ...node, kind: getForcedNodeKind(tierIndex) || "enemy" as SpireNodeKind })));
+  const guaranteedTreasureId = getGuaranteedTreasureId(seed, rows);
   for (const [tierIndex, row] of rows.entries()) {
     const assignedRow = row.map((node, slot) => {
+      const existing = assignedRows[tierIndex][slot];
+      const forced = getForcedNodeKind(tierIndex);
       const incoming = getIncomingNodes(assignedRows, tierIndex, node.id);
-      const kind = getNodeKind(seed, tierIndex, slot, incoming, assignedByOrigin);
+      const kind = forced || getNodeKind(seed, tierIndex, slot, existing.id, guaranteedTreasureId, assignedRows, incoming, assignedByOrigin);
       for (const origin of incoming) {
         if (origin.nextIds.length > 1) {
           const assigned = assignedByOrigin.get(origin.id) || new Set<SpireNodeKind>();
@@ -819,15 +1237,39 @@ function assignRoomKinds(seed: number, rows: SpireMapNode[][]) {
       }
       return { ...node, kind };
     });
-    assignedRows.push(assignedRow);
+    assignedRows[tierIndex] = assignedRow;
   }
   return balanceSpecialRoomCounts(seed, assignedRows);
+}
+
+function getGuaranteedTreasureId(seed: number, rows: SpireMapNode[][]) {
+  const candidates = rows
+    .flatMap((row, tierIndex) => GUARANTEED_TREASURE_FLOORS.has(tierIndex) ? row : [])
+    .sort((a, b) => getRoll(`${seed}:guaranteed-treasure:${a.id}`) - getRoll(`${seed}:guaranteed-treasure:${b.id}`));
+  return candidates[DEFAULT_FIRST_SLOT]?.id || rows[GUARANTEED_TREASURE_MIN_FLOOR_INDEX]?.[DEFAULT_FIRST_SLOT]?.id || "";
 }
 
 function balanceSpecialRoomCounts(seed: number, rows: SpireMapNode[][]) {
   const cappedUnknowns = capUnknownRooms(seed, rows);
   const withElites = ensureMinimumRoomKind(seed, cappedUnknowns, "elite", MIN_ELITE_ROOM_COUNT);
-  return ensureMinimumRoomKind(seed, withElites, "rest", MIN_REST_ROOM_COUNT);
+  const withRest = ensureMinimumRoomKind(seed, withElites, "rest", MIN_REST_ROOM_COUNT);
+  const withSupportedElites = ensureEliteCampfireSupport(seed, withRest);
+  return cleanInvalidSpecialChains(withSupportedElites);
+}
+
+function cleanInvalidSpecialChains(rows: SpireMapNode[][]) {
+  let cleaned = rows;
+  for (let tierIndex = FIRST_TIER + 1; tierIndex < BOSS_FLOOR_INDEX; tierIndex += 1) {
+    cleaned = cleaned.map((row, rowTierIndex) => row.map((node) => {
+      if (rowTierIndex !== tierIndex || !CONSECUTIVE_BLOCKED_KINDS.includes(node.kind)) {
+        return node;
+      }
+      const incomingSpecial = getIncomingNodes(cleaned, tierIndex, node.id).some((incoming) => CONSECUTIVE_BLOCKED_KINDS.includes(incoming.kind));
+      const restTooClose = node.kind === "rest" && getAncestorNodesWithinFloors(cleaned.flat(), node, 2).some((ancestor) => ancestor.kind === "rest");
+      return incomingSpecial || restTooClose ? { ...node, kind: "enemy" as SpireNodeKind } : node;
+    }));
+  }
+  return cleaned;
 }
 
 function capUnknownRooms(seed: number, rows: SpireMapNode[][]) {
@@ -860,6 +1302,32 @@ function ensureMinimumRoomKind(seed: number, rows: SpireMapNode[][], kind: Spire
   }));
 }
 
+function ensureEliteCampfireSupport(seed: number, rows: SpireMapNode[][]) {
+  const flatRows = rows.flat();
+  const elites = flatRows.filter((node) => node.kind === "elite");
+  const supportedCount = elites.filter((node) => getAncestorNodesWithinFloors(flatRows, node, 3).some((ancestor) => ancestor.kind === "rest")).length;
+  let needed = Math.max(0, Math.ceil(elites.length * 0.6) - supportedCount);
+  if (!needed) {
+    return rows;
+  }
+  const supportIds = new Set(elites
+    .filter((node) => !getAncestorNodesWithinFloors(flatRows, node, 3).some((ancestor) => ancestor.kind === "rest"))
+    .flatMap((elite) => getAncestorNodesWithinFloors(flatRows, elite, 3)
+      .filter((ancestor) => canForceRoomKind(rows, getTierIndex(ancestor.rating), ancestor, "rest"))
+      .sort((a, b) => getRoll(`${seed}:elite-rest:${elite.id}:${a.id}`) - getRoll(`${seed}:elite-rest:${elite.id}:${b.id}`))
+      .slice(0, 1))
+    .sort((a, b) => getRoll(`${seed}:support-rest:${a.id}`) - getRoll(`${seed}:support-rest:${b.id}`))
+    .filter(() => {
+      const use = needed > 0;
+      if (use) {
+        needed -= 1;
+      }
+      return use;
+    })
+    .map((node) => node.id));
+  return rows.map((row) => row.map((node) => supportIds.has(node.id) ? { ...node, kind: "rest" as SpireNodeKind } : node));
+}
+
 function getForceableRoomCount(rows: SpireMapNode[][], kind: SpireNodeKind, fromTierIndex: number) {
   return rows.slice(fromTierIndex).flatMap((row, tierOffset) => row.filter((node) => canForceRoomKind(rows, fromTierIndex + tierOffset, node, kind))).length;
 }
@@ -868,26 +1336,70 @@ function canForceRoomKind(rows: SpireMapNode[][], tierIndex: number, node: Spire
   return node.kind === "enemy"
     && isKindAllowedOnFloor(tierIndex, kind)
     && !getIncomingNodes(rows, tierIndex, node.id).some((incoming) => CONSECUTIVE_BLOCKED_KINDS.includes(incoming.kind))
+    && (kind !== "rest" || !getAncestorNodesWithinFloors(rows.flat(), node, 2).some((ancestor) => ancestor.kind === "rest"))
+    && (kind !== "merchant" || getShopCountInFiveFloorSpan(rows.flat(), tierIndex) < 2)
     && !node.nextIds.some((nextId) => rows[tierIndex + 1]?.some((nextNode) => nextNode.id === nextId && CONSECUTIVE_BLOCKED_KINDS.includes(nextNode.kind)));
 }
 
+function getShopCountInFiveFloorSpan(nodes: SpireMapNode[], tierIndex: number) {
+  const spanStart = Math.max(FIRST_TIER, tierIndex - 4);
+  return nodes.filter((node) => {
+    const nodeTier = getTierIndex(node.rating);
+    return node.kind === "merchant" && nodeTier >= spanStart && nodeTier <= tierIndex;
+  }).length;
+}
+
+function getAncestorNodesWithinFloors(nodes: SpireMapNode[], node: SpireMapNode, floorDistance: number) {
+  const byId = new Map(nodes.map((entry) => [entry.id, entry]));
+  const ancestors: SpireMapNode[] = [];
+  let frontier = [node.id];
+  for (let distance = 1; distance <= floorDistance; distance += 1) {
+    const nextFrontier: string[] = [];
+    for (const id of frontier) {
+      for (const previous of nodes) {
+        if (!previous.nextIds.includes(id)) {
+          continue;
+        }
+        const ancestor = byId.get(previous.id);
+        if (ancestor && !ancestors.some((entry) => entry.id === ancestor.id)) {
+          ancestors.push(ancestor);
+          nextFrontier.push(ancestor.id);
+        }
+      }
+    }
+    frontier = nextFrontier;
+  }
+  return ancestors;
+}
+
 function isKindAllowedOnFloor(tierIndex: number, kind: SpireNodeKind) {
-  if ((kind === "elite" || kind === "rest") && tierIndex < FLOOR_SIX_INDEX) {
+  if (kind === "boss") {
+    return tierIndex === BOSS_FLOOR_INDEX;
+  }
+  if (kind === "elite" && tierIndex < FLOOR_SEVEN_INDEX) {
     return false;
   }
-  return tierIndex !== FLOOR_ONE_INDEX && tierIndex !== TREASURE_FLOOR_INDEX && tierIndex !== BOSS_FLOOR_INDEX;
+  if (kind === "rest" && tierIndex < FLOOR_SIX_INDEX) {
+    return false;
+  }
+  if (kind === "merchant" && tierIndex < FLOOR_FOUR_INDEX) {
+    return false;
+  }
+  if (kind === "treasure" && tierIndex < FLOOR_FIVE_INDEX) {
+    return false;
+  }
+  return tierIndex !== FLOOR_ONE_INDEX && tierIndex !== BOSS_FLOOR_INDEX;
 }
 
 function getIncomingNodes(rows: SpireMapNode[][], tierIndex: number, nodeId: string) {
   return tierIndex > FIRST_TIER ? rows[tierIndex - 1].filter((node) => node.nextIds.includes(nodeId)) : [];
 }
 
-function getNodeKind(seed: number, tierIndex: number, slot: number, incoming: SpireMapNode[], assignedByOrigin: Map<string, Set<SpireNodeKind>>) {
-  const forced = getForcedNodeKind(tierIndex);
-  if (forced) {
-    return forced;
+function getNodeKind(seed: number, tierIndex: number, slot: number, nodeId: string, guaranteedTreasureId: string, rows: SpireMapNode[][], incoming: SpireMapNode[], assignedByOrigin: Map<string, Set<SpireNodeKind>>) {
+  if (nodeId === guaranteedTreasureId) {
+    return "treasure";
   }
-  const candidates = getCandidateKinds(tierIndex, incoming, assignedByOrigin);
+  const candidates = getCandidateKinds(tierIndex, nodeId, guaranteedTreasureId, rows, incoming, assignedByOrigin);
   return pickWeightedKind(candidates, `${seed}:kind:${tierIndex}:${slot}`);
 }
 
@@ -895,22 +1407,30 @@ function getForcedNodeKind(tierIndex: number): SpireNodeKind | null {
   if (tierIndex === FLOOR_ONE_INDEX) {
     return "enemy";
   }
-  if (tierIndex === TREASURE_FLOOR_INDEX) {
-    return "treasure";
-  }
-  if (tierIndex === FLOOR_FOURTEEN_INDEX) {
-    return "rest";
-  }
   if (tierIndex === BOSS_FLOOR_INDEX) {
     return "boss";
   }
   return null;
 }
 
-function getCandidateKinds(tierIndex: number, incoming: SpireMapNode[], assignedByOrigin: Map<string, Set<SpireNodeKind>>) {
+function getCandidateKinds(tierIndex: number, nodeId: string, guaranteedTreasureId: string, rows: SpireMapNode[][], incoming: SpireMapNode[], assignedByOrigin: Map<string, Set<SpireNodeKind>>) {
   const blocked = new Set<SpireNodeKind>();
-  if (tierIndex < FLOOR_SIX_INDEX) {
+  if (tierIndex < FLOOR_SEVEN_INDEX) {
     blocked.add("elite");
+  }
+  if (tierIndex < FLOOR_SIX_INDEX) {
+    blocked.add("rest");
+  }
+  if (tierIndex < FLOOR_FOUR_INDEX) {
+    blocked.add("merchant");
+  }
+  if (tierIndex < FLOOR_FIVE_INDEX || (GUARANTEED_TREASURE_FLOORS.has(tierIndex) && nodeId !== guaranteedTreasureId)) {
+    blocked.add("treasure");
+  }
+  if (getShopCountInFiveFloorSpan(rows.flat(), tierIndex) >= 2) {
+    blocked.add("merchant");
+  }
+  if (getAncestorNodesWithinFloors(rows.flat(), rows[tierIndex].find((node) => node.id === nodeId) || rows[tierIndex][DEFAULT_FIRST_SLOT], 2).some((node) => node.kind === "rest")) {
     blocked.add("rest");
   }
   if (incoming.some((node) => CONSECUTIVE_BLOCKED_KINDS.includes(node.kind))) {

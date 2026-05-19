@@ -138,9 +138,17 @@ export type Relic = {
   source: RelicSource;
   description: string;
   modifiers?: ItemModifier[];
+  wikiCategory?: string;
+  wikiImageFilter?: string;
+  wikiImagePath?: string | null;
+  wikiLevel?: number;
+  wikiRarityLabel?: string;
+  wikiStats?: string[];
+  wikiTier?: string;
+  wikiTierGroup?: string;
 };
 
-export type SpireNodeKind = "unknown" | "merchant" | "treasure" | "rest" | "enemy" | "elite" | "boss";
+export type SpireNodeKind = "unknown" | "merchant" | "treasure" | "rest" | "enemy" | "elite" | "boss" | "event";
 
 export type UnknownEncounterKind = "event" | "monster" | "shop" | "treasure";
 
@@ -179,6 +187,17 @@ export type InventoryItem = {
     level: number;
     stats: Partial<CharacterStats>;
   };
+  wikiAps?: string;
+  wikiCategory?: string;
+  wikiDamage?: string;
+  wikiDps?: string;
+  wikiImageFilter?: string;
+  wikiImagePath?: string | null;
+  wikiLevel?: number;
+  wikiRarityLabel?: string;
+  wikiStats?: string[];
+  wikiTier?: string;
+  wikiTierGroup?: string;
 };
 
 export type InventoryItemPosition = {
@@ -187,7 +206,16 @@ export type InventoryItemPosition = {
   tab: number;
 };
 
-export type ShopConsumableType = "health" | "mana";
+export type ShopConsumableType = "health" | "mana" | "random";
+
+export type ActivePotionEffect = {
+  id: string;
+  modifiers: ItemModifier[];
+  name: string;
+  roomsRemaining: number;
+  sourceNodeId?: string;
+  stats: Partial<CharacterStats>;
+};
 
 export type ShopItem =
   | {
@@ -233,6 +261,7 @@ export type StudyState = {
     stats: CharacterStats;
     skillRanks: Partial<Record<WarriorSkillId, number>>;
     activeSkill: ActiveWarriorSkillId | null;
+    activePotionEffects: ActivePotionEffect[];
     inventory: InventoryItem[];
     inventorySlots: Record<string, InventoryItemPosition>;
     equipment: Record<EquipmentSlot, string | null>;

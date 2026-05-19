@@ -4,7 +4,7 @@ import { questions } from "../data/questions";
 import { applyPassedCombatResult, getMonsterCurrentHealth } from "../lib/combatCore";
 import { createDropItem, ITEM_BASE_NAME_COUNT } from "../lib/itemCore";
 import { getEstimatedRating } from "../lib/ratingCore";
-import { WARRIOR_SKILLS, activateWarriorSkill, canUseActiveWarriorSkill, getAvailableWarriorSkillPoints, spendWarriorSkillPoint } from "../lib/skillCore";
+import { WARRIOR_SKILLS, activateWarriorSkill, canUseActiveWarriorSkill, getAvailableWarriorSkillPoints, resetWarriorSkillPoints, spendWarriorSkillPoint } from "../lib/skillCore";
 import {
   EXPERIENCE_PER_LEVEL,
   HEALTH_LOSS_PER_FAIL,
@@ -303,6 +303,21 @@ describe("studyCore", () => {
     expect(getCriticalChance(state)).toBeGreaterThan(getCriticalChance(defaultState()));
     expect(getHealthLoss(state)).toBeLessThan(getHealthLoss(defaultState()));
     expect(getElementalResistances(state).fire).toBe(3);
+  });
+
+  it("resets spent warrior skill points back into the available pool", () => {
+    let state = defaultState();
+    state.profile.experience = EXPERIENCE_PER_LEVEL * 2;
+
+    state = spendWarriorSkillPoint(state, "bash", getLevelProgress(state).level);
+    state = activateWarriorSkill(state, "powerStrike");
+    const spentPoints = getAvailableWarriorSkillPoints(state, getLevelProgress(state).level);
+
+    state = resetWarriorSkillPoints(state);
+
+    expect(spentPoints).toBeLessThan(getAvailableWarriorSkillPoints(state, getLevelProgress(state).level));
+    expect(state.profile.skillRanks).toEqual({});
+    expect(state.profile.activeSkill).toBeNull();
   });
 
   it("queues active warrior skills and consumes them on the next monster hit", () => {

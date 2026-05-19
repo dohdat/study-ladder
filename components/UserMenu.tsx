@@ -27,6 +27,7 @@ import { InventoryPanel } from "./InventoryPanel";
 import { MONSTER_WIKI_ENTRIES } from "./MonsterEncounter";
 import { RelicIcon } from "./RelicIcon";
 import { WarriorSkillTree } from "./WarriorSkillTree";
+import { getHeroSiegeQualityColor, getRelicQualityLabel } from "../lib/heroSiegeQuality";
 import armorArt from "../assets/hero_siege_items/armor.png";
 import healthPotionArt from "../assets/hero_siege_items/health-potion.png";
 import helmetArt from "../assets/hero_siege_items/helmet.png";
@@ -46,8 +47,19 @@ import naturalResistanceArt from "../assets/hero_siege_skills/natural-resistance
 import sureCritArt from "../assets/hero_siege_skills/sure-crit.png";
 import treasureSenseArt from "../assets/hero_siege_skills/treasure-sense.png";
 import { questions } from "../data/questions";
-import heroSiegeWikiItems from "../data/heroSiegeWikiItems.json";
 import { useStudyBlockerSettings } from "../hooks/useStudyBlocker";
+import {
+  HERO_SIEGE_WIKI_CATEGORIES,
+  HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT,
+  HERO_SIEGE_WIKI_ITEM_IMAGE_DISPLAYS,
+  HERO_SIEGE_WIKI_ITEMS,
+  HERO_SIEGE_WIKI_QUALITY_DISTRIBUTION,
+  getWikiItemQualityLabel,
+  getWikiItemPublicPath,
+  type HeroSiegeWikiCategory,
+  type HeroSiegeWikiIconDisplay,
+  type HeroSiegeWikiItem
+} from "../lib/heroSiegeWikiCatalog";
 import { RELIC_DEFINITIONS } from "../lib/relicCore";
 import {
   EXPERIENCE_PER_LEVEL,
@@ -60,12 +72,11 @@ import {
   getLevelProgress,
   getMaxHealth,
   getMaxMana,
-  getMonsterDamageRoll,
   getRunModifierTotals,
   getWarriorSkillBonusTotals,
   spendStatPoint
 } from "../lib/studyCore";
-import { getMonsterAttackProfile, getMonsterMaxHealth, getUniqueMonsterBonuses } from "../lib/monsterCore";
+import { getMonsterMaxHealth, getUniqueMonsterBonuses } from "../lib/monsterCore";
 import type { CharacterStatKey, Difficulty, ItemModifierKey, Question, Relic, StudyState } from "../types/study";
 
 const ICON_SIZE = 16;
@@ -110,7 +121,6 @@ const WIKI_GRID_MIN_WIDTH = 220;
 const WIKI_MONSTER_PAGE_SIZE = 12;
 const WIKI_RELIC_PAGE_SIZE = 10;
 const WIKI_ITEM_PAGE_SIZE = 24;
-const MONSTER_ATTACK_SAMPLE_COUNT = 24;
 const MONSTER_HEALTH_RANGE_RATIO = 0.1;
 const MONSTER_BASE_RESISTANCE = 0;
 const MONSTER_ENCHANTED_RESISTANCE = 35;
@@ -457,7 +467,6 @@ function MonsterWikiDetails(props: { monster: (typeof MONSTER_WIKI_ENTRIES)[numb
   const question = createWikiMonsterQuestion(props.monster);
   const bonuses = getUniqueMonsterBonuses(question);
   const health = getMonsterHealthRange(question);
-  const attackRange = getMonsterAttackRange(question);
   const resistances = getMonsterResistanceRows(bonuses);
   return (
     <Stack gap={8} style={{ textAlign: "center", width: TOOLTIP_SHEET_WIDTH }}>
@@ -466,7 +475,6 @@ function MonsterWikiDetails(props: { monster: (typeof MONSTER_WIKI_ENTRIES)[numb
         <Text size="sm" fw={800} c="gray.2">Difficulty {props.monster.difficulty} - Rating {props.monster.rating}</Text>
       </Box>
       <TooltipPowerRow label="Health" value={`${health.min}-${health.max}`} range={health} />
-      <TooltipPowerRow label="Attack" value={`${attackRange.min}-${attackRange.max}`} range={attackRange} />
       <Stack gap={2}>
         {resistances.map((row) => (
           <TooltipAffixLine key={row.label} color={row.color} text={`${row.label} Resistance ${row.value}%`} range={{ min: row.value, max: row.value }} />
@@ -514,14 +522,6 @@ function createWikiMonsterQuestion(monster: (typeof MONSTER_WIKI_ENTRIES)[number
     title: monster.name,
     topics: []
   };
-}
-
-function getMonsterAttackRange(question: Question) {
-  const damages = Array.from({ length: MONSTER_ATTACK_SAMPLE_COUNT }, (_item, index) => {
-    const now = 1000 + index;
-    return getMonsterAttackProfile(question, getMonsterDamageRoll(question, now), now).damage;
-  });
-  return { max: Math.max(...damages), min: Math.min(...damages) };
 }
 
 function getMonsterHealthRange(question: Question) {
@@ -593,64 +593,46 @@ function RelicWiki() {
       </Group>
       <SimpleGrid cols={{ base: 1, sm: 2 }}>
         {visibleRelics.map((relic) => (
-          <Box key={`${relic.id}-${relic.rarity}`} p="sm" style={{ background: "var(--mantine-color-dark-7)", border: "1px solid var(--mantine-color-dark-4)", borderRadius: 6 }}>
-            <Group gap="sm" align="flex-start" wrap="nowrap">
-              <RelicIcon relic={relic} size={WIKI_RELIC_ICON_SIZE} />
-              <Box>
-                <Group gap="xs" mb={2}>
-                  <Text size="sm" fw={800}>{relic.name}</Text>
-                  <Badge size="xs" variant="light">{relic.rarity}</Badge>
-                  {relic.source !== "any" && <Badge size="xs" color="red" variant="outline">{relic.source}</Badge>}
-                </Group>
-                <Text size="xs" c="dimmed">{relic.description}</Text>
-                <Text size="xs" mt={4} c="yellow.3">{formatRelicModifiers(relic)}</Text>
-              </Box>
-            </Group>
-          </Box>
+          <RelicWikiCard key={`${relic.id}-${relic.rarity}`} relic={relic} />
         ))}
       </SimpleGrid>
     </Stack>
   );
 }
 
-type HeroSiegeWikiItem = {
-  aps: string;
-  category: string;
-  damage: string;
-  dps: string;
-  id: string;
-  imageHeight: number | null;
-  imagePath: string | null;
-  imageWidth: number | null;
-  level: string;
-  name: string;
-  slot: string;
-  stats: string[];
-  tier: string;
-  tierGroup: string;
-};
+function RelicWikiCard(props: { relic: Relic }) {
+  const quality = getRelicQualityLabel(props.relic.rarity, props.relic.wikiRarityLabel);
+  const qualityColor = getHeroSiegeQualityColor(quality);
+  return (
+    <Box p="sm" style={{ background: "var(--mantine-color-dark-7)", border: "1px solid var(--mantine-color-dark-4)", borderRadius: 6 }}>
+      <Group gap="sm" align="flex-start" wrap="nowrap">
+        <RelicIcon relic={props.relic} size={WIKI_RELIC_ICON_SIZE} />
+        <Box>
+          <Group gap="xs" mb={2}>
+            <Text size="sm" fw={800} c={qualityColor}>{props.relic.name}</Text>
+            <Badge size="xs" variant="outline" style={{ borderColor: qualityColor, color: qualityColor }}>{quality}</Badge>
+            {props.relic.source !== "any" && <Badge size="xs" color="red" variant="outline">{props.relic.source}</Badge>}
+          </Group>
+          <Text size="xs" c="dimmed">{props.relic.description}</Text>
+          <Text size="xs" mt={4} c="yellow.3">{formatRelicModifiers(props.relic)}</Text>
+        </Box>
+      </Group>
+    </Box>
+  );
+}
 
-type WikiItemCategory = {
-  id: string;
-  label: string;
-  slot: string;
-  sourcePage: string;
-};
+type WikiItemCategory = HeroSiegeWikiCategory;
 
-const WIKI_ITEM_DATA = heroSiegeWikiItems as {
-  categories: WikiItemCategory[];
-  generatedAt: string;
-  items: HeroSiegeWikiItem[];
-};
-
-const WIKI_ITEM_CATEGORIES: readonly WikiItemCategory[] = WIKI_ITEM_DATA.categories;
-const WIKI_ITEMS: readonly HeroSiegeWikiItem[] = WIKI_ITEM_DATA.items;
+const WIKI_ITEM_CATEGORIES = HERO_SIEGE_WIKI_CATEGORIES;
+const WIKI_ITEMS = [...HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT, ...HERO_SIEGE_WIKI_ITEMS];
+const WIKI_QUALITY_SORT_ORDER = ["Unique", "Set", "Rare", "Magic", "Normal"];
 
 function ItemWiki() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<WikiItemCategory["id"]>(WIKI_ITEM_CATEGORIES[0].id);
   const [page, setPage] = useState(0);
   const selectedCategory = WIKI_ITEM_CATEGORIES.find((category) => category.id === selectedCategoryId) || WIKI_ITEM_CATEGORIES[0];
   const selectedItems = getWikiItemsForCategory(selectedCategory);
+  const qualityCounts = getWikiQualityCounts(WIKI_ITEMS);
   const selectedCount = selectedItems.length;
   const pageCount = getPageCount(selectedCount, WIKI_ITEM_PAGE_SIZE);
   const safePage = clampPage(page, pageCount);
@@ -662,6 +644,18 @@ function ItemWiki() {
           <Text size="sm" c="dimmed">
             {WIKI_ITEMS.length} Hero Siege wiki items across {WIKI_ITEM_CATEGORIES.length} equipment categories.
           </Text>
+          <Group gap={6} mt={6}>
+            {HERO_SIEGE_WIKI_QUALITY_DISTRIBUTION.map((quality) => (
+              <Badge
+                key={quality.label}
+                size="sm"
+                variant="outline"
+                style={{ borderColor: getHeroSiegeQualityColor(quality.label), color: getHeroSiegeQualityColor(quality.label) }}
+              >
+                {quality.label} {qualityCounts[quality.label] || 0}
+              </Badge>
+            ))}
+          </Group>
         </Box>
         <Group gap="xs" align="flex-end">
           <Select
@@ -688,7 +682,19 @@ function ItemWiki() {
 }
 
 function getWikiItemsForCategory(category: WikiItemCategory) {
-  return WIKI_ITEMS.filter((item) => item.category === category.sourcePage);
+  return WIKI_ITEMS
+    .filter((item) => item.category === category.sourcePage)
+    .sort((left, right) => WIKI_QUALITY_SORT_ORDER.indexOf(getWikiItemQualityLabel(left)) - WIKI_QUALITY_SORT_ORDER.indexOf(getWikiItemQualityLabel(right))
+      || Number(left.level || 0) - Number(right.level || 0)
+      || left.name.localeCompare(right.name));
+}
+
+function getWikiQualityCounts(items: readonly HeroSiegeWikiItem[]) {
+  return items.reduce<Record<string, number>>((counts, item) => {
+    const quality = getWikiItemQualityLabel(item);
+    counts[quality] = (counts[quality] || 0) + 1;
+    return counts;
+  }, {});
 }
 
 function ItemCategoryCard(props: { category: WikiItemCategory; items: readonly HeroSiegeWikiItem[]; page: number; pageSize: number }) {
@@ -702,21 +708,22 @@ function ItemCategoryCard(props: { category: WikiItemCategory; items: readonly H
       </Group>
       <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }}>
         {visibleItems.map((item) => (
-          <WikiItemCard key={item.id} item={item} />
+          <WikiItemCard key={item.id} imageDisplay={HERO_SIEGE_WIKI_ITEM_IMAGE_DISPLAYS.get(item.id)} item={item} />
         ))}
       </SimpleGrid>
     </Box>
   );
 }
 
-function WikiItemCard(props: { item: HeroSiegeWikiItem }) {
+function WikiItemCard(props: { imageDisplay?: HeroSiegeWikiIconDisplay; item: HeroSiegeWikiItem }) {
+  const quality = getWikiItemQualityLabel(props.item);
   return (
-    <Tooltip label={<WikiItemDetails item={props.item} />} multiline withArrow color="dark" styles={{ tooltip: { background: TOOLTIP_BG, border: TOOLTIP_BORDER, borderRadius: 2, boxShadow: TOOLTIP_SHADOW, color: "#f1dfad", padding: TOOLTIP_PADDING } }}>
+    <Tooltip label={<WikiItemDetails imageDisplay={props.imageDisplay} item={props.item} />} multiline withArrow color="dark" styles={{ tooltip: { background: TOOLTIP_BG, border: TOOLTIP_BORDER, borderRadius: 2, boxShadow: TOOLTIP_SHADOW, color: "#f1dfad", padding: TOOLTIP_PADDING } }}>
       <Group gap="xs" wrap="nowrap" p={6} style={{ background: "rgba(0, 0, 0, 0.22)", border: "1px solid rgba(210, 168, 84, 0.22)", minHeight: 64 }}>
-        <WikiItemImage item={props.item} size={WIKI_ITEM_ICON_SIZE + 8} />
+        <WikiItemImage imageDisplay={props.imageDisplay} item={props.item} size={WIKI_ITEM_ICON_SIZE + 8} />
         <Box style={{ minWidth: 0 }}>
-          <Text size="xs" fw={900} c={getWikiTierColor(props.item.tierGroup)} style={{ lineHeight: 1.2 }}>{props.item.name}</Text>
-          <Text size="xs" c="dimmed" style={{ lineHeight: 1.2 }}>{props.item.tierGroup} - Tier {props.item.tier || "?"} - Lvl {props.item.level || "?"}</Text>
+          <Text size="xs" fw={900} c={getHeroSiegeQualityColor(quality)} style={{ lineHeight: 1.2 }}>{props.item.name}</Text>
+          <Text size="xs" c="dimmed" style={{ lineHeight: 1.2 }}>{quality} {props.item.category} - Lvl {props.item.level || "?"}</Text>
           <Text size="xs" c="gray.4" style={{ lineHeight: 1.2 }}>{props.item.damage ? `Damage ${props.item.damage}` : "No weapon damage"}</Text>
         </Box>
       </Group>
@@ -724,15 +731,16 @@ function WikiItemCard(props: { item: HeroSiegeWikiItem }) {
   );
 }
 
-function WikiItemDetails(props: { item: HeroSiegeWikiItem }) {
+function WikiItemDetails(props: { imageDisplay?: HeroSiegeWikiIconDisplay; item: HeroSiegeWikiItem }) {
   const item = props.item;
+  const quality = getWikiItemQualityLabel(item);
   return (
     <Stack gap={8} style={{ textAlign: "center", width: TOOLTIP_SHEET_WIDTH }}>
       <Group gap="sm" justify="center" wrap="nowrap">
-        <WikiItemImage item={item} size={52} />
+        <WikiItemImage imageDisplay={props.imageDisplay} item={item} size={52} />
         <Box>
-          <Text size="lg" fw={900} tt="uppercase" style={{ color: getWikiTierColor(item.tierGroup), letterSpacing: 0, textShadow: "0 2px 0 #000" }}>{item.name}</Text>
-          <Text size="sm" fw={800} c="gray.2">{item.tierGroup} {item.category} - Tier {item.tier || "?"}</Text>
+          <Text size="lg" fw={900} tt="uppercase" style={{ color: getHeroSiegeQualityColor(quality), letterSpacing: 0, textShadow: "0 2px 0 #000" }}>{item.name}</Text>
+          <Text size="sm" fw={800} c="gray.2">{quality} {item.category}</Text>
         </Box>
       </Group>
       <Group justify="center" gap={10}>
@@ -752,20 +760,21 @@ function WikiItemDetails(props: { item: HeroSiegeWikiItem }) {
   );
 }
 
-function WikiItemImage(props: { item: HeroSiegeWikiItem; size: number }) {
+function WikiItemImage(props: { imageDisplay?: HeroSiegeWikiIconDisplay; item: HeroSiegeWikiItem; size: number }) {
   const maxNaturalHeight = Math.max(1, props.item.imageHeight || props.size);
   const maxNaturalWidth = Math.max(1, props.item.imageWidth || props.size);
   const aspectRatio = maxNaturalWidth / maxNaturalHeight;
+  const imagePath = normalizeWikiImagePath(props.imageDisplay?.imagePath || getWikiItemPublicPath(props.item));
   return (
     <Box style={{ alignItems: "center", background: "#08070b", border: "1px solid #8a744c", display: "flex", flex: `0 0 ${props.size}px`, height: props.size, justifyContent: "center", width: props.size }}>
-      {props.item.imagePath ? (
+      {imagePath ? (
         <Box
           alt=""
           component="img"
-          src={props.item.imagePath}
+          src={imagePath}
           style={{
             display: "block",
-            filter: "drop-shadow(0 2px 0 rgba(0, 0, 0, 0.72))",
+            filter: `${props.imageDisplay?.filter ? `${props.imageDisplay.filter} ` : ""}drop-shadow(0 2px 0 rgba(0, 0, 0, 0.72))`,
             height: aspectRatio < 0.72 ? "92%" : undefined,
             imageRendering: "pixelated",
             maxHeight: "92%",
@@ -781,20 +790,8 @@ function WikiItemImage(props: { item: HeroSiegeWikiItem; size: number }) {
   );
 }
 
-function getWikiTierColor(tierGroup: string) {
-  if (tierGroup === "Satanic") {
-    return "#ff3b3b";
-  }
-  if (tierGroup === "Heroic") {
-    return "#d6a94b";
-  }
-  if (tierGroup === "Angelic") {
-    return "#5fa8ff";
-  }
-  if (tierGroup === "Unholy") {
-    return "#b46cff";
-  }
-  return "#f1dfad";
+function normalizeWikiImagePath(imagePath: string | null) {
+  return imagePath?.replace(/^\/hero_siege_wiki_items\//, "hero_siege_wiki_items/") || null;
 }
 
 function WikiPagination(props: { onPageChange: (page: number) => void; page: number; pageCount: number; total: number; unit?: string }) {

@@ -2,8 +2,9 @@
 
 import { Badge, Box, Group, Progress, Stack, Tabs, Text, Tooltip } from "@mantine/core";
 
+import { HeroSiegeButton } from "./HeroSiegeUi";
 import { HeroSiegeSkillIcon } from "./HeroSiegeSkillIcon";
-import { canSpendWarriorSkillPoint, getActiveWarriorSkillByTreeId, getAvailableWarriorSkillPoints, getWarriorSkillRank, spendWarriorSkillPoint, WARRIOR_SKILLS } from "../lib/skillCore";
+import { canSpendWarriorSkillPoint, getActiveWarriorSkillByTreeId, getAvailableWarriorSkillPoints, getWarriorSkillRank, resetWarriorSkillPoints, spendWarriorSkillPoint, WARRIOR_SKILLS } from "../lib/skillCore";
 import { getLevelProgress } from "../lib/studyCore";
 import type { StudyState, WarriorSkillId } from "../types/study";
 
@@ -99,6 +100,7 @@ export function WarriorSkillTree(props: { state: StudyState; setState: React.Dis
   const [activeBranch, setActiveBranch] = useState<WarriorSkillBranch>("Combat Skills");
   const level = getLevelProgress(props.state).level;
   const availablePoints = getAvailableWarriorSkillPoints(props.state, level);
+  const hasSpentSkillPoints = hasSpentWarriorSkillPoints(props.state);
   return (
     <Stack gap="sm">
       <Group justify="space-between">
@@ -106,7 +108,10 @@ export function WarriorSkillTree(props: { state: StudyState; setState: React.Dis
           <Text size="sm" fw={800}>Warrior Skill Tree</Text>
           <Text size="xs" c="dimmed">Level {level} warrior</Text>
         </Box>
-        <Badge color={availablePoints > 0 ? "yellow" : "gray"} variant="light">{availablePoints} skill points</Badge>
+        <Group gap="xs">
+          <HeroSiegeButton height={24} minWidth={92} disabled={!hasSpentSkillPoints} onClick={() => props.setState((previous) => resetWarriorSkillPoints(previous))}>Reset Skills</HeroSiegeButton>
+          <Badge color={availablePoints > 0 ? "yellow" : "gray"} variant="light">{availablePoints} skill points</Badge>
+        </Group>
       </Group>
       <Box p="md" style={{ background: TREE_BG, border: TREE_BORDER, boxShadow: "inset 0 0 0 2px #080304, 0 16px 42px rgba(0, 0, 0, 0.58)" }}>
         <Tabs value={activeBranch} onChange={(value) => value && setActiveBranch(value as WarriorSkillBranch)} keepMounted={false}>
@@ -242,12 +247,16 @@ function SkillNodeButton(props: { level: number; node: SkillNode; state: StudySt
               width: RANK_BADGE_SIZE
             }}
           >
-            {rank || 1}
+            {rank}
           </Box>
         </button>
       </span>
     </Tooltip>
   );
+}
+
+function hasSpentWarriorSkillPoints(state: StudyState) {
+  return WARRIOR_SKILLS.some((skill) => getWarriorSkillRank(state.profile.skillRanks, skill.id) > 0);
 }
 
 function SkillSockets() {

@@ -3,7 +3,8 @@ type StaticImageData = string;
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { HeroSiegeButton, getHeroSiegeMenuButtonAsset } from "./HeroSiegeUi";
-import { advanceSpireNode, enterSpireNode, getCurrentSpireNode, isCombatNode, selectSpireNode, smithSpireNode } from "../lib/spireMapCore";
+import { ShopPanel } from "./ShopPanel";
+import { canUpgradeSpireInventoryItem, claimCurrentSpireRoomReward, enterSpireNode, getCurrentSpireNode, isCombatNode, leaveSpireRoom, MERCHANT_UPGRADE_COST, selectSpireNode, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
 import type { SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
 import campfireArt from "../assets/hero_siege_map/campfire.png";
 import chestArt from "../assets/hero_siege_map/chest.png";
@@ -21,15 +22,16 @@ const EXPANDED_MAP_HEIGHT = "calc(100vh - 126px)";
 const COMPACT_ROOM_HEIGHT = 66;
 const COMPACT_ROOM_ICON_SIZE = 42;
 const COMPACT_ROOM_ICON_INSET = 8;
+const ROOM_PANEL_MIN_HEIGHT = "calc(100vh - 126px)";
 const NODE_SIZE = 86;
 const NODE_ICON_SIZE = 82;
-const BOSS_NODE_SIZE = 128;
-const BOSS_NODE_ICON_SIZE = 118;
+const BOSS_NODE_SIZE = 150;
+const BOSS_NODE_ICON_SIZE = 140;
 const LEGEND_ICON_SIZE = 24;
 const MAP_CONTENT_WIDTH = 1780;
-const MAP_CONTENT_HEIGHT = 1280;
+const MAP_CONTENT_HEIGHT = 1680;
 const ACT_LABEL = "Act #1 The Sightless Eye";
-const PATH_COLOR = "rgba(20, 31, 34, 0.72)";
+const PATH_COLOR = "rgba(25, 31, 34, 0.48)";
 const LOCKED_NODE_OPACITY = 0.42;
 const HIGHLIGHTED_NODE_OPACITY = 1;
 const DIMMED_NODE_OPACITY = 0.2;
@@ -48,12 +50,12 @@ const BOSS_LOCKED_OPACITY = 0.78;
 const MAP_BG = "#909286";
 const ENTER_BUTTON_RIGHT = 16;
 const ENTER_BUTTON_BOTTOM = 16;
-const PATH_NODE_RADIUS = 3.05;
-const PATH_STROKE_WIDTH = 0.22;
-const PATH_STROKE_DASH = "0.7 0.45";
-const PATH_CURVE_JITTER = 3.6;
-const NODE_VISUAL_X_JITTER = 2.4;
-const NODE_VISUAL_Y_JITTER = 3.8;
+const PATH_NODE_RADIUS = 2.3;
+const PATH_STROKE_WIDTH = 0.16;
+const PATH_STROKE_DASH = "0.42 0.38";
+const PATH_CURVE_JITTER = 0.6;
+const NODE_VISUAL_X_JITTER = 1.2;
+const NODE_VISUAL_Y_JITTER = 0.9;
 const NODE_VISUAL_MIN = 5;
 const NODE_VISUAL_MAX = 95;
 const BOSS_VISUAL_JITTER_SCALE = 0.45;
@@ -73,6 +75,7 @@ const ACT_LABEL_BG = "linear-gradient(180deg, rgba(51, 34, 19, 0.96), rgba(15, 1
 const ACT_LABEL_ASSET = getHeroSiegeMenuButtonAsset();
 const NODE_LABELS: Record<SpireNodeKind, string> = {
   boss: "Boss",
+  event: "Event",
   elite: "Elite",
   enemy: "Enemy",
   merchant: "Merchant",
@@ -83,6 +86,7 @@ const NODE_LABELS: Record<SpireNodeKind, string> = {
 
 const NODE_ICON_ASSETS: Record<SpireNodeKind, StaticImageData> = {
   boss: demonKingArt,
+  event: questionMarkArt,
   elite: skeletonMageArt,
   enemy: zombieArt,
   merchant: fieldTentArt,
@@ -93,12 +97,13 @@ const NODE_ICON_ASSETS: Record<SpireNodeKind, StaticImageData> = {
 
 const NODE_DIMENSIONS: Record<SpireNodeKind, { icon: number; size: number }> = {
   boss: { icon: BOSS_NODE_ICON_SIZE, size: BOSS_NODE_SIZE },
-  elite: { icon: 58, size: 70 },
-  enemy: { icon: 54, size: 66 },
-  merchant: { icon: 106, size: 118 },
-  rest: { icon: 60, size: 72 },
-  treasure: { icon: 62, size: 74 },
-  unknown: { icon: 24, size: 34 }
+  event: { icon: 24, size: 34 },
+  elite: { icon: 42, size: 54 },
+  enemy: { icon: 34, size: 44 },
+  merchant: { icon: 56, size: 68 },
+  rest: { icon: 42, size: 54 },
+  treasure: { icon: 42, size: 54 },
+  unknown: { icon: 22, size: 34 }
 };
 
 // eslint-disable-next-line complexity
@@ -110,7 +115,7 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
   const solved = props.state.profile.spireRun.roundSolvedIds.length;
   const target = props.state.profile.spireRun.roundQuestionIds.length;
   const mapOpen = props.state.profile.spireRun.mapOpen;
-  const selectedNodeIsReachable = mapOpen && Boolean(node && props.state.profile.spireRun.availableNodeIds.includes(node.id));
+  const selectedNodeIsReachable = mapOpen && Boolean(node && isReachableMapNode(props.state, node.id));
   return (
     <Paper withBorder p="sm" style={{ background: "var(--mantine-color-dark-7)", ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
       <Box style={{ minWidth: 0, ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
@@ -139,7 +144,7 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
                       highlightMode={Boolean(highlightedKind)}
                       kind={mapNode.kind}
                       onSelect={() => props.setState((previous) => selectSpireNode(previous, mapNode.id))}
-                      selectable={props.state.profile.spireRun.availableNodeIds.includes(mapNode.id)}
+                      selectable={isReachableMapNode(props.state, mapNode.id)}
                       x={position.x}
                       y={position.y}
                     />
@@ -149,33 +154,30 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
               </Box>
             </Box>
             <Legend highlightedKind={highlightedKind} onHighlight={setDebouncedHighlightedKind} />
-            {node?.kind === "rest" ? (
-              <Group gap={8} wrap="nowrap" style={{ bottom: ENTER_BUTTON_BOTTOM, position: "absolute", right: ENTER_BUTTON_RIGHT, zIndex: 4 }}>
-                <HeroSiegeButton disabled={!selectedNodeIsReachable} onClick={() => props.setState((previous) => advanceSpireNode(previous))} minWidth={104}>Rest</HeroSiegeButton>
-                <HeroSiegeButton disabled={!selectedNodeIsReachable || props.state.profile.inventory.length === 0} onClick={() => props.setState((previous) => smithSpireNode(previous))} minWidth={104}>Smith</HeroSiegeButton>
-              </Group>
-            ) : (
-              <HeroSiegeButton
-                disabled={!selectedNodeIsReachable}
-                onClick={() => props.setState((previous) => (isCombatNode(node) ? enterSpireNode(previous) : advanceSpireNode(previous)))}
-                minWidth={134}
-                style={{
-                  bottom: ENTER_BUTTON_BOTTOM,
-                  position: "absolute",
-                  right: ENTER_BUTTON_RIGHT,
-                  zIndex: 4
-                }}
-              >
-                {getMapButtonLabel(node)}
-              </HeroSiegeButton>
-            )}
+            <HeroSiegeButton
+              disabled={!selectedNodeIsReachable}
+              onClick={() => props.setState((previous) => enterSpireNode(previous))}
+              minWidth={134}
+              style={{
+                bottom: ENTER_BUTTON_BOTTOM,
+                position: "absolute",
+                right: ENTER_BUTTON_RIGHT,
+                zIndex: 4
+              }}
+            >
+              {getMapButtonLabel(node)}
+            </HeroSiegeButton>
           </Box>
         ) : (
-          <CompactRoomPanel node={node} solved={solved} target={target} />
+          <RoomPanel node={node} setState={props.setState} solved={solved} state={props.state} target={target} />
         )}
       </Box>
     </Paper>
   );
+}
+
+function isReachableMapNode(state: StudyState, nodeId: string) {
+  return state.profile.godMode || state.profile.spireRun.availableNodeIds.includes(nodeId);
 }
 
 function useDebouncedLegendHighlight(onHighlight: (kind: SpireNodeKind | null) => void) {
@@ -247,6 +249,21 @@ function isInteractiveMapTarget(target: EventTarget) {
   return target instanceof Element && Boolean(target.closest("button, a, input, select, textarea"));
 }
 
+function RoomPanel(props: { node: SpireMapNode | undefined; setState: React.Dispatch<React.SetStateAction<StudyState>>; solved: number; state: StudyState; target: number }) {
+  if (isCombatNode(props.node)) {
+    return <CompactRoomPanel node={props.node} solved={props.solved} target={props.target} />;
+  }
+  return (
+    <Stack gap="sm" style={{ minHeight: ROOM_PANEL_MIN_HEIGHT }}>
+      <CompactRoomPanel node={props.node} solved={props.solved} target={props.target} />
+      {props.node?.kind === "merchant" && <MerchantRoomPanel setState={props.setState} state={props.state} />}
+      {props.node?.kind === "treasure" && <TreasureRoomPanel node={props.node} setState={props.setState} state={props.state} />}
+      {props.node?.kind === "rest" && <RestRoomPanel node={props.node} setState={props.setState} state={props.state} />}
+      {props.node?.kind === "event" && <EventRoomPanel node={props.node} setState={props.setState} state={props.state} />}
+    </Stack>
+  );
+}
+
 function CompactRoomPanel(props: { node: SpireMapNode | undefined; solved: number; target: number }) {
   const kind = props.node?.kind || "enemy";
   return (
@@ -261,6 +278,83 @@ function CompactRoomPanel(props: { node: SpireMapNode | undefined; solved: numbe
         </Box>
       </Group>
       <Text size="xs" c="dimmed">Room {props.solved}/{props.target}</Text>
+    </Group>
+  );
+}
+
+function MerchantRoomPanel(props: { setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
+  const canUpgrade = canUpgradeSpireInventoryItem(props.state) && props.state.profile.coins >= MERCHANT_UPGRADE_COST;
+  return (
+    <Stack gap="sm">
+      <ShopPanel state={props.state} setState={props.setState} />
+      <Group justify="space-between" wrap="nowrap" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "10px 14px" }}>
+        <Box>
+          <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>Merchant Services</Text>
+          <Text size="xs" c="dimmed">Upgrade a random item up to Rare for {MERCHANT_UPGRADE_COST} gold.</Text>
+        </Box>
+        <Group gap={8} wrap="nowrap">
+          <HeroSiegeButton disabled={!canUpgrade} onClick={() => props.setState((previous) => upgradeCurrentSpireRoomItem(previous))} minWidth={132}>Upgrade Item</HeroSiegeButton>
+          <HeroSiegeButton onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
+        </Group>
+      </Group>
+    </Stack>
+  );
+}
+
+function TreasureRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
+  const opened = props.state.profile.spireRun.completedNodeIds.includes(props.node.id);
+  return (
+    <Group justify="space-between" wrap="nowrap" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "14px 16px" }}>
+      <Group gap="sm" wrap="nowrap">
+        <NodeIcon kind="treasure" size={46} />
+        <Box>
+          <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>{opened ? "Treasure Opened" : "Treasure Chest"}</Text>
+          <Text size="xs" c="dimmed">{opened ? "Claimed treasure rewards. Continue to choose the next route." : "Open the chest to claim relics, gold, and possible equipment."}</Text>
+        </Box>
+      </Group>
+      <Group gap={8} wrap="nowrap">
+        <HeroSiegeButton disabled={opened} onClick={() => props.setState((previous) => claimCurrentSpireRoomReward(previous))} minWidth={134}>Open Treasure</HeroSiegeButton>
+        <HeroSiegeButton disabled={!opened} onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
+      </Group>
+    </Group>
+  );
+}
+
+function RestRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
+  const used = props.state.profile.spireRun.completedNodeIds.includes(props.node.id);
+  return (
+    <Group justify="space-between" wrap="nowrap" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "14px 16px" }}>
+      <Group gap="sm" wrap="nowrap">
+        <NodeIcon kind="rest" size={46} />
+        <Box>
+          <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>{used ? "Rest Site Used" : "Rest Site"}</Text>
+          <Text size="xs" c="dimmed">{used ? "Continue to choose the next route." : "Rest to recover or smith your lowest-tier item."}</Text>
+        </Box>
+      </Group>
+      <Group gap={8} wrap="nowrap">
+        <HeroSiegeButton disabled={used} onClick={() => props.setState((previous) => claimCurrentSpireRoomReward(previous))} minWidth={104}>Rest</HeroSiegeButton>
+        <HeroSiegeButton disabled={used || !canUpgradeSpireInventoryItem(props.state)} onClick={() => props.setState((previous) => upgradeCurrentSpireRoomItem(previous))} minWidth={104}>Smith</HeroSiegeButton>
+        <HeroSiegeButton disabled={!used} onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
+      </Group>
+    </Group>
+  );
+}
+
+function EventRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
+  const resolved = props.state.profile.spireRun.completedNodeIds.includes(props.node.id);
+  return (
+    <Group justify="space-between" wrap="nowrap" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "14px 16px" }}>
+      <Group gap="sm" wrap="nowrap">
+        <NodeIcon kind="event" size={36} />
+        <Box>
+          <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>{resolved ? "Event Resolved" : "Unknown Event"}</Text>
+          <Text size="xs" c="dimmed">{resolved ? "Event reward claimed. Continue to choose the next route." : "Resolve the event to receive a random boon."}</Text>
+        </Box>
+      </Group>
+      <Group gap={8} wrap="nowrap">
+        <HeroSiegeButton disabled={resolved} onClick={() => props.setState((previous) => claimCurrentSpireRoomReward(previous))} minWidth={124}>Resolve Event</HeroSiegeButton>
+        <HeroSiegeButton disabled={!resolved} onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
+      </Group>
     </Group>
   );
 }
@@ -333,10 +427,19 @@ function getMapButtonLabel(node: SpireMapNode | undefined) {
     return "Enter Room";
   }
   if (node.kind === "treasure") {
-    return "Open Treasure";
+    return "Enter Treasure";
   }
   if (node.kind === "rest") {
-    return "Rest";
+    return "Enter Rest";
+  }
+  if (node.kind === "merchant") {
+    return "Enter Shop";
+  }
+  if (node.kind === "unknown") {
+    return "Enter ?";
+  }
+  if (node.kind === "event") {
+    return "Enter Event";
   }
   return "Continue";
 }
@@ -470,29 +573,40 @@ function getNodeOpacity(props: { active: boolean; completed: boolean; highlighte
 function NodeIcon(props: { highlightTone?: "active" | "hover" | "selected"; kind: SpireNodeKind; shadow?: boolean; size?: number }) {
   const size = props.size || LEGEND_ICON_SIZE;
   const filter = getNodeIconFilter(props.kind, Boolean(props.shadow), props.highlightTone);
+  const opacity = getNodeIconOpacity(props.kind, props.highlightTone);
   return (
     <Box
       alt=""
       component="img"
       src={NODE_ICON_ASSETS[props.kind]}
-      style={{ display: "block", filter, height: size, imageRendering: "pixelated", objectFit: "contain", width: size }}
+      style={{ display: "block", filter, height: size, imageRendering: "pixelated", objectFit: "contain", opacity, width: size }}
     />
   );
 }
 
 function getNodeIconFilter(kind: SpireNodeKind, shadow: boolean, highlightTone: "active" | "hover" | "selected" | undefined) {
   const filters = [];
+  if (kind !== "boss") {
+    filters.push("grayscale(1) saturate(0.25) contrast(1.35) brightness(0.54)");
+  }
   if (kind === "unknown") {
-    filters.push("saturate(0.55) brightness(1.18)");
+    filters.push("brightness(0.74)");
   }
   if (shadow) {
-    filters.push(NODE_DROP_SHADOW);
+    filters.push(kind === "boss" ? NODE_DROP_SHADOW : "drop-shadow(0 2px 2px rgba(0, 0, 0, 0.32))");
   }
   const highlightFilter = kind === "boss" && highlightTone === "active" ? BOSS_ACTIVE_HIGHLIGHT : getNodeHighlightFilter(highlightTone);
   if (highlightFilter) {
     filters.push(highlightFilter);
   }
   return filters.length ? filters.join(" ") : undefined;
+}
+
+function getNodeIconOpacity(kind: SpireNodeKind, highlightTone: "active" | "hover" | "selected" | undefined) {
+  if (kind === "boss" || highlightTone) {
+    return 1;
+  }
+  return 0.78;
 }
 
 function getNodeHighlightFilter(highlightTone: "active" | "hover" | "selected" | undefined) {
@@ -509,7 +623,7 @@ function getNodeHighlightFilter(highlightTone: "active" | "hover" | "selected" |
 }
 
 function Legend(props: { highlightedKind: SpireNodeKind | null; onHighlight: (kind: SpireNodeKind | null) => void }) {
-  const rows: SpireNodeKind[] = ["unknown", "merchant", "treasure", "rest", "enemy", "elite", "boss"];
+  const rows: SpireNodeKind[] = ["unknown", "event", "merchant", "treasure", "rest", "enemy", "elite", "boss"];
   return (
     <Box p="sm" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, borderRadius: 2, boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.72), 0 10px 26px rgba(0, 0, 0, 0.36)", color: "#e7dcc0", position: "absolute", right: 12, top: 12, width: 150, zIndex: 4 }}>
       <Text size="sm" fw={900} mb={6} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>Legend</Text>

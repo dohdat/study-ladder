@@ -7,7 +7,7 @@ import { applyElementalResistance, getResistancesFromModifiers } from "./resista
 import { getWarriorSkillBonuses, normalizeWarriorSkillRanks } from "./skillCore";
 import { createShopStock, normalizeShopStock } from "./shopCore";
 import { createSpireRun, normalizeSpireRun } from "./spireMapCore";
-import type { CardState, CharacterStatKey, CharacterStats, ElementalDamageType, EquipmentSlot, InventoryItem, InventoryItemPosition, ItemModifierKey, Question, StudyState } from "../types/study";
+import type { ActivePotionEffect, CardState, CharacterStatKey, CharacterStats, ElementalDamageType, EquipmentSlot, InventoryItem, InventoryItemPosition, ItemModifierKey, Question, StudyState } from "../types/study";
 
 const MS_PER_MINUTE = 60000;
 const EASY_MINUTES = 10;
@@ -120,6 +120,7 @@ function createDefaultStateBase(): StudyState {
       stats: { ...DEFAULT_CHARACTER_STATS },
       skillRanks: {},
       activeSkill: null,
+      activePotionEffects: [],
       inventory: [],
       inventorySlots: {},
       equipment: defaultEquipment(),
@@ -142,7 +143,11 @@ export const cloneState = (state: StudyState): StudyState => ({
 });
 
 function cloneProfile(state: StudyState): StudyState["profile"] {
-  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), inventorySlots: cloneInventorySlots(state.profile.inventorySlots), relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, spireRun: { ...state.profile.spireRun, availableNodeIds: [...state.profile.spireRun.availableNodeIds], completedNodeIds: [...state.profile.spireRun.completedNodeIds], nodes: state.profile.spireRun.nodes.map((node) => ({ ...node, nextIds: [...node.nextIds] })), roundQuestionIds: [...state.profile.spireRun.roundQuestionIds], roundSolvedIds: [...state.profile.spireRun.roundSolvedIds], unknownEncounterMisses: { ...state.profile.spireRun.unknownEncounterMisses } }, stats: { ...state.profile.stats } };
+  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, activePotionEffects: cloneActivePotionEffects(state.profile.activePotionEffects), equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), inventorySlots: cloneInventorySlots(state.profile.inventorySlots), relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, spireRun: { ...state.profile.spireRun, availableNodeIds: [...state.profile.spireRun.availableNodeIds], completedNodeIds: [...state.profile.spireRun.completedNodeIds], nodes: state.profile.spireRun.nodes.map((node) => ({ ...node, nextIds: [...node.nextIds] })), roundQuestionIds: [...state.profile.spireRun.roundQuestionIds], roundSolvedIds: [...state.profile.spireRun.roundSolvedIds], unknownEncounterMisses: { ...state.profile.spireRun.unknownEncounterMisses } }, stats: { ...state.profile.stats } };
+}
+
+function cloneActivePotionEffects(effects: ActivePotionEffect[] | undefined) {
+  return (effects || []).map((effect) => ({ ...effect, modifiers: effect.modifiers.map((modifier) => ({ ...modifier })), stats: { ...effect.stats } }));
 }
 
 function cloneInventoryItem(item: InventoryItem) {
@@ -176,6 +181,7 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
       stats: normalizeCharacterStats(profile.stats),
       skillRanks: normalizeWarriorSkillRanks(profile.skillRanks),
       activeSkill: profile.activeSkill ?? null,
+      activePotionEffects: normalizeActivePotionEffects(profile.activePotionEffects),
       inventory,
       inventorySlots: normalizeInventorySlots(profile.inventorySlots, inventory),
       equipment: normalizeEquipment(profile.equipment),
@@ -206,7 +212,7 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
 };
 
 function createStarterShopStock() {
-  return createShopStock(questions[0], DEFAULT_CHARACTER_STATS, STARTER_SHOP_REFRESH_AT);
+  return createShopStock(questions[0], DEFAULT_CHARACTER_STATS, STARTER_SHOP_REFRESH_AT, { maxItemLevel: FIRST_STAT_LEVEL });
 }
 
 function normalizeCharacterStats(stats: Partial<CharacterStats> | undefined): CharacterStats { return { strength: normalizeStat(stats?.strength), constitution: normalizeStat(stats?.constitution), perception: normalizeStat(stats?.perception), intelligence: normalizeStat(stats?.intelligence) }; }
@@ -253,6 +259,21 @@ function normalizeItemModifiers(modifiers: InventoryItem["modifiers"] | undefine
   return (modifiers || []).filter((modifier) => MODIFIER_KEYS.includes(modifier.key) && Number.isFinite(modifier.value));
 }
 
+function normalizeActivePotionEffects(effects: ActivePotionEffect[] | undefined) {
+  return (effects || [])
+    .filter((effect) => effect.id && effect.name && Number.isFinite(effect.roomsRemaining) && effect.roomsRemaining > 0)
+    .map((effect) => ({
+      ...effect,
+      modifiers: normalizeItemModifiers(effect.modifiers),
+      roomsRemaining: Math.max(1, Math.floor(effect.roomsRemaining)),
+      stats: normalizePartialStats(effect.stats)
+    }));
+}
+
+function normalizePartialStats(stats: Partial<CharacterStats> | undefined) {
+  return Object.fromEntries(Object.entries(stats || {}).filter(([key, value]) => key in DEFAULT_CHARACTER_STATS && Number.isFinite(value))) as Partial<CharacterStats>;
+}
+
 function normalizeCards(cards: StudyState["cards"] | undefined) {
   return Object.fromEntries(Object.entries(cards || {}).map(([id, card]) => [id, { ...defaultCard(), ...card, failedSubmissions: Math.max(0, card.failedSubmissions || 0) }]));
 }
@@ -270,11 +291,12 @@ export const isMasteredCard = (card: CardState) => card.correct > 0;
 export const getEffectiveCharacterStats = (state: StudyState): CharacterStats => {
   const levelBonus = getLevelProgress(state).level - FIRST_STAT_LEVEL;
   const equipmentStats = getEquipmentStats(state);
+  const potionStats = getActivePotionStats(state);
   return {
-    strength: state.profile.stats.strength + equipmentStats.strength + Math.floor((levelBonus + FIRST_STAT_LEVEL) / STRENGTH_LEVEL_INTERVAL),
-    constitution: state.profile.stats.constitution + equipmentStats.constitution + Math.floor(levelBonus / CONSTITUTION_LEVEL_INTERVAL),
-    perception: state.profile.stats.perception + equipmentStats.perception + Math.floor((levelBonus + FIRST_STAT_LEVEL) / PERCEPTION_LEVEL_INTERVAL),
-    intelligence: state.profile.stats.intelligence + equipmentStats.intelligence + Math.floor(levelBonus / INTELLIGENCE_LEVEL_INTERVAL)
+    strength: state.profile.stats.strength + equipmentStats.strength + potionStats.strength + Math.floor((levelBonus + FIRST_STAT_LEVEL) / STRENGTH_LEVEL_INTERVAL),
+    constitution: state.profile.stats.constitution + equipmentStats.constitution + potionStats.constitution + Math.floor(levelBonus / CONSTITUTION_LEVEL_INTERVAL),
+    perception: state.profile.stats.perception + equipmentStats.perception + potionStats.perception + Math.floor((levelBonus + FIRST_STAT_LEVEL) / PERCEPTION_LEVEL_INTERVAL),
+    intelligence: state.profile.stats.intelligence + equipmentStats.intelligence + potionStats.intelligence + Math.floor(levelBonus / INTELLIGENCE_LEVEL_INTERVAL)
   };
 };
 
@@ -290,7 +312,7 @@ export const getEquipmentModifierTotals = (state: StudyState) => {
   return getEquippedItems(state).reduce((totals, item) => addModifierTotals(totals, item.modifiers), { ...DEFAULT_ITEM_MODIFIERS });
 };
 
-export const getRunModifierTotals = (state: StudyState) => addModifierRecords(getEquipmentModifierTotals(state), getRelicModifierTotals(state));
+export const getRunModifierTotals = (state: StudyState) => addModifierRecords(addModifierRecords(getEquipmentModifierTotals(state), getRelicModifierTotals(state)), getActivePotionModifierTotals(state));
 
 export const getElementalResistances = (state: StudyState) => getResistancesFromModifiers(addSkillResistances(getRunModifierTotals(state), getWarriorSkillBonusTotals(state)));
 
@@ -298,6 +320,14 @@ export const getWarriorSkillBonusTotals = (state: StudyState) => getWarriorSkill
 
 function getEquippedItemStats(state: StudyState): CharacterStats {
   return getEquippedItems(state).reduce((stats, item) => addStats(stats, item.stats), { strength: 0, constitution: 0, perception: 0, intelligence: 0 });
+}
+
+function getActivePotionStats(state: StudyState): CharacterStats {
+  return (state.profile.activePotionEffects || []).reduce((stats, effect) => addStats(stats, effect.stats), { strength: 0, constitution: 0, perception: 0, intelligence: 0 });
+}
+
+function getActivePotionModifierTotals(state: StudyState) {
+  return (state.profile.activePotionEffects || []).reduce((totals, effect) => addModifierTotals(totals, effect.modifiers), { ...DEFAULT_ITEM_MODIFIERS });
 }
 
 export const getActiveSetBonuses = (state: StudyState) => {
@@ -532,8 +562,9 @@ export const canEquipItem = (state: StudyState, item: InventoryItem) => {
 
 export const getQuestionDrop = (question: Question, state: StudyState, now = Date.now()) => {
   const stats = getEffectiveCharacterStats(state);
+  const maxItemLevel = getRewardItemLevelCap(state);
   if (state.profile.godMode) {
-    return createDropItem(question, stats, now);
+    return createDropItem(question, stats, now, { maxItemLevel });
   }
   const modifiers = getRunModifierTotals(state);
   const skills = getWarriorSkillBonusTotals(state);
@@ -543,8 +574,12 @@ export const getQuestionDrop = (question: Question, state: StudyState, now = Dat
   if (roll > chance) {
     return null;
   }
-  return createDropItem(question, stats, now);
+  return createDropItem(question, stats, now, { maxItemLevel });
 };
+
+export function getRewardItemLevelCap(state: StudyState) {
+  return getLevelProgress(state).level;
+}
 
 function getDropRoll(questionId: string, now: number) {
   return getSeededRoll(`${questionId}:${now}:drop`);
@@ -737,7 +772,7 @@ function applyShopRefresh(next: StudyState, question: Question | undefined, now:
   if (!question) {
     return;
   }
-  next.profile.shopStock = createShopStock(question, getEffectiveCharacterStats(next), now);
+  next.profile.shopStock = createShopStock(question, getEffectiveCharacterStats(next), now, { maxItemLevel: getRewardItemLevelCap(next) });
   next.profile.shopLastRefreshedAt = now;
 }
 

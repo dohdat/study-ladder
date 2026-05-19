@@ -5,6 +5,8 @@ import { IconTrash } from "@tabler/icons-react";
 
 import { HeroSiegeButton } from "./HeroSiegeUi";
 import { HERO_ITEM_RARITY_COLORS, HeroSiegeEquipmentIcon } from "./HeroSiegeItemIcon";
+import { getHeroSiegeQualityColor, getItemQuality } from "../lib/heroSiegeQuality";
+import { MODIFIER_FORMATTERS } from "../lib/modifierFormat";
 import { canEquipItem, discardItem, EQUIPMENT_SLOT_LABELS, equipItem, getActiveSetBonuses, moveInventoryItem, unequipItem } from "../lib/studyCore";
 import { ITEM_BASE_NAMES } from "../lib/itemNames";
 import type { EquipmentSlot, InventoryItem, InventoryItemPosition, ItemModifierKey, StudyState } from "../types/study";
@@ -30,23 +32,6 @@ const STAT_LABELS = {
 } as const;
 
 const RARITY_COLORS = HERO_ITEM_RARITY_COLORS;
-const MODIFIER_FORMATTERS: Record<ItemModifierKey, (value: number) => string> = {
-  bonusXpPercent: (value) => `+${value}% XP`,
-  coldResistPercent: (value) => `+${value}% Cold Res`,
-  criticalChancePercent: (value) => `+${value}% Crit`,
-  damageReduction: (value) => `Damage -${value}`,
-  enhancedDamagePercent: (value) => `+${value}% Damage`,
-  fireResistPercent: (value) => `+${value}% Fire Res`,
-  goldFindPercent: (value) => `+${value}% Gold`,
-  lifeOnKill: (value) => `+${value} Life/Sub`,
-  lightningResistPercent: (value) => `+${value}% Lightning Res`,
-  magicFindPercent: (value) => `+${value}% Magic Find`,
-  manaOnKill: (value) => `+${value} Mana/Sub`,
-  maxLife: (value) => `+${value} Max Life`,
-  maxMana: (value) => `+${value} Max Mana`,
-  poisonResistPercent: (value) => `+${value}% Poison Res`
-};
-
 const COMPACT_NAME_LINES = 2;
 const INVENTORY_PANEL_WIDTH = 534;
 const INVENTORY_PANEL_HEIGHT = 720;
@@ -110,14 +95,6 @@ const ITEM_DAMAGE_LEVEL_FACTOR = 0.42;
 const ITEM_DAMAGE_SPREAD = 4;
 const ITEM_ARMOR_LEVEL_FACTOR = 0.36;
 const ITEM_ARMOR_SPREAD = 3;
-
-const ITEM_RARITY_LABEL_COLORS: Record<InventoryItem["rarity"], string> = {
-  common: "#d4d4d4",
-  epic: "#b46cff",
-  legendary: "#d6a94b",
-  rare: "#5fa8ff",
-  uncommon: "#40c057"
-};
 
 const SLOT_POWER_PROFILES: Record<EquipmentSlot, { damage?: [number, number]; defense?: [number, number]; tier: string }> = {
   armor: { defense: [12, 18], tier: "Armor" },
@@ -674,18 +651,20 @@ function isItemEquipped(state: StudyState, item: InventoryItem) {
   return state.profile.equipment[item.slot] === item.id;
 }
 
-export function ItemSummary(props: { compact?: boolean; item: InventoryItem }) {
+export function ItemSummary(props: { compact?: boolean; item: InventoryItem; large?: boolean; showIcon?: boolean }) {
+  const nameSize = props.large ? "sm" : props.compact ? "10px" : "xs";
+  const detailSize = props.large ? "12px" : "10px";
   return (
     <Group gap={props.compact ? COMPACT_SUMMARY_GAP : FULL_SUMMARY_GAP} wrap="nowrap" align="flex-start">
-      <ItemPixelIcon item={props.item} />
+      {props.showIcon !== false && <ItemPixelIcon item={props.item} />}
       <Box style={{ minWidth: 0 }}>
         <Group gap={4} wrap="nowrap">
-          <Text size={props.compact ? "10px" : "xs"} fw={800} c={RARITY_COLORS[props.item.rarity]} lineClamp={props.compact ? COMPACT_NAME_LINES : 1}>{props.item.name}</Text>
+          <Text size={nameSize} fw={800} c={getHeroSiegeQualityColor(getItemQuality(props.item))} lineClamp={props.compact ? COMPACT_NAME_LINES : 1}>{props.item.name}</Text>
           {props.item.setId && <Badge size="xs" color="green" variant="light">set</Badge>}
         </Group>
-        <Text size="10px" c="gray.4" lineClamp={1}>{formatItemStats(props.item)}</Text>
-        {props.item.modifiers?.length ? <Text size="10px" c="blue.2" lineClamp={1}>{formatItemModifiers(props.item)}</Text> : null}
-        <Text size="10px" c="dimmed" lineClamp={1}>{formatItemRequirements(props.item)}</Text>
+        <Text size={detailSize} c="gray.4" lineClamp={1}>{formatItemStats(props.item)}</Text>
+        {getItemEffectLine(props.item) ? <Text size={detailSize} c="blue.2" lineClamp={1}>{getItemEffectLine(props.item)}</Text> : null}
+        <Text size={detailSize} c="dimmed" lineClamp={1}>{formatItemRequirements(props.item)}</Text>
       </Box>
     </Group>
   );
@@ -695,11 +674,11 @@ function ItemPixelIcon(props: { item: InventoryItem }) {
   return <HeroSiegeEquipmentIcon item={props.item} size={ITEM_ICON_SIZE} />;
 }
 
-function InventoryItemTooltip(props: { canEquip?: boolean; children: React.ReactNode; disabled?: boolean; equipped?: boolean; item: InventoryItem }) {
+export function InventoryItemTooltip(props: { canEquip?: boolean; children: React.ReactNode; disabled?: boolean; equipped?: boolean; item: InventoryItem; showRollRanges?: boolean }) {
   return (
     <Tooltip
       disabled={props.disabled}
-      label={<ItemDetails canEquip={props.canEquip} equipped={props.equipped} item={props.item} />}
+      label={<ItemDetails canEquip={props.canEquip} equipped={props.equipped} item={props.item} showRollRanges={props.showRollRanges} />}
       multiline
       withArrow
       color="dark"
@@ -719,46 +698,65 @@ function InventoryItemTooltip(props: { canEquip?: boolean; children: React.React
   );
 }
 
-function ItemDetails(props: { canEquip?: boolean; equipped?: boolean; item: InventoryItem }) {
+function ItemDetails(props: { canEquip?: boolean; equipped?: boolean; item: InventoryItem; showRollRanges?: boolean }) {
   const baseName = getBaseItemName(props.item);
   const powerProfile = SLOT_POWER_PROFILES[props.item.slot];
   const level = props.item.requirements.level;
+  const showRollRanges = props.showRollRanges !== false;
+  const rollSeed = props.item.id;
   const damageRange = powerProfile.damage ? getScaledPowerRange(powerProfile.damage, level, ITEM_DAMAGE_LEVEL_FACTOR, ITEM_DAMAGE_SPREAD) : null;
   const defenseRange = powerProfile.defense ? getScaledPowerRange(powerProfile.defense, level, ITEM_ARMOR_LEVEL_FACTOR, ITEM_ARMOR_SPREAD) : null;
   return (
     <Stack gap={8} style={{ textAlign: "center", width: DETAILS_SHEET_WIDTH }}>
       <Box>
-        <Text size="lg" fw={900} tt="uppercase" style={{ color: ITEM_RARITY_LABEL_COLORS[props.item.rarity], letterSpacing: 0, textShadow: "0 2px 0 #000" }}>
+        <Text size="lg" fw={900} tt="uppercase" style={{ color: getHeroSiegeQualityColor(getItemQuality(props.item)), letterSpacing: 0, textShadow: "0 2px 0 #000" }}>
           {props.item.name}
         </Text>
         <Text size="sm" fw={800} c="gray.2">{baseName}</Text>
+        {(props.item.wikiRarityLabel || props.item.wikiCategory) && (
+          <Text size="xs" fw={800} c="gray.4">{formatWikiItemSubtitle(props.item)}</Text>
+        )}
       </Box>
+      {props.item.wikiDamage || props.item.wikiAps || props.item.wikiDps ? (
+        <Group justify="center" gap={8}>
+          {props.item.wikiDamage && <Text size="sm" fw={900} c="gray.1">Damage: <Box component="span" c="#6f6ff6">{showRollRanges ? props.item.wikiDamage : formatRolledValue(props.item.wikiDamage, `${rollSeed}:wiki-damage`)}</Box></Text>}
+          {props.item.wikiAps && <Text size="sm" fw={900} c="gray.1">APS: <Box component="span" c="#6f6ff6">{props.item.wikiAps}</Box></Text>}
+          {props.item.wikiDps && <Text size="sm" fw={900} c="gray.1">DPS: <Box component="span" c="#6f6ff6">{showRollRanges ? props.item.wikiDps : formatRolledValue(props.item.wikiDps, `${rollSeed}:wiki-dps`)}</Box></Text>}
+        </Group>
+      ) : null}
       {damageRange && (
-        <TooltipPowerRow label="Attack Damage" value={`${damageRange.min}-${damageRange.max}`} range={damageRange} />
+        <TooltipPowerRow label="Attack Damage" showRollRange={showRollRanges} value={showRollRanges ? `${damageRange.min}-${damageRange.max}` : getRolledRangeValue(damageRange, `${rollSeed}:attack-damage`)} range={damageRange} />
       )}
       {defenseRange && (
-        <TooltipPowerRow label={props.item.slot === "offHand" ? "Block Armor" : "Armor"} value={defenseRange.average} range={defenseRange} />
+        <TooltipPowerRow label={props.item.slot === "offHand" ? "Block Armor" : "Armor"} showRollRange={showRollRanges} value={showRollRanges ? defenseRange.average : getRolledRangeValue(defenseRange, `${rollSeed}:defense`)} range={defenseRange} />
       )}
       {props.item.modifiers?.length ? (
         <Stack gap={2}>
           {props.item.modifiers.map((modifier) => {
             const details = MODIFIER_DETAILS[modifier.key];
             const range = getScaledModifierRange(details.range, level);
-            return <TooltipAffixLine key={modifier.key} color={details.color} text={details.label(modifier.value)} range={range} />;
+            return <TooltipAffixLine key={modifier.key} color={details.color} showRollRange={showRollRanges} text={details.label(modifier.value)} range={range} />;
           })}
+        </Stack>
+      ) : null}
+      {props.item.wikiStats?.length ? (
+        <Stack gap={2}>
+          {props.item.wikiStats.slice(0, 8).map((stat, index) => (
+            <Text key={`${stat}-${index}`} size="sm" fw={900} style={{ color: "#73a7ff", lineHeight: 1.18, textShadow: "0 1px 0 #000" }}>{showRollRanges ? stat : formatRolledValue(stat, `${rollSeed}:wiki-stat:${index}`)}</Text>
+          ))}
         </Stack>
       ) : null}
       <Stack gap={2}>
         {Object.entries(props.item.stats).filter(([, value]) => value).map(([key, value]) => {
           const stat = key as keyof typeof STAT_DISPLAY_NAMES;
-          return <TooltipAffixLine key={key} color="#6f6ff6" text={`+${value} to ${STAT_DISPLAY_NAMES[stat]}`} range={getStatRollRange(props.item)} />;
+          return <TooltipAffixLine key={key} color="#6f6ff6" showRollRange={showRollRanges} text={`+${value} to ${STAT_DISPLAY_NAMES[stat]}`} range={getStatRollRange(props.item)} />;
         })}
       </Stack>
       <Box mt={2} style={{ display: "grid", gap: 2, gridTemplateColumns: "1fr 1fr", textAlign: "left" }}>
         <Text size="xs" fw={900} c="gray.1">[{EQUIPMENT_SLOT_LABELS[props.item.slot]}]</Text>
         <Text size="xs" fw={900} c="gray.1" ta="right">[{powerProfile.tier}]</Text>
         <Text size="xs" fw={900} c="gray.1">Level Req. {props.item.requirements.level}</Text>
-        <Text size="xs" fw={900} c="gray.1" ta="right">Rarity: {formatRarity(props.item.rarity)}</Text>
+        <Text size="xs" fw={900} c="gray.1" ta="right">Rarity: {getItemQuality(props.item)}</Text>
         {Object.entries(props.item.requirements.stats).filter(([, value]) => value).map(([key, value]) => (
           <Text key={key} size="xs" fw={900} c="gray.1" style={{ gridColumn: "1 / -1" }}>{STAT_DISPLAY_NAMES[key as keyof typeof STAT_DISPLAY_NAMES]} Req. {value}</Text>
         ))}
@@ -772,22 +770,58 @@ function ItemDetails(props: { canEquip?: boolean; equipped?: boolean; item: Inve
   );
 }
 
-function TooltipPowerRow(props: { label: string; range: { average: number; max: number; min: number }; value: React.ReactNode }) {
+function TooltipPowerRow(props: { label: string; range: { average: number; max: number; min: number }; showRollRange?: boolean; value: React.ReactNode }) {
   return (
     <Group justify="center" gap={8} wrap="nowrap">
       <Text size="sm" fw={900} c="gray.1">{props.label}:</Text>
       <Text size="sm" fw={900} c="#6f6ff6">{props.value}</Text>
-      <Text size="sm" fw={900} c="#20e020">[{props.range.min}-{props.range.max}]</Text>
+      {props.showRollRange !== false && <Text size="sm" fw={900} c="#20e020">[{props.range.min}-{props.range.max}]</Text>}
     </Group>
   );
 }
 
-function TooltipAffixLine(props: { color: string; range: { max: number; min: number }; text: string }) {
+function TooltipAffixLine(props: { color: string; range: { max: number; min: number }; showRollRange?: boolean; text: string }) {
   return (
     <Text size="sm" fw={900} style={{ color: props.color, lineHeight: 1.18, textShadow: "0 1px 0 #000" }}>
-      {props.text} <Box component="span" c="#20e020">[{props.range.min}-{props.range.max}]</Box>
+      {props.text}{props.showRollRange !== false && <Box component="span" c="#20e020"> [{props.range.min}-{props.range.max}]</Box>}
     </Text>
   );
+}
+
+function formatRolledValue(value: string, seed: string) {
+  return value.replace(/(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)/g, (_match, min: string, max: string) => {
+    const rolled = rollNumberBetween(Number(min), Number(max), `${seed}:${min}:${max}`);
+    return Number.isInteger(rolled) ? String(rolled) : rolled.toFixed(1);
+  });
+}
+
+function getRolledRangeValue(range: { max: number; min: number }, seed: string) {
+  return rollNumberBetween(range.min, range.max, seed);
+}
+
+function rollNumberBetween(min: number, max: number, seed: string) {
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return min || 0;
+  }
+  if (min === max) {
+    return min;
+  }
+  const low = Math.min(min, max);
+  const high = Math.max(min, max);
+  const roll = getTooltipSeedRoll(seed);
+  if (Number.isInteger(low) && Number.isInteger(high)) {
+    return low + Math.floor(roll * (high - low + 1));
+  }
+  return low + roll * (high - low);
+}
+
+function getTooltipSeedRoll(seed: string) {
+  let hash = 2166136261;
+  for (const char of seed) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967296;
 }
 
 function formatItemRequirements(item: InventoryItem) {
@@ -799,11 +833,22 @@ function formatItemRequirements(item: InventoryItem) {
 }
 
 function formatItemStats(item: InventoryItem) {
+  if (item.wikiRarityLabel || item.wikiCategory) {
+    return formatWikiItemSubtitle(item);
+  }
   return formatStats(item.stats);
+}
+
+function formatWikiItemSubtitle(item: InventoryItem) {
+  return `${getItemQuality(item)} ${item.wikiCategory || EQUIPMENT_SLOT_LABELS[item.slot]}`;
 }
 
 function formatItemModifiers(item: InventoryItem) {
   return (item.modifiers || []).map((modifier) => MODIFIER_FORMATTERS[modifier.key](modifier.value)).join(", ");
+}
+
+function getItemEffectLine(item: InventoryItem) {
+  return item.wikiStats?.[0] || formatItemModifiers(item);
 }
 
 function getBaseItemName(item: InventoryItem) {
@@ -828,10 +873,6 @@ function getStatRollRange(item: InventoryItem) {
   const tier = Math.max(1, Math.ceil(item.requirements.level / LEVELS_PER_POWER_TIER));
   const rarityMax: Record<InventoryItem["rarity"], number> = { common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 5 };
   return { max: Math.min(rarityMax[item.rarity], tier), min: 1 };
-}
-
-function formatRarity(rarity: InventoryItem["rarity"]) {
-  return rarity.charAt(0).toUpperCase() + rarity.slice(1);
 }
 
 function formatStats(stats: InventoryItem["stats"]) {

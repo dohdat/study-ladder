@@ -1,3 +1,5 @@
+import { createWikiRelicDefinitions } from "./heroSiegeWikiCatalog";
+import { getRelicQualityLabel } from "./heroSiegeQuality";
 import type { ItemModifierKey, Relic, RelicRarity, StudyState } from "../types/study";
 
 const HASH_SEED = 2166136261;
@@ -11,6 +13,8 @@ const BOSS_COST = 320;
 const EVENT_COST = 210;
 const UNIQUE_EFFECT_START_VALUE = 1;
 const UNIQUE_EFFECT_SEARCH_LIMIT = 200;
+const LOW_LEVEL_WIKI_RELIC_MAX_LEVEL = 20;
+const HIGH_POWER_WIKI_RELIC_GROUPS = new Set(["Satanic", "Satanic Set", "Heroic", "Unholy", "Angelic"]);
 
 type RelicSeed = Omit<Relic, "id"> & { id?: string };
 
@@ -41,7 +45,7 @@ const createRelic = (seed: RelicSeed): Relic => ({
   id: seed.id || seed.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
 });
 
-const RAW_RELIC_DEFINITIONS: Relic[] = [
+const LEGACY_RELIC_DEFINITIONS: Relic[] = [
   createRelic({ description: "After each completed combat, recover health.", id: "burning-blood", modifiers: [{ key: "lifeOnKill", value: 6 }], name: "Burning Blood", rarity: "starter", source: "ironclad" }),
   createRelic({ description: "A stronger Burning Blood that greatly improves combat sustain.", id: "black-blood", modifiers: [{ key: "lifeOnKill", value: 12 }], name: "Black Blood", rarity: "boss", source: "ironclad" }),
   relic("Red Skull", "common", "When health is low, your attacks hit harder.", { criticalChancePercent: 4, enhancedDamagePercent: 8 }, "ironclad"),
@@ -150,7 +154,8 @@ const RAW_RELIC_DEFINITIONS: Relic[] = [
   relic("Warped Tongs", "event", "A random skill feels upgraded each fight.", { bonusXpPercent: 8, enhancedDamagePercent: 8 })
 ];
 
-export const RELIC_DEFINITIONS: Relic[] = makeRelicEffectsUnique(RAW_RELIC_DEFINITIONS);
+const WIKI_RELIC_DEFINITIONS = createWikiRelicDefinitions();
+export const RELIC_DEFINITIONS: Relic[] = makeRelicEffectsUnique([...WIKI_RELIC_DEFINITIONS, ...addLegacyIconFilters(LEGACY_RELIC_DEFINITIONS)]);
 
 export function getOwnedRelicIds(state: StudyState) {
   return new Set(state.profile.relics.map((relic) => relic.id));
@@ -195,7 +200,7 @@ export function grantRelic(state: StudyState, relic: Relic): StudyState {
   return { ...state, profile: { ...state.profile, relics: [...state.profile.relics, relic] } };
 }
 
-export function rollRelic(state: StudyState, seed: string, options: { includeShop?: boolean; minRarity?: RelicRarity[] } = {}) {
+export function rollRelic(state: StudyState, seed: string, options: { includeShop?: boolean; maxItemLevel?: number; minRarity?: RelicRarity[] } = {}) {
   const owned = getOwnedRelicIds(state);
   const allowed = RELIC_DEFINITIONS.filter((relicRow) => {
     if (owned.has(relicRow.id)) {
@@ -207,12 +212,25 @@ export function rollRelic(state: StudyState, seed: string, options: { includeSho
     if (!options.includeShop && relicRow.rarity === "shop") {
       return false;
     }
+    if (options.maxItemLevel && !isRelicAllowedForLevel(relicRow, options.maxItemLevel)) {
+      return false;
+    }
     return !options.minRarity || options.minRarity.includes(relicRow.rarity);
   });
   if (!allowed.length) {
     return RELIC_DEFINITIONS.find((relicRow) => relicRow.id === "circlet") || relic("Circlet", "special", "A trophy for finding everything.", {});
   }
   return allowed[Math.floor(getRelicSeedRoll(seed) * allowed.length)];
+}
+
+function isRelicAllowedForLevel(relicItem: Relic, maxItemLevel: number) {
+  if (relicItem.wikiLevel && relicItem.wikiLevel > maxItemLevel) {
+    return false;
+  }
+  if (maxItemLevel < LOW_LEVEL_WIKI_RELIC_MAX_LEVEL && relicItem.wikiTierGroup && HIGH_POWER_WIKI_RELIC_GROUPS.has(relicItem.wikiTierGroup)) {
+    return false;
+  }
+  return true;
 }
 
 export function getRelicCost(relicItem: Relic) {
@@ -256,6 +274,25 @@ function makeRelicEffectsUnique(relics: Relic[]) {
     seen.add(getRelicEffectSignature(uniqueRelic));
     return uniqueRelic;
   });
+}
+
+function addLegacyIconFilters(relics: Relic[]) {
+  return relics.map((relicItem, index) => ({
+    ...relicItem,
+    wikiImageFilter: relicItem.wikiImageFilter || getRelicIconFilter(relicItem.id, index),
+    wikiRarityLabel: relicItem.wikiRarityLabel || getLegacyRelicQualityLabel(relicItem.rarity)
+  }));
+}
+
+function getLegacyRelicQualityLabel(rarity: RelicRarity) {
+  return getRelicQualityLabel(rarity);
+}
+
+function getRelicIconFilter(id: string, index: number) {
+  const hue = Math.round(getRelicSeedRoll(`${id}:${index}:icon-filter`) * 360);
+  const saturation = 1.08 + ((index % 5) * 0.08);
+  const brightness = 0.92 + ((index % 4) * 0.06);
+  return `hue-rotate(${hue}deg) saturate(${saturation.toFixed(2)}) brightness(${brightness.toFixed(2)})`;
 }
 
 function createUniqueEffectRelic(relicItem: Relic, index: number, seen: Set<string>) {

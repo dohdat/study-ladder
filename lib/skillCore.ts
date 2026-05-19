@@ -180,6 +180,17 @@ export function spendWarriorSkillPoint(state: StudyState, skillId: WarriorSkillI
   return { ...state, profile: { ...state.profile, skillRanks: { ...state.profile.skillRanks, [skillId]: getWarriorSkillRank(state.profile.skillRanks, skillId) + 1 } } };
 }
 
+export function resetWarriorSkillPoints(state: StudyState): StudyState {
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      activeSkill: null,
+      skillRanks: {}
+    }
+  };
+}
+
 export function getActiveWarriorSkill(skillId: ActiveWarriorSkillId | null | undefined) {
   return ACTIVE_WARRIOR_SKILLS.find((skill) => skill.id === skillId) || null;
 }

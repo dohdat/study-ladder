@@ -11,8 +11,24 @@ describe("shopCore", () => {
 
     expect(stock.some((item) => item.kind === "consumable" && item.type === "health")).toBe(true);
     expect(stock.some((item) => item.kind === "consumable" && item.type === "mana")).toBe(true);
-    expect(stock.filter((item) => item.kind === "equipment")).toHaveLength(4);
-    expect(stock.filter((item) => item.kind === "relic")).toHaveLength(4);
+    expect(stock.some((item) => item.kind === "consumable" && item.type === "random")).toBe(true);
+    expect(stock.filter((item) => item.kind === "consumable")).toHaveLength(3);
+    expect(stock.filter((item) => item.kind === "equipment")).toHaveLength(5);
+    expect(stock.filter((item) => item.kind === "relic")).toHaveLength(3);
+    const relicIds = stock.filter((item) => item.kind === "relic").map((item) => item.relic.id);
+    expect(new Set(relicIds).size).toBe(relicIds.length);
+    expect(stock.filter((item) => item.kind === "relic").every((item) => item.relic.rarity !== "boss")).toBe(true);
+    const equipmentKeys = stock.filter((item) => item.kind === "equipment").map((item) => item.item.wikiImagePath || item.item.name);
+    expect(new Set(equipmentKeys).size).toBe(equipmentKeys.length);
+    expect(stock.filter((item) => item.kind === "equipment").every((item) => Boolean(item.item.wikiCategory && item.item.wikiImagePath))).toBe(true);
+    expect(stock.filter((item) => item.kind === "equipment").every((item) => !item.item.wikiTierGroup || !["Satanic", "Satanic Set", "Heroic", "Unholy", "Angelic"].includes(item.item.wikiTierGroup))).toBe(true);
+    expect(stock.filter((item) => item.kind === "equipment").every((item) => item.item.rarity === "common")).toBe(true);
+    expect(stock.filter((item) => item.kind === "equipment").every((item) => item.item.wikiRarityLabel === "Normal")).toBe(true);
+    expect(stock.filter((item) => item.kind === "equipment").every((item) => item.item.wikiLevel && item.item.wikiLevel < 20)).toBe(true);
+    expect(stock.filter((item) => item.kind === "equipment").every((item) => Object.values(item.item.stats).filter(Boolean).length <= 1 && !(item.item.modifiers || []).length)).toBe(true);
+    expect(new Set(stock.filter((item) => item.kind === "equipment").map((item) => item.item.slot)).size).toBe(5);
+    expect(stock.filter((item) => item.kind === "relic").every((item) => !item.relic.wikiLevel || item.relic.wikiLevel <= 1)).toBe(true);
+    expect(stock.filter((item) => item.kind === "relic").every((item) => !item.relic.wikiTierGroup || !["Satanic", "Satanic Set", "Heroic", "Unholy", "Angelic"].includes(item.relic.wikiTierGroup))).toBe(true);
   });
 
   it("refreshes shop stock only after a successful schedule result", () => {
@@ -23,7 +39,7 @@ describe("shopCore", () => {
 
     state = applyScheduleResult(state, questions[0].id, true, "ok", 2000);
     const firstStockIds = state.profile.shopStock.map((item) => item.id);
-    expect(firstStockIds).toHaveLength(10);
+    expect(firstStockIds).toHaveLength(11);
     expect(firstStockIds).not.toEqual(starterStockIds);
 
     const failedAgain = applyScheduleResult(state, questions[0].id, false, "bad", 3000);
@@ -41,6 +57,17 @@ describe("shopCore", () => {
     state = buyShopItem(state, healthPotion?.id || "", getMaxHealth(state), getMaxMana(state));
     expect(state.profile.health).toBe(MAX_HEALTH);
     expect(state.profile.shopStock.some((item) => item.id === healthPotion?.id)).toBe(false);
+
+    const randomPotion = state.profile.shopStock.find((item) => item.kind === "consumable" && item.type === "random");
+    expect(randomPotion).toBeTruthy();
+    state.profile.health = MAX_HEALTH - 30;
+    state.profile.mana = 0;
+    state = buyShopItem(state, randomPotion?.id || "", getMaxHealth(state), getMaxMana(state));
+    expect(state.profile.health).toBe(MAX_HEALTH - 30);
+    expect(state.profile.mana).toBe(0);
+    expect(state.profile.activePotionEffects).toHaveLength(1);
+    expect(state.profile.activePotionEffects[0].roomsRemaining).toBe(3);
+    expect(state.profile.shopStock.some((item) => item.id === randomPotion?.id)).toBe(false);
 
     const equipment = state.profile.shopStock.find((item) => item.kind === "equipment");
     expect(equipment).toBeTruthy();

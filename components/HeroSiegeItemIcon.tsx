@@ -128,6 +128,7 @@ import triforceRelicArt from "../assets/hero_siege_relics/triforce.png";
 import vadjraRelicArt from "../assets/hero_siege_relics/vadjra.png";
 import wizardsHatRelicArt from "../assets/hero_siege_relics/wizards-hat.png";
 import zombiesFaceRelicArt from "../assets/hero_siege_relics/zombies-face.png";
+import { getHeroSiegeQualityColor, getItemQuality, getRelicQualityLabel, ITEM_RARITY_TO_QUALITY } from "../lib/heroSiegeQuality";
 import { RELIC_DEFINITIONS } from "../lib/relicCore";
 import type { EquipmentSlot, InventoryItem, ItemRarity, Relic, ShopItem } from "../types/study";
 
@@ -142,11 +143,11 @@ const ITEM_FRAME_BG = "radial-gradient(circle at 45% 28%, rgba(68, 55, 34, 0.98)
 const ITEM_FRAME_SHADOW = "inset 0 0 0 1px rgba(0, 0, 0, 0.82), 0 3px 8px rgba(0, 0, 0, 0.4)";
 
 export const HERO_ITEM_RARITY_COLORS: Record<ItemRarity, string> = {
-  common: "#b8b8b8",
-  epic: "#b46cff",
-  legendary: "#d6a94b",
-  rare: "#5fa8ff",
-  uncommon: "#40c057"
+  common: getHeroSiegeQualityColor(ITEM_RARITY_TO_QUALITY.common),
+  epic: getHeroSiegeQualityColor(ITEM_RARITY_TO_QUALITY.epic),
+  legendary: getHeroSiegeQualityColor(ITEM_RARITY_TO_QUALITY.legendary),
+  rare: getHeroSiegeQualityColor(ITEM_RARITY_TO_QUALITY.rare),
+  uncommon: getHeroSiegeQualityColor(ITEM_RARITY_TO_QUALITY.uncommon)
 } as const;
 
 const EQUIPMENT_ASSETS: Record<EquipmentSlot, StaticImageData> = {
@@ -165,19 +166,9 @@ const RELIC_FALLBACK_ASSETS = [
   relicOrbArt,
   relicGlyphArt,
   charmRelicArt,
-  amuletArt,
-  armorArt,
-  axeArt,
-  beltArt,
-  bootsArt,
   chestArt,
-  glovesArt,
   healthPotionArt,
-  helmetArt,
   manaPotionArt,
-  ringArt,
-  shieldArt,
-  swordArt,
   aaronsStaffRelicArt,
   amazonsSpearsRelicArt,
   allmightyFedoraRelicArt,
@@ -296,30 +287,48 @@ const RELIC_ASSET_INDEXES = new Map(RELIC_DEFINITIONS.map((relic, index) => [get
 export function HeroSiegeEquipmentIcon(props: { item: InventoryItem; size?: number; unframed?: boolean }) {
   return (
     <FramedItemAsset
-      asset={getEquipmentAsset(props.item)}
-      borderColor={HERO_ITEM_RARITY_COLORS[props.item.rarity]}
+      asset={props.item.wikiImagePath || getEquipmentAsset(props.item)}
+      borderColor={getHeroSiegeQualityColor(getItemQuality(props.item))}
+      filter={props.item.wikiImageFilter}
       size={props.size || DEFAULT_ICON_SIZE}
       unframed={props.unframed}
     />
   );
 }
 
-export function HeroSiegePotionIcon(props: { size?: number; type: Extract<ShopItem, { kind: "consumable" }>["type"] }) {
+export function HeroSiegePotionIcon(props: { size?: number; type: Extract<ShopItem, { kind: "consumable" }>["type"]; unframed?: boolean }) {
   return (
     <FramedItemAsset
-      asset={props.type === "health" ? healthPotionArt : manaPotionArt}
-      borderColor={props.type === "health" ? "#e03131" : "#228be6"}
+      asset={getPotionAsset(props.type)}
+      borderColor={getPotionBorderColor(props.type)}
       size={props.size || DEFAULT_SHOP_ICON_SIZE}
+      unframed={props.unframed}
     />
   );
 }
 
-export function HeroSiegeRelicIcon(props: { relic: Relic; size?: number }) {
+function getPotionAsset(type: Extract<ShopItem, { kind: "consumable" }>["type"]) {
+  if (type === "health") {
+    return healthPotionArt;
+  }
+  return manaPotionArt;
+}
+
+function getPotionBorderColor(type: Extract<ShopItem, { kind: "consumable" }>["type"]) {
+  if (type === "health") {
+    return "#e03131";
+  }
+  return type === "mana" ? "#228be6" : "#f59f00";
+}
+
+export function HeroSiegeRelicIcon(props: { relic: Relic; size?: number; unframed?: boolean }) {
   return (
     <FramedItemAsset
-      asset={getRelicAsset(props.relic)}
-      borderColor="#8a744c"
+      asset={props.relic.wikiImagePath || getRelicAsset(props.relic)}
+      borderColor={getHeroSiegeQualityColor(getRelicQualityLabel(props.relic.rarity, props.relic.wikiRarityLabel))}
+      filter={props.relic.wikiImageFilter}
       size={props.size || DEFAULT_RELIC_ICON_SIZE}
+      unframed={props.unframed}
     />
   );
 }
@@ -328,7 +337,8 @@ export function HeroSiegeRewardItemIcon(props: { size?: number }) {
   return <FramedItemAsset asset={chestArt} borderColor="#d6a94b" size={props.size || DEFAULT_ICON_SIZE} unframed />;
 }
 
-function FramedItemAsset(props: { asset: StaticImageData; borderColor: string; size: number; unframed?: boolean }) {
+function FramedItemAsset(props: { asset: StaticImageData; borderColor: string; filter?: string; size: number; unframed?: boolean }) {
+  const asset = normalizeAssetPath(props.asset);
   return (
     <Box
       aria-hidden="true"
@@ -348,10 +358,10 @@ function FramedItemAsset(props: { asset: StaticImageData; borderColor: string; s
       <Box
         alt=""
         component="img"
-        src={props.asset}
+        src={asset}
         style={{
           display: "block",
-          filter: "drop-shadow(0 2px 0 rgba(0, 0, 0, 0.72))",
+          filter: `${props.filter ? `${props.filter} ` : ""}drop-shadow(0 2px 0 rgba(0, 0, 0, 0.72))`,
           height: props.unframed ? "100%" : undefined,
           imageRendering: "pixelated",
           maxHeight: props.unframed ? "100%" : ITEM_IMAGE_SCALE,
@@ -362,6 +372,10 @@ function FramedItemAsset(props: { asset: StaticImageData; borderColor: string; s
       />
     </Box>
   );
+}
+
+function normalizeAssetPath(asset: StaticImageData) {
+  return typeof asset === "string" ? asset.replace(/^\/hero_siege_wiki_items\//, "hero_siege_wiki_items/") : asset;
 }
 
 function getEquipmentAsset(item: InventoryItem) {
@@ -419,8 +433,53 @@ function matchesItemName(name: string, keywords: string[]) {
 }
 
 function getRelicAsset(relic: Relic) {
+  const semanticAsset = getSemanticRelicAsset(relic);
+  if (semanticAsset) {
+    return semanticAsset;
+  }
   const index = RELIC_ASSET_INDEXES.get(getRelicAssetKey(relic));
   return RELIC_FALLBACK_ASSETS[(index ?? hashString(getRelicAssetKey(relic))) % RELIC_FALLBACK_ASSETS.length];
+}
+
+function getSemanticRelicAsset(relic: Relic): StaticImageData | null {
+  const name = relic.name.toLowerCase();
+  if (matchesItemName(name, ["belt", "sash"])) {
+    return rockBeltRelicArt;
+  }
+  if (matchesItemName(name, ["boot"])) {
+    return blazingBootsRelicArt;
+  }
+  if (matchesItemName(name, ["eye", "snecko"])) {
+    return theEyeRelicArt;
+  }
+  if (matchesItemName(name, ["skull"])) {
+    return devilSkullRelicArt;
+  }
+  if (matchesItemName(name, ["blood", "vial"])) {
+    return charmedBloodRelicArt;
+  }
+  if (matchesItemName(name, ["flower", "mushroom"])) {
+    return magicMushroomRelicArt;
+  }
+  if (matchesItemName(name, ["coin", "gold", "midas"])) {
+    return midasHandRelicArt;
+  }
+  if (matchesItemName(name, ["stone", "clay", "bark", "anchor"])) {
+    return ancientRockRelicArt;
+  }
+  if (matchesItemName(name, ["crown"])) {
+    return kingsCrownRelicArt;
+  }
+  if (matchesItemName(name, ["bell"])) {
+    return devilHornRelicArt;
+  }
+  if (matchesItemName(name, ["bottle", "potion", "tea", "coffee"])) {
+    return largeBeerRelicArt;
+  }
+  if (matchesItemName(name, ["chest", "box", "cage"])) {
+    return chestArt;
+  }
+  return null;
 }
 
 function getRelicAssetKey(relic: Relic) {

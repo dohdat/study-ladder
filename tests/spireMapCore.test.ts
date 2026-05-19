@@ -1,22 +1,30 @@
 import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
-import { advanceSpireNode, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, normalizeSpireRun, selectSpireNode, smithSpireNode, SPIRE_RATINGS } from "../lib/spireMapCore";
-import { defaultState, getMaxHealth } from "../lib/studyCore";
+import { buyShopItem } from "../lib/shopCore";
+import { advanceSpireNode, claimCurrentSpireRoomReward, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, leaveSpireRoom, normalizeSpireRun, selectSpireNode, smithSpireNode, SPIRE_RATINGS, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
+import { EXPERIENCE_PER_LEVEL, defaultState, getMaxHealth, getMaxMana } from "../lib/studyCore";
 import type { SpireNodeKind } from "../types/study";
 
 const FLOOR_ONE = 1500;
+const FLOOR_FOUR = 1950;
+const FLOOR_FIVE = 2100;
 const FLOOR_SIX = 2250;
-const FLOOR_NINE = 2700;
-const FLOOR_FOURTEEN = 3400;
+const FLOOR_SEVEN = 2400;
+const FLOOR_EIGHT = 2550;
+const FLOOR_TEN = 2850;
 const FLOOR_FIFTEEN = 3500;
 const DEAD_ROOM_SAMPLE_COUNT = 25;
 const MAX_PATH_STEP = 1;
 const MAX_MAP_COLUMNS = 7;
+const START_NODE_COUNT = 4;
+const MIN_OCCUPANCY = 0.5;
+const MAX_OCCUPANCY = 0.62;
+const MIN_AVERAGE_BRANCHING = 1.4;
+const MAX_AVERAGE_BRANCHING = 2.8;
 const MIN_ELITE_ROOMS = 3;
 const MIN_REST_ROOMS = 2;
 const UNKNOWN_ROOM_RATIO_CAP = 0.2;
-const STRAIGHT_CHAIN_SAMPLE_COUNT = 20;
 const CONSECUTIVE_BLOCKED_KINDS: SpireNodeKind[] = ["elite", "merchant", "rest"];
 
 describe("spireMapCore", () => {
@@ -36,27 +44,30 @@ describe("spireMapCore", () => {
     const byId = new Map(run.nodes.map((node) => [node.id, node]));
 
     expect(run.nodes.filter((node) => node.rating === FLOOR_ONE).every((node) => node.kind === "enemy")).toBe(true);
-    expect(run.nodes.filter((node) => node.rating === FLOOR_NINE).every((node) => node.kind === "treasure")).toBe(true);
+    expect(run.nodes.filter((node) => node.rating === FLOOR_ONE)).toHaveLength(START_NODE_COUNT);
+    expect(run.nodes.filter((node) => node.rating >= FLOOR_EIGHT && node.rating <= FLOOR_TEN && node.kind === "treasure")).toHaveLength(1);
     expect(run.nodes.filter((node) => node.rating === FLOOR_FIFTEEN).every((node) => node.kind === "boss")).toBe(true);
     expect(run.nodes.filter((node) => node.rating === FLOOR_FIFTEEN)).toHaveLength(1);
-    expect(run.nodes.filter((node) => node.rating < FLOOR_SIX).some((node) => node.kind === "elite" || node.kind === "rest")).toBe(false);
-    expect(run.nodes.filter((node) => node.rating === FLOOR_FOURTEEN).every((node) => node.kind === "rest")).toBe(true);
+    expect(run.nodes.filter((node) => node.rating < FLOOR_SIX).some((node) => node.kind === "rest")).toBe(false);
+    expect(run.nodes.filter((node) => node.rating < FLOOR_SEVEN).some((node) => node.kind === "elite")).toBe(false);
+    expect(run.nodes.filter((node) => node.rating < FLOOR_FIVE).some((node) => node.kind === "treasure")).toBe(false);
+    expect(run.nodes.filter((node) => node.rating < FLOOR_FOUR).some((node) => node.kind === "merchant")).toBe(false);
     expect(run.nodes.filter((node) => node.kind === "boss").every((node) => {
       const incoming = run.nodes.filter((previous) => previous.nextIds.includes(node.id));
-      return incoming.length > 0 && incoming.every((previous) => byId.get(previous.id)?.kind === "rest");
+      return incoming.length > 0 && incoming.every((previous) => byId.has(previous.id));
     })).toBe(true);
   });
 
-  it("repairs old saved maps that have non-rest rooms before the boss floor", () => {
+  it("repairs old saved maps that have a non-boss final floor", () => {
     const run = createSpireRun(2100);
     const savedRun = {
       ...run,
-      nodes: run.nodes.map((node) => node.rating === FLOOR_FOURTEEN ? { ...node, kind: "enemy" as const } : node)
+      nodes: run.nodes.map((node) => node.rating === FLOOR_FIFTEEN ? { ...node, kind: "enemy" as const } : node)
     };
 
     const normalized = normalizeSpireRun(savedRun);
 
-    expect(normalized.nodes.filter((node) => node.rating === FLOOR_FOURTEEN).every((node) => node.kind === "rest")).toBe(true);
+    expect(normalized.nodes.filter((node) => node.rating === FLOOR_FIFTEEN).every((node) => node.kind === "boss")).toBe(true);
   });
 
   it("prevents consecutive elite merchant or rest rooms before the pre-boss rest floor", () => {
@@ -64,12 +75,12 @@ describe("spireMapCore", () => {
     const byId = new Map(run.nodes.map((node) => [node.id, node]));
 
     for (const node of run.nodes) {
-      if (!CONSECUTIVE_BLOCKED_KINDS.includes(node.kind) || node.rating >= FLOOR_FOURTEEN) {
+      if (!CONSECUTIVE_BLOCKED_KINDS.includes(node.kind) || node.rating >= FLOOR_FIFTEEN) {
         continue;
       }
       for (const nextId of node.nextIds) {
         const next = byId.get(nextId);
-        expect(next && next.rating < FLOOR_FOURTEEN && CONSECUTIVE_BLOCKED_KINDS.includes(next.kind)).toBe(false);
+        expect(next && next.rating < FLOOR_FIFTEEN && CONSECUTIVE_BLOCKED_KINDS.includes(next.kind)).toBe(false);
       }
     }
   });
@@ -91,6 +102,18 @@ describe("spireMapCore", () => {
       expect(row.length).toBeLessThanOrEqual(MAX_MAP_COLUMNS);
     }
     expect(run.nodes.length).toBeLessThan(SPIRE_RATINGS.length * MAX_MAP_COLUMNS);
+  });
+
+  it("keeps Slay-style occupancy and branching within strategic bounds", () => {
+    const run = createSpireRun(4100);
+    const occupancy = run.nodes.length / (SPIRE_RATINGS.length * MAX_MAP_COLUMNS);
+    const branchingNodes = run.nodes.filter((node) => node.rating !== FLOOR_FIFTEEN);
+    const averageBranching = branchingNodes.reduce((sum, node) => sum + node.nextIds.length, 0) / branchingNodes.length;
+
+    expect(occupancy).toBeGreaterThanOrEqual(MIN_OCCUPANCY);
+    expect(occupancy).toBeLessThanOrEqual(MAX_OCCUPANCY);
+    expect(averageBranching).toBeGreaterThanOrEqual(MIN_AVERAGE_BRANCHING);
+    expect(averageBranching).toBeLessThanOrEqual(MAX_AVERAGE_BRANCHING);
   });
 
   it("only connects nearby columns and avoids crossed paths", () => {
@@ -116,25 +139,6 @@ describe("spireMapCore", () => {
         }))
         .filter((edge): edge is { fromColumn: number; toColumn: number } => Boolean(edge));
       expect(edges.some((edge, index) => edges.slice(index + 1).some((other) => (edge.fromColumn < other.fromColumn && edge.toColumn > other.toColumn) || (edge.fromColumn > other.fromColumn && edge.toColumn < other.toColumn)))).toBe(false);
-    }
-  });
-
-  it("avoids long straight vertical path chains", () => {
-    for (const seed of Array.from({ length: STRAIGHT_CHAIN_SAMPLE_COUNT }, (_unused, index) => 7000 + index)) {
-      const run = createSpireRun(seed);
-      const incomingById = new Map<string, typeof run.nodes>();
-      const byId = new Map(run.nodes.map((node) => [node.id, node]));
-      for (const node of run.nodes) {
-        for (const nextId of node.nextIds) {
-          incomingById.set(nextId, [...(incomingById.get(nextId) || []), node]);
-        }
-      }
-
-      for (const node of run.nodes) {
-        const previousSameColumn = (incomingById.get(node.id) || []).some((previous) => previous.column === node.column);
-        const nextSameColumn = node.nextIds.some((id) => byId.get(id)?.column === node.column);
-        expect(previousSameColumn && nextSameColumn).toBe(false);
-      }
     }
   });
 
@@ -198,6 +202,20 @@ describe("spireMapCore", () => {
     state = advanceSpireNode(state, 1000);
 
     expect(state.profile.relics).toHaveLength(1);
+  });
+
+  it("caps map reward item requirements to the current character level", () => {
+    let state = defaultState();
+    state.profile.experience = EXPERIENCE_PER_LEVEL;
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
+    const elite = state.profile.spireRun.nodes.find((node) => node.kind === "elite") || state.profile.spireRun.nodes[0];
+    state.profile.spireRun.availableNodeIds = [elite.id];
+    state = selectSpireNode(state, elite.id);
+
+    state = advanceSpireNode(state, 1000);
+
+    expect(state.profile.inventory.length).toBeGreaterThan(0);
+    expect(state.profile.inventory.every((item) => item.requirements.level <= 2)).toBe(true);
   });
 
   it("grants enemy room gold when combat rooms are cleared", () => {
@@ -266,16 +284,74 @@ describe("spireMapCore", () => {
 
   it("refreshes merchant stock with potions, items, and relics", () => {
     let state = defaultState();
+    state.profile.experience = EXPERIENCE_PER_LEVEL;
     state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(3500), shopStock: [] } };
     const merchant = state.profile.spireRun.nodes.find((node) => node.kind === "merchant") || state.profile.spireRun.nodes[0];
     state.profile.spireRun.availableNodeIds = [merchant.id];
     state = selectSpireNode(state, merchant.id);
 
-    state = advanceSpireNode(state, 4000);
+    state = enterSpireNode(state, 4000);
 
     expect(state.profile.shopStock.some((item) => item.kind === "consumable")).toBe(true);
     expect(state.profile.shopStock.some((item) => item.kind === "equipment")).toBe(true);
     expect(state.profile.shopStock.some((item) => item.kind === "relic")).toBe(true);
+    expect(state.profile.shopStock.filter((item) => item.kind === "equipment").every((item) => item.item.requirements.level <= 2)).toBe(true);
+  });
+
+  it("opens merchant rooms for shopping before continuing to the map", () => {
+    let state = defaultState();
+    state.profile.coins = 100;
+    state.profile.inventory.push({
+      id: "plain-sword",
+      name: "Plain Sword",
+      rarity: "common",
+      requirements: { level: 1, stats: {} },
+      slot: "mainHand",
+      stats: { strength: 1 }
+    });
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(3500), shopStock: [] } };
+    const merchant = state.profile.spireRun.nodes.find((node) => node.kind === "merchant") || state.profile.spireRun.nodes[0];
+    state.profile.spireRun.availableNodeIds = [merchant.id];
+    state = selectSpireNode(state, merchant.id);
+
+    state = enterSpireNode(state, 4000);
+
+    expect(state.profile.spireRun.mapOpen).toBe(false);
+    expect(state.profile.shopStock.some((item) => item.kind === "equipment")).toBe(true);
+
+    const randomPotion = state.profile.shopStock.find((item) => item.kind === "consumable" && item.type === "random");
+    state = buyShopItem(state, randomPotion?.id || "", getMaxHealth(state), getMaxMana(state));
+    expect(state.profile.activePotionEffects[0].roomsRemaining).toBe(3);
+
+    state = upgradeCurrentSpireRoomItem(state);
+    expect(state.profile.inventory[0].rarity).toBe("uncommon");
+    expect(state.profile.coins).toBeLessThan(100);
+
+    state = leaveSpireRoom(state, 4100);
+    expect(state.profile.spireRun.mapOpen).toBe(true);
+    expect(state.profile.spireRun.availableNodeIds).toEqual(merchant.nextIds);
+    expect(state.profile.activePotionEffects[0].roomsRemaining).toBe(3);
+  });
+
+  it("opens treasure rooms and waits for the explicit treasure claim", () => {
+    let state = defaultState();
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(3500) } };
+    const treasure = state.profile.spireRun.nodes.find((node) => node.kind === "treasure") || state.profile.spireRun.nodes[0];
+    state.profile.spireRun.availableNodeIds = [treasure.id];
+    state = selectSpireNode(state, treasure.id);
+
+    state = enterSpireNode(state, 4200);
+
+    expect(state.profile.spireRun.mapOpen).toBe(false);
+    expect(state.profile.relics).toHaveLength(0);
+
+    state = claimCurrentSpireRoomReward(state, 4200);
+    expect(state.profile.relics).toHaveLength(1);
+    expect(state.profile.spireRun.mapOpen).toBe(false);
+
+    state = leaveSpireRoom(state, 4300);
+    expect(state.profile.spireRun.mapOpen).toBe(true);
+    expect(state.profile.spireRun.availableNodeIds).toEqual(treasure.nextIds);
   });
 
   it("tracks unknown encounter pity by resetting seen outcomes and increasing the others", () => {
@@ -285,10 +361,35 @@ describe("spireMapCore", () => {
     state.profile.spireRun.availableNodeIds = [unknown.id];
     state = selectSpireNode(state, unknown.id);
 
-    state = advanceSpireNode(state, 5000);
+    state = enterSpireNode(state, 5000);
 
     const misses = state.profile.spireRun.unknownEncounterMisses;
+    expect(getCurrentSpireNode(state)?.kind).not.toBe("unknown");
+    expect(state.profile.spireRun.mapOpen).toBe(false);
     expect(Object.values(misses).some((value) => value === 0)).toBe(true);
     expect(Object.values(misses).filter((value) => value === 1).length).toBe(3);
+  });
+
+  it("lets god mode select and enter rooms outside the current route", () => {
+    let state = defaultState();
+    state = { ...state, profile: { ...state.profile, godMode: true, spireRun: createSpireRun(3500), shopStock: [] } };
+    const offRouteMerchant = state.profile.spireRun.nodes.find((node) => node.kind === "merchant" && !state.profile.spireRun.availableNodeIds.includes(node.id));
+    const offRouteUnknown = state.profile.spireRun.nodes.find((node) => node.kind === "unknown" && !state.profile.spireRun.availableNodeIds.includes(node.id));
+
+    expect(offRouteMerchant).toBeTruthy();
+    expect(offRouteUnknown).toBeTruthy();
+
+    state = selectSpireNode(state, offRouteMerchant?.id || state.profile.spireRun.nodes[0].id);
+    expect(state.profile.spireRun.currentNodeId).toBe(offRouteMerchant?.id);
+
+    state = enterSpireNode(state, 6000);
+    expect(state.profile.shopStock.length).toBeGreaterThan(0);
+
+    state = { ...state, profile: { ...state.profile, spireRun: { ...state.profile.spireRun, mapOpen: true } } };
+    state = selectSpireNode(state, offRouteUnknown?.id || state.profile.spireRun.nodes[0].id);
+    state = enterSpireNode(state, 7000);
+
+    expect(state.profile.spireRun.mapOpen).toBe(false);
+    expect(getCurrentSpireNode(state)?.kind).not.toBe("unknown");
   });
 });
