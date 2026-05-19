@@ -8,7 +8,7 @@ import { PlayerStatus } from "./PlayerStatus";
 import { UserMenu, USER_MENU_SHORTCUTS } from "./UserMenu";
 import type { UserMenuSection } from "./UserMenu";
 import { STUDY_BLOCKER_MS_PER_MINUTE, useStudyBlockerSettings } from "../hooks/useStudyBlocker";
-import type { ActiveWarriorSkillId, CharacterStats, StudyState } from "../types/study";
+import type { ActiveWarriorSkillId, StudyState } from "../types/study";
 import type { CombatImpactVisual } from "./MonsterEncounter";
 
 const PROGRESS_MAX = 100;
@@ -39,7 +39,6 @@ export function AppHeader(props: {
   rating: number;
   state: StudyState;
   setState: React.Dispatch<React.SetStateAction<StudyState>>;
-  stats: CharacterStats;
   useActiveSkill: (skillId: ActiveWarriorSkillId) => void;
 }) {
   const [activeSection, setActiveSection] = useState<UserMenuSection | null>(null);
@@ -76,7 +75,6 @@ export function AppHeader(props: {
             playerImpact={props.playerImpact}
             rating={props.rating}
             state={props.state}
-            stats={props.stats}
             useActiveSkill={props.useActiveSkill}
           />
         )}

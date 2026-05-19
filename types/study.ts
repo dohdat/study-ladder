@@ -33,6 +33,7 @@ export type CardState = {
   attempts: number;
   correct: number;
   failedSubmissions: number;
+  hintsBought: number;
   lastResult: "pass" | "fail" | null;
   lastAttemptAt?: number;
   masteredAt?: number;

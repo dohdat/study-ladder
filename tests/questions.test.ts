@@ -3,10 +3,60 @@ import { describe, expect, it } from "vitest";
 import { questions } from "../data/questions";
 
 const MIN_TEST_CASES_PER_QUESTION = 10;
-const MIN_QUESTION_BANK_SIZE = 150;
+const MIN_QUESTION_BANK_SIZE = 50;
+const GENERATED_VARIANT_SUFFIX = /-\d+$/;
+const VARIANT_TITLE_PATTERN = /\bvariant\b|\b\d+$/i;
+const PLACEHOLDER_EXPLANATION_PATTERN = /follows directly|different input shape|\bRule:|For this input|the result is/i;
+const TOPIC_DISTRIBUTION_TOLERANCE_PERCENT = 3;
+const TARGET_TOPIC_DISTRIBUTION = [
+  ["Arrays & Strings", 20],
+  ["Hash Maps / Sets", 15],
+  ["Trees & Binary Trees", 15],
+  ["Graphs (BFS/DFS)", 15],
+  ["Dynamic Programming", 10],
+  ["Sliding Window / Two Pointers", 10],
+  ["Binary Search", 5],
+  ["Heaps / Priority Queues", 5],
+  ["Linked Lists", 3],
+  ["Stacks & Queues", 2]
+] as const;
+
+const TOPIC_BUCKETS: Record<string, string> = {
+  Arrays: "Arrays & Strings",
+  Backtracking: "Dynamic Programming",
+  "Binary Search": "Binary Search",
+  "Bit Manipulation": "Arrays & Strings",
+  BFS: "Graphs (BFS/DFS)",
+  Counting: "Arrays & Strings",
+  DFS: "Graphs (BFS/DFS)",
+  "Dynamic Programming": "Dynamic Programming",
+  Filtering: "Arrays & Strings",
+  Graphs: "Graphs (BFS/DFS)",
+  Grid: "Graphs (BFS/DFS)",
+  "Hash Map": "Hash Maps / Sets",
+  "Hash Set": "Hash Maps / Sets",
+  Heap: "Heaps / Priority Queues",
+  Intervals: "Arrays & Strings",
+  "Linear Scan": "Arrays & Strings",
+  "Linked Lists": "Linked Lists",
+  Math: "Arrays & Strings",
+  Prefix: "Arrays & Strings",
+  "Prefix Product": "Arrays & Strings",
+  "Prefix Sum": "Arrays & Strings",
+  Queues: "Stacks & Queues",
+  Sliding: "Sliding Window / Two Pointers",
+  "Sliding Window": "Sliding Window / Two Pointers",
+  Sorting: "Arrays & Strings",
+  Stacks: "Stacks & Queues",
+  Strings: "Arrays & Strings",
+  "Topological Sort": "Graphs (BFS/DFS)",
+  Trees: "Trees & Binary Trees",
+  Tries: "Hash Maps / Sets",
+  "Two Pointers": "Sliding Window / Two Pointers"
+};
 
 describe("question bank", () => {
-  it("contains at least one hundred fifty questions", () => {
+  it("contains a unique non-variant question bank", () => {
     expect(questions.length).toBeGreaterThanOrEqual(MIN_QUESTION_BANK_SIZE);
   });
 
@@ -15,11 +65,50 @@ describe("question bank", () => {
     expect(new Set(questions.map((question) => question.functionName)).size).toBe(questions.length);
   });
 
+  it("does not include generated variant clones", () => {
+    const generatedVariants = questions
+      .filter((question) => question.id.startsWith("generated-"))
+      .filter((question) => GENERATED_VARIANT_SUFFIX.test(question.id) || /\d+$/.test(question.functionName) || VARIANT_TITLE_PATTERN.test(question.title))
+      .map((question) => question.id);
+
+    expect(generatedVariants).toEqual([]);
+  });
+
   it("keeps every question covered by at least ten runner test cases", () => {
     const underCovered = questions
       .filter((question) => question.tests.length < MIN_TEST_CASES_PER_QUESTION)
       .map((question) => `${question.id}: ${question.tests.length}`);
 
     expect(underCovered).toEqual([]);
+  });
+
+  it("does not show placeholder example explanations", () => {
+    const placeholderExplanations = questions
+      .flatMap((question) => question.examples.map((example, index) => ({ example, index, question })))
+      .filter(({ example }) => PLACEHOLDER_EXPLANATION_PATTERN.test(example.explanation || ""))
+      .map(({ index, question }) => `${question.id}: example ${index + 1}`);
+
+    expect(placeholderExplanations).toEqual([]);
+  });
+
+  it("keeps primary topic distribution close to interview prep weights", () => {
+    const distribution = new Map<string, number>();
+    const targetBuckets = new Set<string>(TARGET_TOPIC_DISTRIBUTION.map(([bucket]) => bucket));
+    for (const question of questions) {
+      const bucket = TOPIC_BUCKETS[question.topics[0]] || question.topics[0];
+      distribution.set(bucket, (distribution.get(bucket) || 0) + 1);
+    }
+
+    const unexpectedBuckets = [...distribution.keys()].filter((bucket) => !targetBuckets.has(bucket));
+    const outOfRange = TARGET_TOPIC_DISTRIBUTION
+      .map(([bucket, targetPercent]) => {
+        const actualPercent = ((distribution.get(bucket) || 0) / questions.length) * 100;
+        return { actualPercent, bucket, targetPercent };
+      })
+      .filter(({ actualPercent, targetPercent }) => Math.abs(actualPercent - targetPercent) > TOPIC_DISTRIBUTION_TOLERANCE_PERCENT)
+      .map(({ actualPercent, bucket, targetPercent }) => `${bucket}: ${actualPercent.toFixed(1)}% vs ${targetPercent}%`);
+
+    expect(unexpectedBuckets).toEqual([]);
+    expect(outOfRange).toEqual([]);
   });
 });

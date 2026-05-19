@@ -8,7 +8,7 @@ import { HeroSiegeButton } from "./HeroSiegeUi";
 import { HERO_ITEM_RARITY_COLORS, HeroSiegeEquipmentIcon } from "./HeroSiegeItemIcon";
 import { getHeroSiegeQualityColor, getItemQuality } from "../lib/heroSiegeQuality";
 import { MODIFIER_FORMATTERS } from "../lib/modifierFormat";
-import { bulkSellItems, canEquipItem, EQUIPMENT_SLOT_LABELS, equipItem, getActiveSetBonuses, getItemSellValue, moveInventoryItem, sellItem, unequipItem } from "../lib/studyCore";
+import { bulkSellItems, canEquipItem, EQUIPMENT_SLOT_LABELS, equipItem, equipItemToSlot, getActiveSetBonuses, getItemSellValue, moveInventoryItem, sellItem, unequipItem } from "../lib/studyCore";
 import { ITEM_BASE_NAMES } from "../lib/itemNames";
 import type { EquipmentSlot, InventoryItem, InventoryItemPosition, ItemModifierKey, StudyState } from "../types/study";
 import inventoryGamepadBg from "../assets/hero_siege_inventory/inventory-gamepad.png";
@@ -224,11 +224,13 @@ export function InventoryPanel(props: { state: StudyState; setState: React.Dispa
 
 function EquipmentBoard(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const [activeTab, setActiveTab] = useState(0);
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [highlightedSlot, setHighlightedSlot] = useState<EquipmentSlot | null>(null);
   const [preview, setPreview] = useState<InventoryPreview | null>(null);
   const shiftHeld = useShiftKeyPressed();
   const boardRef = useRef<HTMLDivElement | null>(null);
   const [previewAnchor, setPreviewAnchor] = useState<{ left: number; top: number } | null>(null);
+  const draggedItem = draggedItemId ? props.state.profile.inventory.find((item) => item.id === draggedItemId) || null : null;
   useEffect(() => {
     if (!preview || !boardRef.current) {
       setPreviewAnchor(null);
@@ -259,11 +261,12 @@ function EquipmentBoard(props: { state: StudyState; setState: React.Dispatch<Rea
       {Object.entries(EQUIPMENT_LAYOUT).map(([slotKey, layout]) => {
         const slot = slotKey as EquipmentSlot;
         const item = props.state.profile.inventory.find((row) => row.id === props.state.profile.equipment[slot]);
-        return <EquipmentSlotCell key={slot} highlighted={isCompatibleSlotHighlight(highlightedSlot, slot)} item={item} layout={layout} onPreview={setPreview} slot={slot} onUnequip={() => props.setState((previous) => unequipItem(previous, slot))} />;
+        const canDropDraggedItem = Boolean(draggedItem && canEquipItem(props.state, draggedItem) && isCompatibleSlotHighlight(draggedItem.slot, slot));
+        return <EquipmentSlotCell key={slot} canDropDraggedItem={canDropDraggedItem} highlighted={canDropDraggedItem || isCompatibleSlotHighlight(highlightedSlot, slot)} item={item} layout={layout} onDropItem={(itemId) => props.setState((previous) => equipItemToSlot(previous, itemId, slot))} onPreview={setPreview} slot={slot} onUnequip={() => props.setState((previous) => unequipItem(previous, slot))} />;
       })}
-      <InventoryGrid activeTab={activeTab} state={props.state} setState={props.setState} onHoverItem={setPreview} onHoverSlot={setHighlightedSlot} />
+      <InventoryGrid activeTab={activeTab} draggedItemId={draggedItemId} state={props.state} setDraggedItemId={setDraggedItemId} setState={props.setState} onHoverItem={setPreview} onHoverSlot={setHighlightedSlot} />
       <InventoryBackgroundGhostMask />
-      <InventoryActions activeTab={activeTab} state={props.state} setState={props.setState} />
+      <InventoryActions state={props.state} setState={props.setState} />
       <InventoryTabs activeTab={activeTab} onChange={setActiveTab} />
     </Box>
   );
@@ -347,11 +350,10 @@ function InventoryBackgroundGhostMask() {
   );
 }
 
-function EquipmentSlotCell(props: { highlighted: boolean; item?: InventoryItem; layout: EquipmentSpriteLayout; onPreview: (preview: InventoryPreview | null) => void; onUnequip: () => void; slot: EquipmentSlot }) {
+function EquipmentSlotCell(props: { canDropDraggedItem: boolean; highlighted: boolean; item?: InventoryItem; layout: EquipmentSpriteLayout; onDropItem: (itemId: string) => void; onPreview: (preview: InventoryPreview | null) => void; onUnequip: () => void; slot: EquipmentSlot }) {
   const content = (
     <Box
       component="button"
-      disabled={!props.item}
       onClick={props.item ? (event: MouseEvent<HTMLButtonElement>) => {
         if (!event.shiftKey) {
           return;
@@ -361,7 +363,26 @@ function EquipmentSlotCell(props: { highlighted: boolean; item?: InventoryItem; 
       } : undefined}
       onMouseEnter={() => props.item && props.onPreview({ equipped: true, item: props.item })}
       onMouseLeave={() => props.onPreview(null)}
-      style={{ backgroundColor: "transparent", backgroundImage: `url(${props.layout.asset})`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%", border: 0, boxShadow: props.highlighted ? "0 0 0 2px rgba(255, 242, 154, 0.9), 0 0 18px rgba(255, 225, 90, 0.55)" : "none", cursor: props.item ? "pointer" : "default", filter: props.highlighted ? "brightness(1.22)" : "none", height: props.layout.height, imageRendering: "pixelated", left: props.layout.left, outline: "none", padding: 0, position: "absolute", top: props.layout.top, width: props.layout.width, zIndex: props.highlighted ? 4 : 2 }}
+      onDragOver={(event) => {
+        if (!props.canDropDraggedItem) {
+          return;
+        }
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+      }}
+      onDrop={(event) => {
+        if (!props.canDropDraggedItem) {
+          return;
+        }
+        const itemId = event.dataTransfer.getData("text/plain");
+        if (!itemId) {
+          return;
+        }
+        event.preventDefault();
+        props.onDropItem(itemId);
+        props.onPreview(null);
+      }}
+      style={{ backgroundColor: "transparent", backgroundImage: `url(${props.layout.asset})`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%", border: 0, boxShadow: props.highlighted ? "0 0 0 2px rgba(255, 242, 154, 0.9), 0 0 18px rgba(255, 225, 90, 0.55)" : "none", cursor: props.canDropDraggedItem ? "copy" : props.item ? "pointer" : "default", filter: props.highlighted ? "brightness(1.22)" : "none", height: props.layout.height, imageRendering: "pixelated", left: props.layout.left, outline: "none", padding: 0, position: "absolute", top: props.layout.top, width: props.layout.width, zIndex: props.highlighted ? 4 : 2 }}
       type="button"
     >
       {props.item ? (
@@ -374,30 +395,29 @@ function EquipmentSlotCell(props: { highlighted: boolean; item?: InventoryItem; 
   return content;
 }
 
-function InventoryGrid(props: { activeTab: number; onHoverItem: (preview: InventoryPreview | null) => void; onHoverSlot: (slot: EquipmentSlot | null) => void; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
-  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+function InventoryGrid(props: { activeTab: number; draggedItemId: string | null; onHoverItem: (preview: InventoryPreview | null) => void; onHoverSlot: (slot: EquipmentSlot | null) => void; state: StudyState; setDraggedItemId: (itemId: string | null) => void; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const [dropPreview, setDropPreview] = useState<InventoryDropPreview | null>(null);
   const placements = getAllInventoryPlacements(props.state.profile.inventory, props.state.profile.inventorySlots);
   const visiblePlacements = placements.filter((placement) => placement.tab === props.activeTab);
   const cells = Array.from({ length: INVENTORY_GRID_ROWS * INVENTORY_GRID_COLUMNS });
   const clearDragState = () => {
-    setDraggedItemId(null);
+    props.setDraggedItemId(null);
     setDropPreview(null);
   };
   return (
     <Box
       onDragOver={(event) => {
-        if (!draggedItemId) {
+        if (!props.draggedItemId) {
           return;
         }
-        const draggedPlacement = placements.find((placement) => placement.item.id === draggedItemId);
+        const draggedPlacement = placements.find((placement) => placement.item.id === props.draggedItemId);
         const position = getDropInventoryPosition(event.currentTarget, event, props.activeTab, draggedPlacement?.footprint);
         if (!position || !draggedPlacement) {
           setDropPreview(null);
           return;
         }
         const dropPosition = clampDropPreviewPosition(position, draggedPlacement.footprint);
-        const valid = canMoveItemToPosition(draggedItemId, dropPosition, placements);
+        const valid = canMoveItemToPosition(props.draggedItemId, dropPosition, placements);
         setDropPreview({
           footprint: draggedPlacement.footprint,
           position: dropPosition,
@@ -414,7 +434,7 @@ function InventoryGrid(props: { activeTab: number; onHoverItem: (preview: Invent
         }
       }}
       onDrop={(event) => {
-        const itemId = event.dataTransfer.getData("text/plain") || draggedItemId;
+        const itemId = event.dataTransfer.getData("text/plain") || props.draggedItemId;
         const draggedPlacement = placements.find((placement) => placement.item.id === itemId);
         const position = getDropInventoryPosition(event.currentTarget, event, props.activeTab, draggedPlacement?.footprint);
         const dropPosition = position && draggedPlacement ? clampDropPreviewPosition(position, draggedPlacement.footprint) : null;
@@ -439,17 +459,17 @@ function InventoryGrid(props: { activeTab: number; onHoverItem: (preview: Invent
           equipped={isItemEquipped(props.state, placement.item)}
           item={placement.item}
           footprint={placement.footprint}
-          isDragging={draggedItemId === placement.item.id}
+          isDragging={props.draggedItemId === placement.item.id}
           compareItem={getEquippedComparisonItem(props.state, placement.item)}
           onEquip={() => props.setState((previous) => equipItem(previous, placement.item.id))}
           onUnequip={() => props.setState((previous) => unequipItem(previous, getEquippedSlot(previous, placement.item) || placement.item.slot))}
           onSell={() => props.setState((previous) => sellItem(previous, placement.item.id))}
           onDragEnd={clearDragState}
-          onDragStart={(itemId) => setDraggedItemId(itemId)}
+          onDragStart={(itemId) => props.setDraggedItemId(itemId)}
           onHoverItem={props.onHoverItem}
           onHoverSlot={props.onHoverSlot}
           placement={placement}
-          tooltipDisabled={draggedItemId !== null}
+          tooltipDisabled={props.draggedItemId !== null}
         />
       ))}
     </Box>
@@ -733,8 +753,8 @@ function getInventoryItemIconSize(footprint: ItemFootprint) {
   return Math.max(INVENTORY_ITEM_ICON_SIZE, Math.min(width, height) - 8);
 }
 
-function InventoryActions(props: { activeTab: number; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
-  const sellableItems = getBulkSellItemsForTab(props.state, props.activeTab);
+function InventoryActions(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
+  const sellableItems = getBulkSellItems(props.state);
   const sellValue = sellableItems.reduce((sum, item) => sum + getItemSellValue(item), 0);
   return (
     <>
@@ -757,7 +777,7 @@ function InventoryActions(props: { activeTab: number; state: StudyState; setStat
           if (!sellableItems.length) {
             return;
           }
-          const confirmed = window.confirm(`Sell ${sellableItems.length} unequipped item${sellableItems.length === 1 ? "" : "s"} from this tab for ${sellValue} gold?`);
+          const confirmed = window.confirm(`Sell ${sellableItems.length} unequipped item${sellableItems.length === 1 ? "" : "s"} from all inventory tabs for ${sellValue} gold?`);
           if (confirmed) {
             props.setState((previous) => bulkSellItems(previous, sellableItems.map((item) => item.id)));
           }
@@ -778,10 +798,10 @@ function InventoryActions(props: { activeTab: number; state: StudyState; setStat
   );
 }
 
-function getBulkSellItemsForTab(state: StudyState, tab: number) {
+function getBulkSellItems(state: StudyState) {
   const equippedIds = new Set(Object.values(state.profile.equipment).filter(Boolean));
   return getAllInventoryPlacements(state.profile.inventory, state.profile.inventorySlots)
-    .filter((placement) => placement.tab === tab && !equippedIds.has(placement.item.id))
+    .filter((placement) => !equippedIds.has(placement.item.id))
     .map((placement) => placement.item);
 }
 

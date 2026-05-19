@@ -304,9 +304,9 @@ function SetupToolbarActions(props: Parameters<typeof EditorCard>[0]) {
       <Tooltip label="Format JavaScript code (Ctrl+S)" withArrow>
         <HeroSiegeButton leftSection={<IconWand size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.beautifyCurrentCode()}>Beautify</HeroSiegeButton>
       </Tooltip>
-      <Tooltip label={`Buy one next-step hint (${props.hintCost} coins)`} withArrow>
+      <Tooltip label={`Buy one next-step hint for ${props.hintCost} gold`} withArrow>
         <Box component="span">
-          <HeroSiegeButton leftSection={<IconBulb size={ICON_SM} />} disabled={!props.sessionStarted || !props.canBuyHint} onClick={props.actions.buyHint}>Hint</HeroSiegeButton>
+          <HeroSiegeButton leftSection={<IconBulb size={ICON_SM} />} disabled={!props.sessionStarted || !props.canBuyHint} onClick={props.actions.buyHint}>Hint {props.hintCost}</HeroSiegeButton>
         </Box>
       </Tooltip>
     </>

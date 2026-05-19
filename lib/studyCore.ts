@@ -101,7 +101,9 @@ const MODIFIER_KEYS: ItemModifierKey[] = [
   "resistancePenetrationPercent"
 ];
 
-export const HINT_COST = 0;
+export const HINT_COST = 10;
+export const HINT_COST_INCREMENT = 10;
+export const HINT_MAX_COST = 30;
 export const MAX_HEALTH = 50;
 export const HEALTH_LOSS_PER_FAIL = 5;
 export const EXPERIENCE_PER_LEVEL = 150;
@@ -161,7 +163,7 @@ function createDefaultStateBase(): StudyState {
   };
 }
 
-export const defaultCard = (): CardState => ({ dueAt: 0, intervalDays: 0, ease: 2.4, reps: 0, attempts: 0, correct: 0, failedSubmissions: 0, lastResult: null });
+export const defaultCard = (): CardState => ({ dueAt: 0, intervalDays: 0, ease: 2.4, reps: 0, attempts: 0, correct: 0, failedSubmissions: 0, hintsBought: 0, lastResult: null });
 
 export const cloneState = (state: StudyState): StudyState => ({
   ...state,
@@ -306,7 +308,7 @@ function normalizePartialStats(stats: Partial<CharacterStats> | undefined) {
 }
 
 function normalizeCards(cards: StudyState["cards"] | undefined) {
-  return Object.fromEntries(Object.entries(cards || {}).map(([id, card]) => [id, { ...defaultCard(), ...card, failedSubmissions: Math.max(0, card.failedSubmissions || 0) }]));
+  return Object.fromEntries(Object.entries(cards || {}).map(([id, card]) => [id, { ...defaultCard(), ...card, failedSubmissions: Math.max(0, card.failedSubmissions || 0), hintsBought: Math.max(0, card.hintsBought || 0) }]));
 }
 
 export const getCard = (state: StudyState, questionId: string): CardState => {
@@ -573,13 +575,20 @@ export const equipItem = (state: StudyState, itemId: string): StudyState => {
   if (!item || !canEquipItem(state, item)) {
     return state;
   }
+  return equipItemToSlot(state, itemId, getPreferredEquipSlot(state, item));
+};
+
+export const equipItemToSlot = (state: StudyState, itemId: string, slot: EquipmentSlot): StudyState => {
+  const item = state.profile.inventory.find((row) => row.id === itemId);
+  if (!item || !canEquipItem(state, item) || !getCompatibleEquipSlots(item).includes(slot)) {
+    return state;
+  }
   const next = cloneState(state);
-  for (const slot of EQUIPMENT_SLOTS) {
-    if (next.profile.equipment[slot] === item.id) {
-      next.profile.equipment[slot] = null;
+  for (const equippedSlot of EQUIPMENT_SLOTS) {
+    if (next.profile.equipment[equippedSlot] === item.id) {
+      next.profile.equipment[equippedSlot] = null;
     }
   }
-  const slot = getPreferredEquipSlot(next, item);
   next.profile.equipment[slot] = item.id;
   next.profile.health = Math.min(next.profile.health, getMaxHealth(next));
   next.profile.mana = Math.min(next.profile.mana, getMaxMana(next));
@@ -738,21 +747,26 @@ export const applyHealthPenalty = (state: StudyState, amount = HEALTH_LOSS_PER_F
   return next;
 };
 
-export const canBuyHint = (state: StudyState) => state.profile.coins >= HINT_COST;
+export const getHintCost = (state: StudyState, questionId?: string) => {
+  const cardHintsBought = questionId ? getCard(state, questionId).hintsBought : 0;
+  return Math.min(HINT_MAX_COST, HINT_COST + cardHintsBought * HINT_COST_INCREMENT);
+};
 
-export const buyHint = (state: StudyState) => {
-  if (!canBuyHint(state)) {
+export const canBuyHint = (state: StudyState, questionId?: string) => state.profile.coins >= getHintCost(state, questionId);
+
+export const buyHint = (state: StudyState, questionId?: string) => {
+  if (!canBuyHint(state, questionId)) {
     return state;
   }
+  const next = cloneState(state);
+  const cost = getHintCost(next, questionId);
+  next.profile.coins -= cost;
+  next.profile.hintsBought += 1;
+  if (questionId) {
+    setCard(next, questionId, { ...getCard(next, questionId), hintsBought: getCard(next, questionId).hintsBought + 1 });
+  }
 
-  return {
-    ...state,
-    profile: {
-      ...state.profile,
-      coins: state.profile.coins - HINT_COST,
-      hintsBought: state.profile.hintsBought + 1
-    }
-  };
+  return next;
 };
 
 export const getRecommendedDifficulty = (state: StudyState) => {

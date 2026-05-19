@@ -60,8 +60,8 @@ Coverage is enforced at 80% for statements, branches, functions, and lines.
 - Monaco Editor is used for JavaScript editing and loads from local extension assets.
 - Beautify is available from the toolbar or `Ctrl+S` / `Cmd+S`, and it fills missing semicolons on common statement lines.
 - Submit is available from the toolbar or `Ctrl+Enter` / `Cmd+Enter`.
-- Solving questions earns coins by difficulty, and hints are temporarily free for Codex streaming tests.
-- Buying a hint streams one next-step hint with an intentionally incomplete partial-code fragment from Codex through the native messaging helper.
+- Solving questions earns gold by difficulty, and hints spend gold instead of health.
+- Buying a hint streams one next-step hint with an intentionally incomplete partial-code fragment from Codex through the native messaging helper. Hint cost starts low on each question and rises for deeper hints on that same card.
 - LeetCode-style JavaScript questions are active.
 - Practice sessions are timed by difficulty: Easy/Easy+ 10 minutes, Medium/Medium+ 20 minutes, Hard 25 minutes.
 - System Design mode is present as a selectable placeholder.

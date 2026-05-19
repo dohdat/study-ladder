@@ -32,6 +32,7 @@ import {
   getEquipmentModifierTotals,
   getExperienceReward,
   getHealthLoss,
+  getHintCost,
   getLevelProgress,
   getItemSellValue,
   getManaReward,
@@ -52,6 +53,7 @@ import {
   sellItem,
   setCard,
   equipItem,
+  equipItemToSlot,
   unequipItem,
   spendStatPoint
 } from "../lib/studyCore";
@@ -510,6 +512,24 @@ describe("studyCore", () => {
     expect(getEffectiveCharacterStats(state)).toMatchObject({ constitution: 2, intelligence: 2, perception: 2 });
   });
 
+  it("equips items into the requested compatible slot", () => {
+    let state = defaultState();
+    state.profile.inventory.push(
+      { id: "ring-a", modifiers: [], name: "Bronze Ring", rarity: "common", requirements: { level: 1, stats: {} }, slot: "eyewear", stats: { intelligence: 1 } },
+      { id: "ring-b", modifiers: [], name: "Iron Ring", rarity: "common", requirements: { level: 1, stats: {} }, slot: "eyewear", stats: { perception: 1 } },
+      { id: "sword-a", modifiers: [], name: "Short Sword", rarity: "common", requirements: { level: 1, stats: {} }, slot: "mainHand", stats: { strength: 1 } }
+    );
+
+    state = equipItemToSlot(state, "ring-a", "ringTwo");
+    expect(state.profile.equipment.ringTwo).toBe("ring-a");
+    expect(state.profile.equipment.eyewear).toBeNull();
+
+    state = equipItemToSlot(state, "ring-b", "eyewear");
+    expect(state.profile.equipment.eyewear).toBe("ring-b");
+    expect(state.profile.equipment.ringTwo).toBe("ring-a");
+    expect(equipItemToSlot(state, "sword-a", "ringTwo")).toBe(state);
+  });
+
   it("bulk sells unequipped inventory items for gold", () => {
     let state = defaultState();
     const keptItem: InventoryItem = { id: "kept-sword", modifiers: [], name: "Kept Sword", rarity: "common", requirements: { level: 1, stats: {} }, slot: "mainHand", stats: { strength: 1 } };
@@ -660,24 +680,36 @@ describe("studyCore", () => {
     expect(getEffectiveCharacterStats(state).constitution).toBeGreaterThan(defaultState().profile.stats.constitution + 1);
   });
 
-  it("allows free hints for local hint testing", () => {
+  it("spends gold for hints and increases the next hint cost on that card", () => {
     let state = defaultState();
+    const question = questions[0];
+    state.profile.coins = 100;
 
-    expect(canBuyHint(state)).toBe(true);
-    state = buyHint(state);
+    expect(HINT_COST).toBe(10);
+    expect(getHintCost(state, question.id)).toBe(10);
+    expect(canBuyHint(state, question.id)).toBe(true);
 
-    expect(HINT_COST).toBe(0);
-    expect(state.profile.coins).toBe(0);
+    state = buyHint(state, question.id);
+
+    expect(state.profile.coins).toBe(90);
     expect(state.profile.hintsBought).toBe(1);
-    expect(canBuyHint(state)).toBe(true);
+    expect(getCard(state, question.id).hintsBought).toBe(1);
+    expect(getHintCost(state, question.id)).toBe(20);
+
+    state = buyHint(state, question.id);
+
+    expect(state.profile.coins).toBe(70);
+    expect(state.profile.hintsBought).toBe(2);
+    expect(getCard(state, question.id).hintsBought).toBe(2);
+    expect(getHintCost(state, question.id)).toBe(30);
   });
 
   it("does not spend coins when a state is below the hint threshold", () => {
     const state = defaultState();
-    state.profile.coins = -1;
+    state.profile.coins = HINT_COST - 1;
 
-    expect(canBuyHint(state)).toBe(false);
-    expect(buyHint(state)).toBe(state);
+    expect(canBuyHint(state, questions[0].id)).toBe(false);
+    expect(buyHint(state, questions[0].id)).toBe(state);
   });
 
   it("computes profile and topic stats", () => {
