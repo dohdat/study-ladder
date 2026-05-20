@@ -113,6 +113,7 @@ const ACT_LABEL_TOP = 16;
 const ACT_LABEL_BORDER = "1px solid rgba(223, 195, 122, 0.72)";
 const ACT_LABEL_BG = "linear-gradient(180deg, rgba(51, 34, 19, 0.96), rgba(15, 12, 8, 0.94))";
 const ACT_LABEL_ASSET = getHeroSiegeMenuButtonAsset();
+const USER_MENU_OPEN_EVENT = "study-ladder-user-menu-open";
 const HEAT_PANEL_TOP = 70;
 const HEAT_PANEL_LEFT = 16;
 const HEAT_ROW_ICON_SIZE = 18;
@@ -163,6 +164,7 @@ type VisualSpireMapNode = SpireMapNode & { position: { x: number; y: number } };
 export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
   const [highlightedKind, setHighlightedKind] = useState<SpireNodeKind | null>(null);
   const setDebouncedHighlightedKind = useDebouncedLegendHighlight(setHighlightedKind);
+  const userMenuOpen = useUserMenuOpen();
   const mapDrag = useMapDrag();
   const node = getCurrentSpireNode(props.state);
   const solved = props.state.profile.spireRun.roundSolvedIds.length;
@@ -174,6 +176,11 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
   const reachableNodeIds = useMemo(() => new Set(props.state.profile.spireRun.availableNodeIds), [props.state.profile.spireRun.availableNodeIds]);
   const completedNodeIds = useMemo(() => new Set(props.state.profile.spireRun.completedNodeIds), [props.state.profile.spireRun.completedNodeIds]);
   const visualNodes = useMemo(() => props.state.profile.spireRun.nodes.map((mapNode) => ({ ...mapNode, position: getVisualNodePosition(mapNode) })), [props.state.profile.spireRun.nodes]);
+  useEffect(() => {
+    if (userMenuOpen) {
+      setHighlightedKind(null);
+    }
+  }, [userMenuOpen]);
   return (
     <Paper withBorder p="sm" style={{ background: "var(--mantine-color-dark-7)", ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
       <Box style={{ minWidth: 0, ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
@@ -217,7 +224,7 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
                 <ActMapLabel state={props.state} />
               </Box>
             </Box>
-            <Legend highlightedKind={highlightedKind} onHighlight={setDebouncedHighlightedKind} />
+            <Legend disabled={userMenuOpen} highlightedKind={highlightedKind} onHighlight={setDebouncedHighlightedKind} />
             <HeroSiegeButton
               disabled={!selectedNodeIsReachable || Boolean(pendingRelicReward)}
               onClick={() => props.setState((previous) => enterSpireNode(previous))}
@@ -239,6 +246,20 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
       </Box>
     </Paper>
   );
+}
+
+function useUserMenuOpen() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const syncFromDom = () => setOpen(document.body.dataset.userMenuOpen === "true");
+    const handleMenuOpen = (event: Event) => {
+      setOpen(Boolean((event as CustomEvent<boolean>).detail));
+    };
+    syncFromDom();
+    window.addEventListener(USER_MENU_OPEN_EVENT, handleMenuOpen);
+    return () => window.removeEventListener(USER_MENU_OPEN_EVENT, handleMenuOpen);
+  }, []);
+  return open;
 }
 
 function isReachableMapNode(state: StudyState, nodeId: string) {
@@ -374,9 +395,10 @@ function RoomPanel(props: { node: SpireMapNode | undefined; setState: React.Disp
   if (isCombatNode(props.node)) {
     return <CompactRoomPanel node={props.node} solved={props.solved} state={props.state} target={props.target} />;
   }
+  const showCompactRoomPanel = props.node?.kind !== "rest";
   return (
     <Stack gap="sm" style={{ minHeight: ROOM_PANEL_MIN_HEIGHT }}>
-      <CompactRoomPanel node={props.node} solved={props.solved} state={props.state} target={props.target} />
+      {showCompactRoomPanel && <CompactRoomPanel node={props.node} solved={props.solved} state={props.state} target={props.target} />}
       {props.node?.kind === "merchant" && <MerchantRoomPanel setState={props.setState} state={props.state} />}
       {props.node?.kind === "treasure" && <TreasureRoomPanel node={props.node} setState={props.setState} state={props.state} />}
       {props.node?.kind === "rest" && <RestRoomPanel node={props.node} setState={props.setState} state={props.state} />}
@@ -591,7 +613,7 @@ function RestRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch<Rea
           <NodeIcon kind="rest" size={46} />
           <Box>
             <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>{used ? "Rest Site Used" : "Rest Site"}</Text>
-            <Text size="xs" c="dimmed">{used ? "Continue to choose the next route." : `Rest heals 50% health.${specialText}`}</Text>
+            <Text size="xs" c="dimmed">{used ? "Continue to choose the next route." : `Rest heals 30% health.${specialText}`}</Text>
           </Box>
         </Group>
         <Group gap={8} wrap="nowrap">
@@ -1141,7 +1163,7 @@ const MapNode = memo(function MapNode(props: { act: SpireAct; active: boolean; c
   const size = dimensions.size;
   const iconSize = dimensions.icon;
   const zIndex = getNodeZIndex(props.kind, props.highlighted, props.active);
-  const highlightTone = props.mapMoving ? undefined : getNodeHighlightTone(props.active, hovered);
+  const highlightTone = getNodeHighlightTone(props.active, hovered);
   return (
     <Box
       aria-label={NODE_LABELS[props.kind]}
@@ -1157,14 +1179,14 @@ const MapNode = memo(function MapNode(props: { act: SpireAct; active: boolean; c
       style={{ alignItems: "center", background: "transparent", border: 0, borderRadius: 0, boxShadow: "none", cursor: props.selectable ? "pointer" : "default", display: "flex", height: size, justifyContent: "center", left: `${props.x}%`, opacity, padding: 0, position: "absolute", top: `${props.y}%`, transform: "translate(-50%, -50%)", transition: NODE_HIGHLIGHT_TRANSITION, width: size, zIndex }}
       type="button"
     >
-      {props.completed && !props.mapMoving && <CompletedRoomRing kind={props.kind} seed={props.id} size={size} />}
-      <NodeIcon act={props.act} kind={props.kind} highlightTone={highlightTone} shadow={!props.mapMoving} size={iconSize} />
-      {props.kind === "enemy" && props.rewardKind ? <NodeRewardBadge hovered={!props.mapMoving && hovered} kind={props.rewardKind} mapMoving={props.mapMoving} /> : null}
+      {props.completed && <CompletedRoomRing kind={props.kind} seed={props.id} size={size} />}
+      <NodeIcon act={props.act} kind={props.kind} highlightTone={highlightTone} shadow size={iconSize} />
+      {props.kind === "enemy" && props.rewardKind ? <NodeRewardBadge hovered={!props.mapMoving && hovered} kind={props.rewardKind} /> : null}
     </Box>
   );
 });
 
-function NodeRewardBadge(props: { hovered: boolean; kind: SpireCombatRewardKind; mapMoving?: boolean }) {
+function NodeRewardBadge(props: { hovered: boolean; kind: SpireCombatRewardKind }) {
   return (
     <Box
       aria-hidden="true"
@@ -1182,15 +1204,15 @@ function NodeRewardBadge(props: { hovered: boolean; kind: SpireCombatRewardKind;
       }}
     >
       {props.kind === "gold" ? (
-        <Box style={{ filter: props.mapMoving ? undefined : "drop-shadow(0 2px 0 #000) drop-shadow(0 0 3px rgba(247, 201, 72, 0.42))" }}>
+        <Box style={{ filter: "drop-shadow(0 2px 0 #000) drop-shadow(0 0 3px rgba(247, 201, 72, 0.42))" }}>
           <CoinIcon size={18} />
         </Box>
       ) : props.kind === "heart" ? (
-        <CentaurHeartIcon mapMoving={props.mapMoving} />
+        <CentaurHeartIcon />
       ) : props.kind === "pom" ? (
-        <PomPowerIcon mapMoving={props.mapMoving} />
+        <PomPowerIcon />
       ) : (
-        <Box alt="" component="img" src={getRewardKindIcon(props.kind)} style={{ display: "block", filter: props.mapMoving ? undefined : `drop-shadow(0 2px 0 #000) drop-shadow(0 0 4px ${getRewardKindColor(props.kind)}66)`, height: 22, imageRendering: "pixelated", objectFit: "contain", width: 22 }} />
+        <Box alt="" component="img" src={getRewardKindIcon(props.kind)} style={{ display: "block", filter: `drop-shadow(0 2px 0 #000) drop-shadow(0 0 4px ${getRewardKindColor(props.kind)}66)`, height: 22, imageRendering: "pixelated", objectFit: "contain", width: 22 }} />
       )}
       {props.hovered ? <NodeRewardTooltip kind={props.kind} /> : null}
     </Box>
@@ -1220,13 +1242,13 @@ function NodeRewardTooltip(props: { kind: SpireCombatRewardKind }) {
   );
 }
 
-function CentaurHeartIcon(props: { mapMoving?: boolean } = {}) {
+function CentaurHeartIcon() {
   return (
     <Box
       aria-hidden="true"
       style={{
         color: "#ff2f3f",
-        filter: props.mapMoving ? undefined : "drop-shadow(0 2px 0 #000) drop-shadow(0 0 5px rgba(255, 47, 63, 0.72))",
+        filter: "drop-shadow(0 2px 0 #000) drop-shadow(0 0 5px rgba(255, 47, 63, 0.72))",
         fontFamily: "Arial, sans-serif",
         fontSize: 24,
         fontWeight: 900,
@@ -1239,7 +1261,7 @@ function CentaurHeartIcon(props: { mapMoving?: boolean } = {}) {
   );
 }
 
-function PomPowerIcon(props: { mapMoving?: boolean } = {}) {
+function PomPowerIcon() {
   return (
     <Box
       aria-hidden="true"
@@ -1248,7 +1270,7 @@ function PomPowerIcon(props: { mapMoving?: boolean } = {}) {
         border: "1px solid #ff6870",
         borderRadius: "50%",
         boxShadow: "inset 0 2px 0 rgba(255, 255, 255, 0.28), inset 0 -3px 0 rgba(0, 0, 0, 0.38)",
-        filter: props.mapMoving ? undefined : "drop-shadow(0 2px 0 #000) drop-shadow(0 0 5px rgba(255, 31, 65, 0.72))",
+        filter: "drop-shadow(0 2px 0 #000) drop-shadow(0 0 5px rgba(255, 31, 65, 0.72))",
         height: 22,
         position: "relative",
         width: 22
@@ -1516,18 +1538,18 @@ function getNodeHighlightFilter(highlightTone: "active" | "hover" | "selected" |
   return undefined;
 }
 
-function Legend(props: { highlightedKind: SpireNodeKind | null; onHighlight: (kind: SpireNodeKind | null) => void }) {
+function Legend(props: { disabled?: boolean; highlightedKind: SpireNodeKind | null; onHighlight: (kind: SpireNodeKind | null) => void }) {
   const rows: SpireNodeKind[] = ["unknown", "blight", "event", "merchant", "treasure", "rest", "enemy", "elite", "boss"];
   return (
-    <Box p="sm" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, borderRadius: 2, boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.72), 0 10px 26px rgba(0, 0, 0, 0.36)", color: "#e7dcc0", position: "absolute", right: 12, top: 12, width: 150, zIndex: 4 }}>
+    <Box p="sm" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, borderRadius: 2, boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.72), 0 10px 26px rgba(0, 0, 0, 0.36)", color: "#e7dcc0", pointerEvents: props.disabled ? "none" : undefined, position: "absolute", right: 12, top: 12, width: 150, zIndex: 4 }}>
       <Text size="sm" fw={900} mb={6} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>Legend</Text>
       <Stack gap={4}>
         {rows.map((kind) => (
           <Group
             key={kind}
             gap="xs"
-            onMouseEnter={() => props.onHighlight(kind)}
-            onMouseLeave={() => props.onHighlight(null)}
+            onMouseEnter={() => !props.disabled && props.onHighlight(kind)}
+            onMouseLeave={() => !props.disabled && props.onHighlight(null)}
             style={{ background: props.highlightedKind === kind ? "rgba(223, 195, 122, 0.16)" : undefined, borderRadius: 4, cursor: "default", marginInline: -4, paddingInline: 4, transition: LEGEND_ROW_TRANSITION }}
             wrap="nowrap"
           >

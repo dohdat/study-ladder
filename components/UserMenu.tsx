@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Box,
@@ -162,6 +162,7 @@ export const USER_MENU_ITEMS = [
 ] as const;
 
 export type UserMenuSection = typeof USER_MENU_ITEMS[number]["id"];
+export const USER_MENU_OPEN_EVENT = "study-ladder-user-menu-open";
 
 export const USER_MENU_SHORTCUTS: ReadonlyArray<{ key: string; section: UserMenuSection }> = USER_MENU_ITEMS.map((item) => ({
   key: item.shortcut.toLowerCase(),
@@ -170,13 +171,24 @@ export const USER_MENU_SHORTCUTS: ReadonlyArray<{ key: string; section: UserMenu
 
 export function UserMenu(props: { activeSection: UserMenuSection | null; setActiveSection: (section: UserMenuSection | null) => void; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const modalTitle = USER_MENU_ITEMS.find((item) => item.id === props.activeSection)?.label || "User";
+  const [menuOpened, setMenuOpened] = useState(false);
+  useEffect(() => {
+    document.body.dataset.userMenuOpen = menuOpened ? "true" : "false";
+    window.dispatchEvent(new CustomEvent(USER_MENU_OPEN_EVENT, { detail: menuOpened }));
+  }, [menuOpened]);
+  useEffect(() => {
+    return () => {
+      document.body.dataset.userMenuOpen = "false";
+      window.dispatchEvent(new CustomEvent(USER_MENU_OPEN_EVENT, { detail: false }));
+    };
+  }, []);
   return (
     <>
-      <Menu position="bottom-end" width={MENU_WIDTH} shadow="md">
+      <Menu opened={menuOpened} onChange={setMenuOpened} position="bottom-end" width={MENU_WIDTH} shadow="md">
         <Menu.Target>
           <HeroSiegeButton leftSection={<IconUser size={ICON_SIZE} />} minWidth={104}>User</HeroSiegeButton>
         </Menu.Target>
-        <Menu.Dropdown style={{ background: MENU_DROPDOWN_BG, border: MENU_DROPDOWN_BORDER, borderRadius: 2, boxShadow: MODAL_SHADOW }}>
+        <Menu.Dropdown data-user-menu-dropdown style={{ background: MENU_DROPDOWN_BG, border: MENU_DROPDOWN_BORDER, borderRadius: 2, boxShadow: MODAL_SHADOW }}>
           {USER_MENU_ITEMS.map((item) => (
             <Menu.Item
               key={item.label}
