@@ -338,6 +338,9 @@ function ConsoleOutputPanel(props: { currentQuestion: Question; result: ConsoleR
   if (!props.result) {
     return null;
   }
+  if (props.result.hiddenTestCount && !props.result.results?.length) {
+    return <HiddenSubmitPanel result={props.result} />;
+  }
   if (props.result.results?.length) {
     return <RunCasePanel currentQuestion={props.currentQuestion} result={props.result} />;
   }
@@ -356,6 +359,20 @@ function ConsoleOutputPanel(props: { currentQuestion: Question; result: ConsoleR
   );
 }
 
+function HiddenSubmitPanel(props: { result: ConsoleRunResult }) {
+  return (
+    <Paper radius={0} p="md" bg="dark.8">
+      <Group gap="sm" align="baseline" mb={4}>
+        <Title order={RUN_TITLE_ORDER} c="red.5">Wrong Answer</Title>
+        {typeof props.result.runtimeMs === "number" && <Text size="sm" c="blue.3">Runtime: {props.result.runtimeMs} ms</Text>}
+      </Group>
+      <Text size="sm" c="gray.3">
+        Failed hidden submission tests. Details are hidden unless a relic or mirror upgrade reveals them.
+      </Text>
+    </Paper>
+  );
+}
+
 function RunCasePanel(props: { currentQuestion: Question; result: ConsoleRunResult }) {
   const [activeIndex, setActiveIndex] = useState(FIRST_CASE_INDEX);
   const results = props.result.results || [];
@@ -369,6 +386,11 @@ function RunCasePanel(props: { currentQuestion: Question; result: ConsoleRunResu
         <Title order={RUN_TITLE_ORDER} c={`${tone}.5`}>{props.result.ok ? "Accepted" : "Wrong Answer"}</Title>
         {typeof props.result.runtimeMs === "number" && <Text size="sm" c="blue.3">Runtime: {props.result.runtimeMs} ms</Text>}
       </Group>
+      {props.result.hiddenTestCount ? (
+        <Text size="sm" c="gray.3" mb="md">
+          Failed hidden submission tests. Revealing {props.result.revealedTestCount || results.length} of {props.result.hiddenTestCount}.
+        </Text>
+      ) : null}
       <Group gap="sm" mb="md">
         {results.map((result, index) => (
           <HeroSiegeButton

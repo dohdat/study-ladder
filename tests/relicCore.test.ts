@@ -33,11 +33,12 @@ describe("relicCore", () => {
   it("uses the curated roguelike relic catalog instead of generated legacy relics", () => {
     const counts = RELIC_DEFINITIONS.reduce<Record<string, number>>((total, relic) => ({ ...total, [relic.rarity]: (total[relic.rarity] || 0) + 1 }), {});
 
-    expect(RELIC_DEFINITIONS).toHaveLength(72);
+    expect(RELIC_DEFINITIONS).toHaveLength(91);
     expect(counts).toMatchObject(ROGUELIKE_RELIC_RARITY_COUNTS);
     expect(RELIC_DEFINITIONS.some((relic) => relic.id === "burning-blood")).toBe(false);
     expect(RELIC_DEFINITIONS.some((relic) => relic.id === "no-run-blade")).toBe(true);
     expect(RELIC_DEFINITIONS.some((relic) => relic.id === "glass-crown")).toBe(true);
+    expect(RELIC_DEFINITIONS.some((relic) => relic.id === "cracked-lens")).toBe(true);
   });
 
   it("avoids duplicate mechanical relic packages", () => {
@@ -60,4 +61,36 @@ describe("relicCore", () => {
       expect(["common", "uncommon", "rare"]).toContain(rollRelic(state, `normal-roll-${index}`).rarity);
     }
   });
+
+  it("uses luck relics to improve future relic rarity rolls", () => {
+    const normal = defaultState();
+    const lucky = defaultState();
+    lucky.profile.relics = [RELIC_DEFINITIONS.find((relic) => relic.id === "fortune-thread")!];
+
+    const normalScore = getAverageRelicRarityScore(normal);
+    const luckyScore = getAverageRelicRarityScore(lucky);
+
+    expect(luckyScore).toBeGreaterThan(normalScore);
+  });
+
+  it("uses mirror luck to improve relic rarity rolls", () => {
+    const normal = defaultState();
+    const lucky = defaultState();
+    lucky.profile.metaProgress.upgrades.relicLuck = 5;
+
+    const normalScore = getAverageRelicRarityScore(normal);
+    const luckyScore = getAverageRelicRarityScore(lucky);
+
+    expect(luckyScore).toBeGreaterThan(normalScore);
+  });
 });
+
+function getAverageRelicRarityScore(state: ReturnType<typeof defaultState>) {
+  const rarityScores = { common: 1, rare: 3, uncommon: 2 } as const;
+  let total = 0;
+  for (let index = 0; index < 180; index += 1) {
+    const rarity = rollRelic(state, `luck-roll-${index}`).rarity as keyof typeof rarityScores;
+    total += rarityScores[rarity] || 0;
+  }
+  return total / 180;
+}

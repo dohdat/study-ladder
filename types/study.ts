@@ -156,6 +156,7 @@ export type ItemModifierKey =
   | "reducedEnemyDamagePercent"
   | "relicChoiceBonus"
   | "relicRerollBonus"
+  | "revealSubmitTestCount"
   | "revealTopicCount"
   | "revivePercent"
   | "shopDiscountPercent"
@@ -194,10 +195,10 @@ export type Relic = {
   wikiTierGroup?: string;
 };
 
-export type SpireNodeKind = "unknown" | "merchant" | "treasure" | "rest" | "enemy" | "elite" | "boss" | "event";
-export type SpireCombatRewardKind = "gold" | "heart" | "insight";
+export type SpireNodeKind = "unknown" | "merchant" | "treasure" | "rest" | "enemy" | "elite" | "boss" | "event" | "blight";
+export type SpireCombatRewardKind = "gold" | "heart" | "insight" | "pom";
 
-export type UnknownEncounterKind = "elite" | "monster" | "shop" | "treasure";
+export type UnknownEncounterKind = "blight" | "elite" | "monster" | "shop" | "treasure";
 export type SpireAct = 1 | 2 | 3 | 4;
 export type SpireDifficulty = "normal" | "nightmare" | "hell";
 export type HeatConditionId =
@@ -262,7 +263,7 @@ export type RelicRewardChoice = {
   choices: Relic[];
   nodeId: string;
   rerollsRemaining: number;
-  rewardKind: "enemy" | "elite" | "boss" | "treasure" | "event" | "rest";
+  rewardKind: "blight" | "enemy" | "elite" | "boss" | "treasure" | "event" | "rest";
   selectedRelicId: string | null;
   seed: string;
   skipMetaCurrency: number;
@@ -354,6 +355,9 @@ export type MetaProgress = {
     mistakeAlchemy: number;
     olympianFavor: number;
     oracleFavor: number;
+    relicLuck: number;
+    revealSubmitTests: number;
+    starterRelics: number;
     silverGuard: number;
     shadowTraining: number;
     shopkeeperFavor: number;
@@ -412,6 +416,8 @@ export type RunResult = {
 
 export type ConsoleRunResult = {
   error?: string;
+  hiddenTestCount?: number;
+  revealedTestCount?: number;
   ok: boolean;
   output: string[];
   results?: RunResult[];

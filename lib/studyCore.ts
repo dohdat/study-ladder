@@ -58,7 +58,10 @@ const DEFAULT_VISIBLE_TOPIC_COUNT = 1;
 const FULL_PERCENT = 100;
 const META_TOUGH_START_HEALTH = 5;
 const META_COIN_PURSE_GOLD = 15;
+const META_STARTER_RELICS_PER_RANK = 1;
 const META_RELIC_CHOICE_BONUS_CAP = 2;
+const META_RELIC_LUCK_PERCENT = 6;
+const META_REVEAL_SUBMIT_TESTS_PER_RANK = 1;
 export const MODIFIER_KEYS: ItemModifierKey[] = ALL_MODIFIER_KEYS;
 
 export const HINT_COST = 10;
@@ -470,6 +473,8 @@ export const getMetaStartingGoldBonus = (state: StudyState) => Math.max(0, state
 
 export const getMetaMaxHealthBonus = (state: StudyState) => Math.max(0, state.profile.metaProgress.upgrades.toughStart || 0) * META_TOUGH_START_HEALTH;
 
+export const getMetaStartingRelicCount = (state: StudyState) => Math.max(0, state.profile.metaProgress.upgrades.starterRelics || 0) * META_STARTER_RELICS_PER_RANK;
+
 export const getMetaRelicChoiceBonus = (state: StudyState) => Math.min(META_RELIC_CHOICE_BONUS_CAP, Math.max(0, state.profile.metaProgress.upgrades.relicChoice || 0));
 
 export function setSpireMinimumRating(state: StudyState, value: number): StudyState {
@@ -509,6 +514,7 @@ export type MetaUpgradeDefinition = {
 export const META_UPGRADE_DEFINITIONS: MetaUpgradeDefinition[] = [
   { baseCost: 8, costStep: 6, description: `Start each run with +${META_TOUGH_START_HEALTH} max health per rank.`, id: "toughStart", label: "Thick Skin", maxRank: 10 },
   { baseCost: 6, costStep: 5, description: `Start each run with +${META_COIN_PURSE_GOLD} gold per rank.`, id: "coinPurse", label: "Deep Pockets", maxRank: 8 },
+  { baseCost: 26, costStep: 18, description: `Start each run with ${META_STARTER_RELICS_PER_RANK} random relic per rank.`, id: "starterRelics", label: "Heirloom Cache", maxRank: 3 },
   { baseCost: 12, costStep: 8, description: "+5% damage per rank. A simple permanent power path.", id: "shadowTraining", label: "Shadow Training", maxRank: 6, modifiers: [{ key: "enhancedDamagePercent", valuePerRank: 5 }] },
   { baseCost: 18, costStep: 10, description: "+3% critical chance per rank.", id: "lethalPrecision", label: "Lethal Precision", maxRank: 5, modifiers: [{ key: "criticalChancePercent", valuePerRank: 3 }] },
   { baseCost: 18, costStep: 10, description: "+12% critical damage per rank.", id: "crushingInsight", label: "Crushing Insight", maxRank: 4, modifiers: [{ key: "criticalDamagePercent", valuePerRank: 12 }] },
@@ -522,7 +528,9 @@ export const META_UPGRADE_DEFINITIONS: MetaUpgradeDefinition[] = [
   { baseCost: 16, costStep: 8, description: "+5% shop discount per rank.", id: "underworldBroker", label: "Underworld Broker", maxRank: 4, modifiers: [{ key: "shopDiscountPercent", valuePerRank: 5 }] },
   { baseCost: 32, costStep: 0, description: "Shops stock one extra relic.", id: "shopkeeperFavor", label: "Shopkeeper Favor", maxRank: 1, modifiers: [{ key: "shopRelicStock", valuePerRank: 1 }] },
   { baseCost: 22, costStep: 12, description: "+4% rare relic chance per rank.", id: "olympianFavor", label: "Olympian Favor", maxRank: 6, modifiers: [{ key: "increasedRareDropChancePercent", valuePerRank: 4 }] },
+  { baseCost: 34, costStep: 18, description: `+${META_RELIC_LUCK_PERCENT}% chance for rarer relic rolls per rank.`, id: "relicLuck", label: "Fortune Glass", maxRank: 5, modifiers: [{ key: "increasedRareDropChancePercent", valuePerRank: META_RELIC_LUCK_PERCENT }] },
   { baseCost: 24, costStep: 14, description: "Reveal one extra question topic per rank.", id: "topicMemory", label: "Topic Memory", maxRank: 2, modifiers: [{ key: "revealTopicCount", valuePerRank: 1 }] },
+  { baseCost: 18, costStep: 14, description: `Reveal ${META_REVEAL_SUBMIT_TESTS_PER_RANK} failed submit test case per rank.`, id: "revealSubmitTests", label: "Trial Lantern", maxRank: 3, modifiers: [{ key: "revealSubmitTestCount", valuePerRank: META_REVEAL_SUBMIT_TESTS_PER_RANK }] },
   { baseCost: 26, costStep: 14, description: "Relic rewards show one extra choice per rank.", id: "relicChoice", label: "Dark Foresight", maxRank: META_RELIC_CHOICE_BONUS_CAP },
   { baseCost: 30, costStep: 18, description: "+1 relic reward reroll per rank.", id: "fatedPersuasion", label: "Fated Persuasion", maxRank: 3, modifiers: [{ key: "relicRerollBonus", valuePerRank: 1 }] },
   { baseCost: 20, costStep: 10, description: "+2 insight when skipping relic rewards per rank.", id: "fatedTreasury", label: "Fated Treasury", maxRank: 5, modifiers: [{ key: "skipRelicMetaBonus", valuePerRank: 2 }] },
@@ -1062,7 +1070,7 @@ function applyShopRefresh(next: StudyState, question: Question | undefined, now:
   if (!question) {
     return;
   }
-  next.profile.shopStock = createShopStock(question, getEffectiveCharacterStats(next), now, { extraRelicStock: getRunModifierTotals(next).shopRelicStock, maxItemLevel: getRewardItemLevelCap(next) });
+  next.profile.shopStock = createShopStock(question, getEffectiveCharacterStats(next), now, { extraRelicStock: getRunModifierTotals(next).shopRelicStock, maxItemLevel: getRewardItemLevelCap(next), relicRollState: next });
   next.profile.shopLastRefreshedAt = now;
 }
 

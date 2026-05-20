@@ -26,7 +26,7 @@ const ITEM_STAT_COST_MULTIPLIER = 6;
 const COMMON_RARITY_COST = 8;
 const MAX_SHOP_DISCOUNT_PERCENT = 70;
 const MERCHANT_RELIC_RARITIES = ["common", "uncommon", "rare", "shop"] as const;
-type ShopStockOptions = { extraRelicStock?: number; maxItemLevel?: number };
+type ShopStockOptions = { extraRelicStock?: number; maxItemLevel?: number; relicRollState?: StudyState };
 
 const RARITY_COSTS = {
   common: COMMON_RARITY_COST,
@@ -137,7 +137,7 @@ function createShopEquipmentStock(question: Question, stats: CharacterStats, now
 }
 
 function createShopRelic(question: Question, now: number, index: number, options: ShopStockOptions): ShopItem {
-  const relic = rollRelic({ profile: { relics: [] } } as unknown as StudyState, `${question.id}:${now}:shop-relic:${index}`, { includeShop: true, maxItemLevel: options.maxItemLevel, minRarity: [...MERCHANT_RELIC_RARITIES] });
+  const relic = rollRelic(options.relicRollState || { profile: { relics: [] } } as unknown as StudyState, `${question.id}:${now}:shop-relic:${index}`, { includeShop: true, maxItemLevel: options.maxItemLevel, minRarity: [...MERCHANT_RELIC_RARITIES] });
   return { cost: getScaledShopCost(getRelicCost(relic), options, RELIC_LEVEL_COST_MULTIPLIER), id: `shop-relic-${relic.id}-${now}-${index}`, kind: "relic", name: relic.name, relic };
 }
 

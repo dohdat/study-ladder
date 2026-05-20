@@ -48,6 +48,7 @@ export const MODIFIER_FORMATTERS: Partial<Record<ItemModifierKey, (value: number
   reducedEnemyDamagePercent: (value) => `${lower(value)}% Enemy Damage`,
   relicChoiceBonus: (value) => value > 0 ? `${plus(value)} Relic Reward ${value === 1 ? "Choice" : "Choices"}` : "",
   relicRerollBonus: (value) => value > 0 ? `${plus(value)} Relic Reward ${value === 1 ? "Reroll" : "Rerolls"}` : "",
+  revealSubmitTestCount: (value) => value > 0 ? `Reveals ${value} failed submit ${value === 1 ? "test" : "tests"}` : "",
   revealTopicCount: (value) => value > 0 ? `Reveals ${value} extra question ${value === 1 ? "tag" : "tags"}` : "",
   revivePercent: (value) => value > 0 ? "1 Revive" : "",
   shopDiscountPercent: (value) => value > 0 ? `${plus(value)}% Shop Discount` : "",

@@ -7,7 +7,7 @@ import { CoinIcon } from "./CoinIcon";
 import { ShopPanel } from "./ShopPanel";
 import { RelicIcon } from "./RelicIcon";
 import { HEAT_CONDITION_DEFINITIONS, MAX_HEAT, getHeatLevel, getSpireCampaignLabel, getSpireDifficultyModifiers } from "../lib/campaignCore";
-import { canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, digCurrentSpireRoomRelic, enterSpireNode, getCurrentSpireNode, getRestSpecialAction, isCombatNode, isSpireRunSetupOpen, leaveSpireRoom, rerollPendingRelicReward, resetSpireHeat, selectPendingRelicReward, selectSpireNode, setSpireHeatConditionRank, skipPendingRelicReward, startSpireHeatRun } from "../lib/spireMapCore";
+import { canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, enterSpireNode, getCurrentSpireNode, getRestRelicSellValue, isCombatNode, isSpireRunSetupOpen, leaveSpireRoom, rerollPendingRelicReward, resetSpireHeat, selectPendingRelicReward, selectSpireNode, sellRestSiteRelic, setSpireHeatConditionRank, skipPendingRelicReward, startSpireHeatRun } from "../lib/spireMapCore";
 import { META_UPGRADE_DEFINITIONS, canPurchaseMetaUpgrade, getMetaUpgradeCost, purchaseMetaUpgrade } from "../lib/studyCore";
 import { formatModifier } from "../lib/modifierFormat";
 import { getRelicRarityColor } from "../lib/heroSiegeQuality";
@@ -38,6 +38,7 @@ import dislocatedEyeArt from "../assets/hero_siege_relics/dislocated-eye.png";
 import fortuneCardArt from "../assets/hero_siege_relics/fortune-card.png";
 import guardianAngelArt from "../assets/hero_siege_relics/guardian-angel.png";
 import heatOrbArt from "../assets/hero_siege_relics/orb-of-fire.png";
+import holyGrailArt from "../assets/hero_siege_relics/holy-grail.png";
 import kingsCrownArt from "../assets/hero_siege_relics/kings-crown.png";
 import midasHandArt from "../assets/hero_siege_relics/midas-hand.png";
 import oddBookArt from "../assets/hero_siege_relics/odd-book.png";
@@ -115,6 +116,7 @@ const HEAT_PANEL_TOP = 70;
 const HEAT_PANEL_LEFT = 16;
 const HEAT_ROW_ICON_SIZE = 18;
 const NODE_LABELS: Record<SpireNodeKind, string> = {
+  blight: "Blight",
   boss: "Boss",
   event: "Event",
   elite: "Elite",
@@ -126,6 +128,7 @@ const NODE_LABELS: Record<SpireNodeKind, string> = {
 };
 
 const NODE_ICON_ASSETS: Record<SpireNodeKind, StaticImageData> = {
+  blight: deadTreeArt,
   boss: demonKingArt,
   event: questionMarkArt,
   elite: skeletonMageArt,
@@ -142,6 +145,7 @@ const ACT_BOSS_NODE_ASSETS: Partial<Record<SpireAct, StaticImageData>> = {
 };
 
 const NODE_DIMENSIONS: Record<SpireNodeKind, { icon: number; size: number }> = {
+  blight: { icon: 34, size: 44 },
   boss: { icon: BOSS_NODE_ICON_SIZE, size: BOSS_NODE_SIZE },
   event: { icon: 24, size: 34 },
   elite: { icon: 42, size: 54 },
@@ -349,6 +353,7 @@ function RoomPanel(props: { node: SpireMapNode | undefined; setState: React.Disp
       {props.node?.kind === "treasure" && <TreasureRoomPanel node={props.node} setState={props.setState} state={props.state} />}
       {props.node?.kind === "rest" && <RestRoomPanel node={props.node} setState={props.setState} state={props.state} />}
       {props.node?.kind === "event" && <EventRoomPanel node={props.node} setState={props.setState} state={props.state} />}
+      {props.node?.kind === "blight" && <BlightRoomPanel node={props.node} setState={props.setState} state={props.state} />}
     </Stack>
   );
 }
@@ -398,7 +403,7 @@ function TreasureRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch
         <NodeIcon kind="treasure" size={46} />
         <Box>
           <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>{opened ? "Treasure Opened" : "Treasure Chest"}</Text>
-          <Text size="xs" c="dimmed">{opened ? "Continue to choose the next route." : "Open the chest to claim gold and choose a relic, or skip it for meta currency."}</Text>
+          <Text size="xs" c="dimmed">{opened ? "Continue to choose the next route." : "Open the chest to claim gold; rare chests may offer a relic choice."}</Text>
           {rewardClaim && <TreasureRewardIcons claim={rewardClaim} state={props.state} />}
         </Box>
       </Group>
@@ -436,6 +441,7 @@ function PendingRelicRewardPanel(props: { floating?: boolean; inlineContinue?: b
   if (!pending) {
     return null;
   }
+  const forcedBlight = pending.rewardKind === "blight";
   const confirmSelection = () => props.setState((previous) => {
     const selectedRelicId = previous.profile.spireRun.pendingRelicReward?.selectedRelicId;
     return selectedRelicId ? choosePendingRelicReward(previous, selectedRelicId) : previous;
@@ -458,15 +464,19 @@ function PendingRelicRewardPanel(props: { floating?: boolean; inlineContinue?: b
     >
       <Group justify="space-between" align="flex-start" mb="sm" wrap="nowrap">
         <Box>
-          <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>Choose a Relic</Text>
-          <Text size="xs" c="dimmed">Pick one run relic, reroll the offering, or skip it for {pending.skipMetaCurrency} insight.</Text>
+          <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>{forcedBlight ? "Choose a Blight" : "Choose a Relic"}</Text>
+          <Text size="xs" c="dimmed">{forcedBlight ? "Pick one blight relic to continue." : `Pick one run relic, reroll the offering, or skip it for ${pending.skipMetaCurrency} insight.`}</Text>
         </Box>
         <Group gap={8} wrap="nowrap">
           <Badge color="violet" variant="light">Insight {props.state.profile.metaProgress.currency}</Badge>
-          <HeroSiegeButton disabled={pending.rerollsRemaining <= 0} onClick={() => props.setState((previous) => rerollPendingRelicReward(previous))} minWidth={98}>
-            Reroll {pending.rerollsRemaining}
-          </HeroSiegeButton>
-          <HeroSiegeButton onClick={() => props.setState((previous) => skipPendingRelicReward(previous))} minWidth={116}>Skip +{pending.skipMetaCurrency}</HeroSiegeButton>
+          {!forcedBlight ? (
+            <>
+              <HeroSiegeButton disabled={pending.rerollsRemaining <= 0} onClick={() => props.setState((previous) => rerollPendingRelicReward(previous))} minWidth={98}>
+                Reroll {pending.rerollsRemaining}
+              </HeroSiegeButton>
+              <HeroSiegeButton onClick={() => props.setState((previous) => skipPendingRelicReward(previous))} minWidth={116}>Skip +{pending.skipMetaCurrency}</HeroSiegeButton>
+            </>
+          ) : null}
           {props.inlineContinue ? (
             <HeroSiegeButton disabled={!pending.selectedRelicId} onClick={confirmSelection} minWidth={116}>
               Continue
@@ -488,7 +498,7 @@ function PendingRelicRewardPanel(props: { floating?: boolean; inlineContinue?: b
   );
 }
 
-function RelicChoiceCard(props: { onChoose: () => void; relic: Relic; selected: boolean }) {
+function RelicChoiceCard(props: { footer?: React.ReactNode; onChoose: () => void; relic: Relic; selected: boolean }) {
   const rarityColor = getRelicRarityColor(props.relic.rarity);
   const effects = (props.relic.modifiers || []).map((modifier) => formatModifier(modifier.key, modifier.value)).filter(Boolean);
   return (
@@ -524,6 +534,7 @@ function RelicChoiceCard(props: { onChoose: () => void; relic: Relic; selected: 
           <Text key={effect} size="11px" c="yellow.3" lineClamp={1}>{effect}</Text>
         ))}
         <Text size="11px" c="gray.3" lineClamp={3}>{props.relic.description}</Text>
+        {props.footer}
       </Stack>
     </Box>
   );
@@ -531,26 +542,67 @@ function RelicChoiceCard(props: { onChoose: () => void; relic: Relic; selected: 
 
 function RestRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
   const used = props.state.profile.spireRun.completedNodeIds.includes(props.node.id);
-  const specialAction = getRestSpecialAction(props.state);
-  const hasDigAction = specialAction === "dig";
-  const specialText = hasDigAction ? " Dig can find one random relic." : "";
+  const sellableRelics = props.state.profile.relics;
+  const [selectedRelicId, setSelectedRelicId] = useState(sellableRelics[0]?.id || "");
+  const [sellPickerOpen, setSellPickerOpen] = useState(false);
+  const selectedRelic = sellableRelics.find((relic) => relic.id === selectedRelicId) || sellableRelics[0] || null;
+  const specialText = sellableRelics.length ? " You can sell one relic for insight." : "";
+  useEffect(() => {
+    if (used) {
+      setSellPickerOpen(false);
+      return;
+    }
+    if (sellableRelics.length && !sellableRelics.some((relic) => relic.id === selectedRelicId)) {
+      setSelectedRelicId(sellableRelics[0].id);
+    }
+  }, [selectedRelicId, sellableRelics, used]);
   return (
-    <Group justify="space-between" wrap="nowrap" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "14px 16px" }}>
-      <Group gap="sm" wrap="nowrap">
-        <NodeIcon kind="rest" size={46} />
-        <Box>
-          <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>{used ? "Rest Site Used" : "Rest Site"}</Text>
-          <Text size="xs" c="dimmed">{used ? "Continue to choose the next route." : `Rest heals 50% health.${specialText}`}</Text>
+    <Stack gap="sm">
+      <Group justify="space-between" wrap="nowrap" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "14px 16px" }}>
+        <Group gap="sm" wrap="nowrap">
+          <NodeIcon kind="rest" size={46} />
+          <Box>
+            <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>{used ? "Rest Site Used" : "Rest Site"}</Text>
+            <Text size="xs" c="dimmed">{used ? "Continue to choose the next route." : `Rest heals 50% health.${specialText}`}</Text>
+          </Box>
+        </Group>
+        <Group gap={8} wrap="nowrap">
+          <HeroSiegeButton disabled={used} onClick={() => props.setState((previous) => claimCurrentSpireRoomReward(previous))} minWidth={104}>Rest</HeroSiegeButton>
+          {sellableRelics.length ? (
+            <HeroSiegeButton disabled={used} onClick={() => setSellPickerOpen((open) => !open)} minWidth={126}>{sellPickerOpen ? "Cancel Sell" : "Sell Relic"}</HeroSiegeButton>
+          ) : null}
+          <HeroSiegeButton disabled={!used} onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
+        </Group>
+      </Group>
+      {!used && sellPickerOpen ? (
+        <Box style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "14px 16px" }}>
+          <Group justify="space-between" mb={10} wrap="nowrap">
+            <Box>
+              <Text size="sm" fw={900} style={{ color: "#fff0b8", textShadow: "0 1px 0 #000" }}>Sell a Relic</Text>
+              <Text size="xs" c="dimmed">Choose one relic to convert into insight. This uses the rest site.</Text>
+            </Box>
+            <HeroSiegeButton
+              disabled={!selectedRelic}
+              onClick={() => selectedRelic && props.setState((previous) => sellRestSiteRelic(previous, selectedRelic.id))}
+              minWidth={132}
+            >
+              {selectedRelic ? `Sell +${getRestRelicSellValue(selectedRelic)}` : "Sell"}
+            </HeroSiegeButton>
+          </Group>
+          <Box style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
+            {sellableRelics.map((relic) => (
+              <RelicChoiceCard
+                key={relic.id}
+                relic={relic}
+                selected={selectedRelicId === relic.id}
+                onChoose={() => setSelectedRelicId(relic.id)}
+                footer={<Text size="11px" fw={900} c="violet.2">Sell value: +{getRestRelicSellValue(relic)} insight</Text>}
+              />
+            ))}
+          </Box>
         </Box>
-      </Group>
-      <Group gap={8} wrap="nowrap">
-        <HeroSiegeButton disabled={used} onClick={() => props.setState((previous) => claimCurrentSpireRoomReward(previous))} minWidth={104}>Rest</HeroSiegeButton>
-        {hasDigAction ? (
-          <HeroSiegeButton disabled={used} onClick={() => props.setState((previous) => digCurrentSpireRoomRelic(previous))} minWidth={104}>Dig</HeroSiegeButton>
-        ) : null}
-        <HeroSiegeButton disabled={!used} onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
-      </Group>
-    </Group>
+      ) : null}
+    </Stack>
   );
 }
 
@@ -567,6 +619,25 @@ function EventRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch<Re
       </Group>
       <Group gap={8} wrap="nowrap">
         <HeroSiegeButton disabled={resolved} onClick={() => props.setState((previous) => claimCurrentSpireRoomReward(previous))} minWidth={124}>Resolve Event</HeroSiegeButton>
+        <HeroSiegeButton disabled={!resolved} onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
+      </Group>
+    </Group>
+  );
+}
+
+function BlightRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
+  const resolved = props.state.profile.spireRun.completedNodeIds.includes(props.node.id);
+  return (
+    <Group justify="space-between" wrap="nowrap" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "14px 16px" }}>
+      <Group gap="sm" wrap="nowrap">
+        <NodeIcon kind="blight" size={42} />
+        <Box>
+          <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>{resolved ? "Blight Claimed" : "Blight Room"}</Text>
+          <Text size="xs" c="dimmed">{resolved ? "Continue to choose the next route." : "Choose one blight relic. Blights are permanent run curses."}</Text>
+        </Box>
+      </Group>
+      <Group gap={8} wrap="nowrap">
+        <HeroSiegeButton disabled={resolved} onClick={() => props.setState((previous) => claimCurrentSpireRoomReward(previous))} minWidth={124}>Choose Blight</HeroSiegeButton>
         <HeroSiegeButton disabled={!resolved} onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
       </Group>
     </Group>
@@ -811,10 +882,13 @@ const MIRROR_UPGRADE_ICONS: Record<string, StaticImageData> = {
   mistakeAlchemy: barbedShieldArt,
   olympianFavor: tokenLuckArt,
   oracleFavor: dislocatedEyeArt,
+  relicLuck: fortuneCardArt,
   relicChoice: findItemArt,
+  revealSubmitTests: dislocatedEyeArt,
   shadowTraining: bookOfBelialArt,
   shopkeeperFavor: steamSaleArt,
   silverGuard: shieldMasteryArt,
+  starterRelics: holyGrailArt,
   swiftReflex: heatOrbArt,
   topicMemory: oddBookArt,
   toughStart: deathsScytheArt,
@@ -1075,6 +1149,8 @@ function NodeRewardBadge(props: { hovered: boolean; kind: SpireCombatRewardKind 
         </Box>
       ) : props.kind === "heart" ? (
         <CentaurHeartIcon />
+      ) : props.kind === "pom" ? (
+        <PomPowerIcon />
       ) : (
         <Box alt="" component="img" src={getRewardKindIcon(props.kind)} style={{ display: "block", filter: `drop-shadow(0 2px 0 #000) drop-shadow(0 0 4px ${getRewardKindColor(props.kind)}66)`, height: 22, imageRendering: "pixelated", objectFit: "contain", width: 22 }} />
       )}
@@ -1125,6 +1201,28 @@ function CentaurHeartIcon() {
   );
 }
 
+function PomPowerIcon() {
+  return (
+    <Box
+      aria-hidden="true"
+      style={{
+        background: "radial-gradient(circle at 34% 30%, #ff9a9a 0 12%, #d71938 34%, #8f071b 72%, #3a0308 100%)",
+        border: "1px solid #ff6870",
+        borderRadius: "50%",
+        boxShadow: "inset 0 2px 0 rgba(255, 255, 255, 0.28), inset 0 -3px 0 rgba(0, 0, 0, 0.38)",
+        filter: "drop-shadow(0 2px 0 #000) drop-shadow(0 0 5px rgba(255, 31, 65, 0.72))",
+        height: 22,
+        position: "relative",
+        width: 22
+      }}
+    >
+      <Box style={{ background: "#ffd7a3", borderRadius: "50%", height: 3, left: 7, position: "absolute", top: 8, width: 3 }} />
+      <Box style={{ background: "#ffd7a3", borderRadius: "50%", height: 3, left: 13, position: "absolute", top: 8, width: 3 }} />
+      <Box style={{ background: "#ffd7a3", borderRadius: "50%", height: 3, left: 10, position: "absolute", top: 13, width: 3 }} />
+    </Box>
+  );
+}
+
 function getRewardKindIcon(kind: SpireCombatRewardKind) {
   if (kind === "insight") {
     return oddBookArt;
@@ -1142,6 +1240,9 @@ function getRewardKindColor(kind: SpireCombatRewardKind) {
   if (kind === "insight") {
     return "#a879ff";
   }
+  if (kind === "pom") {
+    return "#ff4b5f";
+  }
   return "#46a3ff";
 }
 
@@ -1155,6 +1256,9 @@ function getRewardKindLabel(kind: SpireCombatRewardKind) {
   if (kind === "insight") {
     return "Insight";
   }
+  if (kind === "pom") {
+    return "Pom of Power";
+  }
   return "Reward";
 }
 
@@ -1167,6 +1271,9 @@ function getRewardKindDescription(kind: SpireCombatRewardKind) {
   }
   if (kind === "insight") {
     return "Clear combat to earn mirror currency.";
+  }
+  if (kind === "pom") {
+    return "Clear combat to upgrade one owned relic's rarity.";
   }
   return "Clear combat to claim this reward.";
 }
@@ -1338,6 +1445,9 @@ function getNodeIconFilter(kind: SpireNodeKind, shadow: boolean, highlightTone: 
   if (kind === "unknown") {
     filters.push("brightness(0.74)");
   }
+  if (kind === "blight") {
+    filters.push("sepia(0.6) saturate(1.4) hue-rotate(250deg) brightness(0.82)");
+  }
   if (shadow) {
     filters.push(kind === "boss" ? NODE_DROP_SHADOW : "drop-shadow(0 2px 2px rgba(0, 0, 0, 0.32))");
   }
@@ -1369,7 +1479,7 @@ function getNodeHighlightFilter(highlightTone: "active" | "hover" | "selected" |
 }
 
 function Legend(props: { highlightedKind: SpireNodeKind | null; onHighlight: (kind: SpireNodeKind | null) => void }) {
-  const rows: SpireNodeKind[] = ["unknown", "event", "merchant", "treasure", "rest", "enemy", "elite", "boss"];
+  const rows: SpireNodeKind[] = ["unknown", "blight", "event", "merchant", "treasure", "rest", "enemy", "elite", "boss"];
   return (
     <Box p="sm" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, borderRadius: 2, boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.72), 0 10px 26px rgba(0, 0, 0, 0.36)", color: "#e7dcc0", position: "absolute", right: 12, top: 12, width: 150, zIndex: 4 }}>
       <Text size="sm" fw={900} mb={6} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>Legend</Text>
@@ -1390,7 +1500,7 @@ function Legend(props: { highlightedKind: SpireNodeKind | null; onHighlight: (ki
           </Group>
         ))}
         <Text size="10px" fw={900} mt={4} tt="uppercase" c="gray.4">Enemy rewards</Text>
-        {(["gold", "heart", "insight"] as SpireCombatRewardKind[]).map((kind) => (
+        {(["gold", "heart", "insight", "pom"] as SpireCombatRewardKind[]).map((kind) => (
           <Group key={kind} gap="xs" wrap="nowrap">
             <RewardLegendIcon kind={kind} />
             <Text size="xs" fw={800} style={{ textShadow: "0 1px 0 #000" }}>{getRewardKindLabel(kind)}</Text>
@@ -1408,6 +1518,8 @@ function RewardLegendIcon(props: { kind: SpireCombatRewardKind }) {
         <CoinIcon size={18} />
       ) : props.kind === "heart" ? (
         <CentaurHeartIcon />
+      ) : props.kind === "pom" ? (
+        <PomPowerIcon />
       ) : (
         <Box alt="" component="img" src={getRewardKindIcon(props.kind)} style={{ display: "block", filter: `drop-shadow(0 2px 0 #000) drop-shadow(0 0 4px ${getRewardKindColor(props.kind)}66)`, height: 22, imageRendering: "pixelated", objectFit: "contain", width: 22 }} />
       )}

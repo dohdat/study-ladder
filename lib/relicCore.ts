@@ -25,6 +25,22 @@ export const RELIC_MOD_RULES: Record<HeroSiegeQuality, { max: number; min: numbe
 const RELIC_TOTAL_KEYS: ItemModifierKey[] = ALL_MODIFIER_KEYS;
 const DEFAULT_REWARD_RARITIES: RelicRarity[] = ["common", "uncommon", "rare"];
 const NON_RANDOM_RARITIES = new Set<RelicRarity>(["blight", "event", "shop", "boss", "special", "starter"]);
+const BASE_RELIC_RARITY_WEIGHTS: Partial<Record<RelicRarity, number>> = {
+  common: 58,
+  event: 15,
+  rare: 12,
+  shop: 14,
+  uncommon: 30,
+  unique: 6
+};
+const RARE_LUCK_DIVISOR = 2;
+const UNIQUE_LUCK_DIVISOR = 6;
+const COMMON_LUCK_PENALTY_DIVISOR = 2;
+const UNCOMMON_LUCK_PENALTY_DIVISOR = 4;
+const META_OLYMPIAN_FAVOR_LUCK_PERCENT = 4;
+const META_RELIC_LUCK_PERCENT = 6;
+const RELIC_UPGRADE_BONUS_MULTIPLIER = 1.2;
+const RELIC_UPGRADE_RARITY_ORDER: RelicRarity[] = ["common", "uncommon", "rare", "unique"];
 
 const relic = (name: string, rarity: RelicRarity, description: string, modifiers: Partial<Record<ItemModifierKey, number>>, source: Relic["source"] = "any"): Relic => ({
   description: ROGUELIKE_RELIC_SOURCE_DETAILS[name]?.description || description,
@@ -55,6 +71,8 @@ const ROGUELIKE_RELIC_SOURCE_DETAILS: Record<string, { description: string; wiki
   "Unused Advice": { description: "unused free hint charges convert to gold.", wikiStats: ["Trigger: onRoomClear.", "Tuning: +6 gold per unused charge."] },
   "Mystery Reward": { description: "hidden topics increase room reward value.", wikiStats: ["Trigger: onRewardGenerated.", "Tuning: +5% gold and +3% meta currency per hidden topic at completion."] },
   "Opening Strike": { description: "first successful submit each room deals bonus damage.", wikiStats: ["Trigger: afterCorrectSubmit.", "Tuning: +25% damage on first hit."] },
+  "Lucky Token": { description: "future relic rewards are slightly luckier.", wikiStats: ["Trigger: onRewardGenerated.", "Tuning: +6% rare relic chance while owned."] },
+  "Cracked Lens": { description: "failed submissions reveal one hidden failing test case.", wikiStats: ["Trigger: afterFailedSubmit.", "Tuning: reveal 1 failed submit test case while owned."] },
   "No-Run Blade": { description: "if the player submits without pressing Run Code on that question, deal bonus damage.", wikiStats: ["Trigger: afterCorrectSubmit.", "Tuning: +40% damage."] },
   "Frustration Engine": { description: "each failed submission in the current room adds a damage stack. Stacks clear on room exit.", wikiStats: ["Trigger: afterFailedSubmit and afterCorrectSubmit.", "Tuning: +12% damage per failure, max 5 stacks."] },
   "Pain Capacitor": { description: "taking damage charges the next successful attack.", wikiStats: ["Trigger: onIncomingDamage and afterCorrectSubmit.", "Tuning: next attack deals +50% of damage recently taken."] },
@@ -67,10 +85,11 @@ const ROGUELIKE_RELIC_SOURCE_DETAILS: Record<string, { description: string; wiki
   "Combo Quill": { description: "consecutive correct answers increase crit chance. A wrong answer resets the bonus.", wikiStats: ["Trigger: afterCorrectSubmit and afterFailedSubmit.", "Tuning: +3% crit per correct submit, max +15%."] },
   "Elite Brand": { description: "deal bonus damage to elites.", wikiStats: ["Trigger: onPlayerDamage.", "Tuning: +35% damage against elite rooms."] },
   "Merchant Shelf": { description: "shops show one extra relic.", wikiStats: ["Trigger: shopEnter.", "Tuning: +1 relic listing."] },
-  "Campfire Tools": { description: "rest sites offer one extra action instead of a single fixed reward.", wikiStats: ["Trigger: restEnter.", "Tuning: choose heal, smith, or dig."] },
+  "Campfire Tools": { description: "rest sites offer one extra action instead of a single fixed reward.", wikiStats: ["Trigger: restEnter.", "Tuning: choose heal, smith, or sell a relic for insight."] },
   "Treasure Compass": { description: "treasure rooms are more likely to offer relics instead of gold/potions.", wikiStats: ["Trigger: onRewardGenerated.", "Tuning: +35% relic chance."] },
   "Safe Curiosity": { description: "unknown rooms are safer but less rewarding.", wikiStats: ["Trigger: unknown room resolution.", "Tuning: remove elite outcome, reduce gold/relic rewards by 20%."] },
   "Challenger Banner": { description: "choosing an elite path grants temporary damage for that room.", wikiStats: ["Trigger: roomEnter.", "Tuning: +20% damage in elite rooms."] },
+  "Polished Clover": { description: "luck improves and relic rewards can be rerolled more often.", wikiStats: ["Trigger: onRewardGenerated.", "Tuning: +10% rare relic chance and +1 relic reroll."] },
   "Heavy Purse": { description: "gold above a threshold increases damage.", wikiStats: ["Trigger: damage calculation.", "Tuning: every 50 gold above 100 gives +3% damage, max +18%."] },
   "Spending Rush": { description: "spending gold buffs the next combat room.", wikiStats: ["Trigger: shopPurchase.", "Tuning: +1% damage per 10 gold spent, max +25%, one room."] },
   "Long Bottle": { description: "potions last one extra room.", wikiStats: ["Trigger: potionApply.", "Tuning: +1 room duration."] },
@@ -92,6 +111,8 @@ const ROGUELIKE_RELIC_SOURCE_DETAILS: Record<string, { description: string; wiki
   "Smithing Shrine": { description: "rest sites can upgrade one current relic.", wikiStats: ["Trigger: restEnter.", "Tuning: pick 1 of 3 owned relics; upgrade numbers by 25% or improve charge count by 1."] },
   "Backroom Dice": { description: "shops sell relic rerolls.", wikiStats: ["Trigger: shopEnter.", "Tuning: reroll token costs 45 gold."] },
   "Alchemist's Menu": { description: "random potion becomes choose-one-of-three.", wikiStats: ["Trigger: potionRewardGenerated or potionUse.", "Tuning: show 3 potion options whenever a random potion would be generated."] },
+  "Fortune Thread": { description: "luckier relic rewards also show a wider offering.", wikiStats: ["Trigger: onRewardGenerated.", "Tuning: +18% rare relic chance and +1 relic choice."] },
+  "Answer Lantern": { description: "failed submissions reveal more hidden cases without giving direct hints.", wikiStats: ["Trigger: afterFailedSubmit.", "Tuning: reveal 2 failed submit test cases while owned."] },
   "No Rest Bonus": { description: "completing a floor segment without resting grants bonus reward.", wikiStats: ["Trigger: onFloorAdvanced or onActClear.", "Tuning: if no rest in last 4 rooms, next reward gets +1 rarity tier chance."] },
   "Window Shopper": { description: "completing an act without visiting a shop grants a rare relic.", wikiStats: ["Trigger: onActClear.", "Tuning: generate rare relic choice at act end."] },
   "Oracle Dagger": { description: "hints become attacks. Buying a hint immediately deals damage, then the next submit deals bonus damage.", wikiStats: ["Trigger: buyHint and afterCorrectSubmit.", "Tuning: hint deals 20% of enemy max health; next submit +25% damage."] },
@@ -120,7 +141,7 @@ const ROGUELIKE_RELIC_SOURCE_DETAILS: Record<string, { description: string; wiki
   "Gold Hourglass": { description: "more gold, but timer is shorter.", wikiStats: ["Trigger: reward calculation and question timer.", "Tuning: +35% gold; -20% question time."] },
   "Oracle Chain": { description: "free hints, but hint use reduces rewards.", wikiStats: ["Trigger: buyHint and reward calculation.", "Tuning: 1 free hint per question; using any hint reduces room gold/meta by 30%."] },
   "Demon Writ": { description: "massive boss damage, but normal rooms hit harder.", wikiStats: ["Trigger: damage calculation and onIncomingDamage.", "Tuning: +60% boss damage; +25% incoming damage in non-boss combat."] },
-  "Forbidden Trophy": { description: "rare rewards appear more often, but rest healing is disabled.", wikiStats: ["Trigger: onRewardGenerated and restEnter.", "Tuning: +25% rare/unique chance; rest can smith/dig only."] },
+  "Forbidden Trophy": { description: "rare rewards appear more often, but rest healing is disabled.", wikiStats: ["Trigger: onRewardGenerated and restEnter.", "Tuning: +25% rare/unique chance; rest can smith or sell relics only."] },
   "Elite Toll": { description: "elite clears give extra relics, but elite rooms require 3 questions.", wikiStats: ["Trigger: onEliteClear and roomEnter.", "Tuning: elite reward choice +1; elite room question count fixed at 3."] },
   "Volatile Relic Core": { description: "every future relic has stronger effects and stronger downsides.", wikiStats: ["Trigger: onRewardGenerated.", "Tuning: future relic positive numbers +30%; future relic downside numbers +30%; add downside to relics without one where possible."] },
   "Dry Flask": { description: "cannot buy potions, but your max life is higher.", wikiStats: ["Trigger: shopEnter and potionRewardGenerated.", "Tuning: remove potion stock/rewards; gain max life."] },
@@ -148,13 +169,21 @@ const ROGUELIKE_RELIC_SOURCE_DETAILS: Record<string, { description: string; wiki
   "Short Fuse": { description: "timer is shorter.", wikiStats: ["Trigger: questionStart.", "Tuning: -15% question time."] },
   "Price Gouge": { description: "shops cost more.", wikiStats: ["Trigger: getShopItemCost.", "Tuning: +20% shop prices."] },
   "Withered Flask": { description: "healing reduced.", wikiStats: ["Trigger: healing.", "Tuning: -35% healing received."] },
-  "Cold Campfire": { description: "rest sites cannot heal.", wikiStats: ["Trigger: restEnter.", "Tuning: remove heal option, keep smith/dig if available."] },
+  "Cold Campfire": { description: "rest sites cannot heal.", wikiStats: ["Trigger: restEnter.", "Tuning: remove heal option, keep smith/sell if available."] },
   "Elite Burden": { description: "elites require more questions.", wikiStats: ["Trigger: roomEnter.", "Tuning: elite rooms always have 3 questions."] },
   "Sharp Shadows": { description: "normal rooms hit harder.", wikiStats: ["Trigger: onIncomingDamage.", "Tuning: +20% incoming damage in non-elite, non-boss rooms."] },
   "Oracle Tax": { description: "rewards reduced after hint use.", wikiStats: ["Trigger: reward calculation.", "Tuning: -25% gold/meta if any hint was used in the room."] },
   "Heavy Coffers": { description: "hoarding gold increases boss damage taken.", wikiStats: ["Trigger: onBossEnter or onIncomingDamage.", "Tuning: bosses deal +1% damage per 25 gold, capped at +30%."] },
   "Weak Dawn": { description: "start each act at lower health.", wikiStats: ["Trigger: actStart.", "Tuning: current health capped at 70% max health."] },
-  "Cursed Beginning": { description: "run starts with a curse for extra meta currency.", wikiStats: ["Trigger: runStart.", "Tuning: choose 1 curse; +20% meta currency for the run."] }
+  "Cursed Beginning": { description: "run starts with a curse for extra meta currency.", wikiStats: ["Trigger: runStart.", "Tuning: choose 1 curse; +20% meta currency for the run."] },
+  "Narrow Offering": { description: "relic choices are narrower and rooms are more dangerous.", wikiStats: ["Trigger: rewardChoice and onIncomingDamage.", "Tuning: -1 relic choice; +5% incoming damage."] },
+  "Dull Blade": { description: "critical builds lose sharpness.", wikiStats: ["Trigger: damage calculation.", "Tuning: lower crit chance and crit damage."] },
+  "Brittle Shield": { description: "enemy damage mitigation is weaker.", wikiStats: ["Trigger: onIncomingDamage.", "Tuning: more damage taken from enemy hits."] },
+  "Blind Map": { description: "less question information is visible and damage is weaker.", wikiStats: ["Trigger: questionStart and damage calculation.", "Tuning: hide one extra topic and reduce damage."] },
+  "Expensive Lessons": { description: "shops cost more and skipping rewards pays less insight.", wikiStats: ["Trigger: getShopItemCost and skipRelicReward.", "Tuning: +12% shop prices; -2 skip insight."] },
+  "Leaking Flask": { description: "sustain effects are weaker.", wikiStats: ["Trigger: healing and room clear.", "Tuning: less healing received and less life on completion."] },
+  "Rusty Coin": { description: "gold rewards shrink.", wikiStats: ["Trigger: reward calculation.", "Tuning: -25% gold find."] },
+  "Slow Mind": { description: "timer grace and speed damage are reduced.", wikiStats: ["Trigger: questionStart and damage calculation.", "Tuning: -20 seconds timer grace and weaker time damage."] }
 };
 
 const COMMON_RELICS: Relic[] = [
@@ -167,7 +196,9 @@ const COMMON_RELICS: Relic[] = [
   relic("Blood Spark", "common", "Critical hits and room clears restore a little health.", { criticalChancePercent: 4, lifeOnKill: 2 }),
   relic("Small Bounty", "common", "Enemy clears pay more gold and support merchant builds.", { goldFindPercent: 14 }),
   relic("Error Cushion", "common", "Mistakes hurt less while you learn the room.", { reducedEnemyDamagePercent: 10, damageReduction: 1 }),
-  relic("Opening Strike", "common", "Early successful submits hit harder.", { bonusDamageWhileFullHealthPercent: 10, enhancedDamagePercent: 6 })
+  relic("Opening Strike", "common", "Early successful submits hit harder.", { bonusDamageWhileFullHealthPercent: 10, enhancedDamagePercent: 6 }),
+  relic("Lucky Token", "common", "Future relic rewards are slightly luckier.", { increasedRareDropChancePercent: 6 }),
+  relic("Cracked Lens", "common", "Failed submissions reveal one hidden failing test.", { revealSubmitTestCount: 1 })
 ];
 
 const UNCOMMON_RELICS: Relic[] = [
@@ -182,7 +213,8 @@ const UNCOMMON_RELICS: Relic[] = [
   relic("Elite Brand", "uncommon", "Elite rooms take much more damage.", { bonusDamageVsElitesPercent: 35 }),
   relic("Merchant Shelf", "uncommon", "Merchants show one extra relic.", { shopRelicStock: 1 }),
   relic("Campfire Tools", "uncommon", "Rest routes are safer and more flexible.", { maxLife: 8, blockFirstHit: 1 }),
-  relic("Challenger Banner", "uncommon", "Elite routes grant extra room damage.", { bonusDamageVsElitesPercent: 20, enhancedDamagePercent: 8 })
+  relic("Challenger Banner", "uncommon", "Elite routes grant extra room damage.", { bonusDamageVsElitesPercent: 20, enhancedDamagePercent: 8 }),
+  relic("Polished Clover", "uncommon", "Luck improves and relic rewards can be rerolled more often.", { increasedRareDropChancePercent: 10, relicRerollBonus: 1 })
 ];
 
 const RARE_RELICS: Relic[] = [
@@ -199,7 +231,9 @@ const RARE_RELICS: Relic[] = [
   relic("Ash Offering", "rare", "Skipping relics grants much more insight.", { skipRelicMetaBonus: 6 }),
   relic("Smithing Shrine", "rare", "Rest routes refine your build instead of only healing.", { enhancedDamagePercent: 14, relicRerollBonus: 1 }),
   relic("Backroom Dice", "rare", "Shops and rewards offer more ways to reroll.", { shopRelicStock: 1, relicRerollBonus: 1, shopDiscountPercent: 5 }),
-  relic("Alchemist's Menu", "rare", "Potion-style sustain is stronger.", { increasedHealingReceivedPercent: 25, maxLife: 8 })
+  relic("Alchemist's Menu", "rare", "Potion-style sustain is stronger.", { increasedHealingReceivedPercent: 25, maxLife: 8 }),
+  relic("Fortune Thread", "rare", "Luckier relic rewards also show a wider offering.", { increasedRareDropChancePercent: 18, relicChoiceBonus: 1 }),
+  relic("Answer Lantern", "rare", "Failed submissions reveal more hidden cases.", { revealSubmitTestCount: 2, freeHintPerRoom: 1 })
 ];
 
 const UNIQUE_RELICS: Relic[] = [
@@ -250,7 +284,21 @@ const BLIGHT_RELICS: Relic[] = [
   relic("Short Fuse", "blight", "Question timers are shorter.", { timerPenaltyPercent: 15 }),
   relic("Price Gouge", "blight", "Shop prices are higher.", { shopPriceIncreasePercent: 20 }),
   relic("Withered Flask", "blight", "Healing is reduced.", { increasedHealingReceivedPercent: -35 }),
-  relic("Sharp Shadows", "blight", "Normal rooms hit harder.", { incomingDamagePercent: 20 })
+  relic("Sharp Shadows", "blight", "Normal rooms hit harder.", { incomingDamagePercent: 20 }),
+  relic("Cold Campfire", "blight", "Healing and max life are lower.", { increasedHealingReceivedPercent: -20, maxLife: -5, timerPenaltyPercent: 5 }),
+  relic("Elite Burden", "blight", "Elites are harder to burst down.", { bonusDamageVsElitesPercent: -20, incomingDamagePercent: 8, timerPenaltyPercent: 5 }),
+  relic("Oracle Tax", "blight", "Rewards shrink when relying on help.", { goldFindPercent: -20, freeHintPerRoom: -1, shopPriceIncreasePercent: 8 }),
+  relic("Heavy Coffers", "blight", "Power drops while shops get pricier.", { enhancedDamagePercent: -8, shopPriceIncreasePercent: 10, timerDamagePercent: -8 }),
+  relic("Weak Dawn", "blight", "Start weaker with less max life.", { maxLife: -12 }),
+  relic("Cursed Beginning", "blight", "Relic control drops and timers tighten.", { relicRerollBonus: -1, timerPenaltyPercent: 8 }),
+  relic("Narrow Offering", "blight", "Relic choices are narrower and rooms are more dangerous.", { relicChoiceBonus: -1, incomingDamagePercent: 5, relicRerollBonus: -1 }),
+  relic("Dull Blade", "blight", "Critical builds lose sharpness.", { accuracyPercent: -8, criticalChancePercent: -6, criticalDamagePercent: -20 }),
+  relic("Brittle Shield", "blight", "Enemy damage mitigation is weaker.", { blockChancePercent: -6, damageReduction: -2, reducedEnemyDamagePercent: -8 }),
+  relic("Blind Map", "blight", "Less information is visible and damage is weaker.", { revealTopicCount: -1, enhancedDamagePercent: -5, revealSubmitTestCount: -1 }),
+  relic("Expensive Lessons", "blight", "Shops cost more and skipped relics pay less.", { skipRelicMetaBonus: -2, shopPriceIncreasePercent: 12 }),
+  relic("Leaking Flask", "blight", "Sustain effects are weaker.", { lifeOnKill: -3, increasedHealingReceivedPercent: -15 }),
+  relic("Rusty Coin", "blight", "Gold rewards shrink.", { goldFindPercent: -25, magicFindPercent: -10 }),
+  relic("Slow Mind", "blight", "Timer grace and speed damage are reduced.", { timerPauseSeconds: -20, timerDamagePercent: -10 })
 ];
 
 export const ROGUELIKE_RELIC_RARITY_COUNTS = {
@@ -293,7 +341,20 @@ export function getRelicModifierTotals(state: StudyState) {
 export function normalizeRelics(relics: Relic[] | undefined) {
   const knownById = new Map(RELIC_DEFINITIONS.map((row) => [row.id, row]));
   return Array.from(new Set((relics || []).map((row) => row.id)))
-    .map((id) => knownById.get(id))
+    .map((id) => {
+      const source = (relics || []).find((row) => row.id === id);
+      const known = knownById.get(id);
+      if (!known) {
+        return null;
+      }
+      const rarity = isUpgradeableRelicRarity(source?.rarity) ? source?.rarity || known.rarity : known.rarity;
+      return {
+        ...known,
+        modifiers: source?.modifiers?.length ? source.modifiers.map((modifier) => ({ ...modifier })) : known.modifiers,
+        rarity,
+        wikiRarityLabel: getRelicQualityLabel(rarity)
+      };
+    })
     .filter(Boolean) as Relic[];
 }
 
@@ -302,6 +363,38 @@ export function grantRelic(state: StudyState, relicItem: Relic): StudyState {
     return state;
   }
   return { ...state, profile: { ...state.profile, relics: [...state.profile.relics, relicItem] } };
+}
+
+export function getPomEligibleRelics(state: StudyState) {
+  return state.profile.relics.filter((relicItem) => getNextRelicRarity(relicItem.rarity));
+}
+
+export function upgradeRelicRarity(relicItem: Relic): Relic {
+  const nextRarity = getNextRelicRarity(relicItem.rarity);
+  if (!nextRarity) {
+    return relicItem;
+  }
+  return {
+    ...relicItem,
+    modifiers: (relicItem.modifiers || []).map((modifier) => ({
+      ...modifier,
+      value: modifier.value > 0 ? Math.max(modifier.value + 1, Math.ceil(modifier.value * RELIC_UPGRADE_BONUS_MULTIPLIER)) : modifier.value
+    })),
+    rarity: nextRarity,
+    wikiRarityLabel: getRelicQualityLabel(nextRarity)
+  };
+}
+
+function getNextRelicRarity(rarity: RelicRarity) {
+  const index = RELIC_UPGRADE_RARITY_ORDER.indexOf(rarity);
+  if (index < 0 || index >= RELIC_UPGRADE_RARITY_ORDER.length - 1) {
+    return null;
+  }
+  return RELIC_UPGRADE_RARITY_ORDER[index + 1];
+}
+
+function isUpgradeableRelicRarity(rarity: RelicRarity | undefined): rarity is RelicRarity {
+  return Boolean(rarity && RELIC_UPGRADE_RARITY_ORDER.includes(rarity));
 }
 
 export function rollRelic(state: StudyState, seed: string, options: { includeBlights?: boolean; includeEvents?: boolean; includeShop?: boolean; maxItemLevel?: number; minRarity?: RelicRarity[] } = {}) {
@@ -331,7 +424,52 @@ export function rollRelic(state: StudyState, seed: string, options: { includeBli
   if (!allowed.length) {
     return RELIC_DEFINITIONS.find((relicItem) => relicItem.id === "free-hint-token") || RELIC_DEFINITIONS[0];
   }
-  return allowed[Math.floor(getRelicSeedRoll(seed) * allowed.length)];
+  const rarity = rollRelicRarity(allowed, seed, getRelicRollLuckPercent(state));
+  const candidates = allowed.filter((relicItem) => relicItem.rarity === rarity);
+  const pool = candidates.length ? candidates : allowed;
+  return pool[Math.floor(getRelicSeedRoll(`${seed}:item`) * pool.length)];
+}
+
+function rollRelicRarity(allowed: Relic[], seed: string, luckPercent: number) {
+  const availableRarities = Array.from(new Set(allowed.map((relicItem) => relicItem.rarity)));
+  const luck = Math.max(0, Math.floor(luckPercent || 0));
+  const weights = availableRarities.map((rarity) => ({
+    rarity,
+    weight: getRelicRarityWeight(rarity, luck)
+  }));
+  const totalWeight = weights.reduce((sum, row) => sum + row.weight, 0);
+  let cursor = getRelicSeedRoll(`${seed}:rarity`) * totalWeight;
+  for (const row of weights) {
+    cursor -= row.weight;
+    if (cursor <= 0) {
+      return row.rarity;
+    }
+  }
+  return weights[weights.length - 1]?.rarity || allowed[0].rarity;
+}
+
+function getRelicRollLuckPercent(state: StudyState) {
+  const upgrades = state.profile?.metaProgress?.upgrades;
+  const metaLuck = (Math.max(0, upgrades?.olympianFavor || 0) * META_OLYMPIAN_FAVOR_LUCK_PERCENT)
+    + (Math.max(0, upgrades?.relicLuck || 0) * META_RELIC_LUCK_PERCENT);
+  return (getRelicModifierTotals(state).increasedRareDropChancePercent || 0) + metaLuck;
+}
+
+function getRelicRarityWeight(rarity: RelicRarity, luck: number) {
+  const base = BASE_RELIC_RARITY_WEIGHTS[rarity] || 1;
+  if (rarity === "unique") {
+    return base + Math.floor(luck / UNIQUE_LUCK_DIVISOR);
+  }
+  if (rarity === "rare" || rarity === "event" || rarity === "shop") {
+    return base + Math.floor(luck / RARE_LUCK_DIVISOR);
+  }
+  if (rarity === "common") {
+    return Math.max(5, base - Math.floor(luck / COMMON_LUCK_PENALTY_DIVISOR));
+  }
+  if (rarity === "uncommon") {
+    return Math.max(8, base - Math.floor(luck / UNCOMMON_LUCK_PENALTY_DIVISOR));
+  }
+  return base;
 }
 
 export function getRelicCost(relicItem: Relic) {

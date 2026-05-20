@@ -24,7 +24,7 @@ import { getTimerDisplay } from "../lib/timerDisplay";
 import { chooseNextSpireQuestion, completeSpireQuestion, getCurrentRoundQuestion, getCurrentSpireNode, isCombatNode as isSpireCombatNode } from "../lib/spireMapCore";
 import {
   HINT_COST, applyHealthPenalty, applyIncomingDamage, applyScheduleResult, buyHint, canBuyHint, cloneState, defaultState, getCard,
-  getHintCost, getIncomingDamageEffect, getMaxHealth, getMetaStartingGoldBonus, getModifiedQuestionTimeLimitMs, isQuestionInRecommendedRange, markQuestionRunCode, normalizeStudyState, setCard, setSpireMinimumRating
+  getHintCost, getIncomingDamageEffect, getMaxHealth, getMetaStartingGoldBonus, getModifiedQuestionTimeLimitMs, getRunModifierTotals, isQuestionInRecommendedRange, markQuestionRunCode, normalizeStudyState, setCard, setSpireMinimumRating
 } from "../lib/studyCore";
 import { createHintPrompt } from "../lib/hintPrompt";
 import { createLocalHint } from "../lib/localHint";
@@ -243,13 +243,28 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
     }
     params.showHealthLoss(healthLoss, attack.hitCount);
     params.setState((previous) => applyHealthPenalty(previous, attack.damage, attack.manaDamage, question.id, params.code, now, attack.element));
+    const submitResult = createHiddenSubmitResult(params.state, message.results, message.runtimeMs);
     params.setResults([]);
-    params.setConsoleRunResult({ ok: false, output: [], results: message.results.slice(VISIBLE_RUN_CASE_COUNT), runtimeMs: message.runtimeMs });
+    params.setConsoleRunResult(submitResult);
     params.setTone("fail");
     params.setStatus(getFailStatus(attack));
     return;
   }
   completePassedSubmit(params, question);
+}
+
+function createHiddenSubmitResult(state: StudyState, results: RunResult[], runtimeMs: number | undefined): ConsoleRunResult {
+  const failedResults = results.filter((result) => !result.pass);
+  const revealCount = Math.max(0, Math.floor(getRunModifierTotals(state).revealSubmitTestCount || 0));
+  const revealed = failedResults.slice(0, revealCount);
+  return {
+    hiddenTestCount: failedResults.length || results.length,
+    ok: false,
+    output: [],
+    results: revealed,
+    revealedTestCount: revealed.length,
+    runtimeMs
+  };
 }
 
 function completePassedSubmit(params: Parameters<typeof useRunnerMessages>[0], question: Question) {

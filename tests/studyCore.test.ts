@@ -47,6 +47,7 @@ import {
   getMaxHealth,
   getMaxMana,
   getMetaStartingGoldBonus,
+  getMetaStartingRelicCount,
   getMetaUpgradeCost,
   getMonsterDamageRoll,
   getMonsterLevel,
@@ -183,16 +184,27 @@ describe("studyCore", () => {
     state.profile.metaProgress.upgrades.eliteHunter = 1;
     state.profile.metaProgress.upgrades.underworldBroker = 2;
     state.profile.metaProgress.upgrades.topicMemory = 1;
+    state.profile.metaProgress.upgrades.relicLuck = 2;
+    state.profile.metaProgress.upgrades.revealSubmitTests = 2;
 
     expect(getRunModifierTotals(state)).toMatchObject({
       bonusDamageVsElitesPercent: 8,
       criticalChancePercent: 6,
       enhancedDamagePercent: 10,
       freeHintPerRoom: 1,
+      increasedRareDropChancePercent: 12,
       relicRerollBonus: 1,
+      revealSubmitTestCount: 2,
       revealTopicCount: 1,
       shopDiscountPercent: 10
     });
+  });
+
+  it("uses mirror ranks for starter relic count", () => {
+    const state = defaultState();
+    state.profile.metaProgress.upgrades.starterRelics = 3;
+
+    expect(getMetaStartingRelicCount(state)).toBe(3);
   });
 
   it("blocks meta upgrade purchases when insight is missing or the rank is maxed", () => {

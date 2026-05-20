@@ -16,9 +16,9 @@ import {
 } from "./campaignCore";
 import { createDropItem, SLOT_STAT_BIAS } from "./itemCore";
 import { getUniqueMonsterBonusCount } from "./monsterCore";
-import { grantRelic, rollRelic } from "./relicCore";
+import { getPomEligibleRelics, grantRelic, rollRelic, upgradeRelicRarity } from "./relicCore";
 import { createShopStock } from "./shopCore";
-import { getMaxHealth, getMetaRelicChoiceBonus, getMetaStartingGoldBonus, getRunModifierTotals } from "./studyCore";
+import { getMaxHealth, getMetaRelicChoiceBonus, getMetaStartingGoldBonus, getMetaStartingRelicCount, getRunModifierTotals } from "./studyCore";
 import type { Difficulty, HeatConditionId, HeatConditionRanks, InventoryItem, ItemRarity, Question, Relic, RelicRarity, SpireAct, SpireCombatRewardKind, SpireDifficulty, SpireMapNode, SpireNodeKind, SpireRun, StudyState, UnknownEncounterKind } from "../types/study";
 
 export const DEFAULT_SPIRE_MIN_RATING = 1500;
@@ -56,15 +56,18 @@ const BASE_RELIC_CHOICE_COUNT = 3;
 const ELITE_RELIC_CHOICE_BONUS = 1;
 const BOSS_RELIC_CHOICE_BONUS = 1;
 const BASE_RELIC_REROLLS = 1;
+const TREASURE_RELIC_CHANCE = 0.35;
+const EVENT_RELIC_CHANCE = 0.25;
 const SKIP_META_COMMON = 3;
 const SKIP_META_ELITE = 6;
 const SKIP_META_BOSS = 10;
 const EVENT_META_REWARD = 8;
 const POTION_HEALTH_RATIO = 0.25;
-const UNKNOWN_MONSTER_WEIGHT = 45;
-const UNKNOWN_TREASURE_WEIGHT = 25;
-const UNKNOWN_SHOP_WEIGHT = 20;
-const UNKNOWN_ELITE_WEIGHT = 10;
+const UNKNOWN_BLIGHT_WEIGHT = 1;
+const UNKNOWN_MONSTER_WEIGHT = 1;
+const UNKNOWN_TREASURE_WEIGHT = 1;
+const UNKNOWN_SHOP_WEIGHT = 1;
+const UNKNOWN_ELITE_WEIGHT = 1;
 const MAP_X_MIN = 8;
 const MAP_X_SPREAD = 84;
 const FIRST_ROW_Y = 92;
@@ -122,12 +125,15 @@ const ROOM_KIND_WEIGHTS: Array<{ kind: SpireNodeKind; weight: number }> = [
   { kind: "treasure", weight: 4 }
 ];
 const COMBAT_REWARD_WEIGHTS: Array<{ kind: SpireCombatRewardKind; weight: number }> = [
-  { kind: "gold", weight: 52 },
-  { kind: "insight", weight: 32 },
-  { kind: "heart", weight: 16 }
+  { kind: "gold", weight: 44 },
+  { kind: "insight", weight: 28 },
+  { kind: "heart", weight: 16 },
+  { kind: "pom", weight: 12 }
 ];
 const CENTAUR_HEART_MAX_HEALTH = 25;
+const POM_FALLBACK_META_REWARD = 6;
 const UNKNOWN_ENCOUNTER_WEIGHTS: Record<UnknownEncounterKind, number> = {
+  blight: UNKNOWN_BLIGHT_WEIGHT,
   elite: UNKNOWN_ELITE_WEIGHT,
   monster: UNKNOWN_MONSTER_WEIGHT,
   shop: UNKNOWN_SHOP_WEIGHT,
@@ -141,7 +147,7 @@ const ROOM_REWARD_ITEM_RARITY: Record<"enemy" | "elite" | "boss" | "treasure", {
 };
 const ITEM_RARITY_ORDER: ItemRarity[] = ["common", "uncommon", "rare", "epic", "legendary"];
 const MAX_MERCHANT_UPGRADE_RARITY: ItemRarity = "rare";
-export type RestSpecialAction = "smith" | "dig";
+export type RestSpecialAction = "smith" | "sellRelic";
 const CONSECUTIVE_BLOCKED_KINDS: SpireNodeKind[] = ["elite", "merchant", "rest"];
 const GUARANTEED_TREASURE_FLOORS = new Set([GUARANTEED_TREASURE_MIN_FLOOR_INDEX, GUARANTEED_TREASURE_MIN_FLOOR_INDEX + 1, GUARANTEED_TREASURE_MAX_FLOOR_INDEX]);
 
@@ -246,7 +252,7 @@ function hasRequiredSpireFloors(nodes: SpireMapNode[]) {
   return SPIRE_RATINGS.every((_rating, tierIndex) => nodes.some((node) => node.tierIndex === tierIndex));
 }
 
-function createDefaultUnknownEncounterMisses(): Record<UnknownEncounterKind, number> { return { elite: 0, monster: 0, shop: 0, treasure: 0 }; }
+function createDefaultUnknownEncounterMisses(): Record<UnknownEncounterKind, number> { return { blight: 0, elite: 0, monster: 0, shop: 0, treasure: 0 }; }
 
 function normalizeSpireAct(value: SpireRun["act"] | undefined): SpireAct {
   return [1, 2, 3, 4].includes(Number(value)) ? Number(value) as SpireAct : 1;
@@ -326,9 +332,10 @@ function normalizeForcedRoomKinds(nodes: SpireMapNode[]) {
 }
 
 function normalizeCombatRewardKinds(nodes: SpireMapNode[], seed: number) {
-  return nodes.map((node) => isRewardedCombatNode(node)
+  const normalized = nodes.map((node) => isRewardedCombatNode(node)
     ? { ...node, rewardKind: isValidCombatRewardKind(node.rewardKind) ? node.rewardKind : rollCombatRewardKind(seed, node) }
     : { ...node, rewardKind: undefined });
+  return ensurePomCombatReward(normalized, seed);
 }
 
 export function canEditSpireHeat(state: StudyState) {
@@ -353,7 +360,7 @@ export function startSpireHeatRun(state: StudyState): StudyState {
   if (!isSpireRunSetupOpen(state)) {
     return state;
   }
-  const nextState = {
+  const openedState = {
     ...state,
     profile: {
       ...state.profile,
@@ -363,6 +370,7 @@ export function startSpireHeatRun(state: StudyState): StudyState {
       }
     }
   };
+  const nextState = grantStartingRelics(openedState, `${openedState.profile.spireRun.mapSeed}:act-${openedState.profile.spireRun.act}`);
   return {
     ...nextState,
     profile: {
@@ -371,6 +379,15 @@ export function startSpireHeatRun(state: StudyState): StudyState {
       health: getMaxHealth(nextState)
     }
   };
+}
+
+function grantStartingRelics(state: StudyState, seed: string): StudyState {
+  let next = state;
+  const relicCount = getMetaStartingRelicCount(state);
+  for (let index = 0; index < relicCount; index += 1) {
+    next = grantRelic(next, rollRelic(next, `${seed}:starter-relic:${index}`));
+  }
+  return next;
 }
 
 export function setSpireHeatConditionRank(state: StudyState, conditionId: HeatConditionId, rank: number): StudyState {
@@ -718,6 +735,9 @@ export function claimSpireNodeReward(state: StudyState, now = Date.now()) {
   if (currentNode.kind === "event") {
     return applyEventRoomReward(state, currentNode, now);
   }
+  if (currentNode.kind === "blight") {
+    return applyBlightRoomReward(state, currentNode, now);
+  }
   return state;
 }
 
@@ -730,8 +750,27 @@ function applyEnemyRoomReward(state: StudyState, node: SpireMapNode, now: number
   if (rewardKind === "heart") {
     return recordRoomRewardClaim(addCentaurHeartReward(state), node.id, { maxHealth: CENTAUR_HEART_MAX_HEALTH });
   }
+  if (rewardKind === "pom") {
+    return applyPomReward(state, node, now);
+  }
   const gold = getRoomGold(state, node, "enemy", now);
   return recordRoomRewardClaim(addRoomGold(state, gold), node.id, { gold });
+}
+
+function applyPomReward(state: StudyState, node: SpireMapNode, now: number) {
+  const candidates = getPomEligibleRelics(state);
+  if (!candidates.length) {
+    return recordRoomRewardClaim(addMetaCurrency(state, POM_FALLBACK_META_REWARD), node.id, { metaCurrency: POM_FALLBACK_META_REWARD });
+  }
+  const relic = candidates[Math.floor(getRoll(`${node.id}:${now}:pom-relic`) * candidates.length)];
+  const upgraded = upgradeRelicRarity(relic);
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      relics: state.profile.relics.map((relicItem) => relicItem.id === relic.id ? upgraded : relicItem)
+    }
+  };
 }
 
 function addCentaurHeartReward(state: StudyState) {
@@ -753,7 +792,7 @@ function applyEliteRoomReward(state: StudyState, node: SpireMapNode, now: number
   const withGold = grantRoomGold(state, node, "elite", now);
   const withRelicChoice = createPendingRelicReward(withGold, node, now, "elite", {
     choiceBonus: ELITE_RELIC_CHOICE_BONUS,
-    minRarity: ["uncommon", "rare", "unique"],
+    minRarity: ["common", "uncommon", "rare", "unique"],
     skipMetaCurrency: SKIP_META_ELITE
   });
   return maybeApplyHealingReward(withRelicChoice, node, now, "elite");
@@ -771,7 +810,12 @@ function applyBossRoomReward(state: StudyState, node: SpireMapNode, now: number)
 
 function applyTreasureRoomReward(state: StudyState, node: SpireMapNode, now: number) {
   const gold = getRoomGold(state, node, "treasure", now);
-  return recordRoomRewardClaim(createPendingRelicReward(addRoomGold(state, gold), node, now, "treasure", { skipMetaCurrency: SKIP_META_COMMON }), node.id, { gold });
+  const withGold = addRoomGold(state, gold);
+  if (getRoll(`${node.id}:${now}:treasure-relic`) < TREASURE_RELIC_CHANCE) {
+    return recordRoomRewardClaim(createPendingRelicReward(withGold, node, now, "treasure", { skipMetaCurrency: SKIP_META_COMMON }), node.id, { gold });
+  }
+  const metaCurrency = getRoomMetaCurrency(state, node, now);
+  return recordRoomRewardClaim(addMetaCurrency(withGold, metaCurrency), node.id, { gold, metaCurrency });
 }
 
 function applyMerchantRoomReward(state: StudyState, node: SpireMapNode, now: number) {
@@ -781,7 +825,7 @@ function applyMerchantRoomReward(state: StudyState, node: SpireMapNode, now: num
     profile: {
       ...state.profile,
       shopLastRefreshedAt: now,
-    shopStock: createShopStock(question, state.profile.stats, now, { extraRelicStock: getRunModifierTotals(state).shopRelicStock, maxItemLevel: getStateLevel(state) })
+      shopStock: createShopStock(question, state.profile.stats, now, { extraRelicStock: getRunModifierTotals(state).shopRelicStock, maxItemLevel: getStateLevel(state), relicRollState: state })
     }
   };
 }
@@ -798,17 +842,48 @@ function applyRestRoomReward(state: StudyState) {
 }
 
 function applyEventRoomReward(state: StudyState, node: SpireMapNode, now: number) {
-  if (getRoll(`${node.id}:${now}:event-reward`) < 0.5) {
+  if (getRoll(`${node.id}:${now}:event-reward`) < EVENT_RELIC_CHANCE) {
     return createPendingRelicReward(state, node, now, "event", { minRarity: ["event", "rare"], skipMetaCurrency: SKIP_META_ELITE });
   }
   const withMeta = addMetaCurrency(state, EVENT_META_REWARD);
   return recordRoomRewardClaim(withMeta, node.id, { metaCurrency: EVENT_META_REWARD });
 }
 
+function applyBlightRoomReward(state: StudyState, node: SpireMapNode, now: number) {
+  return createPendingRelicReward(state, node, now, "blight", {
+    minRarity: ["blight"],
+    rerolls: 0,
+    skipMetaCurrency: 0
+  });
+}
+
 export function getRestSpecialAction(state: StudyState): RestSpecialAction {
   const currentNode = getCurrentSpireNode(state);
   const seed = `${state.profile.spireRun.mapSeed}:${currentNode?.id || "rest"}:rest-special`;
-  return getRoll(seed) < 0.5 ? "smith" : "dig";
+  return getRoll(seed) < 0.5 ? "smith" : "sellRelic";
+}
+
+export function getRestRelicSellValue(relic: Relic) {
+  switch (relic.rarity) {
+    case "boss":
+      return 16;
+    case "unique":
+      return 14;
+    case "event":
+      return 12;
+    case "rare":
+      return 10;
+    case "shop":
+      return 8;
+    case "uncommon":
+      return 7;
+    case "common":
+      return 5;
+    case "starter":
+      return 3;
+    default:
+      return 6;
+  }
 }
 
 export function canUpgradeSpireInventoryItem(state: StudyState) {
@@ -939,8 +1014,9 @@ function createPendingRelicReward(
   options: { choiceBonus?: number; minRarity?: RelicRarity[]; rerolls?: number; skipMetaCurrency?: number } = {}
 ) {
   const seed = `${node.id}:${now}:${rewardKind}:relic-choice`;
+  const forcedBlight = rewardKind === "blight";
   const choiceCount = Math.max(1, BASE_RELIC_CHOICE_COUNT + getMetaRelicChoiceBonus(state) + getRunModifierTotals(state).relicChoiceBonus + (options.choiceBonus || 0) - getHeatRelicChoicePenalty(state.profile.spireRun, rewardKind));
-  const rerollsRemaining = Math.max(0, (options.rerolls ?? BASE_RELIC_REROLLS) + Math.max(0, Math.floor(getRunModifierTotals(state).relicRerollBonus || 0)) - getHeatRelicRerollPenalty(state.profile.spireRun));
+  const rerollsRemaining = forcedBlight ? 0 : Math.max(0, (options.rerolls ?? BASE_RELIC_REROLLS) + Math.max(0, Math.floor(getRunModifierTotals(state).relicRerollBonus || 0)) - getHeatRelicRerollPenalty(state.profile.spireRun));
   return {
     ...state,
     profile: {
@@ -954,7 +1030,7 @@ function createPendingRelicReward(
           rewardKind,
           selectedRelicId: null,
           seed,
-          skipMetaCurrency: (options.skipMetaCurrency ?? SKIP_META_COMMON) + Math.max(0, Math.floor(getRunModifierTotals(state).skipRelicMetaBonus || 0))
+          skipMetaCurrency: forcedBlight ? 0 : (options.skipMetaCurrency ?? SKIP_META_COMMON) + Math.max(0, Math.floor(getRunModifierTotals(state).skipRelicMetaBonus || 0))
         }
       }
     }
@@ -965,7 +1041,7 @@ function rollRelicChoices(state: StudyState, seed: string, count: number, minRar
   let nextState = state;
   const choices: Relic[] = [];
   for (let index = 0; choices.length < count && index < count * 6; index += 1) {
-    const relic = rollRelic(nextState, `${seed}:${index}`, { includeEvents: minRarity?.includes("event"), maxItemLevel: getStateLevel(state), minRarity });
+    const relic = rollRelic(nextState, `${seed}:${index}`, { includeBlights: minRarity?.includes("blight"), includeEvents: minRarity?.includes("event"), maxItemLevel: getStateLevel(state), minRarity });
     if (choices.some((choice) => choice.id === relic.id)) {
       continue;
     }
@@ -1013,6 +1089,9 @@ export function skipPendingRelicReward(state: StudyState) {
   if (!pending) {
     return state;
   }
+  if (pending.rewardKind === "blight") {
+    return state;
+  }
   const metaCurrency = pending.skipMetaCurrency;
   const withMeta = addMetaCurrency(state, metaCurrency);
   return recordRoomRewardClaim(clearPendingRelicReward(withMeta), pending.nodeId, {
@@ -1050,10 +1129,13 @@ function getRelicChoiceRarities(kind: RelicRewardKind): RelicRarity[] | undefine
     return ["boss"];
   }
   if (kind === "elite") {
-    return ["uncommon", "rare", "unique"];
+    return ["common", "uncommon", "rare", "unique"];
   }
   if (kind === "event") {
     return ["event", "rare"];
+  }
+  if (kind === "blight") {
+    return ["blight"];
   }
   return undefined;
 }
@@ -1218,12 +1300,21 @@ export function upgradeCurrentSpireRoomItem(state: StudyState) {
   return markSpireRoomRewardClaimed(upgraded, currentNode.id);
 }
 
-export function digCurrentSpireRoomRelic(state: StudyState, now = Date.now()) {
+export function sellRestSiteRelic(state: StudyState, relicId: string) {
   const currentNode = getCurrentSpireNode(state);
-  if (!currentNode || currentNode.kind !== "rest" || state.profile.spireRun.mapOpen || isSpireRoomRewardClaimed(state, currentNode.id) || getRestSpecialAction(state) !== "dig") {
+  const relic = state.profile.relics.find((item) => item.id === relicId);
+  if (!currentNode || currentNode.kind !== "rest" || state.profile.spireRun.mapOpen || isSpireRoomRewardClaimed(state, currentNode.id) || !relic) {
     return state;
   }
-  return markSpireRoomRewardClaimed(createPendingRelicReward(state, currentNode, now, "rest", { skipMetaCurrency: SKIP_META_COMMON }), currentNode.id);
+  const metaCurrency = getRestRelicSellValue(relic);
+  const sold = {
+    ...state,
+    profile: {
+      ...state.profile,
+      relics: state.profile.relics.filter((item) => item.id !== relic.id)
+    }
+  };
+  return markSpireRoomRewardClaimed(recordRoomRewardClaim(addMetaCurrency(sold, metaCurrency), currentNode.id, { metaCurrency }), currentNode.id);
 }
 
 export function smithSpireNode(state: StudyState, now = Date.now()) {
@@ -1291,6 +1382,9 @@ function revealUnknownSpireNode(state: StudyState, node: SpireMapNode, now: numb
 }
 
 function getRevealedNodeKind(encounter: UnknownEncounterKind): SpireNodeKind {
+  if (encounter === "blight") {
+    return "blight";
+  }
   if (encounter === "monster") {
     return "enemy";
   }
@@ -1457,7 +1551,20 @@ function createSpireNodes(seed: number, ratings = SPIRE_RATINGS) {
 }
 
 function assignCombatRewardKinds(nodes: SpireMapNode[], seed: number) {
-  return nodes.map((node) => isRewardedCombatNode(node) ? { ...node, rewardKind: rollCombatRewardKind(seed, node) } : node);
+  const assigned = nodes.map((node) => isRewardedCombatNode(node) ? { ...node, rewardKind: rollCombatRewardKind(seed, node) } : node);
+  return ensurePomCombatReward(assigned, seed);
+}
+
+function ensurePomCombatReward(nodes: SpireMapNode[], seed: number) {
+  if (nodes.some((node) => isRewardedCombatNode(node) && node.rewardKind === "pom")) {
+    return nodes;
+  }
+  const candidates = nodes.filter(isRewardedCombatNode);
+  if (!candidates.length) {
+    return nodes;
+  }
+  const target = candidates[Math.floor(getRoll(`${seed}:guaranteed-pom`) * candidates.length) % candidates.length];
+  return nodes.map((node) => node.id === target.id ? { ...node, rewardKind: "pom" as const } : node);
 }
 
 function isRewardedCombatNode(node: Pick<SpireMapNode, "kind">) {
@@ -1465,7 +1572,7 @@ function isRewardedCombatNode(node: Pick<SpireMapNode, "kind">) {
 }
 
 function isValidCombatRewardKind(kind: SpireCombatRewardKind | undefined): kind is SpireCombatRewardKind {
-  return kind === "gold" || kind === "heart" || kind === "insight";
+  return kind === "gold" || kind === "heart" || kind === "insight" || kind === "pom";
 }
 
 function getCombatRewardKind(node: SpireMapNode): SpireCombatRewardKind {

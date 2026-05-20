@@ -325,7 +325,7 @@ function getPotionBorderColor(type: Extract<ShopItem, { kind: "consumable" }>["t
 export function HeroSiegeRelicIcon(props: { relic: Relic; size?: number; unframed?: boolean }) {
   return (
     <FramedItemAsset
-      asset={props.relic.wikiImagePath || getRelicAsset(props.relic)}
+      asset={getHeroSiegeRelicIconAsset(props.relic)}
       borderColor={getRelicRarityColor(props.relic.rarity)}
       filter={props.relic.wikiImageFilter}
       size={props.size || DEFAULT_RELIC_ICON_SIZE}
@@ -433,54 +433,12 @@ function matchesItemName(name: string, keywords: string[]) {
   return keywords.some((keyword) => name.includes(keyword));
 }
 
-function getRelicAsset(relic: Relic) {
-  const semanticAsset = getSemanticRelicAsset(relic);
-  if (semanticAsset) {
-    return semanticAsset;
+export function getHeroSiegeRelicIconAsset(relic: Relic) {
+  if (relic.wikiImagePath) {
+    return relic.wikiImagePath;
   }
   const index = RELIC_ASSET_INDEXES.get(getRelicAssetKey(relic));
   return RELIC_FALLBACK_ASSETS[(index ?? hashString(getRelicAssetKey(relic))) % RELIC_FALLBACK_ASSETS.length];
-}
-
-function getSemanticRelicAsset(relic: Relic): StaticImageData | null {
-  const name = relic.name.toLowerCase();
-  if (matchesItemName(name, ["belt", "sash"])) {
-    return rockBeltRelicArt;
-  }
-  if (matchesItemName(name, ["boot"])) {
-    return blazingBootsRelicArt;
-  }
-  if (matchesItemName(name, ["eye", "snecko"])) {
-    return theEyeRelicArt;
-  }
-  if (matchesItemName(name, ["skull"])) {
-    return devilSkullRelicArt;
-  }
-  if (matchesItemName(name, ["blood", "vial"])) {
-    return charmedBloodRelicArt;
-  }
-  if (matchesItemName(name, ["flower", "mushroom"])) {
-    return magicMushroomRelicArt;
-  }
-  if (matchesItemName(name, ["coin", "gold", "midas"])) {
-    return midasHandRelicArt;
-  }
-  if (matchesItemName(name, ["stone", "clay", "bark", "anchor"])) {
-    return ancientRockRelicArt;
-  }
-  if (matchesItemName(name, ["crown"])) {
-    return kingsCrownRelicArt;
-  }
-  if (matchesItemName(name, ["bell"])) {
-    return devilHornRelicArt;
-  }
-  if (matchesItemName(name, ["bottle", "potion", "tea", "coffee"])) {
-    return largeBeerRelicArt;
-  }
-  if (matchesItemName(name, ["chest", "box", "cage"])) {
-    return chestArt;
-  }
-  return null;
 }
 
 function getRelicAssetKey(relic: Relic) {

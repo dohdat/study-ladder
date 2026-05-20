@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { getHeroSiegeRelicIconAsset } from "../components/HeroSiegeItemIcon";
 import { MONSTER_WIKI_ENTRIES } from "../components/MonsterEncounter";
 import { HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT, HERO_SIEGE_MOD_RULES, HERO_SIEGE_WIKI_CATEGORIES, HERO_SIEGE_WIKI_CHARMS, HERO_SIEGE_WIKI_ITEM_IMAGE_DISPLAYS, HERO_SIEGE_WIKI_ITEMS, getVisibleWikiItemStats, getVisibleWikiRelicStats, getWikiItemPublicPath, getWikiItemQualityLabel, getWikiRelicQualityLabel, pickWikiEquipmentItem } from "../lib/heroSiegeWikiCatalog";
 import { getRelicQualityLabel } from "../lib/heroSiegeQuality";
@@ -17,6 +18,12 @@ describe("wiki icon uniqueness", () => {
 
   it("renders every relic with a unique wiki icon identity", () => {
     const iconKeys = RELIC_DEFINITIONS.map((relic) => `${relic.wikiImagePath || "missing"}|${relic.wikiImageFilter || "base"}`);
+
+    expect(new Set(iconKeys).size).toBe(iconKeys.length);
+  });
+
+  it("renders every relic with a unique base icon asset", () => {
+    const iconKeys = RELIC_DEFINITIONS.map((relic) => getHeroSiegeRelicIconAsset(relic));
 
     expect(new Set(iconKeys).size).toBe(iconKeys.length);
   });
