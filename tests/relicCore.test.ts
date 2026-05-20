@@ -33,11 +33,17 @@ describe("relicCore", () => {
   it("uses the curated roguelike relic catalog instead of generated legacy relics", () => {
     const counts = RELIC_DEFINITIONS.reduce<Record<string, number>>((total, relic) => ({ ...total, [relic.rarity]: (total[relic.rarity] || 0) + 1 }), {});
 
-    expect(RELIC_DEFINITIONS).toHaveLength(115);
+    expect(RELIC_DEFINITIONS).toHaveLength(72);
     expect(counts).toMatchObject(ROGUELIKE_RELIC_RARITY_COUNTS);
     expect(RELIC_DEFINITIONS.some((relic) => relic.id === "burning-blood")).toBe(false);
     expect(RELIC_DEFINITIONS.some((relic) => relic.id === "no-run-blade")).toBe(true);
     expect(RELIC_DEFINITIONS.some((relic) => relic.id === "glass-crown")).toBe(true);
+  });
+
+  it("avoids duplicate mechanical relic packages", () => {
+    const packageKeys = RELIC_DEFINITIONS.map((relic) => (relic.modifiers || []).map((modifier) => modifier.key).sort().join("|"));
+
+    expect(new Set(packageKeys).size).toBe(packageKeys.length);
   });
 
   it("keeps the wiki catalog aligned with the roguelike relic source notes", () => {

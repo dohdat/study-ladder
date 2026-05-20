@@ -43,6 +43,22 @@ import axeMasteryArt from "../assets/hero_siege_skills/axe-mastery.png";
 import naturalResistanceArt from "../assets/hero_siege_skills/natural-resistance.png";
 import sureCritArt from "../assets/hero_siege_skills/sure-crit.png";
 import treasureSenseArt from "../assets/hero_siege_skills/treasure-sense.png";
+import barbedShieldArt from "../assets/hero_siege_relics/barbed-shield.png";
+import bookOfBelialArt from "../assets/hero_siege_relics/book-of-belial.png";
+import casinoDiceArt from "../assets/hero_siege_relics/casino-dice.png";
+import deathsScytheArt from "../assets/hero_siege_relics/deaths-scythe.png";
+import dislocatedEyeArt from "../assets/hero_siege_relics/dislocated-eye.png";
+import fortuneCardArt from "../assets/hero_siege_relics/fortune-card.png";
+import guardianAngelArt from "../assets/hero_siege_relics/guardian-angel.png";
+import kingsCrownArt from "../assets/hero_siege_relics/kings-crown.png";
+import oddBookArt from "../assets/hero_siege_relics/odd-book.png";
+import razorwireArt from "../assets/hero_siege_relics/razorwire.png";
+import steamSaleArt from "../assets/hero_siege_relics/steam-sale.png";
+import battleTranceArt from "../assets/hero_siege_skills/battle-trance.png";
+import findItemArt from "../assets/hero_siege_skills/find-item.png";
+import ironSkinArt from "../assets/hero_siege_skills/iron-skin.png";
+import shieldMasteryArt from "../assets/hero_siege_skills/shield-mastery.png";
+import swordMasteryArt from "../assets/hero_siege_skills/sword-mastery.png";
 import { questions } from "../data/questions";
 import { useStudyBlockerSettings } from "../hooks/useStudyBlocker";
 import {
@@ -58,12 +74,12 @@ import {
   type HeroSiegeWikiIconDisplay,
   type HeroSiegeWikiItem
 } from "../lib/heroSiegeWikiCatalog";
+import { HEAT_CONDITION_DEFINITIONS, MAX_HEAT } from "../lib/campaignCore";
 import { RELIC_DEFINITIONS } from "../lib/relicCore";
 import { formatModifier } from "../lib/modifierFormat";
 import { SPIRE_MIN_RATING_MAX, SPIRE_MIN_RATING_MIN, getSpireActBaseRating, normalizeSpireMinRating } from "../lib/spireMapCore";
 import {
   META_UPGRADE_DEFINITIONS,
-  canPurchaseMetaUpgrade,
   defaultState,
   getAttackDamage,
   getCriticalChance,
@@ -71,10 +87,8 @@ import {
   getElementalResistances,
   getHealthLoss,
   getMaxHealth,
-  getMetaUpgradeCost,
   getRunModifierTotals,
   getWarriorSkillBonusTotals,
-  purchaseMetaUpgrade,
   setSpireMinimumRating,
   spendStatPoint
 } from "../lib/studyCore";
@@ -244,49 +258,6 @@ function ProfilePanel(props: { state: StudyState; setState: React.Dispatch<React
       <Text size="sm" c="dimmed" fw={700}>
         Run power now comes from relics, route choices, gold, potions, and temporary effects.
       </Text>
-      <MetaUpgradePanel state={props.state} setState={props.setState} />
-    </Stack>
-  );
-}
-
-function MetaUpgradePanel(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
-  return (
-    <Stack gap="xs">
-      <Group justify="space-between" align="flex-end">
-        <Box>
-          <Text size="sm" fw={900} c="yellow.3">Meta Upgrades</Text>
-          <Text size="xs" c="dimmed">Spend insight for permanent bonuses that apply after a run reset.</Text>
-        </Box>
-        <Badge variant="light" color="yellow">{props.state.profile.metaProgress.currency} insight</Badge>
-      </Group>
-      <SimpleGrid cols={{ base: 1, sm: 3 }}>
-        {META_UPGRADE_DEFINITIONS.map((upgrade) => {
-          const rank = props.state.profile.metaProgress.upgrades[upgrade.id] || 0;
-          const maxed = rank >= upgrade.maxRank;
-          const cost = getMetaUpgradeCost(props.state, upgrade.id);
-          const canBuy = canPurchaseMetaUpgrade(props.state, upgrade.id);
-          return (
-            <Box key={upgrade.id} p="sm" style={{ background: "rgba(0, 0, 0, 0.2)", border: "1px solid var(--mantine-color-dark-4)", borderRadius: 6 }}>
-              <Stack gap={8}>
-                <Group justify="space-between" gap="xs" wrap="nowrap">
-                  <Text size="sm" fw={900}>{upgrade.label}</Text>
-                  <Badge size="xs" variant={maxed ? "filled" : "outline"} color={maxed ? "green" : "yellow"}>{rank}/{upgrade.maxRank}</Badge>
-                </Group>
-                <Text size="xs" c="dimmed" style={{ minHeight: 34 }}>{upgrade.description}</Text>
-                <HeroSiegeButton
-                  disabled={!canBuy}
-                  fullWidth
-                  height={28}
-                  minWidth={84}
-                  onClick={() => props.setState((previous) => purchaseMetaUpgrade(previous, upgrade.id))}
-                >
-                  {maxed ? "Max" : `${cost} Insight`}
-                </HeroSiegeButton>
-              </Stack>
-            </Box>
-          );
-        })}
-      </SimpleGrid>
     </Stack>
   );
 }
@@ -417,6 +388,8 @@ function WikiPanel() {
       <Tabs.List grow mb="md">
         <Tabs.Tab value="monsters">Monsters</Tabs.Tab>
         <Tabs.Tab value="relics">Relics</Tabs.Tab>
+        <Tabs.Tab value="mirror">Mirror</Tabs.Tab>
+        <Tabs.Tab value="pact">Pact</Tabs.Tab>
         <Tabs.Tab value="questions">LeetCode Bank</Tabs.Tab>
       </Tabs.List>
       <Tabs.Panel value="monsters">
@@ -424,6 +397,12 @@ function WikiPanel() {
       </Tabs.Panel>
       <Tabs.Panel value="relics">
         <RelicWiki />
+      </Tabs.Panel>
+      <Tabs.Panel value="mirror">
+        <MirrorWiki />
+      </Tabs.Panel>
+      <Tabs.Panel value="pact">
+        <PactWiki />
       </Tabs.Panel>
       <Tabs.Panel value="questions">
         <QuestionBankWiki />
@@ -736,6 +715,242 @@ function RelicWikiCard(props: { relic: Relic }) {
   );
 }
 
+function MirrorWiki() {
+  const totalRanks = META_UPGRADE_DEFINITIONS.reduce((sum, upgrade) => sum + upgrade.maxRank, 0);
+  return (
+    <Stack gap="md">
+      <Group justify="space-between">
+        <Box>
+          <Title order={4}>Mirror Upgrade Catalog</Title>
+          <Text size="sm" c="dimmed">{META_UPGRADE_DEFINITIONS.length} permanent upgrades, {totalRanks} total ranks.</Text>
+        </Box>
+        <Badge variant="outline">{META_UPGRADE_DEFINITIONS.length} entries</Badge>
+      </Group>
+      <SimpleGrid cols={{ base: 1, sm: 2 }}>
+        {META_UPGRADE_DEFINITIONS.map((upgrade, index) => (
+          <MirrorWikiCard key={upgrade.id} index={index} upgrade={upgrade} />
+        ))}
+      </SimpleGrid>
+    </Stack>
+  );
+}
+
+function MirrorWikiCard(props: { index: number; upgrade: (typeof META_UPGRADE_DEFINITIONS)[number] }) {
+  const upgrade = props.upgrade;
+  const effectText = formatMirrorUpgradeEffect(upgrade);
+  const totalCost = getMirrorUpgradeTotalCost(upgrade);
+  return (
+    <Tooltip label={<MirrorWikiDetails upgrade={upgrade} totalCost={totalCost} />} multiline withArrow color="dark" styles={{ tooltip: { background: TOOLTIP_BG, border: TOOLTIP_BORDER, borderRadius: 2, boxShadow: TOOLTIP_SHADOW, color: "#f1dfad", padding: TOOLTIP_PADDING } }}>
+      <Box p="sm" style={{ background: "var(--mantine-color-dark-7)", border: "1px solid rgba(216, 193, 129, 0.5)", borderRadius: 6, minHeight: 112 }}>
+        <Group gap="sm" align="flex-start" wrap="nowrap">
+          <Box
+            style={{
+              alignItems: "center",
+              background: "#08070b",
+              border: "1px solid #8a744c",
+              display: "flex",
+              flex: "0 0 42px",
+              height: 42,
+              justifyContent: "center",
+              width: 42
+            }}
+          >
+            <Box alt="" component="img" src={getMirrorUpgradeIcon(upgrade.id)} style={{ display: "block", filter: "drop-shadow(0 2px 0 rgba(0, 0, 0, 0.72))", height: 34, imageRendering: "pixelated", objectFit: "contain", width: 34 }} />
+          </Box>
+          <Box
+            style={{
+              alignItems: "center",
+              background: "rgba(216, 193, 129, 0.14)",
+              border: "1px solid rgba(216, 193, 129, 0.58)",
+              color: "#f1dfad",
+              display: "flex",
+              flex: "0 0 28px",
+              fontSize: 14,
+              fontWeight: 900,
+              height: 28,
+              justifyContent: "center",
+              width: 28
+            }}
+          >
+            {props.index + 1}
+          </Box>
+          <Box style={{ minWidth: 0 }}>
+            <Group gap="xs" mb={2} wrap="nowrap">
+              <Text size="sm" fw={900} c="yellow.3" truncate>{upgrade.label}</Text>
+              <Badge size="xs" variant="outline">{upgrade.maxRank} ranks</Badge>
+            </Group>
+            <Text size="xs" c="dimmed" lineClamp={2}>{upgrade.description}</Text>
+            <Text size="xs" mt={4} c="yellow.3" lineClamp={2}>{effectText}</Text>
+          </Box>
+        </Group>
+      </Box>
+    </Tooltip>
+  );
+}
+
+const MIRROR_UPGRADE_ICONS: Record<string, string> = {
+  cleanExecution: swordMasteryArt,
+  coinPurse: midasHandArt,
+  crushingInsight: razorwireArt,
+  deathDefiance: guardianAngelArt,
+  eliteHunter: kingsCrownArt,
+  fatedPersuasion: casinoDiceArt,
+  fatedTreasury: fortuneCardArt,
+  goldenTouch: midasHandArt,
+  highConfidence: battleTranceArt,
+  ironResolve: ironSkinArt,
+  lethalPrecision: sureCritArt,
+  mistakeAlchemy: barbedShieldArt,
+  olympianFavor: tokenLuckArt,
+  oracleFavor: dislocatedEyeArt,
+  relicChoice: findItemArt,
+  shadowTraining: bookOfBelialArt,
+  shopkeeperFavor: steamSaleArt,
+  silverGuard: shieldMasteryArt,
+  swiftReflex: fireIceArt,
+  topicMemory: oddBookArt,
+  toughStart: deathsScytheArt,
+  underworldBroker: treasureSenseArt
+};
+
+function getMirrorUpgradeIcon(id: string) {
+  return MIRROR_UPGRADE_ICONS[id] || tokenLuckArt;
+}
+
+function MirrorWikiDetails(props: { totalCost: number; upgrade: (typeof META_UPGRADE_DEFINITIONS)[number] }) {
+  const upgrade = props.upgrade;
+  const effects = getMirrorUpgradeEffectLines(upgrade);
+  return (
+    <Stack gap={8} style={{ textAlign: "left", width: TOOLTIP_SHEET_WIDTH }}>
+      <Box>
+        <Text size="lg" fw={900} tt="uppercase" style={{ color: "#f1dfad", lineHeight: 1.15, textShadow: "0 2px 0 #000" }}>{upgrade.label}</Text>
+        <Text size="sm" fw={800} c="gray.2">Max rank {upgrade.maxRank} - Total cost {props.totalCost} insight</Text>
+      </Box>
+      <Text size="xs" c="gray.3">{upgrade.description}</Text>
+      <Stack gap={2}>
+        {effects.map((effect) => (
+          <Text key={effect} size="sm" fw={900} style={{ color: "#f0df5f", lineHeight: 1.18, textShadow: "0 1px 0 #000" }}>{effect}</Text>
+        ))}
+      </Stack>
+      <Text size="xs" c="gray.4">{formatMirrorUpgradeCost(upgrade)}</Text>
+    </Stack>
+  );
+}
+
+function PactWiki() {
+  const fullHeat = HEAT_CONDITION_DEFINITIONS.reduce((sum, condition) => sum + condition.maxRank * condition.heatPerRank, 0);
+  return (
+    <Stack gap="md">
+      <Group justify="space-between">
+        <Box>
+          <Title order={4}>Pact of Conditions Catalog</Title>
+          <Text size="sm" c="dimmed">{HEAT_CONDITION_DEFINITIONS.length} run modifiers, {fullHeat} total heat.</Text>
+        </Box>
+        <Badge variant="outline">Max heat {MAX_HEAT}</Badge>
+      </Group>
+      <SimpleGrid cols={{ base: 1, sm: 2 }}>
+        {HEAT_CONDITION_DEFINITIONS.map((condition, index) => (
+          <PactWikiCard key={condition.id} condition={condition} index={index} />
+        ))}
+      </SimpleGrid>
+    </Stack>
+  );
+}
+
+function PactWikiCard(props: { condition: (typeof HEAT_CONDITION_DEFINITIONS)[number]; index: number }) {
+  const condition = props.condition;
+  return (
+    <Tooltip label={<PactWikiDetails condition={condition} />} multiline withArrow color="dark" styles={{ tooltip: { background: TOOLTIP_BG, border: TOOLTIP_BORDER, borderRadius: 2, boxShadow: TOOLTIP_SHADOW, color: "#f1dfad", padding: TOOLTIP_PADDING } }}>
+      <Box p="sm" style={{ background: "var(--mantine-color-dark-7)", border: "1px solid rgba(239, 68, 68, 0.52)", borderRadius: 6, minHeight: 112 }}>
+        <Group gap="sm" align="flex-start" wrap="nowrap">
+          <Box
+            style={{
+              alignItems: "center",
+              background: "#08070b",
+              border: "1px solid rgba(239, 68, 68, 0.78)",
+              display: "flex",
+              flex: "0 0 42px",
+              height: 42,
+              justifyContent: "center",
+              width: 42
+            }}
+          >
+            <Box alt="" component="img" src={getPactConditionIcon(condition.id)} style={{ display: "block", filter: "drop-shadow(0 2px 0 rgba(0, 0, 0, 0.72))", height: 34, imageRendering: "pixelated", objectFit: "contain", width: 34 }} />
+          </Box>
+          <Box
+            style={{
+              alignItems: "center",
+              background: "rgba(239, 68, 68, 0.2)",
+              border: "1px solid rgba(255, 225, 120, 0.32)",
+              color: "#ff6b5a",
+              display: "flex",
+              flex: "0 0 28px",
+              fontSize: 14,
+              fontWeight: 900,
+              height: 28,
+              justifyContent: "center",
+              width: 28
+            }}
+          >
+            {props.index + 1}
+          </Box>
+          <Box style={{ minWidth: 0 }}>
+            <Group gap="xs" mb={2} wrap="nowrap">
+              <Text size="sm" fw={900} c="red.4" truncate>{condition.label}</Text>
+              <Badge size="xs" variant="outline">{condition.maxRank} ranks</Badge>
+              <Badge size="xs" color="orange" variant="light">+{condition.heatPerRank}</Badge>
+            </Group>
+            <Text size="xs" c="dimmed" lineClamp={2}>{condition.description}</Text>
+            <Text size="xs" mt={4} c="yellow.3" lineClamp={2}>{formatPactConditionSummary(condition)}</Text>
+          </Box>
+        </Group>
+      </Box>
+    </Tooltip>
+  );
+}
+
+const PACT_CONDITION_ICONS: Record<string, string> = {
+  approvalProcess: casinoDiceArt,
+  benefitsPackage: devilSkullArt,
+  calisthenicsProgram: kingsCrownArt,
+  convenienceFee: steamSaleArt,
+  damageControl: shieldMasteryArt,
+  extremeMeasures: deathsScytheArt,
+  forcedOvertime: fireIceArt,
+  hardLabor: bookOfBelialArt,
+  heightenedSecurity: razorwireArt,
+  jurySummons: oddBookArt,
+  lastingConsequences: healthPotionArt,
+  middleManagement: dislocatedEyeArt,
+  routineInspection: tokenLuckArt,
+  tightDeadline: battleTranceArt,
+  underworldCustoms: guardianAngelArt
+};
+
+function getPactConditionIcon(id: string) {
+  return PACT_CONDITION_ICONS[id] || devilSkullArt;
+}
+
+function PactWikiDetails(props: { condition: (typeof HEAT_CONDITION_DEFINITIONS)[number] }) {
+  const condition = props.condition;
+  const effects = getPactConditionEffectLines(condition);
+  return (
+    <Stack gap={8} style={{ textAlign: "left", width: TOOLTIP_SHEET_WIDTH }}>
+      <Box>
+        <Text size="lg" fw={900} tt="uppercase" style={{ color: "#ff6b5a", lineHeight: 1.15, textShadow: "0 2px 0 #000" }}>{condition.label}</Text>
+        <Text size="sm" fw={800} c="gray.2">Max rank {condition.maxRank} - {condition.heatPerRank} heat per rank - {condition.maxRank * condition.heatPerRank} total heat</Text>
+      </Box>
+      <Text size="xs" c="gray.3">{condition.description}</Text>
+      <Stack gap={2}>
+        {effects.map((effect) => (
+          <Text key={effect} size="sm" fw={900} style={{ color: "#f0df5f", lineHeight: 1.18, textShadow: "0 1px 0 #000" }}>{effect}</Text>
+        ))}
+      </Stack>
+      <Text size="xs" c="gray.4">Pact ranks apply only to the current run after starting Act I.</Text>
+    </Stack>
+  );
+}
+
 type WikiItemCategory = HeroSiegeWikiCategory;
 type RelicRarityFilter = "all" | RelicRarity;
 
@@ -958,6 +1173,74 @@ function formatRelicModifiers(relic: Relic) {
     return relic.description;
   }
   return modifiers.map((modifier) => formatModifier(modifier.key, modifier.value)).filter(Boolean).join(", ") || relic.description;
+}
+
+function formatMirrorUpgradeEffect(upgrade: (typeof META_UPGRADE_DEFINITIONS)[number]) {
+  return getMirrorUpgradeEffectLines(upgrade).join(", ");
+}
+
+function getMirrorUpgradeEffectLines(upgrade: (typeof META_UPGRADE_DEFINITIONS)[number]) {
+  const modifierLines = (upgrade.modifiers || [])
+    .map((modifier) => formatModifier(modifier.key, modifier.valuePerRank))
+    .filter(Boolean)
+    .map((line) => `${line} per rank`);
+  return modifierLines.length ? modifierLines : [upgrade.description];
+}
+
+function formatMirrorUpgradeCost(upgrade: (typeof META_UPGRADE_DEFINITIONS)[number]) {
+  if (upgrade.maxRank <= 1 || upgrade.costStep === 0) {
+    return `Cost: ${upgrade.baseCost} insight.`;
+  }
+  return `Cost: ${upgrade.baseCost} insight, +${upgrade.costStep} per rank.`;
+}
+
+function getMirrorUpgradeTotalCost(upgrade: (typeof META_UPGRADE_DEFINITIONS)[number]): number {
+  let total = 0;
+  for (let rank = 0; rank < upgrade.maxRank; rank++) {
+    total += upgrade.baseCost + rank * upgrade.costStep;
+  }
+  return total;
+}
+
+function formatPactConditionSummary(condition: (typeof HEAT_CONDITION_DEFINITIONS)[number]) {
+  return getPactConditionEffectLines(condition).slice(0, 2).join(", ");
+}
+
+function getPactConditionEffectLines(condition: (typeof HEAT_CONDITION_DEFINITIONS)[number]) {
+  switch (condition.id) {
+    case "approvalProcess":
+      return ["Relic reward rerolls are reduced by 1 per rank.", "At max rank, relic rewards lose 2 rerolls."];
+    case "benefitsPackage":
+      return ["All monsters gain +80 rating per rank.", "Monster damage also rises from the heat total."];
+    case "calisthenicsProgram":
+      return ["Monsters gain +15% health per rank.", "At max rank, monsters have +30% health."];
+    case "convenienceFee":
+      return ["Shop prices increase by +40% per rank.", "At max rank, shop prices are +80%."];
+    case "damageControl":
+      return ["Monsters gain +12% health per rank.", "Big-hit strategies become less reliable by pushing combat toward higher health pools."];
+    case "extremeMeasures":
+      return ["Bosses gain +18% health and damage per rank.", "Boss question rating also rises by about +90 per rank."];
+    case "forcedOvertime":
+      return ["Monsters deal +10% damage per rank.", "Question timers are shortened by +5% per rank."];
+    case "hardLabor":
+      return ["Incoming monster damage increases by +20% per rank.", "At max rank, incoming monster damage is +100% before other heat scaling."];
+    case "heightenedSecurity":
+      return ["Wrong answers deal +15% more monster damage.", "This stacks with Hard Labor and the global heat damage bonus."];
+    case "jurySummons":
+      return ["Elite rooms add +1 question at rank 1.", "Regular combat rooms add +1 question starting at rank 2."];
+    case "lastingConsequences":
+      return ["Healing received is reduced by -25% per rank.", "At max rank, healing is clamped to a minimum 5% effectiveness."];
+    case "middleManagement":
+      return ["Elite rooms gain +25% health and damage.", "Elite question rating also rises by about +100."];
+    case "routineInspection":
+      return ["Relic rewards show 1 fewer choice per rank.", "Choice count cannot fall below 1."];
+    case "tightDeadline":
+      return ["Question timers are shortened by +10% per rank.", "At max rank, timers are shortened by +50% before other timer penalties."];
+    case "underworldCustoms":
+      return ["Boss relic rewards show 1 fewer choice.", "This stacks with Routine Inspection for boss rewards."];
+    default:
+      return [condition.description];
+  }
 }
 
 function SettingsPanel(props: { setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {

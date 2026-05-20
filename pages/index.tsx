@@ -760,7 +760,7 @@ export default function Home() {
     freshState.profile.spireRun = {
       ...freshState.profile.spireRun,
       heatConditions: { ...state.profile.spireRun.heatConditions },
-      heatSetupOpen: Boolean(state.profile.metaProgress.heatUnlocked)
+      heatSetupOpen: true
     };
     freshState = setSpireMinimumRating(freshState, state.profile.spireMinRating);
     freshState.profile.coins = getMetaStartingGoldBonus(freshState);

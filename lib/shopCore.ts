@@ -65,15 +65,12 @@ export function buyShopItem(state: StudyState, shopItemId: string, maxHealth: nu
   return next;
 }
 
-export function canBuyShopItem(state: StudyState, listing: ShopItem, maxHealth: number, _maxMana = 0) {
+export function canBuyShopItem(state: StudyState, listing: ShopItem, _maxHealth: number, _maxMana = 0) {
   if (state.profile.coins < getShopItemCost(state, listing)) {
     return false;
   }
   if (listing.kind !== "consumable") {
     return true;
-  }
-  if (listing.type === "health") {
-    return state.profile.health < maxHealth;
   }
   return true;
 }

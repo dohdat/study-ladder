@@ -66,6 +66,24 @@ describe("shopCore", () => {
     expect(state.profile.relics.some((item) => item.id === (relic?.kind === "relic" ? relic.relic.id : ""))).toBe(true);
   });
 
+  it("allows one health potion purchase per shop even at full health", () => {
+    let state = defaultState();
+    state.profile.coins = 500;
+    state.profile.health = getMaxHealth(state);
+    state.profile.shopStock = createShopStock(questions[0], getEffectiveCharacterStats(state), 1000);
+
+    const healthPotions = state.profile.shopStock.filter((item) => item.kind === "consumable" && item.type === "health");
+    expect(healthPotions).toHaveLength(1);
+    const potion = healthPotions[0];
+    const cost = getShopItemCost(state, potion);
+
+    state = buyShopItem(state, potion.id, getMaxHealth(state));
+
+    expect(state.profile.coins).toBe(500 - cost);
+    expect(state.profile.health).toBe(getMaxHealth(state));
+    expect(state.profile.shopStock.some((item) => item.kind === "consumable" && item.type === "health")).toBe(false);
+  });
+
   it("applies relic shop discounts to affordability and purchase cost", () => {
     let state = defaultState();
     state.profile.shopStock = createShopStock(questions[0], getEffectiveCharacterStats(state), 1000);

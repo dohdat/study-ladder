@@ -1,4 +1,4 @@
-import { Badge, Box, Group, Paper, Stack, Text } from "@mantine/core";
+import { Badge, Box, Group, Paper, SimpleGrid, Stack, Text } from "@mantine/core";
 type StaticImageData = string;
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -7,10 +7,11 @@ import { CoinIcon } from "./CoinIcon";
 import { ShopPanel } from "./ShopPanel";
 import { RelicIcon } from "./RelicIcon";
 import { HEAT_CONDITION_DEFINITIONS, MAX_HEAT, getHeatLevel, getSpireCampaignLabel, getSpireDifficultyModifiers } from "../lib/campaignCore";
-import { canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, digCurrentSpireRoomRelic, enterSpireNode, getCurrentSpireNode, getRestSpecialAction, isCombatNode, isSpireHeatSetupOpen, leaveSpireRoom, rerollPendingRelicReward, resetSpireHeat, selectPendingRelicReward, selectSpireNode, setSpireHeatConditionRank, skipPendingRelicReward, startSpireHeatRun } from "../lib/spireMapCore";
+import { canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, digCurrentSpireRoomRelic, enterSpireNode, getCurrentSpireNode, getRestSpecialAction, isCombatNode, isSpireRunSetupOpen, leaveSpireRoom, rerollPendingRelicReward, resetSpireHeat, selectPendingRelicReward, selectSpireNode, setSpireHeatConditionRank, skipPendingRelicReward, startSpireHeatRun } from "../lib/spireMapCore";
+import { META_UPGRADE_DEFINITIONS, canPurchaseMetaUpgrade, getMetaUpgradeCost, purchaseMetaUpgrade } from "../lib/studyCore";
 import { formatModifier } from "../lib/modifierFormat";
 import { getRelicRarityColor } from "../lib/heroSiegeQuality";
-import type { Relic, SpireAct, SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
+import type { Relic, SpireAct, SpireCombatRewardKind, SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
 import campfireArt from "../assets/hero_siege_map/campfire.png";
 import chestArt from "../assets/hero_siege_map/chest.png";
 import deadTreeArt from "../assets/hero_siege_map/dead-tree.png";
@@ -29,6 +30,27 @@ import hellBeastArt from "../assets/hero_siege_monsters/hell-beast.png";
 import sheepKingArt from "../assets/hero_siege_monsters/sheep-king.png";
 import skeletonMageArt from "../assets/hero_siege_monsters/skeleton-mage.png";
 import zombieArt from "../assets/hero_siege_monsters/zombie.png";
+import barbedShieldArt from "../assets/hero_siege_relics/barbed-shield.png";
+import bookOfBelialArt from "../assets/hero_siege_relics/book-of-belial.png";
+import casinoDiceArt from "../assets/hero_siege_relics/casino-dice.png";
+import deathsScytheArt from "../assets/hero_siege_relics/deaths-scythe.png";
+import dislocatedEyeArt from "../assets/hero_siege_relics/dislocated-eye.png";
+import fortuneCardArt from "../assets/hero_siege_relics/fortune-card.png";
+import guardianAngelArt from "../assets/hero_siege_relics/guardian-angel.png";
+import heatOrbArt from "../assets/hero_siege_relics/orb-of-fire.png";
+import kingsCrownArt from "../assets/hero_siege_relics/kings-crown.png";
+import midasHandArt from "../assets/hero_siege_relics/midas-hand.png";
+import oddBookArt from "../assets/hero_siege_relics/odd-book.png";
+import razorwireArt from "../assets/hero_siege_relics/razorwire.png";
+import steamSaleArt from "../assets/hero_siege_relics/steam-sale.png";
+import tokenLuckArt from "../assets/hero_siege_relics/token-luck.png";
+import battleTranceArt from "../assets/hero_siege_skills/battle-trance.png";
+import findItemArt from "../assets/hero_siege_skills/find-item.png";
+import ironSkinArt from "../assets/hero_siege_skills/iron-skin.png";
+import shieldMasteryArt from "../assets/hero_siege_skills/shield-mastery.png";
+import sureCritArt from "../assets/hero_siege_skills/sure-crit.png";
+import swordMasteryArt from "../assets/hero_siege_skills/sword-mastery.png";
+import treasureSenseArt from "../assets/hero_siege_skills/treasure-sense.png";
 
 const EXPANDED_MAP_HEIGHT = "calc(100vh - 126px)";
 const COMPACT_ROOM_HEIGHT = 66;
@@ -145,8 +167,8 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
   return (
     <Paper withBorder p="sm" style={{ background: "var(--mantine-color-dark-7)", ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
       <Box style={{ minWidth: 0, ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
-        {mapOpen && isSpireHeatSetupOpen(props.state) ? (
-          <HeatSetupScreen fillAvailableHeight={props.fillAvailableHeight} setState={props.setState} state={props.state} />
+        {mapOpen && isSpireRunSetupOpen(props.state) ? (
+          <RunSetupScreen fillAvailableHeight={props.fillAvailableHeight} setState={props.setState} state={props.state} />
         ) : mapOpen ? (
           <Box style={{ background: mapBg, border: "1px solid var(--mantine-color-dark-4)", height: props.fillAvailableHeight ? undefined : EXPANDED_MAP_HEIGHT, overflow: "hidden", position: "relative", ...(props.fillAvailableHeight ? FLEX_FILL_STYLE : {}) }}>
             <Box
@@ -174,6 +196,7 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
                       id={mapNode.id}
                       kind={mapNode.kind}
                       onSelect={() => props.setState((previous) => selectSpireNode(previous, mapNode.id))}
+                      rewardKind={mapNode.rewardKind}
                       selectable={isReachableMapNode(props.state, mapNode.id)}
                       x={position.x}
                       y={position.y}
@@ -620,6 +643,7 @@ function MapProp(props: { asset: StaticImageData; left: number; opacity?: number
 
 function ActMapLabel(props: { state: StudyState }) {
   const difficulty = getSpireDifficultyModifiers(props.state.profile.spireRun);
+  const heat = getHeatLevel(props.state.profile.spireRun.heatConditions);
   return (
     <Box
       style={{
@@ -645,15 +669,36 @@ function ActMapLabel(props: { state: StudyState }) {
         zIndex: 4
       }}
     >
-      <Text size="xs" fw={900} ta="center" tt="uppercase" style={{ letterSpacing: 0, lineHeight: 1, textShadow: "0 2px 0 #000" }}>
-        {getSpireCampaignLabel(props.state.profile.spireRun)} {difficulty.resistancePenalty ? `(${difficulty.resistancePenalty}% Resist)` : ""}
-      </Text>
+      <Group gap={7} justify="center" wrap="nowrap">
+        {heat > 0 ? (
+          <Group gap={2} wrap="nowrap">
+            <Box
+              component="img"
+              src={heatOrbArt}
+              alt=""
+              style={{
+                filter: "drop-shadow(0 1px 0 #000)",
+                height: 18,
+                imageRendering: "pixelated",
+                width: 18
+              }}
+            />
+            <Text size="xs" fw={900} tt="uppercase" style={{ color: "#ffe26a", letterSpacing: 0, lineHeight: 1, textShadow: "0 2px 0 #000" }}>
+              {heat}
+            </Text>
+          </Group>
+        ) : null}
+        <Text size="xs" fw={900} ta="center" tt="uppercase" style={{ letterSpacing: 0, lineHeight: 1, textShadow: "0 2px 0 #000" }}>
+          {getSpireCampaignLabel(props.state.profile.spireRun)} {difficulty.resistancePenalty ? `(${difficulty.resistancePenalty}% Resist)` : ""}
+        </Text>
+      </Group>
     </Box>
   );
 }
 
-function HeatSetupScreen(props: { fillAvailableHeight?: boolean; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
+function RunSetupScreen(props: { fillAvailableHeight?: boolean; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
   const mapBg = getActMapBackground(props.state.profile.spireRun.act);
+  const showPact = props.state.profile.metaProgress.heatUnlocked;
   return (
     <Box
       style={{
@@ -670,9 +715,114 @@ function HeatSetupScreen(props: { fillAvailableHeight?: boolean; setState: React
       }}
     >
       <MapBackdrop act={props.state.profile.spireRun.act} />
-      <HeatPanel embedded setState={props.setState} showStart state={props.state} />
+      <Stack gap={18} align="center" style={{ maxHeight: "100%", overflow: "auto", width: "min(1320px, 100%)", zIndex: 2 }}>
+        <SimpleGrid cols={{ base: 1, lg: showPact ? 2 : 1 }} spacing={18} style={{ alignItems: "start", width: "100%" }}>
+          <MirrorUpgradePanel setState={props.setState} state={props.state} />
+          {showPact ? <HeatPanel embedded setState={props.setState} state={props.state} /> : null}
+        </SimpleGrid>
+        <HeroSiegeButton onClick={() => props.setState((previous) => startSpireHeatRun(previous))} minWidth={150}>
+          Start Act I
+        </HeroSiegeButton>
+      </Stack>
     </Box>
   );
+}
+
+function MirrorUpgradePanel(props: { setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
+  return (
+    <Box
+      style={{
+        background: "linear-gradient(180deg, rgba(44, 38, 33, 0.94), rgba(18, 15, 13, 0.96))",
+        border: ACT_LABEL_BORDER,
+        boxShadow: "0 12px 28px rgba(0, 0, 0, 0.42), inset 0 0 0 1px rgba(0, 0, 0, 0.72)",
+        color: "#f1dfad",
+        padding: "24px 28px",
+        width: "100%"
+      }}
+    >
+      <Group justify="space-between" mb={12} wrap="nowrap">
+        <Box>
+          <Text size="lg" fw={900} tt="uppercase" style={{ color: "#fff0b8", textShadow: "0 1px 0 #000" }}>Mirror Upgrades</Text>
+          <Text size="sm" c="gray.4">Spend insight between runs before starting Act I.</Text>
+        </Box>
+        <Badge size="lg" color="yellow" variant="filled">Insight {props.state.profile.metaProgress.currency}</Badge>
+      </Group>
+      <Stack gap={7}>
+        {META_UPGRADE_DEFINITIONS.map((upgrade, index) => {
+          const rank = props.state.profile.metaProgress.upgrades[upgrade.id] || 0;
+          const maxed = rank >= upgrade.maxRank;
+          const cost = getMetaUpgradeCost(props.state, upgrade.id);
+          const canBuy = canPurchaseMetaUpgrade(props.state, upgrade.id);
+          return (
+            <Group key={upgrade.id} justify="space-between" gap={14} wrap="nowrap">
+              <Group gap={10} wrap="nowrap" style={{ minWidth: 0 }}>
+                <Box
+                  style={{
+                    alignItems: "center",
+                    background: rank ? "rgba(235, 188, 82, 0.24)" : "rgba(0, 0, 0, 0.26)",
+                    border: "1px solid rgba(255, 225, 120, 0.24)",
+                    display: "flex",
+                    height: 34,
+                    justifyContent: "center",
+                    width: 34
+                  }}
+                >
+                  <Box alt="" component="img" src={getMirrorUpgradeIcon(upgrade.id)} style={{ filter: rank ? "drop-shadow(0 2px 0 #000)" : "grayscale(0.75) brightness(0.72) drop-shadow(0 2px 0 #000)", height: 28, imageRendering: "pixelated", objectFit: "contain", width: 28 }} />
+                </Box>
+                <Box style={{ minWidth: 0 }}>
+                  <Text size="sm" fw={900} c={rank ? "yellow.3" : "orange.2"} truncate>{upgrade.label}</Text>
+                  <Text size="xs" c="gray.4" truncate>{upgrade.description}</Text>
+                </Box>
+              </Group>
+              <Group gap={7} wrap="nowrap">
+                <Text size="sm" fw={900} c={rank ? "yellow.3" : "gray.4"} style={{ minWidth: 54, textAlign: "right" }}>
+                  {rank}/{upgrade.maxRank}
+                </Text>
+                <HeroSiegeButton
+                  disabled={!canBuy}
+                  height={30}
+                  minWidth={maxed ? 70 : 92}
+                  onClick={() => props.setState((previous) => purchaseMetaUpgrade(previous, upgrade.id))}
+                  style={{ fontSize: 11, padding: "0 12px" }}
+                >
+                  {maxed ? "Max" : `${cost}`}
+                </HeroSiegeButton>
+              </Group>
+            </Group>
+          );
+        })}
+      </Stack>
+    </Box>
+  );
+}
+
+const MIRROR_UPGRADE_ICONS: Record<string, StaticImageData> = {
+  cleanExecution: swordMasteryArt,
+  coinPurse: midasHandArt,
+  crushingInsight: razorwireArt,
+  deathDefiance: guardianAngelArt,
+  eliteHunter: kingsCrownArt,
+  fatedPersuasion: casinoDiceArt,
+  fatedTreasury: fortuneCardArt,
+  goldenTouch: midasHandArt,
+  highConfidence: battleTranceArt,
+  ironResolve: ironSkinArt,
+  lethalPrecision: sureCritArt,
+  mistakeAlchemy: barbedShieldArt,
+  olympianFavor: tokenLuckArt,
+  oracleFavor: dislocatedEyeArt,
+  relicChoice: findItemArt,
+  shadowTraining: bookOfBelialArt,
+  shopkeeperFavor: steamSaleArt,
+  silverGuard: shieldMasteryArt,
+  swiftReflex: heatOrbArt,
+  topicMemory: oddBookArt,
+  toughStart: deathsScytheArt,
+  underworldBroker: treasureSenseArt
+};
+
+function getMirrorUpgradeIcon(id: string) {
+  return MIRROR_UPGRADE_ICONS[id] || tokenLuckArt;
 }
 
 function HeatPanel(props: { embedded?: boolean; setState: React.Dispatch<React.SetStateAction<StudyState>>; showStart?: boolean; state: StudyState }) {
@@ -872,7 +1022,7 @@ function getStableRoll(value: string) {
   return (hash >>> 0) / HASH_DIVISOR;
 }
 
-function MapNode(props: { act: SpireAct; active: boolean; completed: boolean; highlighted: boolean; highlightMode: boolean; id: string; kind: SpireNodeKind; onSelect: () => void; selectable: boolean; x: number; y: number }) {
+function MapNode(props: { act: SpireAct; active: boolean; completed: boolean; highlighted: boolean; highlightMode: boolean; id: string; kind: SpireNodeKind; onSelect: () => void; rewardKind?: SpireCombatRewardKind; selectable: boolean; x: number; y: number }) {
   const [hovered, setHovered] = useState(false);
   const opacity = getNodeOpacity(props);
   const dimensions = getNodeDimensions(props.kind);
@@ -897,8 +1047,128 @@ function MapNode(props: { act: SpireAct; active: boolean; completed: boolean; hi
     >
       {props.completed && <CompletedRoomRing kind={props.kind} seed={props.id} size={size} />}
       <NodeIcon act={props.act} kind={props.kind} highlightTone={highlightTone} shadow size={iconSize} />
+      {props.kind === "enemy" && props.rewardKind ? <NodeRewardBadge hovered={hovered} kind={props.rewardKind} /> : null}
     </Box>
   );
+}
+
+function NodeRewardBadge(props: { hovered: boolean; kind: SpireCombatRewardKind }) {
+  return (
+    <Box
+      aria-hidden="true"
+      style={{
+        alignItems: "center",
+        display: "flex",
+        height: 26,
+        justifyContent: "center",
+        pointerEvents: "none",
+        position: "absolute",
+        right: -8,
+        top: -6,
+        width: 26,
+        zIndex: 5
+      }}
+    >
+      {props.kind === "gold" ? (
+        <Box style={{ filter: "drop-shadow(0 2px 0 #000) drop-shadow(0 0 3px rgba(247, 201, 72, 0.42))" }}>
+          <CoinIcon size={18} />
+        </Box>
+      ) : props.kind === "heart" ? (
+        <CentaurHeartIcon />
+      ) : (
+        <Box alt="" component="img" src={getRewardKindIcon(props.kind)} style={{ display: "block", filter: `drop-shadow(0 2px 0 #000) drop-shadow(0 0 4px ${getRewardKindColor(props.kind)}66)`, height: 22, imageRendering: "pixelated", objectFit: "contain", width: 22 }} />
+      )}
+      {props.hovered ? <NodeRewardTooltip kind={props.kind} /> : null}
+    </Box>
+  );
+}
+
+function NodeRewardTooltip(props: { kind: SpireCombatRewardKind }) {
+  return (
+    <Box
+      style={{
+        background: "linear-gradient(180deg, rgba(35, 13, 13, 0.98), rgba(9, 6, 5, 0.99))",
+        border: `1px solid ${getRewardKindColor(props.kind)}aa`,
+        boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.86), 0 8px 18px rgba(0, 0, 0, 0.52)",
+        color: "#f1dfad",
+        left: "50%",
+        minWidth: 142,
+        padding: "6px 8px",
+        position: "absolute",
+        top: -48,
+        transform: "translateX(-50%)",
+        zIndex: 8
+      }}
+    >
+      <Text size="11px" fw={900} style={{ color: getRewardKindColor(props.kind), lineHeight: 1.1, textShadow: "0 1px 0 #000" }}>{getRewardKindLabel(props.kind)}</Text>
+      <Text size="10px" c="gray.3" style={{ lineHeight: 1.15 }}>{getRewardKindDescription(props.kind)}</Text>
+    </Box>
+  );
+}
+
+function CentaurHeartIcon() {
+  return (
+    <Box
+      aria-hidden="true"
+      style={{
+        color: "#ff2f3f",
+        filter: "drop-shadow(0 2px 0 #000) drop-shadow(0 0 5px rgba(255, 47, 63, 0.72))",
+        fontFamily: "Arial, sans-serif",
+        fontSize: 24,
+        fontWeight: 900,
+        lineHeight: 1,
+        textShadow: "1px 0 0 #7a0610, -1px 0 0 #7a0610, 0 1px 0 #7a0610, 0 -1px 0 #7a0610"
+      }}
+    >
+      ♥
+    </Box>
+  );
+}
+
+function getRewardKindIcon(kind: SpireCombatRewardKind) {
+  if (kind === "insight") {
+    return oddBookArt;
+  }
+  return tokenLuckArt;
+}
+
+function getRewardKindColor(kind: SpireCombatRewardKind) {
+  if (kind === "gold") {
+    return "#f7c948";
+  }
+  if (kind === "heart") {
+    return "#ff6b6b";
+  }
+  if (kind === "insight") {
+    return "#a879ff";
+  }
+  return "#46a3ff";
+}
+
+function getRewardKindLabel(kind: SpireCombatRewardKind) {
+  if (kind === "gold") {
+    return "Gold";
+  }
+  if (kind === "heart") {
+    return "Centaur Heart";
+  }
+  if (kind === "insight") {
+    return "Insight";
+  }
+  return "Reward";
+}
+
+function getRewardKindDescription(kind: SpireCombatRewardKind) {
+  if (kind === "gold") {
+    return "Clear combat to earn run gold.";
+  }
+  if (kind === "heart") {
+    return "Clear combat to gain +25 current and max health this run.";
+  }
+  if (kind === "insight") {
+    return "Clear combat to earn mirror currency.";
+  }
+  return "Clear combat to claim this reward.";
 }
 
 function CompletedRoomRing(props: { kind: SpireNodeKind; seed: string; size: number }) {
@@ -1119,7 +1389,28 @@ function Legend(props: { highlightedKind: SpireNodeKind | null; onHighlight: (ki
             <Text size="xs" fw={800} style={{ textShadow: "0 1px 0 #000" }}>{NODE_LABELS[kind]}</Text>
           </Group>
         ))}
+        <Text size="10px" fw={900} mt={4} tt="uppercase" c="gray.4">Enemy rewards</Text>
+        {(["gold", "heart", "insight"] as SpireCombatRewardKind[]).map((kind) => (
+          <Group key={kind} gap="xs" wrap="nowrap">
+            <RewardLegendIcon kind={kind} />
+            <Text size="xs" fw={800} style={{ textShadow: "0 1px 0 #000" }}>{getRewardKindLabel(kind)}</Text>
+          </Group>
+        ))}
       </Stack>
+    </Box>
+  );
+}
+
+function RewardLegendIcon(props: { kind: SpireCombatRewardKind }) {
+  return (
+    <Box style={{ alignItems: "center", display: "flex", height: 26, justifyContent: "center", width: 26 }}>
+      {props.kind === "gold" ? (
+        <CoinIcon size={18} />
+      ) : props.kind === "heart" ? (
+        <CentaurHeartIcon />
+      ) : (
+        <Box alt="" component="img" src={getRewardKindIcon(props.kind)} style={{ display: "block", filter: `drop-shadow(0 2px 0 #000) drop-shadow(0 0 4px ${getRewardKindColor(props.kind)}66)`, height: 22, imageRendering: "pixelated", objectFit: "contain", width: 22 }} />
+      )}
     </Box>
   );
 }

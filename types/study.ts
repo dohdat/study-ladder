@@ -195,6 +195,7 @@ export type Relic = {
 };
 
 export type SpireNodeKind = "unknown" | "merchant" | "treasure" | "rest" | "enemy" | "elite" | "boss" | "event";
+export type SpireCombatRewardKind = "gold" | "heart" | "insight";
 
 export type UnknownEncounterKind = "elite" | "monster" | "shop" | "treasure";
 export type SpireAct = 1 | 2 | 3 | 4;
@@ -222,6 +223,7 @@ export type SpireMapNode = {
   id: string;
   kind: SpireNodeKind;
   rating: number;
+  rewardKind?: SpireCombatRewardKind;
   tierIndex: number;
   x: number;
   y: number;
@@ -240,11 +242,13 @@ export type SpireRun = {
   failDamageStacks: number;
   mapOpen: boolean;
   mapSeed: number;
+  maxHealthBonus: number;
   nodes: SpireMapNode[];
   pendingRelicReward: RelicRewardChoice | null;
   roomRewardClaims: Record<string, {
     gold?: number;
     itemIds?: string[];
+    maxHealth?: number;
     metaCurrency?: number;
     relicIds?: string[];
   }>;
@@ -337,6 +341,25 @@ export type MetaProgress = {
   highestHeat: number;
   totalEarned: number;
   upgrades: {
+    cleanExecution: number;
+    crushingInsight: number;
+    deathDefiance: number;
+    eliteHunter: number;
+    fatedPersuasion: number;
+    fatedTreasury: number;
+    goldenTouch: number;
+    highConfidence: number;
+    ironResolve: number;
+    lethalPrecision: number;
+    mistakeAlchemy: number;
+    olympianFavor: number;
+    oracleFavor: number;
+    silverGuard: number;
+    shadowTraining: number;
+    shopkeeperFavor: number;
+    swiftReflex: number;
+    topicMemory: number;
+    underworldBroker: number;
     coinPurse: number;
     relicChoice: number;
     toughStart: number;

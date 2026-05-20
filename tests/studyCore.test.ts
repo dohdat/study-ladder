@@ -174,6 +174,27 @@ describe("studyCore", () => {
     expect(getMaxHealth(upgraded)).toBe(getMaxHealth(state) + 5);
   });
 
+  it("applies mirror upgrades to run modifier totals", () => {
+    const state = defaultState();
+    state.profile.metaProgress.upgrades.shadowTraining = 2;
+    state.profile.metaProgress.upgrades.fatedPersuasion = 1;
+    state.profile.metaProgress.upgrades.oracleFavor = 1;
+    state.profile.metaProgress.upgrades.lethalPrecision = 2;
+    state.profile.metaProgress.upgrades.eliteHunter = 1;
+    state.profile.metaProgress.upgrades.underworldBroker = 2;
+    state.profile.metaProgress.upgrades.topicMemory = 1;
+
+    expect(getRunModifierTotals(state)).toMatchObject({
+      bonusDamageVsElitesPercent: 8,
+      criticalChancePercent: 6,
+      enhancedDamagePercent: 10,
+      freeHintPerRoom: 1,
+      relicRerollBonus: 1,
+      revealTopicCount: 1,
+      shopDiscountPercent: 10
+    });
+  });
+
   it("blocks meta upgrade purchases when insight is missing or the rank is maxed", () => {
     const broke = defaultState();
     expect(purchaseMetaUpgrade(broke, "relicChoice")).toBe(broke);

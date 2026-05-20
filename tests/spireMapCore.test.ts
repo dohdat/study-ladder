@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
 import { buyShopItem } from "../lib/shopCore";
-import { advanceSpireNode, canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, isSpireHeatSetupOpen, leaveSpireRoom, normalizeSpireRun, selectPendingRelicReward, selectSpireNode, setSpireHeatConditionRank, skipPendingRelicReward, smithSpireNode, SPIRE_RATINGS, startSpireHeatRun, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
+import { advanceSpireNode, canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, isSpireHeatSetupOpen, isSpireRunSetupOpen, leaveSpireRoom, normalizeSpireRun, selectPendingRelicReward, selectSpireNode, setSpireHeatConditionRank, skipPendingRelicReward, smithSpireNode, SPIRE_RATINGS, startSpireHeatRun, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
 import { EXPERIENCE_PER_LEVEL, defaultState, getMaxHealth, getMaxMana } from "../lib/studyCore";
-import type { SpireNodeKind } from "../types/study";
+import type { SpireCombatRewardKind, SpireNodeKind } from "../types/study";
 
 const FLOOR_ONE = 1500;
 const FLOOR_FOUR = 1615;
@@ -132,6 +132,22 @@ describe("spireMapCore", () => {
     state = startSpireHeatRun(state);
     expect(isSpireHeatSetupOpen(state)).toBe(false);
     expect(canEditSpireHeat(state)).toBe(false);
+  });
+
+  it("allows the between-run setup screen before heat is unlocked", () => {
+    let state = defaultState();
+    state.profile.spireRun = createSpireRun(1000, 1, "normal", {}, true);
+
+    expect(isSpireRunSetupOpen(state)).toBe(true);
+    expect(isSpireHeatSetupOpen(state)).toBe(false);
+    expect(canEditSpireHeat(state)).toBe(false);
+
+    const beforeStart = state;
+    state = enterSpireNode(state, 1001);
+    expect(state).toBe(beforeStart);
+
+    state = startSpireHeatRun(state);
+    expect(isSpireRunSetupOpen(state)).toBe(false);
   });
 
   it("prevents consecutive elite merchant or rest rooms before the pre-boss rest floor", () => {
@@ -358,12 +374,46 @@ describe("spireMapCore", () => {
     let state = defaultState();
     state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
     const enemy = state.profile.spireRun.nodes.find((node) => node.kind === "enemy") || state.profile.spireRun.nodes[0];
+    state.profile.spireRun.nodes = state.profile.spireRun.nodes.map((node) => node.id === enemy.id ? { ...node, rewardKind: "gold" } : node);
     state.profile.spireRun.availableNodeIds = [enemy.id];
     state = selectSpireNode(state, enemy.id);
 
     state = advanceSpireNode(state, 1000);
 
     expect(state.profile.coins).toBeGreaterThan(0);
+  });
+
+  it("marks generated enemy rooms with visible reward kinds", () => {
+    const state = defaultState();
+    state.profile.spireRun = createSpireRun(1000);
+    const enemyRewards = state.profile.spireRun.nodes.filter((node) => node.kind === "enemy").map((node) => node.rewardKind);
+
+    expect(enemyRewards.length).toBeGreaterThan(0);
+    expect(enemyRewards.every((kind) => kind === "gold" || kind === "heart" || kind === "insight")).toBe(true);
+    expect(new Set(enemyRewards).size).toBeGreaterThan(1);
+  });
+
+  it.each(["gold", "heart", "insight"] satisfies SpireCombatRewardKind[])("applies enemy %s room rewards", (rewardKind) => {
+    let state = defaultState();
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
+    const enemy = state.profile.spireRun.nodes.find((node) => node.kind === "enemy") || state.profile.spireRun.nodes[0];
+    const maxHealthBefore = getMaxHealth(state);
+    const healthBefore = state.profile.health;
+    state.profile.spireRun.nodes = state.profile.spireRun.nodes.map((node) => node.id === enemy.id ? { ...node, rewardKind } : node);
+    state.profile.spireRun.availableNodeIds = [enemy.id];
+    state = selectSpireNode(state, enemy.id);
+
+    state = advanceSpireNode(state, 1000);
+
+    if (rewardKind === "gold") {
+      expect(state.profile.coins).toBeGreaterThan(0);
+    } else if (rewardKind === "heart") {
+      expect(getMaxHealth(state)).toBe(maxHealthBefore + 25);
+      expect(state.profile.health).toBe(healthBefore + 25);
+      expect(state.profile.spireRun.pendingRelicReward).toBeNull();
+    } else if (rewardKind === "insight") {
+      expect(state.profile.metaProgress.currency).toBeGreaterThan(0);
+    }
   });
 
   it("grants elite gold and offers upgraded relic choices", () => {

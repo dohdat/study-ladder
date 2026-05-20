@@ -5,7 +5,7 @@ param(
   [string]$ProfileDir = $(if ($env:CHROME_USER_DATA_DIR) { $env:CHROME_USER_DATA_DIR } else { Join-Path $env:LOCALAPPDATA "Google\Chrome\User Data" }),
   [string]$ProfileName = $(if ($env:CHROME_PROFILE_NAME) { $env:CHROME_PROFILE_NAME } else { "Default" }),
   [string]$ChromePath = $(if ($env:CHROME_PATH) { $env:CHROME_PATH } else { "" }),
-  [int]$ReopenDelayMilliseconds = 1200,
+  [int]$ReopenDelayMilliseconds = 3000,
   [switch]$DryRun
 )
 

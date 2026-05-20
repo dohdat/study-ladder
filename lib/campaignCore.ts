@@ -88,8 +88,7 @@ export function getSpireDifficultyDefinition(_difficulty: SpireDifficulty) {
 }
 
 export function getSpireCampaignLabel(run: Pick<SpireRun, "act" | "difficulty" | "heatConditions">) {
-  const heat = getHeatLevel(run.heatConditions);
-  return `${heat > 0 ? `Heat ${heat} - ` : ""}${getSpireActDefinition(run.act).label}`;
+  return getSpireActDefinition(run.act).label;
 }
 
 export function getSpireCampaignRatingBonus(run: Pick<SpireRun, "act" | "difficulty" | "heatConditions">) {

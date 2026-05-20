@@ -160,19 +160,14 @@ const ROGUELIKE_RELIC_SOURCE_DETAILS: Record<string, { description: string; wiki
 const COMMON_RELICS: Relic[] = [
   relic("Free Hint Token", "common", "Each room starts with one free hint charge.", { freeHintPerRoom: 1 }),
   relic("Wooden Buckler", "common", "Blocks the first incoming hit in each room.", { blockFirstHit: 1 }),
-  relic("Sand Timer", "common", "Remaining question time increases submit damage.", { timerDamagePercent: 14 }),
-  relic("Study Lens", "common", "More visible question topics improve damage.", { revealTopicCount: 1, enhancedDamagePercent: 8 }),
-  relic("Scratch Notes", "common", "Reveal one extra topic to recover from early mistakes.", { revealTopicCount: 1 }),
-  relic("Quick Guard", "common", "Fast confident rooms start protected.", { blockFirstHit: 1, damageReduction: 1 }),
-  relic("Blood Spark", "common", "Critical hits and completions restore a little health.", { criticalChancePercent: 4, lifeOnKill: 2 }),
-  relic("Focus Tap", "common", "Successful submits build reward momentum.", { enhancedDamagePercent: 6, goldFindPercent: 6 }),
-  relic("Coupon Charm", "common", "Shop prices are reduced.", { shopDiscountPercent: 10 }),
-  relic("Campfire Guard", "common", "Rest routes make the next fights safer.", { blockFirstHit: 1, maxLife: 4 }),
-  relic("Small Bounty", "common", "Enemy clears pay slightly more gold.", { goldFindPercent: 12 }),
-  relic("Error Cushion", "common", "The first mistakes in a room hurt less.", { reducedEnemyDamagePercent: 10 }),
-  relic("Unused Advice", "common", "Free-hint runs can pivot into economy.", { freeHintPerRoom: 1, goldFindPercent: 8 }),
-  relic("Mystery Reward", "common", "Unknown information improves room payouts.", { goldFindPercent: 12 }),
-  relic("Opening Strike", "common", "Early successful submits hit harder.", { enhancedDamagePercent: 12 })
+  relic("Sand Timer", "common", "Fast solves increase submit damage.", { timerDamagePercent: 16 }),
+  relic("Study Lens", "common", "Visible topics make each question easier to exploit.", { revealTopicCount: 1, enhancedDamagePercent: 8 }),
+  relic("Scratch Notes", "common", "Mistakes reveal information and set up a comeback.", { revealTopicCount: 1, submitFailDamageStackPercent: 5 }),
+  relic("Quick Guard", "common", "Fast confident rooms start protected.", { blockFirstHit: 1, timerDamagePercent: 6 }),
+  relic("Blood Spark", "common", "Critical hits and room clears restore a little health.", { criticalChancePercent: 4, lifeOnKill: 2 }),
+  relic("Small Bounty", "common", "Enemy clears pay more gold and support merchant builds.", { goldFindPercent: 14 }),
+  relic("Error Cushion", "common", "Mistakes hurt less while you learn the room.", { reducedEnemyDamagePercent: 10, damageReduction: 1 }),
+  relic("Opening Strike", "common", "Early successful submits hit harder.", { bonusDamageWhileFullHealthPercent: 10, enhancedDamagePercent: 6 })
 ];
 
 const UNCOMMON_RELICS: Relic[] = [
@@ -180,32 +175,21 @@ const UNCOMMON_RELICS: Relic[] = [
   relic("Frustration Engine", "uncommon", "Wrong answers add temporary damage stacks for the room.", { submitFailDamageStackPercent: 12 }),
   relic("Pain Capacitor", "uncommon", "Damage taken converts into comeback pressure.", { bonusDamageWhileLowHealthPercent: 25, lifeOnKill: 4 }),
   relic("Overkill Spark", "uncommon", "Strong hits are more likely to chain.", { extraAttackChancePercent: 7, enhancedDamagePercent: 10 }),
-  relic("Paid Insight", "uncommon", "Hints become part of your damage plan.", { freeHintPerRoom: 1, enhancedDamagePercent: 10 }),
-  relic("Revealing Lantern", "uncommon", "Hints and question starts reveal more topics.", { revealTopicCount: 3 }),
-  relic("Focused Tutoring", "uncommon", "Hints become cheaper and feed reward momentum.", { freeHintPerRoom: 1, goldFindPercent: 10 }),
-  relic("Gold Timer", "uncommon", "Fast solves convert into better economy.", { timerDamagePercent: 10, goldFindPercent: 14 }),
-  relic("Second Wind Timer", "uncommon", "Fast solves become sustain.", { timerDamagePercent: 10, lifeOnKill: 5 }),
+  relic("Paid Insight", "uncommon", "Hints become part of your damage plan.", { freeHintPerRoom: 1, enhancedDamagePercent: 12 }),
+  relic("Gold Timer", "uncommon", "Fast solves convert into economy.", { timerDamagePercent: 12, goldFindPercent: 14 }),
+  relic("Second Wind Timer", "uncommon", "Fast solves become sustain.", { timerDamagePercent: 12, lifeOnKill: 5 }),
   relic("Combo Quill", "uncommon", "Consecutive clean submits build critical pressure.", { criticalChancePercent: 7, criticalDamagePercent: 20 }),
   relic("Elite Brand", "uncommon", "Elite rooms take much more damage.", { bonusDamageVsElitesPercent: 35 }),
   relic("Merchant Shelf", "uncommon", "Merchants show one extra relic.", { shopRelicStock: 1 }),
   relic("Campfire Tools", "uncommon", "Rest routes are safer and more flexible.", { maxLife: 8, blockFirstHit: 1 }),
-  relic("Treasure Compass", "uncommon", "Treasure rewards lean toward stronger relic offers.", { relicChoiceBonus: 1 }),
-  relic("Safe Curiosity", "uncommon", "Unknown paths are safer but less explosive.", { damageReduction: 1, goldFindPercent: -8 }),
-  relic("Challenger Banner", "uncommon", "Elite routes grant extra room damage.", { bonusDamageVsElitesPercent: 20, enhancedDamagePercent: 8 }),
-  relic("Heavy Purse", "uncommon", "A strong economy also improves damage.", { goldFindPercent: 14, enhancedDamagePercent: 10 }),
-  relic("Spending Rush", "uncommon", "Shopping helps prepare the next fights.", { shopDiscountPercent: 8, enhancedDamagePercent: 8 }),
-  relic("Long Bottle", "uncommon", "Potion and healing builds last longer.", { increasedHealingReceivedPercent: 15, maxLife: 5 }),
-  relic("Clean Draft", "uncommon", "Reward screens are easier to fix with rerolls.", { relicRerollBonus: 1 })
+  relic("Challenger Banner", "uncommon", "Elite routes grant extra room damage.", { bonusDamageVsElitesPercent: 20, enhancedDamagePercent: 8 })
 ];
 
 const RARE_RELICS: Relic[] = [
   relic("Second Heart", "rare", "Gain 1 revive for the run.", { revivePercent: 40 }),
   relic("Frozen Hourglass", "rare", "The timer starts with a larger grace period.", { timerPauseSeconds: 60 }),
-  relic("Golden Ticket", "rare", "Major shop discounts make merchant paths powerful.", { shopDiscountPercent: 25 }),
   relic("Wide Offering", "rare", "Relic rewards show one extra option.", { relicChoiceBonus: 1 }),
-  relic("Polished Dice", "rare", "Relic rewards gain an extra reroll.", { relicRerollBonus: 1 }),
   relic("Trophy Hunter", "rare", "Elite rewards are wider and elites take more damage.", { relicChoiceBonus: 1, bonusDamageVsElitesPercent: 20 }),
-  relic("Reliquary Key", "rare", "Treasure rooms become reliable relic accelerators.", { relicChoiceBonus: 1, magicFindPercent: 15 }),
   relic("Boss Grudge", "rare", "Failures against hard rooms become damage scaling.", { bonusDamageVsElitesPercent: 25, submitFailDamageStackPercent: 10 }),
   relic("Lesson Scar", "rare", "Wrong answers grant damage for the comeback.", { submitFailDamageStackPercent: 12, enhancedDamagePercent: 8 }),
   relic("Perfect Sprint", "rare", "Fast play grants damage and more reward control.", { timerDamagePercent: 24, relicRerollBonus: 1 }),
@@ -214,10 +198,8 @@ const RARE_RELICS: Relic[] = [
   relic("Iron Choice", "rare", "Skipping relics makes the current run sturdier.", { skipRelicMetaBonus: 2, maxLife: 10 }),
   relic("Ash Offering", "rare", "Skipping relics grants much more insight.", { skipRelicMetaBonus: 6 }),
   relic("Smithing Shrine", "rare", "Rest routes refine your build instead of only healing.", { enhancedDamagePercent: 14, relicRerollBonus: 1 }),
-  relic("Backroom Dice", "rare", "Shops and rewards offer more ways to reroll.", { shopRelicStock: 1, relicRerollBonus: 1 }),
-  relic("Alchemist's Menu", "rare", "Potion-style sustain is stronger.", { increasedHealingReceivedPercent: 25, maxLife: 8 }),
-  relic("No Rest Bonus", "rare", "Skipping recovery turns into pressure.", { maxLife: 8, enhancedDamagePercent: 14 }),
-  relic("Window Shopper", "rare", "Avoiding shops pushes relic rewards higher.", { relicChoiceBonus: 1, magicFindPercent: 12 })
+  relic("Backroom Dice", "rare", "Shops and rewards offer more ways to reroll.", { shopRelicStock: 1, relicRerollBonus: 1, shopDiscountPercent: 5 }),
+  relic("Alchemist's Menu", "rare", "Potion-style sustain is stronger.", { increasedHealingReceivedPercent: 25, maxLife: 8 })
 ];
 
 const UNIQUE_RELICS: Relic[] = [
@@ -228,18 +210,11 @@ const UNIQUE_RELICS: Relic[] = [
   relic("Red Ink Contract", "unique", "Wrong answers grant huge power but increase danger.", { submitFailDamageStackPercent: 18, incomingDamagePercent: 8 }),
   relic("Elite Forge", "unique", "Elite paths are harder but accelerate scaling.", { bonusDamageVsElitesPercent: 45, relicChoiceBonus: 1, incomingDamagePercent: 10 }),
   relic("Boss Ledger", "unique", "Accept weak normal-room damage for stronger boss rewards.", { enhancedDamagePercent: -10, bonusDamageVsElitesPercent: 35, relicChoiceBonus: 1 }),
-  relic("Campfire Crown", "unique", "Rest routes become relic-development routes.", { relicRerollBonus: 1, maxLife: 14 }),
   relic("Merchant Kingdom", "unique", "Merchants become the primary power source.", { shopRelicStock: 2, shopDiscountPercent: 15, relicChoiceBonus: -1 }),
-  relic("Topic Prism", "unique", "Topic visibility turns into damage identity.", { revealTopicCount: 2, enhancedDamagePercent: 16 }),
-  relic("Archive Engine", "unique", "Mastered knowledge turns into long-run progression.", { goldFindPercent: 15, skipRelicMetaBonus: 2 }),
-  relic("Frontier Compass", "unique", "First-time progress pays extra rewards.", { goldFindPercent: 28, skipRelicMetaBonus: 2 }),
+  relic("Topic Prism", "unique", "Topic visibility turns into damage identity.", { revealTopicCount: 2, enhancedDamagePercent: 16, criticalChancePercent: 5 }),
   relic("Shield Furnace", "unique", "Unused defense becomes offense.", { blockFirstHit: 1, enhancedDamagePercent: 18 }),
-  relic("Critical Snowball", "unique", "Crits build momentum until the run is interrupted.", { criticalChancePercent: 15, criticalDamagePercent: 45 }),
-  relic("Chain Lightning Thesis", "unique", "Excess pressure carries between enemies.", { lightningDamage: 18, extraAttackChancePercent: 12 }),
-  relic("Memory Seal", "unique", "Act clears preserve more build agency.", { relicChoiceBonus: 1, relicRerollBonus: 1 }),
-  relic("Mirror Reward", "unique", "Reward screens can be copied or rebuilt.", { relicChoiceBonus: 1, relicRerollBonus: 2 }),
-  relic("Pattern Magnet", "unique", "Future rewards favor your current build shape.", { relicChoiceBonus: 1, magicFindPercent: 18 }),
-  relic("Polishing Stone", "unique", "Common relics stay relevant through room clears.", { enhancedDamagePercent: 16, relicRerollBonus: 1 })
+  relic("Critical Snowball", "unique", "Crits build momentum until the run is interrupted.", { criticalChancePercent: 15, criticalDamagePercent: 45, extraAttackChancePercent: 6 }),
+  relic("Chain Lightning Thesis", "unique", "Excess pressure carries between enemies.", { lightningDamage: 18, extraAttackChancePercent: 12 })
 ];
 
 const BOSS_RELICS: Relic[] = [
@@ -251,49 +226,31 @@ const BOSS_RELICS: Relic[] = [
   relic("Oracle Chain", "boss", "Free hints, but room rewards are weaker.", { freeHintPerRoom: 1, goldFindPercent: -30 }),
   relic("Demon Writ", "boss", "Boss and elite damage is massive, but normal danger rises.", { bonusDamageVsElitesPercent: 60, incomingDamagePercent: 25 }),
   relic("Forbidden Trophy", "boss", "Rare rewards appear more often, but sustain is thinner.", { increasedRareDropChancePercent: 25, increasedHealingReceivedPercent: -25 }),
-  relic("Elite Toll", "boss", "Elite rewards are better, but elites are more punishing.", { relicChoiceBonus: 1, bonusDamageVsElitesPercent: 25, incomingDamagePercent: 12 }),
-  relic("Volatile Relic Core", "boss", "All future power is sharper and riskier.", { enhancedDamagePercent: 30, incomingDamagePercent: 15 }),
-  relic("Dry Flask", "boss", "Cannot buy potions, but max life is higher.", { maxLife: 12, increasedHealingReceivedPercent: -20 }),
-  relic("Veiled Map", "boss", "Hidden information increases rewards under time pressure.", { revealTopicCount: -1, goldFindPercent: 20, timerPenaltyPercent: 10 })
+  relic("Elite Toll", "boss", "Elite rewards are better, but elites are more punishing.", { relicChoiceBonus: 1, bonusDamageVsElitesPercent: 25, incomingDamagePercent: 12, timerPenaltyPercent: 10 }),
+  relic("Volatile Relic Core", "boss", "All future power is sharper and riskier.", { enhancedDamagePercent: 30, incomingDamagePercent: 15 })
 ];
 
 const SHOP_RELICS: Relic[] = [
   relic("Merchant Token", "shop", "Shop prices are reduced.", { shopDiscountPercent: 15 }),
-  relic("Extra Shelf", "shop", "Shops show one extra relic.", { shopRelicStock: 1 }),
-  relic("Dice Vendor", "shop", "Reward rerolls become easier to find.", { relicRerollBonus: 1 }),
-  relic("Bundle Pricing", "shop", "Buying support tools makes relics cheaper.", { shopDiscountPercent: 10, maxLife: 4 }),
-  relic("Healing Purchase", "shop", "Buying relics supports survival.", { lifeOnKill: 8, increasedHealingReceivedPercent: 10 }),
-  relic("Hint Coupon", "shop", "Learning tools feed merchant discounts.", { freeHintPerRoom: 1, shopDiscountPercent: 8 }),
-  relic("First One Free", "shop", "The first shop purchase each act is heavily discounted.", { shopDiscountPercent: 35 }),
+  relic("Extra Shelf", "shop", "Shops show one extra relic.", { shopRelicStock: 1, relicRerollBonus: 1 }),
   relic("Blood Market", "shop", "Boss-tier shop offers cost health and risk.", { shopRelicStock: 1, maxLife: -8, relicChoiceBonus: 1 }),
-  relic("Interest Charm", "shop", "Held gold grows between rooms.", { goldFindPercent: 22 }),
+  relic("Interest Charm", "shop", "Held gold grows between rooms.", { goldFindPercent: 22, shopDiscountPercent: 6 }),
   relic("Spending Temper", "shop", "Shopping becomes pre-combat preparation.", { shopDiscountPercent: 8, enhancedDamagePercent: 10 })
 ];
 
 const EVENT_RELICS: Relic[] = [
   relic("Risky Curiosity", "event", "Unknown rooms become riskier but more rewarding.", { incomingDamagePercent: 20, goldFindPercent: 35 }),
-  relic("Relic Transmuter", "event", "Transform weak relic offers into stronger ones.", { relicRerollBonus: 2 }),
   relic("Blood Relic", "event", "Lose max health for access to strange power.", { maxLife: -10, relicChoiceBonus: 1 }),
   relic("Golden Mirror", "event", "Spend gold to copy reward power.", { relicChoiceBonus: 1, relicRerollBonus: 1 }),
-  relic("Ash Bargain", "event", "Give up relic power for insight.", { skipRelicMetaBonus: 10 }),
-  relic("Cursed Cache", "event", "Gain rare rewards while carrying more danger.", { incomingDamagePercent: 15, increasedRareDropChancePercent: 18 }),
-  relic("Upgrade Debt", "event", "Future rewards are delayed for immediate power.", { enhancedDamagePercent: 18, relicRerollBonus: 1 }),
-  relic("Duel Shrine", "event", "Optional elite fights lead to unique power.", { bonusDamageVsElitesPercent: 30, relicChoiceBonus: 1 }),
-  relic("Painful Tutoring", "event", "Hints become easier to access, but mistakes matter.", { freeHintPerRoom: 1, incomingDamagePercent: 8 }),
-  relic("Grave Lesson", "event", "Death and near-death become progression.", { revivePercent: 25, skipRelicMetaBonus: 4 })
+  relic("Ash Bargain", "event", "Give up relic power for insight.", { skipRelicMetaBonus: 10, maxLife: -5, goldFindPercent: -10 }),
+  relic("Duel Shrine", "event", "Optional elite fights lead to unique power.", { bonusDamageVsElitesPercent: 30, relicChoiceBonus: 1, incomingDamagePercent: 8, timerDamagePercent: 8 })
 ];
 
 const BLIGHT_RELICS: Relic[] = [
   relic("Short Fuse", "blight", "Question timers are shorter.", { timerPenaltyPercent: 15 }),
   relic("Price Gouge", "blight", "Shop prices are higher.", { shopPriceIncreasePercent: 20 }),
   relic("Withered Flask", "blight", "Healing is reduced.", { increasedHealingReceivedPercent: -35 }),
-  relic("Cold Campfire", "blight", "Rest routes are less reliable.", { increasedHealingReceivedPercent: -20 }),
-  relic("Elite Burden", "blight", "Elite routes are more dangerous.", { incomingDamagePercent: 12, bonusDamageVsElitesPercent: -10 }),
-  relic("Sharp Shadows", "blight", "Normal rooms hit harder.", { incomingDamagePercent: 20 }),
-  relic("Oracle Tax", "blight", "Hints reduce reward momentum.", { freeHintPerRoom: 1, goldFindPercent: -25 }),
-  relic("Heavy Coffers", "blight", "Hoarded gold attracts danger.", { goldFindPercent: 15, incomingDamagePercent: 10 }),
-  relic("Weak Dawn", "blight", "Each act starts from a weaker position.", { maxLife: -10 }),
-  relic("Cursed Beginning", "blight", "Start cursed for a bigger insight payout.", { incomingDamagePercent: 10, skipRelicMetaBonus: 6 })
+  relic("Sharp Shadows", "blight", "Normal rooms hit harder.", { incomingDamagePercent: 20 })
 ];
 
 export const ROGUELIKE_RELIC_RARITY_COUNTS = {
