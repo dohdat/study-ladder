@@ -7,17 +7,25 @@ import { CoinIcon } from "./CoinIcon";
 import { HeroSiegeEquipmentIcon } from "./HeroSiegeItemIcon";
 import { ShopPanel } from "./ShopPanel";
 import { RelicIcon } from "./RelicIcon";
+import { getSpireCampaignLabel, getSpireDifficultyModifiers } from "../lib/campaignCore";
 import { canUpgradeSpireInventoryItem, claimCurrentSpireRoomReward, digCurrentSpireRoomRelic, enterSpireNode, getCurrentSpireNode, getRestSpecialAction, isCombatNode, leaveSpireRoom, MERCHANT_UPGRADE_COST, selectSpireNode, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
-import type { SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
+import type { SpireAct, SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
 import campfireArt from "../assets/hero_siege_map/campfire.png";
 import chestArt from "../assets/hero_siege_map/chest.png";
 import deadTreeArt from "../assets/hero_siege_map/dead-tree.png";
+import fieldCorpseArt from "../assets/hero_siege_map/field-corpse.png";
+import fieldPillarArt from "../assets/hero_siege_map/field-pillar.png";
 import fieldTentArt from "../assets/hero_siege_map/field-tent.png";
+import fieldTorchArt from "../assets/hero_siege_map/field-torch.png";
 import fieldTreeArt from "../assets/hero_siege_map/field-tree.png";
+import fieldWallArt from "../assets/hero_siege_map/field-wall.png";
 import graveyardRocksArt from "../assets/hero_siege_map/graveyard-rocks.png";
 import questionMarkArt from "../assets/hero_siege_map/question-mark.png";
 import wildBushArt from "../assets/hero_siege_map/wild-bush.png";
 import demonKingArt from "../assets/hero_siege_monsters/demon-king.png";
+import desertBeastArt from "../assets/hero_siege_monsters/desert-beast.png";
+import hellBeastArt from "../assets/hero_siege_monsters/hell-beast.png";
+import sheepKingArt from "../assets/hero_siege_monsters/sheep-king.png";
 import skeletonMageArt from "../assets/hero_siege_monsters/skeleton-mage.png";
 import zombieArt from "../assets/hero_siege_monsters/zombie.png";
 
@@ -33,7 +41,6 @@ const BOSS_NODE_ICON_SIZE = 140;
 const LEGEND_ICON_SIZE = 24;
 const MAP_CONTENT_WIDTH = 1780;
 const MAP_CONTENT_HEIGHT = 1680;
-const ACT_LABEL = "Act #1 The Sightless Eye";
 const PATH_COLOR = "rgba(25, 31, 34, 0.48)";
 const LOCKED_NODE_OPACITY = 0.42;
 const HIGHLIGHTED_NODE_OPACITY = 1;
@@ -43,6 +50,8 @@ const NODE_SHAPE_HIGHLIGHT = "drop-shadow(1px 0 0 rgba(255, 255, 255, 0.98)) dro
 const NODE_SELECTED_HIGHLIGHT = "drop-shadow(2px 0 0 rgba(255, 220, 89, 0.98)) drop-shadow(-2px 0 0 rgba(255, 220, 89, 0.98)) drop-shadow(0 2px 0 rgba(255, 220, 89, 0.98)) drop-shadow(0 -2px 0 rgba(255, 220, 89, 0.98)) drop-shadow(0 0 14px rgba(255, 220, 89, 0.88))";
 const NODE_ACTIVE_HIGHLIGHT = "drop-shadow(2px 0 0 rgba(62, 169, 255, 0.98)) drop-shadow(-2px 0 0 rgba(62, 169, 255, 0.98)) drop-shadow(0 2px 0 rgba(62, 169, 255, 0.98)) drop-shadow(0 -2px 0 rgba(62, 169, 255, 0.98)) drop-shadow(0 0 14px rgba(62, 169, 255, 0.88))";
 const BOSS_ACTIVE_HIGHLIGHT = "drop-shadow(2px 0 0 rgba(175, 35, 42, 0.98)) drop-shadow(-2px 0 0 rgba(175, 35, 42, 0.98)) drop-shadow(0 2px 0 rgba(175, 35, 42, 0.98)) drop-shadow(0 -2px 0 rgba(175, 35, 42, 0.98)) drop-shadow(0 0 18px rgba(151, 21, 28, 0.9))";
+const COMPLETED_ROOM_RING_COLOR = "rgba(13, 22, 27, 0.96)";
+const COMPLETED_ROOM_RING_SHADOW = "drop-shadow(0 2px 0 rgba(255, 255, 220, 0.18)) drop-shadow(0 1px 0 rgba(0, 0, 0, 0.34))";
 const NODE_HIGHLIGHT_TRANSITION = "opacity 70ms ease-out";
 const LEGEND_ROW_TRANSITION = "background-color 70ms ease-out";
 const NODE_Z_INDEX = 2;
@@ -51,6 +60,9 @@ const SELECTED_NODE_Z_INDEX = 4;
 const BOSS_NODE_Z_INDEX = 4;
 const BOSS_LOCKED_OPACITY = 0.78;
 const MAP_BG = "#909286";
+const ACT_TWO_MAP_BG = "#a98554";
+const ACT_THREE_MAP_BG = "#60714d";
+const ACT_FOUR_MAP_BG = "#504a4d";
 const ENTER_BUTTON_RIGHT = 16;
 const ENTER_BUTTON_BOTTOM = 16;
 const PATH_NODE_RADIUS = 2.3;
@@ -86,6 +98,12 @@ const NODE_LABELS: Record<SpireNodeKind, string> = {
   treasure: "Treasure",
   unknown: "Unknown"
 };
+const COMPLETED_ROOM_RING_PATHS = [
+  "M325,18C228.7-8.3,118.5,8.3,78,21C22.4,38.4,4.6,54.6,5.6,77.6c1.4,32.4,52.2,54,142.6,63.7 c66.2,7.1,212.2,7.5,273.5-8.3c64.4-16.6,104.3-57.6,33.8-98.2C386.7-4.9,179.4-1.4,126.3,20.7",
+  "M346,17C250,-3,132,4,73,23C21,40,1,61,12,86c14,32,74,48,166,54c80,5,218,-2,276,-25c52,-21,61,-56,4,-82C394,4,188,-5,112,25",
+  "M302,19C216,-7,101,6,59,29C13,54,10,83,42,105c37,25,116,34,214,31c95,-3,201,-18,230,-50c22,-25,2,-52,-47,-67C365,-3,181,-2,106,23",
+  "M331,16C238,-10,128,8,82,18C28,29,0,51,8,79c11,39,75,59,171,64c86,4,211,1,276,-21c60,-20,72,-58,13,-88C397,-3,197,4,119,18"
+];
 
 const NODE_ICON_ASSETS: Record<SpireNodeKind, StaticImageData> = {
   boss: demonKingArt,
@@ -96,6 +114,11 @@ const NODE_ICON_ASSETS: Record<SpireNodeKind, StaticImageData> = {
   rest: campfireArt,
   treasure: chestArt,
   unknown: questionMarkArt
+};
+const ACT_BOSS_NODE_ASSETS: Partial<Record<SpireAct, StaticImageData>> = {
+  2: desertBeastArt,
+  3: hellBeastArt,
+  4: sheepKingArt
 };
 
 const NODE_DIMENSIONS: Record<SpireNodeKind, { icon: number; size: number }> = {
@@ -119,11 +142,12 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
   const target = props.state.profile.spireRun.roundQuestionIds.length;
   const mapOpen = props.state.profile.spireRun.mapOpen;
   const selectedNodeIsReachable = mapOpen && Boolean(node && isReachableMapNode(props.state, node.id));
+  const mapBg = getActMapBackground(props.state.profile.spireRun.act);
   return (
     <Paper withBorder p="sm" style={{ background: "var(--mantine-color-dark-7)", ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
       <Box style={{ minWidth: 0, ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
         {mapOpen ? (
-          <Box style={{ background: MAP_BG, border: "1px solid var(--mantine-color-dark-4)", height: props.fillAvailableHeight ? undefined : EXPANDED_MAP_HEIGHT, overflow: "hidden", position: "relative", ...(props.fillAvailableHeight ? FLEX_FILL_STYLE : {}) }}>
+          <Box style={{ background: mapBg, border: "1px solid var(--mantine-color-dark-4)", height: props.fillAvailableHeight ? undefined : EXPANDED_MAP_HEIGHT, overflow: "hidden", position: "relative", ...(props.fillAvailableHeight ? FLEX_FILL_STYLE : {}) }}>
             <Box
               className="spire-map-scroll"
               ref={mapDrag.scrollRef}
@@ -133,8 +157,8 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
               onPointerUp={mapDrag.endDrag}
               style={{ cursor: mapDrag.dragging ? "grabbing" : "grab", inset: 0, msOverflowStyle: "none", overflow: "auto", overscrollBehavior: "contain", position: "absolute", scrollbarWidth: "none", touchAction: "none", userSelect: mapDrag.dragging ? "none" : undefined }}
             >
-              <Box style={{ background: MAP_BG, height: MAP_CONTENT_HEIGHT, minHeight: "100%", minWidth: "100%", position: "relative", width: MAP_CONTENT_WIDTH }}>
-                <MapBackdrop />
+              <Box style={{ background: mapBg, height: MAP_CONTENT_HEIGHT, minHeight: "100%", minWidth: "100%", position: "relative", width: MAP_CONTENT_WIDTH }}>
+                <MapBackdrop act={props.state.profile.spireRun.act} />
                 <MapPaths state={props.state} />
                 {props.state.profile.spireRun.nodes.map((mapNode) => {
                   const position = getVisualNodePosition(mapNode);
@@ -145,6 +169,7 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
                       completed={props.state.profile.spireRun.completedNodeIds.includes(mapNode.id)}
                       highlighted={highlightedKind === mapNode.kind}
                       highlightMode={Boolean(highlightedKind)}
+                      act={props.state.profile.spireRun.act}
                       kind={mapNode.kind}
                       onSelect={() => props.setState((previous) => selectSpireNode(previous, mapNode.id))}
                       selectable={isReachableMapNode(props.state, mapNode.id)}
@@ -153,7 +178,7 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
                     />
                   );
                 })}
-                <ActMapLabel />
+                <ActMapLabel state={props.state} />
               </Box>
             </Box>
             <Legend highlightedKind={highlightedKind} onHighlight={setDebouncedHighlightedKind} />
@@ -254,11 +279,11 @@ function isInteractiveMapTarget(target: EventTarget) {
 
 function RoomPanel(props: { node: SpireMapNode | undefined; setState: React.Dispatch<React.SetStateAction<StudyState>>; solved: number; state: StudyState; target: number }) {
   if (isCombatNode(props.node)) {
-    return <CompactRoomPanel node={props.node} solved={props.solved} target={props.target} />;
+    return <CompactRoomPanel node={props.node} solved={props.solved} state={props.state} target={props.target} />;
   }
   return (
     <Stack gap="sm" style={{ minHeight: ROOM_PANEL_MIN_HEIGHT }}>
-      <CompactRoomPanel node={props.node} solved={props.solved} target={props.target} />
+      <CompactRoomPanel node={props.node} solved={props.solved} state={props.state} target={props.target} />
       {props.node?.kind === "merchant" && <MerchantRoomPanel setState={props.setState} state={props.state} />}
       {props.node?.kind === "treasure" && <TreasureRoomPanel node={props.node} setState={props.setState} state={props.state} />}
       {props.node?.kind === "rest" && <RestRoomPanel node={props.node} setState={props.setState} state={props.state} />}
@@ -267,17 +292,18 @@ function RoomPanel(props: { node: SpireMapNode | undefined; setState: React.Disp
   );
 }
 
-function CompactRoomPanel(props: { node: SpireMapNode | undefined; solved: number; target: number }) {
+function CompactRoomPanel(props: { node: SpireMapNode | undefined; solved: number; state: StudyState; target: number }) {
   const kind = props.node?.kind || "enemy";
+  const campaignLabel = getSpireCampaignLabel(props.state.profile.spireRun);
   return (
     <Group justify="space-between" wrap="nowrap" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, borderRadius: 2, boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.72)", height: COMPACT_ROOM_HEIGHT, overflow: "hidden", padding: "10px 14px" }}>
       <Group gap="sm" wrap="nowrap">
         <Box style={{ alignItems: "center", background: "rgba(0, 0, 0, 0.32)", border: "1px solid rgba(223, 195, 122, 0.32)", display: "flex", height: COMPACT_ROOM_ICON_SIZE, justifyContent: "center", width: COMPACT_ROOM_ICON_SIZE }}>
-          <NodeIcon kind={kind} size={COMPACT_ROOM_ICON_SIZE - COMPACT_ROOM_ICON_INSET} />
+          <NodeIcon act={props.state.profile.spireRun.act} kind={kind} size={COMPACT_ROOM_ICON_SIZE - COMPACT_ROOM_ICON_INSET} />
         </Box>
         <Box>
           <Text size="sm" fw={900} tt="uppercase" style={{ color: "#f1dfad", letterSpacing: 0, textShadow: "0 1px 0 #000" }}>{NODE_LABELS[kind]}</Text>
-          <Text size="xs" c="dimmed">{ACT_LABEL}</Text>
+          <Text size="xs" c="dimmed">{campaignLabel}</Text>
         </Box>
       </Group>
       <Text size="xs" c="dimmed">Room {props.solved}/{props.target}</Text>
@@ -413,7 +439,43 @@ function EventRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch<Re
   );
 }
 
-function MapBackdrop() {
+function MapBackdrop(props: { act: SpireAct }) {
+  if (props.act === 2) {
+    return (
+      <Box aria-hidden="true" style={{ inset: 0, overflow: "hidden", pointerEvents: "none", position: "absolute", zIndex: 0 }}>
+        <MapProp asset={fieldWallArt} left={2} top={15} width={170} opacity={0.24} />
+        <MapProp asset={fieldPillarArt} left={9} top={82} width={86} opacity={0.34} />
+        <MapProp asset={fieldTorchArt} left={15} top={28} width={70} opacity={0.3} />
+        <MapProp asset={fieldWallArt} left={100} top={18} width={180} opacity={0.26} />
+        <MapProp asset={fieldPillarArt} left={91} top={80} width={96} opacity={0.34} />
+        <MapProp asset={graveyardRocksArt} left={96} top={93} width={96} opacity={0.22} />
+      </Box>
+    );
+  }
+  if (props.act === 3) {
+    return (
+      <Box aria-hidden="true" style={{ inset: 0, overflow: "hidden", pointerEvents: "none", position: "absolute", zIndex: 0 }}>
+        <MapProp asset={deadTreeArt} left={3} top={16} width={124} opacity={0.28} />
+        <MapProp asset={wildBushArt} left={7} top={84} width={112} opacity={0.3} />
+        <MapProp asset={fieldTreeArt} left={15} top={31} width={116} opacity={0.18} />
+        <MapProp asset={deadTreeArt} left={96} top={16} width={132} opacity={0.3} />
+        <MapProp asset={wildBushArt} left={92} top={85} width={126} opacity={0.32} />
+        <MapProp asset={fieldCorpseArt} left={98} top={94} width={78} opacity={0.24} />
+      </Box>
+    );
+  }
+  if (props.act === 4) {
+    return (
+      <Box aria-hidden="true" style={{ inset: 0, overflow: "hidden", pointerEvents: "none", position: "absolute", zIndex: 0 }}>
+        <MapProp asset={fieldWallArt} left={0} top={12} width={190} opacity={0.28} />
+        <MapProp asset={fieldTorchArt} left={8} top={30} width={82} opacity={0.38} />
+        <MapProp asset={fieldCorpseArt} left={12} top={88} width={92} opacity={0.24} />
+        <MapProp asset={fieldWallArt} left={100} top={12} width={190} opacity={0.3} />
+        <MapProp asset={fieldTorchArt} left={92} top={30} width={82} opacity={0.4} />
+        <MapProp asset={deadTreeArt} left={96} top={84} width={120} opacity={0.22} />
+      </Box>
+    );
+  }
   return (
     <Box aria-hidden="true" style={{ inset: 0, overflow: "hidden", pointerEvents: "none", position: "absolute", zIndex: 0 }}>
       <MapProp asset={fieldTreeArt} left={1} top={14} width={116} opacity={0.26} />
@@ -445,7 +507,8 @@ function MapProp(props: { asset: StaticImageData; left: number; opacity?: number
   );
 }
 
-function ActMapLabel() {
+function ActMapLabel(props: { state: StudyState }) {
+  const difficulty = getSpireDifficultyModifiers(props.state.profile.spireRun);
   return (
     <Box
       style={{
@@ -463,7 +526,7 @@ function ActMapLabel() {
         imageRendering: "pixelated",
         justifyContent: "center",
         left: "50%",
-        minWidth: 276,
+        minWidth: 420,
         padding: "0 26px",
         position: "absolute",
         top: ACT_LABEL_TOP,
@@ -471,7 +534,9 @@ function ActMapLabel() {
         zIndex: 4
       }}
     >
-      <Text size="xs" fw={900} ta="center" tt="uppercase" style={{ letterSpacing: 0, lineHeight: 1, textShadow: "0 2px 0 #000" }}>{ACT_LABEL}</Text>
+      <Text size="xs" fw={900} ta="center" tt="uppercase" style={{ letterSpacing: 0, lineHeight: 1, textShadow: "0 2px 0 #000" }}>
+        {getSpireCampaignLabel(props.state.profile.spireRun)} {difficulty.resistancePenalty ? `(${difficulty.resistancePenalty}% Resist)` : ""}
+      </Text>
     </Box>
   );
 }
@@ -562,7 +627,7 @@ function getStableRoll(value: string) {
   return (hash >>> 0) / HASH_DIVISOR;
 }
 
-function MapNode(props: { active: boolean; completed: boolean; highlighted: boolean; highlightMode: boolean; kind: SpireNodeKind; onSelect: () => void; selectable: boolean; x: number; y: number }) {
+function MapNode(props: { act: SpireAct; active: boolean; completed: boolean; highlighted: boolean; highlightMode: boolean; kind: SpireNodeKind; onSelect: () => void; selectable: boolean; x: number; y: number }) {
   const [hovered, setHovered] = useState(false);
   const opacity = getNodeOpacity(props);
   const dimensions = getNodeDimensions(props.kind);
@@ -585,9 +650,68 @@ function MapNode(props: { active: boolean; completed: boolean; highlighted: bool
       style={{ alignItems: "center", background: "transparent", border: 0, borderRadius: 0, boxShadow: "none", cursor: props.selectable ? "pointer" : "default", display: "flex", height: size, justifyContent: "center", left: `${props.x}%`, opacity, padding: 0, position: "absolute", top: `${props.y}%`, transform: "translate(-50%, -50%)", transition: NODE_HIGHLIGHT_TRANSITION, width: size, zIndex }}
       type="button"
     >
-      <NodeIcon kind={props.kind} highlightTone={highlightTone} shadow size={iconSize} />
+      {props.completed && <CompletedRoomRing kind={props.kind} seed={`${props.kind}:${props.x}:${props.y}`} size={size} />}
+      <NodeIcon act={props.act} kind={props.kind} highlightTone={highlightTone} shadow size={iconSize} />
     </Box>
   );
+}
+
+function CompletedRoomRing(props: { kind: SpireNodeKind; seed: string; size: number }) {
+  const variant = getCompletedRoomRingVariant(props.seed);
+  const ringSize = getCompletedRoomRingSize(props.kind, props.size, variant.size);
+  const strokeWidth = getCompletedRoomRingStroke(props.kind, variant.stroke);
+  const secondaryStrokeWidth = Math.max(4, strokeWidth * 0.54);
+  const path = getCompletedRoomRingPath(variant.path);
+  return (
+    <svg
+      aria-hidden="true"
+      preserveAspectRatio="none"
+      viewBox="0 0 500 150"
+      style={{
+        filter: COMPLETED_ROOM_RING_SHADOW,
+        height: ringSize,
+        overflow: "visible",
+        pointerEvents: "none",
+        position: "absolute",
+        transform: `translate(${variant.offsetX}px, ${variant.offsetY}px) rotate(${getCompletedRoomRingRotation(props.kind, variant.rotation)}deg)`,
+        width: ringSize,
+        zIndex: 0
+      }}
+    >
+      <path d={path} fill="none" opacity={0.3} stroke="rgba(228, 218, 190, 0.52)" strokeLinecap="round" strokeLinejoin="round" strokeWidth={secondaryStrokeWidth} />
+      <path d={path} fill="none" stroke={COMPLETED_ROOM_RING_COLOR} strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth} />
+    </svg>
+  );
+}
+
+function getCompletedRoomRingVariant(seed: string) {
+  return {
+    offsetX: Math.round((getStableRoll(`${seed}:ring-x`) - RANDOM_CENTER) * 6),
+    offsetY: Math.round((getStableRoll(`${seed}:ring-y`) - RANDOM_CENTER) * 5),
+    path: Math.floor(getStableRoll(`${seed}:ring-path`) * COMPLETED_ROOM_RING_PATHS.length),
+    rotation: Math.round((getStableRoll(`${seed}:ring-rotation`) - RANDOM_CENTER) * 22),
+    size: 0.9 + getStableRoll(`${seed}:ring-size`) * 0.28,
+    stroke: 0.85 + getStableRoll(`${seed}:ring-stroke`) * 0.35
+  };
+}
+
+function getCompletedRoomRingPath(index: number) {
+  return COMPLETED_ROOM_RING_PATHS[index] || COMPLETED_ROOM_RING_PATHS[0];
+}
+
+function getCompletedRoomRingSize(kind: SpireNodeKind, size: number, scale: number) {
+  if (kind === "boss") {
+    return Math.round(size * 0.92 * scale);
+  }
+  return Math.round(size * 1.72 * scale);
+}
+
+function getCompletedRoomRingStroke(kind: SpireNodeKind, scale: number) {
+  return Math.round((kind === "boss" ? 9 : 8) * scale);
+}
+
+function getCompletedRoomRingRotation(kind: SpireNodeKind, rotation: number) {
+  return (kind === "boss" ? -10 : 9) + rotation;
 }
 
 function getNodeDimensions(kind: SpireNodeKind) {
@@ -624,7 +748,7 @@ function getNodeOpacity(props: { active: boolean; completed: boolean; highlighte
   return props.selectable || props.completed || props.active ? HIGHLIGHTED_NODE_OPACITY : LOCKED_NODE_OPACITY;
 }
 
-function NodeIcon(props: { highlightTone?: "active" | "hover" | "selected"; kind: SpireNodeKind; shadow?: boolean; size?: number }) {
+function NodeIcon(props: { act?: SpireAct; highlightTone?: "active" | "hover" | "selected"; kind: SpireNodeKind; shadow?: boolean; size?: number }) {
   const size = props.size || LEGEND_ICON_SIZE;
   const filter = getNodeIconFilter(props.kind, Boolean(props.shadow), props.highlightTone);
   const opacity = getNodeIconOpacity(props.kind, props.highlightTone);
@@ -632,10 +756,30 @@ function NodeIcon(props: { highlightTone?: "active" | "hover" | "selected"; kind
     <Box
       alt=""
       component="img"
-      src={NODE_ICON_ASSETS[props.kind]}
-      style={{ display: "block", filter, height: size, imageRendering: "pixelated", objectFit: "contain", opacity, width: size }}
+      src={getNodeIconAsset(props.kind, props.act)}
+      style={{ display: "block", filter, height: size, imageRendering: "pixelated", objectFit: "contain", opacity, position: "relative", width: size, zIndex: 1 }}
     />
   );
+}
+
+function getNodeIconAsset(kind: SpireNodeKind, act: SpireAct = 1) {
+  if (kind === "boss") {
+    return ACT_BOSS_NODE_ASSETS[act] || NODE_ICON_ASSETS.boss;
+  }
+  return NODE_ICON_ASSETS[kind];
+}
+
+function getActMapBackground(act: SpireAct) {
+  if (act === 2) {
+    return ACT_TWO_MAP_BG;
+  }
+  if (act === 3) {
+    return ACT_THREE_MAP_BG;
+  }
+  if (act === 4) {
+    return ACT_FOUR_MAP_BG;
+  }
+  return MAP_BG;
 }
 
 function getNodeIconFilter(kind: SpireNodeKind, shadow: boolean, highlightTone: "active" | "hover" | "selected" | undefined) {

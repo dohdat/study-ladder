@@ -19,13 +19,12 @@ import { useStudyTimeTracker } from "../hooks/useStudyBlocker";
 import { usePersistAchievements } from "../hooks/usePersistAchievements";
 import { useStudyNotifications } from "../hooks/useStudyNotifications";
 import { beautifyCode } from "../lib/codeFormat";
-import { applyPassedCombatResult } from "../lib/combatCore";
-import { getMonsterAttackProfile } from "../lib/monsterCore";
+import { applyPassedCombatResult, getElapsedPressureRatio, getTimedMonsterAttack } from "../lib/combatCore";
 import { getTimerDisplay } from "../lib/timerDisplay";
 import { chooseNextSpireQuestion, completeSpireQuestion, getCurrentRoundQuestion, getCurrentSpireNode, isCombatNode as isSpireCombatNode } from "../lib/spireMapCore";
 import {
   HINT_COST, applyHealthPenalty, applyScheduleResult, buyHint, canBuyHint, cloneState, defaultState, getCard,
-  getHealthLoss, getHintCost, getMonsterDamageRoll, getQuestionTimeLimitMs, isQuestionInRecommendedRange, normalizeStudyState, setCard
+  getHealthLoss, getHintCost, getQuestionTimeLimitMs, isQuestionInRecommendedRange, normalizeStudyState, setCard
 } from "../lib/studyCore";
 import { createHintPrompt } from "../lib/hintPrompt";
 import { createLocalHint } from "../lib/localHint";
@@ -38,16 +37,13 @@ const TIMER_PAD = 2, NUMBER_BASE_HEX = 16;
 const VISIBLE_RUN_CASE_COUNT = 3;
 const DAMAGE_POP_TIMEOUT_MS = 840;
 const COMBAT_ADVANCE_DELAY_MS = 680;
-const TIME_DAMAGE_FREE_RATIO = 0.18;
-const TIME_DAMAGE_MIN_RATIO = 0.18;
-const TIME_DAMAGE_RATIO_RANGE = 0.82;
 
 type TestRunnerMessage = { type: "run-result"; runId: string; ok: boolean; error?: string; results: RunResult[]; runtimeMs?: number };
 type CodeRunMessage = { type: "code-run-result"; runId: string; ok: boolean; error?: string; output: string[]; results?: RunResult[]; runtimeMs?: number };
 type RunnerReadyMessage = { type: "runner-ready" };
 type RunnerMessage = TestRunnerMessage | CodeRunMessage | RunnerReadyMessage;
 
-type FailAndAdvance = (message: string, draft?: string) => void;
+type FailAndAdvance = (message: string, draft?: string, timeRemainingMs?: number) => void;
 
 type TimerControls = { timeRemainingMs: number; questionFinished: boolean; setQuestionFinished: (finished: boolean) => void };
 
@@ -171,7 +167,7 @@ function expireQuestion(params: Parameters<typeof useTimerInterval>[0]) {
   params.setRunning(false);
   params.setResults([]);
   params.setConsoleRunResult(null);
-  params.failAndAdvance("Time expired. Moving to next question.", params.code);
+  params.failAndAdvance("Time expired. Moving to next question.", params.code, 0);
 }
 
 function useRunnerMessages(params: {
@@ -234,17 +230,18 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
     return;
   }
   if (message.error) {
-    params.failAndAdvance(message.error);
+    params.failAndAdvance(message.error, params.code, params.timeRemainingMs);
     return;
   }
   if (!message.ok) {
-    const attack = getMonsterAttackProfile(question, getMonsterDamageRoll(question));
+    const now = Date.now();
+    const attack = getTimedMonsterAttack(question, params.timeRemainingMs, now, "retaliation");
     const healthLoss = getHealthLoss(params.state, attack.damage, attack.element);
     if (healthLoss > 0) {
-      params.showPlayerImpact(createPlayerImpact(question, attack, healthLoss, Date.now()));
+      params.showPlayerImpact(createPlayerImpact(question, attack, healthLoss, now));
     }
     params.showHealthLoss(healthLoss, attack.hitCount);
-    params.setState((previous) => applyHealthPenalty(previous, attack.damage, attack.manaDamage, question.id, params.code, Date.now(), attack.element));
+    params.setState((previous) => applyHealthPenalty(previous, attack.damage, attack.manaDamage, question.id, params.code, now, attack.element));
     params.setResults([]);
     params.setConsoleRunResult({ ok: false, output: [], results: message.results.slice(VISIBLE_RUN_CASE_COUNT), runtimeMs: message.runtimeMs });
     params.setTone("fail");
@@ -333,28 +330,7 @@ function applyElapsedCombatDamage(state: StudyState, question: Question, timeRem
 }
 
 function getElapsedMonsterAttack(question: Question, timeRemainingMs: number, now: number) {
-  const damageRatio = getElapsedPressureRatio(question, timeRemainingMs);
-  const attack = getMonsterAttackProfile(question, getMonsterDamageRoll(question, now), now);
-  return {
-    ...attack,
-    damage: Math.floor(attack.damage * damageRatio),
-    manaDamage: Math.floor(attack.manaDamage * damageRatio),
-    perHitDamage: Math.max(0, Math.floor(attack.perHitDamage * damageRatio))
-  };
-}
-
-function getElapsedPressureRatio(question: Question, timeRemainingMs: number) {
-  const timeLimitMs = getQuestionTimeLimitMs(question);
-  const elapsedRatio = timeLimitMs > 0 ? Math.min(1, Math.max(0, (timeLimitMs - timeRemainingMs) / timeLimitMs)) : 0;
-  return getElapsedDamageRatio(elapsedRatio);
-}
-
-function getElapsedDamageRatio(elapsedRatio: number) {
-  if (elapsedRatio <= TIME_DAMAGE_FREE_RATIO) {
-    return 0;
-  }
-  const pressureRatio = (elapsedRatio - TIME_DAMAGE_FREE_RATIO) / (1 - TIME_DAMAGE_FREE_RATIO);
-  return Math.min(1, TIME_DAMAGE_MIN_RATIO + pressureRatio * TIME_DAMAGE_RATIO_RANGE);
+  return getTimedMonsterAttack(question, timeRemainingMs, now, "elapsed");
 }
 
 function getTimeDamageStatus(result: ReturnType<typeof applyElapsedCombatDamage>) {
@@ -381,7 +357,7 @@ function formatHitStatus(hit: NonNullable<ReturnType<typeof applyPassedCombatRes
   return hit.critical ? `${skill}critical hit${hitCount} for ${hit.damage}.${effects}${restored}` : `${skill}hit${hitCount} for ${hit.damage}.${effects}${restored}`;
 }
 
-function getFailStatus(attack: ReturnType<typeof getMonsterAttackProfile>) {
+function getFailStatus(attack: ReturnType<typeof getTimedMonsterAttack>) {
   const prefix = attack.hitCount > 1 ? `Multi-Shot hit ${attack.hitCount} times` : "Monster hit";
   const element = attack.element ? ` ${attack.element[0].toUpperCase()}${attack.element.slice(1)}` : "";
   const manaBurn = attack.manaDamage ? ` Mana Burn drained ${attack.manaDamage}.` : "";
@@ -626,7 +602,7 @@ function handleRunTimeout(runId: string, formattedCode: string, params: Paramete
   params.activeRunId.current = null;
   params.runTimer.current = null;
   params.setRunning(false);
-  params.failAndAdvance("Timed out. Moving to next question.", formattedCode);
+  params.failAndAdvance("Timed out. Moving to next question.", formattedCode, params.timeRemainingMs);
   params.runnerFrame.current?.contentWindow?.postMessage({ type: "reset-runner" }, "*");
 }
 
@@ -663,20 +639,20 @@ function useFailAndAdvance(params: {
   showPlayerImpact: (impact: CombatImpactVisual) => void;
 }) {
   const { activeRunId, code, currentQuestion, runTimer, setCode, setConsoleRunResult, setCurrentQuestion, setResults, setRunning, setSessionStarted, setState, setStatus, setTone, state } = params;
-  return useCallback((message: string, draft = code) => {
+  return useCallback((message: string, draft = code, timeRemainingMs?: number) => {
     if (!currentQuestion) {
       return;
     }
-    const monsterDamage = getMonsterDamageRoll(currentQuestion);
-    const attack = getMonsterAttackProfile(currentQuestion, monsterDamage);
+    const now = Date.now();
+    const attack = getTimedMonsterAttack(currentQuestion, timeRemainingMs ?? getQuestionTimeLimitMs(currentQuestion), now, "retaliation");
     const healthLoss = getHealthLoss(state, attack.damage, attack.element);
-    const scheduled = applyScheduleResult(state, currentQuestion.id, false, draft, Date.now(), attack.damage, attack.manaDamage, attack.element);
+    const scheduled = applyScheduleResult(state, currentQuestion.id, false, draft, now, attack.damage, attack.manaDamage, attack.element);
     const picked = chooseNextSpireQuestion(scheduled, currentQuestion);
     const nextState = { ...scheduled, currentId: picked.id };
     activeRunId.current = null;
     clearRunTimer(runTimer);
     if (healthLoss > 0) {
-      params.showPlayerImpact(createPlayerImpact(currentQuestion, attack, healthLoss, Date.now()));
+      params.showPlayerImpact(createPlayerImpact(currentQuestion, attack, healthLoss, now));
     }
     params.showHealthLoss(healthLoss, attack.hitCount);
     setRunning(false);
@@ -693,6 +669,7 @@ function useFailAndAdvance(params: {
 }
 
 function useSyncSpireQuestion(params: {
+  active: boolean;
   currentQuestion: Question | null;
   sessionStarted: boolean;
   setCode: (code: string) => void;
@@ -701,7 +678,7 @@ function useSyncSpireQuestion(params: {
   state: StudyState;
 }) {
   useEffect(() => {
-    if (params.sessionStarted || params.state.profile.spireRun.mapOpen) {
+    if (!params.active || params.sessionStarted || params.state.profile.spireRun.mapOpen) {
       return;
     }
     const nextQuestion = getCurrentRoundQuestion(params.state, params.currentQuestion);
@@ -741,7 +718,7 @@ function usePlayerImpact(setPlayerImpact: React.Dispatch<React.SetStateAction<Co
   }, [setPlayerImpact]);
 }
 
-function createPlayerImpact(question: Question, attack: ReturnType<typeof getMonsterAttackProfile>, amount: number, now: number): CombatImpactVisual {
+function createPlayerImpact(question: Question, attack: ReturnType<typeof getTimedMonsterAttack>, amount: number, now: number): CombatImpactVisual {
   return {
     amount,
     damageTypes: [attack.element],
@@ -806,7 +783,22 @@ export default function Home() {
   const currentSpireNode = getCurrentSpireNode(state);
   const mapOpen = state.profile.spireRun.mapOpen;
   const showPractice = !mapOpen && isSpireCombatNode(currentSpireNode);
-  useSyncSpireQuestion({ currentQuestion, sessionStarted, setCode, setCurrentQuestion, setState, state });
+  useSyncSpireQuestion({ active: hydrated, currentQuestion, sessionStarted, setCode, setCurrentQuestion, setState, state });
+  const runnerFrameElement = <iframe ref={runnerFrame} src={RUNNER_FRAME} title="JavaScript runner" hidden onLoad={() => setRunnerReady(true)} />;
+
+  if (!hydrated) {
+    return (
+      <>
+        <Container fluid px="md" py="md" w={{ base: "100%", lg: "70%" }} style={{ height: "100vh", overflow: "hidden" }}>
+          <Stack gap="md" style={{ height: "100%", minHeight: 0 }}>
+            <div aria-label="Loading study map" style={{ background: "#08090d", border: "1px solid rgba(195, 148, 56, 0.28)", height: "100%", minHeight: 0 }} />
+          </Stack>
+        </Container>
+        {runnerFrameElement}
+      </>
+    );
+  }
+
   return (
     <>
       <RewardNotifications items={rewardNotifications} />
@@ -834,7 +826,7 @@ export default function Home() {
           {showPractice && <PracticeArea actions={actions} currentQuestion={currentQuestion} damagePop={monsterDamagePop} editorProps={{ canBuyHint: currentQuestion ? canBuyHint(state, currentQuestion.id) : false, code, consoleRunResult, hintCost: currentQuestion ? getHintCost(state, currentQuestion.id) : HINT_COST, hintError: hints.hintError, hintStreaming: hints.hintStreaming, hintText: hints.hintText, questionFinished: timer.questionFinished, results, runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} state={state} />}
         </Stack>
       </Container>
-      <iframe ref={runnerFrame} src={RUNNER_FRAME} title="JavaScript runner" hidden onLoad={() => setRunnerReady(true)} />
+      {runnerFrameElement}
     </>
   );
 }

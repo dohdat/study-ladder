@@ -1,10 +1,11 @@
 import { questions } from "../data/questions";
+import { getNextSpireCampaignStage, getSpireCampaignRatingBonus, getSpireDifficultyModifiers } from "./campaignCore";
 import { createDropItem, SLOT_STAT_BIAS } from "./itemCore";
 import { getUniqueMonsterBonusCount } from "./monsterCore";
 import { grantRelic, rollRelic } from "./relicCore";
 import { createShopStock } from "./shopCore";
 import { getMaxHealth, getMaxMana } from "./studyCore";
-import type { Difficulty, InventoryItem, ItemRarity, Question, SpireMapNode, SpireNodeKind, SpireRun, StudyState, UnknownEncounterKind } from "../types/study";
+import type { Difficulty, InventoryItem, ItemRarity, Question, SpireAct, SpireDifficulty, SpireMapNode, SpireNodeKind, SpireRun, StudyState, UnknownEncounterKind } from "../types/study";
 
 const RATING_FLOOR_1 = 1500;
 const RATING_FLOOR_2 = 1650;
@@ -149,14 +150,16 @@ type PathEdge = {
   toColumn: number;
 };
 
-export function createSpireRun(seed = Date.now()): SpireRun {
+export function createSpireRun(seed = Date.now(), act: SpireAct = 1, difficulty: SpireDifficulty = "normal"): SpireRun {
   const nodes = createSpireNodes(seed);
   const availableNodeIds = nodes.filter((node) => node.rating === SPIRE_RATINGS[FIRST_TIER]).map((node) => node.id);
   const currentNodeId = availableNodeIds[DEFAULT_FIRST_SLOT] || nodes[0]?.id || FIRST_NODE_ID;
   return {
+    act,
     availableNodeIds,
     completedNodeIds: [],
     currentNodeId,
+    difficulty,
     mapOpen: true,
     mapSeed: seed,
     nodes,
@@ -172,7 +175,7 @@ export function createSpireRun(seed = Date.now()): SpireRun {
 export function normalizeSpireRun(run: Partial<SpireRun> | undefined): SpireRun {
   const normalizedNodes = normalizeForcedRoomKinds(run?.nodes || []);
   if (!normalizedNodes.length || !hasRequiredSpireFloors(normalizedNodes)) {
-    return createSpireRun(run?.mapSeed || Date.now());
+    return createSpireRun(run?.mapSeed || Date.now(), normalizeSpireAct(run?.act), normalizeSpireDifficulty(run?.difficulty));
   }
   const sourceRun = run || {};
   const currentNode = normalizedNodes.find((node) => node.id === sourceRun.currentNodeId) || normalizedNodes[0];
@@ -182,9 +185,11 @@ export function normalizeSpireRun(run: Partial<SpireRun> | undefined): SpireRun 
   const roundQuestionIds = (sourceRun.roundQuestionIds || []).filter((id) => knownQuestionIds.has(id));
   const roundSolvedIds = (sourceRun.roundSolvedIds || []).filter((id) => roundQuestionIds.includes(id));
   return {
+    act: normalizeSpireAct(sourceRun.act),
     availableNodeIds,
     completedNodeIds: sourceRun.completedNodeIds || [],
     currentNodeId: currentNode.id,
+    difficulty: normalizeSpireDifficulty(sourceRun.difficulty),
     mapOpen: typeof sourceRun.mapOpen === "boolean" ? sourceRun.mapOpen : true,
     mapSeed: Number.isFinite(sourceRun.mapSeed) ? sourceRun.mapSeed || Date.now() : Date.now(),
     nodes: normalizedNodes,
@@ -201,6 +206,14 @@ function hasRequiredSpireFloors(nodes: SpireMapNode[]) {
 }
 
 function createDefaultUnknownEncounterMisses(): Record<UnknownEncounterKind, number> { return { elite: 0, monster: 0, shop: 0, treasure: 0 }; }
+
+function normalizeSpireAct(value: SpireRun["act"] | undefined): SpireAct {
+  return [1, 2, 3, 4].includes(Number(value)) ? Number(value) as SpireAct : 1;
+}
+
+function normalizeSpireDifficulty(value: SpireRun["difficulty"] | undefined): SpireDifficulty {
+  return value === "nightmare" || value === "hell" ? value : "normal";
+}
 
 function normalizeUnknownEncounterMisses(misses: Partial<Record<UnknownEncounterKind, number>> | undefined) {
   const fallback = createDefaultUnknownEncounterMisses();
@@ -558,7 +571,7 @@ function applyBossRoomReward(state: StudyState, node: SpireMapNode, now: number)
 }
 
 function applyTreasureRoomReward(state: StudyState, node: SpireMapNode, now: number) {
-  const gold = rollRoomGold(node, "treasure", now);
+  const gold = getRoomGold(state, node, "treasure", now);
   const rewardKind = getRoll(`${node.id}:${now}:treasure-kind`) < 0.5 ? "relic" : "equipment";
   if (rewardKind === "relic") {
     const relic = rollRelic(state, `${node.id}:${now}:treasure-relic`, { maxItemLevel: getStateLevel(state) });
@@ -576,7 +589,7 @@ function applyTreasureRoomReward(state: StudyState, node: SpireMapNode, now: num
 }
 
 function applyMerchantRoomReward(state: StudyState, node: SpireMapNode, now: number) {
-  const question = createRoomRewardQuestion(node, "merchant", now, "merchant");
+  const question = createRoomRewardQuestion(state, node, "merchant", now, "merchant");
   return {
     ...state,
     profile: {
@@ -679,13 +692,17 @@ function updateUnknownEncounterMisses(state: StudyState, seen: UnknownEncounterK
 }
 
 function grantRoomGold(state: StudyState, node: SpireMapNode, kind: SpireNodeKind, now: number) {
-  return addRoomGold(state, rollRoomGold(node, kind, now));
+  return addRoomGold(state, getRoomGold(state, node, kind, now));
 }
 
 function rollRoomGold(node: SpireMapNode, kind: SpireNodeKind, now: number) {
   const base = getRoomGoldBase(node, kind);
   const spread = Math.max(4, Math.floor(base * 0.35));
   return base + Math.floor(getRoll(`${node.id}:${now}:${kind}:gold`) * (spread + 1));
+}
+
+function getRoomGold(state: StudyState, node: SpireMapNode, kind: SpireNodeKind, now: number) {
+  return Math.round(rollRoomGold(node, kind, now) * getSpireDifficultyModifiers(state.profile.spireRun).rewardMultiplier);
 }
 
 function addRoomGold(state: StudyState, gold: number) {
@@ -747,7 +764,7 @@ function grantRoomItems(state: StudyState, node: SpireMapNode, now: number, kind
 }
 
 function createRoomRewardItem(state: StudyState, node: SpireMapNode, now: number, kind: "enemy" | "elite" | "boss" | "treasure", index: number) {
-  const question = createRoomRewardQuestion(node, kind, now, `${kind}-item-${index}`);
+  const question = createRoomRewardQuestion(state, node, kind, now, `${kind}-item-${index}`);
   const rarity = ROOM_REWARD_ITEM_RARITY[kind];
   return createDropItem(question, state.profile.stats, now + index, { ...rarity, maxItemLevel: getStateLevel(state) });
 }
@@ -756,12 +773,12 @@ function getStateLevel(state: StudyState) {
   return Math.min(MAX_CHARACTER_LEVEL, Math.floor(Math.max(0, state.profile.experience) / EXPERIENCE_PER_LEVEL) + 1);
 }
 
-function createRoomRewardQuestion(node: SpireMapNode, kind: string, now: number, suffix: string): Question {
+function createRoomRewardQuestion(state: StudyState, node: SpireMapNode, kind: string, now: number, suffix: string): Question {
   return {
     ...questions[0],
     difficulty: getRoomRewardDifficulty(node, kind),
     id: `${node.id}-${now}-${suffix}`,
-    rating: node.rating,
+    rating: getEffectiveSpireRating(state.profile.spireRun, node.rating),
     title: `${kind} room reward`
   };
 }
@@ -913,7 +930,7 @@ export function enterSpireNode(state: StudyState, now = Date.now()) {
       spireRun: {
         ...enteredState.profile.spireRun,
         mapOpen: false,
-        roundQuestionIds: isCombatNode(enteredNode) ? pickRoundQuestions(enteredNode, state.profile.spireRun.mapSeed + now, state.profile.spireRun.roundQuestionIds, getRoundQuestionCount(enteredNode, now)) : [],
+        roundQuestionIds: isCombatNode(enteredNode) ? pickRoundQuestions(enteredState.profile.spireRun, enteredNode, state.profile.spireRun.mapSeed + now, state.profile.spireRun.roundQuestionIds, getRoundQuestionCount(enteredNode, now)) : [],
         roundSolvedIds: [],
         tierIndex: getTierIndex(enteredNode?.rating || node.rating)
       }
@@ -981,6 +998,17 @@ function markSpireRoomRewardClaimed(state: StudyState, nodeId: string) {
 
 function completeSpireNode(state: StudyState, node: SpireMapNode, now: number, shouldClaimReward = true) {
   const rewarded = tickActivePotionEffects(shouldClaimReward ? claimSpireNodeReward(state, now) : state, node.id);
+  const nextCampaign = node.kind === "boss" && !node.nextIds.length ? getNextSpireCampaignStage(rewarded.profile.spireRun) : null;
+  if (nextCampaign) {
+    return {
+      ...rewarded,
+      currentId: null,
+      profile: {
+        ...rewarded.profile,
+        spireRun: createSpireRun(now + rewarded.profile.spireRun.mapSeed, nextCampaign.act, nextCampaign.difficulty)
+      }
+    };
+  }
   const nextIds = node.nextIds;
   return {
     ...rewarded,
@@ -1524,8 +1552,9 @@ function getTierIndex(rating: number) { return Math.max(FIRST_TIER, SPIRE_RATING
 
 function getRoundQuestionCount(node: SpireMapNode, now: number) { return node.kind === "elite" || node.kind === "boss" ? MAX_ROUND_QUESTION_COUNT : MIN_ROUND_QUESTION_COUNT + Math.floor(getRoll(`${node.id}:${now}:round-count`) * (MAX_ROUND_QUESTION_COUNT - MIN_ROUND_QUESTION_COUNT + 1)); }
 
-function pickRoundQuestions(node: SpireMapNode, seed: number, previousIds: string[], count: number) {
-  const targetRating = node.kind === "elite" || node.kind === "boss" ? Math.min(SPIRE_RATINGS[SPIRE_RATINGS.length - 1], node.rating + ELITE_RATING_BOOST) : node.rating;
+function pickRoundQuestions(run: SpireRun, node: SpireMapNode, seed: number, previousIds: string[], count: number) {
+  const effectiveRating = getEffectiveSpireRating(run, node.rating);
+  const targetRating = node.kind === "elite" || node.kind === "boss" ? effectiveRating + ELITE_RATING_BOOST : effectiveRating;
   const ranked = [...questions]
     .filter((question) => !previousIds.includes(question.id))
     .sort((a, b) => getQuestionSortValue(node, b, targetRating, seed) - getQuestionSortValue(node, a, targetRating, seed));
@@ -1533,6 +1562,10 @@ function pickRoundQuestions(node: SpireMapNode, seed: number, previousIds: strin
 }
 
 function getQuestionSortValue(node: SpireMapNode, question: Question, targetRating: number, seed: number) { const ratingFit = RATING_FIT_BASE - Math.abs(question.rating - targetRating); const eliteBonus = node.kind === "elite" || node.kind === "boss" ? getUniqueMonsterBonusCount(question) * ELITE_BONUS_SORT_WEIGHT : 0; return ratingFit + eliteBonus + getRoll(`${seed}:${question.id}`); }
+
+function getEffectiveSpireRating(run: Pick<SpireRun, "act" | "difficulty">, rating: number) {
+  return rating + getSpireCampaignRatingBonus(run);
+}
 
 function getRoll(seed: string) {
   let hash = HASH_SEED;

@@ -4,7 +4,7 @@ import { Badge, Box, Group, Progress, Stack, Tabs, Text, Tooltip } from "@mantin
 
 import { HeroSiegeButton } from "./HeroSiegeUi";
 import { HeroSiegeSkillIcon } from "./HeroSiegeSkillIcon";
-import { canSpendWarriorSkillPoint, getActiveWarriorSkillByTreeId, getAvailableWarriorSkillPoints, getWarriorSkillRank, resetWarriorSkillPoints, spendWarriorSkillPoint, WARRIOR_SKILLS } from "../lib/skillCore";
+import { canSpendWarriorSkillPoint, getAvailableWarriorSkillPoints, getWarriorSkillRank, getWarriorSkillTooltipBreakdown, resetWarriorSkillPoints, spendWarriorSkillPoint, WARRIOR_SKILLS } from "../lib/skillCore";
 import { getLevelProgress } from "../lib/studyCore";
 import type { StudyState, WarriorSkillId } from "../types/study";
 
@@ -195,7 +195,7 @@ function SkillNodeButton(props: { level: number; node: SkillNode; state: StudySt
       label={<SkillTooltip state={props.state} skill={skill} level={props.level} />}
       withArrow
       multiline
-      w={260}
+      w={340}
       styles={{ tooltip: { background: TOOLTIP_BG, border: TOOLTIP_BORDER, color: TOOLTIP_TEXT }, arrow: { borderColor: TOOLTIP_BG } }}
     >
       <span
@@ -327,24 +327,45 @@ function DependencyArrows(props: { arrows: SkillArrow[] }) {
 }
 
 function SkillTooltip(props: { level: number; skill: (typeof WARRIOR_SKILLS)[number]; state: StudyState }) {
+  const currentRank = getWarriorSkillRank(props.state.profile.skillRanks, props.skill.id);
+  const breakdown = getWarriorSkillTooltipBreakdown(props.state.profile.skillRanks, props.skill.id);
   return (
-    <Stack gap={4}>
+    <Stack gap={5}>
       <Group justify="space-between" gap="xs">
-        <Text size="sm" fw={800}>{props.skill.name}</Text>
+        <Text size="sm" fw={900} c="blue.3" tt="uppercase">{props.skill.name}</Text>
         <Badge size="xs" color={props.level >= props.skill.levelRequired ? "blue" : "gray"} variant="light">Lvl {props.skill.levelRequired}</Badge>
       </Group>
-      <Text size="xs">{props.skill.description}</Text>
-      <SkillCostText skillId={props.skill.id} />
-      {props.skill.synergy && <Text size="xs" c="yellow.3">{props.skill.synergy}</Text>}
+      <Text size="xs" c="red.2" fw={700}>{props.skill.description}</Text>
+      {breakdown.activeCost ? (
+        <Stack gap={1}>
+          <Text size="xs" c="red.2" fw={800}>Mana Cost: {breakdown.activeCost.mana}</Text>
+          {breakdown.activeCost.health ? <Text size="xs" c="red.2" fw={800}>Life Cost: {breakdown.activeCost.health}</Text> : null}
+        </Stack>
+      ) : (
+        <Text size="xs" c="green.3" fw={800}>Passive. No mana cost.</Text>
+      )}
+      <Text size="xs" c="gray.1" fw={800}>Current Skill Level: {currentRank} / {props.skill.maxRank}</Text>
+      <SkillTooltipSection color="blue.2" lines={breakdown.effects} title="Current Effects" />
+      <SkillTooltipSection color="green.3" lines={breakdown.receivesBonusesFrom} title="Receives Bonuses From" />
+      <SkillTooltipSection color="yellow.3" lines={breakdown.grantsBonusesTo} title="Grants Bonuses To" />
       <Text size="xs" c="gray.3">{getRequirementText(props.state, props.skill, props.level)}</Text>
-      <Progress size="xs" color="yellow" value={(getWarriorSkillRank(props.state.profile.skillRanks, props.skill.id) / props.skill.maxRank) * PROGRESS_MAX} />
+      <Progress size="xs" color="yellow" value={(currentRank / props.skill.maxRank) * PROGRESS_MAX} />
     </Stack>
   );
 }
 
-function SkillCostText(props: { skillId: WarriorSkillId }) {
-  const active = getActiveWarriorSkillByTreeId(props.skillId);
-  return active ? <Text size="xs" c="blue.3">Active. Costs {active.cost} mana when used from the toolbar.</Text> : <Text size="xs" c="green.3">Passive. No mana cost.</Text>;
+function SkillTooltipSection(props: { color: string; lines: string[]; title: string }) {
+  if (!props.lines.length) {
+    return null;
+  }
+  return (
+    <Stack gap={1}>
+      <Text size="xs" c={props.color} fw={900}>{props.title}:</Text>
+      {props.lines.map((line) => (
+        <Text key={line} size="xs" c={props.color}>{line}</Text>
+      ))}
+    </Stack>
+  );
 }
 
 function SkillPixelIcon(props: { locked: boolean; skillId: WarriorSkillId }) {

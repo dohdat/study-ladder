@@ -43,7 +43,6 @@ const WEAPON_EQUIPPED_ICON_SIZE = 64;
 const INVENTORY_GRID_COLUMNS = 13;
 const INVENTORY_GRID_ROWS = 5;
 const INVENTORY_TAB_COUNT = 3;
-const INVENTORY_EXTRA_COLUMNS = 3;
 const INVENTORY_GRID_GAP = 4;
 const INVENTORY_GRID_LEFT = 44;
 const INVENTORY_GRID_TOP = 404;
@@ -447,7 +446,6 @@ function InventoryGrid(props: { activeTab: number; draggedItemId: string | null;
       }}
       style={{ display: "grid", gap: INVENTORY_GRID_GAP, gridTemplateColumns: `repeat(${INVENTORY_GRID_COLUMNS}, ${INVENTORY_GRID_CELL_SIZE}px)`, gridTemplateRows: `repeat(${INVENTORY_GRID_ROWS}, ${INVENTORY_GRID_CELL_SIZE}px)`, height: INVENTORY_GRID_HEIGHT, left: INVENTORY_GRID_LEFT, overflow: "hidden", position: "absolute", top: INVENTORY_GRID_TOP, width: INVENTORY_GRID_WIDTH }}
     >
-      <InventoryExtraColumnHighlight />
       {cells.map((_, index) => (
         <InventoryEmptyCell key={`empty-${index}`} />
       ))}
@@ -478,27 +476,6 @@ function InventoryGrid(props: { activeTab: number; draggedItemId: string | null;
 
 function InventoryEmptyCell() {
   return <Box style={{ backgroundImage: `url(${inventoryGridBg})`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%", height: INVENTORY_GRID_CELL_SIZE, imageRendering: "pixelated", width: INVENTORY_GRID_CELL_SIZE }} />;
-}
-
-function InventoryExtraColumnHighlight() {
-  const width = INVENTORY_EXTRA_COLUMNS * INVENTORY_GRID_CELL_SIZE + (INVENTORY_EXTRA_COLUMNS - 1) * INVENTORY_GRID_GAP;
-  const left = (INVENTORY_GRID_COLUMNS - INVENTORY_EXTRA_COLUMNS) * (INVENTORY_GRID_CELL_SIZE + INVENTORY_GRID_GAP);
-  return (
-    <Box
-      aria-hidden="true"
-      style={{
-        border: "1px solid rgba(154, 91, 7, 0.95)",
-        boxShadow: "inset 0 0 0 1px rgba(32, 15, 2, 0.92), inset 0 0 14px rgba(173, 103, 5, 0.18)",
-        height: INVENTORY_GRID_HEIGHT,
-        left,
-        pointerEvents: "none",
-        position: "absolute",
-        top: 0,
-        width,
-        zIndex: 1
-      }}
-    />
-  );
 }
 
 function InventoryDropPreviewOverlay(props: { preview: InventoryDropPreview }) {

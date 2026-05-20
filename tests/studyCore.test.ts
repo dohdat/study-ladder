@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
-import { applyPassedCombatResult, getMonsterCurrentHealth, getMonsterHit } from "../lib/combatCore";
+import { applyPassedCombatResult, getMonsterCurrentHealth, getMonsterHit, getTimedMonsterAttack } from "../lib/combatCore";
 import { createDropItem, ITEM_BASE_NAME_COUNT } from "../lib/itemCore";
 import { getEstimatedRating } from "../lib/ratingCore";
-import { WARRIOR_SKILLS, activateWarriorSkill, canUseActiveWarriorSkill, getAvailableWarriorSkillPoints, resetWarriorSkillPoints, spendWarriorSkillPoint } from "../lib/skillCore";
+import { WARRIOR_SKILLS, activateWarriorSkill, canUseActiveWarriorSkill, getAvailableWarriorSkillPoints, getWarriorSkillTooltipBreakdown, resetWarriorSkillPoints, spendWarriorSkillPoint } from "../lib/skillCore";
 import {
   EXPERIENCE_PER_LEVEL,
   HEALTH_LOSS_PER_FAIL,
@@ -81,6 +81,22 @@ describe("studyCore", () => {
     expect(counts.Warcries).toBeGreaterThanOrEqual(8);
   });
 
+  it("describes warrior skills with current numbers and received bonuses", () => {
+    const state = defaultState();
+    state.profile.skillRanks = { bash: 2, concentrate: 3, doubleSwing: 4, tripleStrike: 1 };
+
+    const concentrate = getWarriorSkillTooltipBreakdown(state.profile.skillRanks, "concentrate");
+    expect(concentrate.effects).toContain("Damage: +15%");
+    expect(concentrate.effects).toContain("Bash Bonus Damage: +18%");
+    expect(concentrate.receivesBonusesFrom).toContain("Bash: +3% damage per level (current +18%)");
+
+    const tripleStrike = getWarriorSkillTooltipBreakdown(state.profile.skillRanks, "tripleStrike");
+    expect(tripleStrike.activeCost?.mana).toBe(8);
+    expect(tripleStrike.effects).toContain("Damage: 86% per hit");
+    expect(tripleStrike.effects).toContain("Total: 258% before armor");
+    expect(tripleStrike.receivesBonusesFrom).toContain("Double Swing: +1.5% damage per hit per level (current +6%)");
+  });
+
   it("normalizes empty and partial persisted state", () => {
     const empty = normalizeStudyState(null);
     expect(empty.mode).toBe("leetcode");
@@ -123,6 +139,20 @@ describe("studyCore", () => {
     state.profile.rating = 3000;
     expect(getRecommendedDifficulty(state)).toBe(5);
     expect(getDueQuestions(state, 1000)).toEqual([]);
+  });
+
+  it("applies nightmare and hell campaign reward and resistance modifiers", () => {
+    const question = questions[0];
+    const normal = defaultState();
+    const nightmare = defaultState();
+    nightmare.profile.spireRun.difficulty = "nightmare";
+    const hell = defaultState();
+    hell.profile.spireRun.difficulty = "hell";
+
+    expect(getCoinReward(question, nightmare)).toBeGreaterThan(getCoinReward(question, normal));
+    expect(getExperienceReward(question, hell)).toBeGreaterThan(getExperienceReward(question, nightmare));
+    expect(getHealthLoss(nightmare, 10, "fire")).toBeGreaterThan(getHealthLoss(normal, 10, "fire"));
+    expect(getHealthLoss(hell, 10, "fire")).toBeGreaterThan(getHealthLoss(nightmare, 10, "fire"));
   });
 
   it("picks unseen rating-fit questions and supports next-question navigation", () => {
@@ -456,6 +486,19 @@ describe("studyCore", () => {
 
     expect(slowHit.damage).toBeLessThan(fastHit.damage);
     expect(slowHit.effects).toContain("Time armor");
+  });
+
+  it("increases monster damage when the question takes longer", () => {
+    const question = questions[0];
+    const fullTime = getQuestionTimeLimitMs(question);
+    const fastRetaliation = getTimedMonsterAttack(question, fullTime, 1000, "retaliation");
+    const slowRetaliation = getTimedMonsterAttack(question, 0, 1000, "retaliation");
+    const earlyPressure = getTimedMonsterAttack(question, fullTime, 1000, "elapsed");
+    const latePressure = getTimedMonsterAttack(question, 0, 1000, "elapsed");
+
+    expect(slowRetaliation.damage).toBeGreaterThan(fastRetaliation.damage);
+    expect(earlyPressure.damage).toBe(0);
+    expect(latePressure.damage).toBeGreaterThan(fastRetaliation.damage);
   });
 
   it("drops and equips stat bonus items from solved questions", () => {

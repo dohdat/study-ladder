@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Box, Group, Text } from "@mantine/core";
 
-import menuButtonBg from "../assets/hero_siege_inventory/menu-button.png";
 import tabSquareBg from "../assets/hero_siege_inventory/tab-square.png";
 import { HeroSiegeModeSwitch } from "./HeroSiegeUi";
 import { PlayerStatus } from "./PlayerStatus";
@@ -13,15 +12,15 @@ import type { CombatImpactVisual } from "./MonsterEncounter";
 
 const PROGRESS_MAX = 100;
 const MINUTES_DECIMAL_PLACES = 1;
-const TODAY_PROGRESS_WIDTH = 360;
-const TODAY_PANEL_HEIGHT = 64;
-const TODAY_PROGRESS_HEIGHT = 12;
+const TODAY_PROGRESS_WIDTH = 330;
+const TODAY_PANEL_HEIGHT = 58;
+const TODAY_PROGRESS_HEIGHT = 14;
 const HERO_TEXT = "#ffe8a8";
 const HERO_DIM = "#c7b081";
-const HERO_PANEL_BG = "linear-gradient(180deg, rgba(20, 13, 9, 0.98), rgba(7, 5, 4, 0.98))";
-const HERO_PANEL_BORDER = "1px solid rgba(157, 114, 38, 0.84)";
-const HERO_PANEL_SHADOW = "inset 0 0 0 1px #050403, inset 0 0 18px rgba(114, 36, 20, 0.28), 0 8px 16px rgba(0, 0, 0, 0.34)";
-const HERO_PROGRESS_BG = "linear-gradient(180deg, #07070b, #020204)";
+const HERO_PANEL_BG = "linear-gradient(180deg, rgba(35, 8, 10, 0.98), rgba(9, 5, 4, 0.98))";
+const HERO_PANEL_BORDER = "1px solid rgba(157, 114, 38, 0.72)";
+const HERO_PANEL_SHADOW = "inset 0 0 0 1px #050403, inset 0 0 18px rgba(114, 36, 20, 0.22), 0 8px 16px rgba(0, 0, 0, 0.34)";
+const HERO_PROGRESS_BG = "linear-gradient(180deg, #050406, #131018 48%, #050406)";
 const TODAY_PROGRESS_FILL = "linear-gradient(180deg, #53b8ff 0%, #167bdd 55%, #063c8f 100%)";
 
 export function AppHeader(props: {
@@ -108,31 +107,19 @@ function TodayProgress() {
         border: HERO_PANEL_BORDER,
         borderRadius: 2,
         boxShadow: HERO_PANEL_SHADOW,
+        display: "flex",
+        flexDirection: "column",
+        gap: 7,
         height: TODAY_PANEL_HEIGHT,
         imageRendering: "pixelated",
         minWidth: TODAY_PROGRESS_WIDTH,
-        padding: "9px 13px 10px",
+        padding: "8px 12px",
         position: "relative"
       }}
     >
-      <Box
-        aria-hidden="true"
-        style={{
-          backgroundImage: `url(${menuButtonBg})`,
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-          backgroundSize: "100% 100%",
-          bottom: 5,
-          left: 7,
-          opacity: 0.28,
-          position: "absolute",
-          right: 7,
-          top: 5
-        }}
-      />
-      <Group justify="space-between" mb={6} wrap="nowrap" style={{ position: "relative" }}>
-        <Text size="sm" fw={900} style={{ color: HERO_TEXT, textShadow: "0 2px 0 #000" }}>Today</Text>
-        <Text size="sm" fw={800} style={{ color: HERO_DIM, textShadow: "0 2px 0 #000" }}>{studiedMinutes.toFixed(MINUTES_DECIMAL_PLACES)} / {settings.dailyMinutes} min</Text>
+      <Group justify="space-between" wrap="nowrap" style={{ minHeight: 18 }}>
+        <Text size="sm" fw={900} style={{ color: HERO_TEXT, lineHeight: 1, textShadow: "0 2px 0 #000" }}>Today</Text>
+        <Text size="sm" fw={900} style={{ color: HERO_TEXT, fontVariantNumeric: "tabular-nums", lineHeight: 1, textShadow: "0 2px 0 #000" }}>{studiedMinutes.toFixed(MINUTES_DECIMAL_PLACES)} / {settings.dailyMinutes} min</Text>
       </Group>
       <Box
         aria-label={`Daily study progress ${Math.round(clampedProgress)}%`}
@@ -140,17 +127,21 @@ function TodayProgress() {
         style={{
           background: HERO_PROGRESS_BG,
           border: "1px solid rgba(0, 0, 0, 0.94)",
-          boxShadow: "inset 0 0 0 1px rgba(255, 232, 168, 0.08), 0 2px 0 rgba(0, 0, 0, 0.7)",
+          boxShadow: "inset 0 0 0 1px rgba(255, 232, 168, 0.12), 0 2px 0 rgba(0, 0, 0, 0.7)",
           height: TODAY_PROGRESS_HEIGHT,
           overflow: "hidden",
+          padding: 2,
           position: "relative"
         }}
       >
         <Box
           style={{
             background: TODAY_PROGRESS_FILL,
-            boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 -1px 0 rgba(0, 0, 0, 0.42)",
+            boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.32), inset 0 -1px 0 rgba(0, 0, 0, 0.48), 0 0 8px rgba(58, 151, 255, 0.42)",
             height: "100%",
+            minWidth: clampedProgress > 0 ? 6 : 0,
+            position: "relative",
+            zIndex: 1,
             width: `${clampedProgress}%`
           }}
         />

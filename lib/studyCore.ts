@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { questions } from "../data/questions";
+import { getSpireDifficultyModifiers } from "./campaignCore";
 import { createDropItem, EQUIPMENT_SLOTS, getActiveSetBonusesForItems, SLOT_LABELS } from "./itemCore";
 import { applyEloResult, DEFAULT_PLAYER_RATING, getEstimatedRating } from "./ratingCore";
 import { getRelicModifierTotals, normalizeRelics } from "./relicCore";
@@ -347,7 +348,7 @@ export const getEquipmentModifierTotals = (state: StudyState) => {
 
 export const getRunModifierTotals = (state: StudyState) => addModifierRecords(addModifierRecords(getEquipmentModifierTotals(state), getRelicModifierTotals(state)), getActivePotionModifierTotals(state));
 
-export const getElementalResistances = (state: StudyState) => getResistancesFromModifiers(addSkillResistances(getRunModifierTotals(state), getWarriorSkillBonusTotals(state)));
+export const getElementalResistances = (state: StudyState) => applyDifficultyResistancePenalty(getResistancesFromModifiers(addSkillResistances(getRunModifierTotals(state), getWarriorSkillBonusTotals(state))), getSpireDifficultyModifiers(state.profile.spireRun).resistancePenalty);
 
 export const getWarriorSkillBonusTotals = (state: StudyState) => getWarriorSkillBonuses(state.profile.skillRanks);
 
@@ -417,6 +418,20 @@ function addSkillResistances(modifiers: Record<ItemModifierKey, number>, skills:
     poisonResistPercent: modifiers.poisonResistPercent + skills.poisonResistPercent
   };
 }
+
+function applyDifficultyResistancePenalty(resistances: ReturnType<typeof getResistancesFromModifiers>, penalty: number) {
+  return {
+    cold: clampPenalizedResistance(resistances.cold + penalty),
+    fire: clampPenalizedResistance(resistances.fire + penalty),
+    lightning: clampPenalizedResistance(resistances.lightning + penalty),
+    poison: clampPenalizedResistance(resistances.poison + penalty)
+  };
+}
+
+function clampPenalizedResistance(value: number) {
+  return Math.min(75, Math.max(-100, Math.round(value || 0)));
+}
+
 function applyPercentBonus(value: number, bonusPercent: number) {
   return Math.round(value * (1 + bonusPercent / MODIFIER_PERCENT_BASE));
 }
@@ -446,11 +461,13 @@ export const getHealthLoss = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, 
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getRunModifierTotals(state);
   const skills = getWarriorSkillBonusTotals(state);
-  const reducedEnemyDamage = amount * (1 - Math.min(75, Math.max(0, modifiers.reducedEnemyDamagePercent || 0)) / MODIFIER_PERCENT_BASE);
+  const difficultyModifiers = getSpireDifficultyModifiers(state.profile.spireRun);
+  const scaledAmount = amount * difficultyModifiers.monsterDamageMultiplier;
+  const reducedEnemyDamage = scaledAmount * (1 - Math.min(75, Math.max(0, modifiers.reducedEnemyDamagePercent || 0)) / MODIFIER_PERCENT_BASE);
   const physicalResistedAmount = element === "physical"
     ? applyPercentReduction(reducedEnemyDamage, modifiers.physicalResistPercent)
     : reducedEnemyDamage;
-  const resistedAmount = applyElementalResistance(physicalResistedAmount, element, getResistancesFromModifiers(addSkillResistances(modifiers, skills)));
+  const resistedAmount = applyElementalResistance(physicalResistedAmount, element, applyDifficultyResistancePenalty(getResistancesFromModifiers(addSkillResistances(modifiers, skills)), difficultyModifiers.resistancePenalty));
   const avoidance = Math.min(60, (modifiers.dodgeChancePercent || 0) + (modifiers.blockChancePercent || 0) + (modifiers.parryChancePercent || 0));
   const avoidedAmount = applyPercentReduction(resistedAmount, avoidance);
   const defense = Math.floor(stats.constitution / CONSTITUTION_LEVEL_INTERVAL) * DEFENSE_PER_THREE_CONSTITUTION;
@@ -507,7 +524,8 @@ export const getCoinReward = (question: Question, state?: StudyState) => {
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getRunModifierTotals(state);
   const skills = getWarriorSkillBonusTotals(state);
-  return applyPercentBonus(Math.round(baseReward * (1 + (stats.perception - FIRST_STAT_LEVEL) * GOLD_BONUS_PER_PERCEPTION)), modifiers.goldFindPercent + skills.goldFindPercent);
+  const difficultyReward = getSpireDifficultyModifiers(state.profile.spireRun).rewardMultiplier;
+  return applyPercentBonus(Math.round(baseReward * difficultyReward * (1 + (stats.perception - FIRST_STAT_LEVEL) * GOLD_BONUS_PER_PERCEPTION)), modifiers.goldFindPercent + skills.goldFindPercent);
 };
 
 export const getExperienceReward = (question: Question, state?: StudyState) => {
@@ -518,7 +536,8 @@ export const getExperienceReward = (question: Question, state?: StudyState) => {
   const stats = getEffectiveCharacterStats(state);
   const modifiers = getRunModifierTotals(state);
   const skills = getWarriorSkillBonusTotals(state);
-  return applyPercentBonus(Math.round(baseReward * (1 + (stats.intelligence - FIRST_STAT_LEVEL) * EXPERIENCE_BONUS_PER_INTELLIGENCE)), modifiers.bonusXpPercent + skills.bonusXpPercent);
+  const difficultyReward = getSpireDifficultyModifiers(state.profile.spireRun).rewardMultiplier;
+  return applyPercentBonus(Math.round(baseReward * difficultyReward * (1 + (stats.intelligence - FIRST_STAT_LEVEL) * EXPERIENCE_BONUS_PER_INTELLIGENCE)), modifiers.bonusXpPercent + skills.bonusXpPercent);
 };
 
 export const getManaReward = (question: Question, state: StudyState) => {

@@ -1,9 +1,11 @@
 import { questions } from "../data/questions";
-import { getMonsterMaxHealth, getMonsterPlayerDamage } from "./monsterCore";
+import { getSpireDifficultyModifiers } from "./campaignCore";
+import { getMonsterAttackProfile, getMonsterMaxHealth, getMonsterPlayerDamage } from "./monsterCore";
 import { getActiveWarriorSkill, getWarriorSkillRank } from "./skillCore";
 import {
   applyHealingReceived, applyScheduleResult, cloneState, getAttackDamage, getCard, getCoinReward, getCriticalChance, getCriticalDamageMultiplier,
-  getExperienceReward, getMaxHealth, getQuestionDrop, getRunModifierTotals, getWarriorSkillBonusTotals, grantPendingStatPoints, setCard
+  getExperienceReward, getMaxHealth, getMonsterDamageRoll, getQuestionDrop, getQuestionTimeLimitMs, getRunModifierTotals, getWarriorSkillBonusTotals,
+  grantPendingStatPoints, setCard
 } from "./studyCore";
 import type { DamageType, Question, StudyState } from "../types/study";
 
@@ -26,8 +28,12 @@ const HASH_SEED = 2166136261;
 const HASH_MULTIPLIER = 16777619;
 const HASH_DIVISOR = 4294967296;
 const MAX_TIME_MONSTER_DEFENSE_PERCENT = 20;
+const MAX_TIME_MONSTER_DAMAGE_BONUS_PERCENT = 75;
 const MAX_TIME_MONSTER_RESISTANCE_PERCENT = 30;
 const PERCENT = 100;
+const TIME_DAMAGE_FREE_RATIO = 0.18;
+const TIME_DAMAGE_MIN_RATIO = 0.18;
+const TIME_DAMAGE_RATIO_RANGE = 0.82;
 
 export type MonsterHitOptions = {
   timePressureRatio?: number;
@@ -47,12 +53,15 @@ export type MonsterHitResult = {
   remainingHealth: number;
 };
 
+export type TimedMonsterAttackMode = "elapsed" | "retaliation";
+
 export const getMonsterCurrentHealth = (state: StudyState, question: Question) => {
   const storedHealth = getCard(state, question.id).monsterHealth;
+  const maxHealth = getCampaignMonsterMaxHealth(state, question);
   if (!Number.isFinite(storedHealth)) {
-    return getMonsterMaxHealth(question);
+    return maxHealth;
   }
-  return Math.min(getMonsterMaxHealth(question), Math.max(0, storedHealth || 0));
+  return Math.min(maxHealth, Math.max(0, storedHealth || 0));
 };
 
 export const getMonsterHit = (state: StudyState, question: Question, now = Date.now(), options: MonsterHitOptions = {}) => {
@@ -64,7 +73,8 @@ export const getMonsterHit = (state: StudyState, question: Question, now = Date.
   const activeHit = getActiveSkillHit(state, question, activeSkill?.id ?? null, criticalDamage);
   const modifiers = getRunModifierTotals(state);
   const currentHealth = getMonsterCurrentHealth(state, question);
-  const executeProc = currentHealth / getMonsterMaxHealth(question) <= EXECUTE_WOUNDED_THRESHOLD && getSeededRoll(`${question.id}:${now}:execute-proc`) <= (modifiers.executeChancePercent || 0) / 100;
+  const maxHealth = getCampaignMonsterMaxHealth(state, question);
+  const executeProc = currentHealth / maxHealth <= EXECUTE_WOUNDED_THRESHOLD && getSeededRoll(`${question.id}:${now}:execute-proc`) <= (modifiers.executeChancePercent || 0) / 100;
   const extraAttack = getSeededRoll(`${question.id}:${now}:extra-attack`) <= (modifiers.extraAttackChancePercent || 0) / 100 ? 1 : 0;
   const armorPenetration = (modifiers.armorPenetrationPercent || 0) + (modifiers.reducedEnemyArmorPercent || 0);
   const resistancePenetration = modifiers.resistancePenetrationPercent || 0;
@@ -93,6 +103,40 @@ function getTimeHardening(timePressureRatio = 0) {
   return {
     defensePercent: Math.round(pressure * MAX_TIME_MONSTER_DEFENSE_PERCENT),
     resistancePercent: Math.round(pressure * MAX_TIME_MONSTER_RESISTANCE_PERCENT)
+  };
+}
+
+export function getTimedMonsterAttack(question: Question, timeRemainingMs: number, now = Date.now(), mode: TimedMonsterAttackMode = "elapsed") {
+  const pressureRatio = getElapsedPressureRatio(question, timeRemainingMs);
+  const damageMultiplier = (mode === "retaliation" ? 1 : pressureRatio) * (1 + pressureRatio * MAX_TIME_MONSTER_DAMAGE_BONUS_PERCENT / PERCENT);
+  return scaleMonsterAttack(getMonsterAttackProfile(question, getMonsterDamageRoll(question, now), now), damageMultiplier);
+}
+
+export function getElapsedPressureRatio(question: Question, timeRemainingMs: number) {
+  const timeLimitMs = getQuestionTimeLimitMs(question);
+  const elapsedRatio = timeLimitMs > 0 ? Math.min(1, Math.max(0, (timeLimitMs - timeRemainingMs) / timeLimitMs)) : 0;
+  return getElapsedDamageRatio(elapsedRatio);
+}
+
+function getElapsedDamageRatio(elapsedRatio: number) {
+  if (elapsedRatio <= TIME_DAMAGE_FREE_RATIO) {
+    return 0;
+  }
+  const pressureRatio = (elapsedRatio - TIME_DAMAGE_FREE_RATIO) / (1 - TIME_DAMAGE_FREE_RATIO);
+  return Math.min(1, TIME_DAMAGE_MIN_RATIO + pressureRatio * TIME_DAMAGE_RATIO_RANGE);
+}
+
+function scaleMonsterAttack(attack: ReturnType<typeof getMonsterAttackProfile>, damageMultiplier: number) {
+  if (damageMultiplier <= 0) {
+    return { ...attack, damage: 0, manaDamage: 0, perHitDamage: 0 };
+  }
+  const perHitDamage = Math.max(1, Math.round(attack.perHitDamage * damageMultiplier));
+  const damage = perHitDamage * attack.hitCount;
+  return {
+    ...attack,
+    damage,
+    manaDamage: attack.manaDamage > 0 ? Math.max(1, Math.round(attack.manaDamage * damageMultiplier)) : 0,
+    perHitDamage
   };
 }
 
@@ -140,10 +184,11 @@ export const applyPassedCombatResult = (state: StudyState, questionId: string, d
     const next = applyScheduleResult(state, questionId, true, draft, now);
     next.profile.activeSkill = null;
     next.profile.health = Math.min(getMaxHealth(next), next.profile.health + hit.lifeRestored);
-    setCard(next, questionId, { ...getCard(next, questionId), monsterHealth: getMonsterMaxHealth(question) });
-    return { hit: { ...hit, defeated, maxHealth: getMonsterMaxHealth(question), remainingHealth }, state: next };
+    const maxHealth = getCampaignMonsterMaxHealth(state, question);
+    setCard(next, questionId, { ...getCard(next, questionId), monsterHealth: maxHealth });
+    return { hit: { ...hit, defeated, maxHealth, remainingHealth }, state: next };
   }
-  return applyPartialMonsterHit(state, questionId, draft, now, { ...hit, defeated, maxHealth: getMonsterMaxHealth(question), remainingHealth });
+  return applyPartialMonsterHit(state, questionId, draft, now, { ...hit, defeated, maxHealth: getCampaignMonsterMaxHealth(state, question), remainingHealth });
 };
 
 function applyPartialMonsterHit(state: StudyState, questionId: string, draft: string, now: number, hit: MonsterHitResult) {
@@ -175,7 +220,7 @@ function getActiveSkillHit(state: StudyState, question: Question, skillId: Study
   }
   if (skillId === "execute") {
     const currentHealth = getMonsterCurrentHealth(state, question);
-    const wounded = currentHealth / getMonsterMaxHealth(question) <= EXECUTE_WOUNDED_THRESHOLD;
+    const wounded = currentHealth / getCampaignMonsterMaxHealth(state, question) <= EXECUTE_WOUNDED_THRESHOLD;
     return createActiveHit(1, Math.round(baseDamage * (wounded ? EXECUTE_WOUNDED_MULTIPLIER : EXECUTE_MULTIPLIER)), [wounded ? "Execute" : "Finisher"]);
   }
   if (skillId === "bloodForBlood") {
@@ -193,6 +238,10 @@ function getActiveSkillHit(state: StudyState, question: Question, skillId: Study
 
 function createActiveHit(hitCount: number, perHitDamage: number, effects: string[] = [], lifeRestored = 0) {
   return { effects, hitCount, lifeRestored, perHitDamage };
+}
+
+export function getCampaignMonsterMaxHealth(state: StudyState, question: Question) {
+  return Math.round(getMonsterMaxHealth(question) * getSpireDifficultyModifiers(state.profile.spireRun).monsterHealthMultiplier);
 }
 
 function applyPartialRewards(next: StudyState, question: Question | undefined, rewardState: StudyState, now: number) {

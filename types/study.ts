@@ -181,6 +181,8 @@ export type Relic = {
 export type SpireNodeKind = "unknown" | "merchant" | "treasure" | "rest" | "enemy" | "elite" | "boss" | "event";
 
 export type UnknownEncounterKind = "elite" | "monster" | "shop" | "treasure";
+export type SpireAct = 1 | 2 | 3 | 4;
+export type SpireDifficulty = "normal" | "nightmare" | "hell";
 
 export type SpireMapNode = {
   column: number;
@@ -193,7 +195,9 @@ export type SpireMapNode = {
 };
 
 export type SpireRun = {
+  act: SpireAct;
   availableNodeIds: string[];
+  difficulty: SpireDifficulty;
   tierIndex: number;
   currentNodeId: string;
   completedNodeIds: string[];

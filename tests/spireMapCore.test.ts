@@ -70,6 +70,38 @@ describe("spireMapCore", () => {
     expect(normalized.nodes.filter((node) => node.rating === FLOOR_FIFTEEN).every((node) => node.kind === "boss")).toBe(true);
   });
 
+  it("advances the campaign through acts and into nightmare and hell", () => {
+    let state = defaultState();
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000, 1, "normal") } };
+    const actOneBoss = state.profile.spireRun.nodes.find((node) => node.kind === "boss") || state.profile.spireRun.nodes[0];
+    state.profile.spireRun.availableNodeIds = [actOneBoss.id];
+    state = selectSpireNode(state, actOneBoss.id);
+    state = advanceSpireNode(state, 2000);
+
+    expect(state.profile.spireRun.act).toBe(2);
+    expect(state.profile.spireRun.difficulty).toBe("normal");
+    expect(state.profile.spireRun.mapOpen).toBe(true);
+    expect(state.profile.spireRun.availableNodeIds.length).toBeGreaterThan(1);
+
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(3000, 4, "normal") } };
+    const actFourBoss = state.profile.spireRun.nodes.find((node) => node.kind === "boss") || state.profile.spireRun.nodes[0];
+    state.profile.spireRun.availableNodeIds = [actFourBoss.id];
+    state = selectSpireNode(state, actFourBoss.id);
+    state = advanceSpireNode(state, 4000);
+
+    expect(state.profile.spireRun.act).toBe(1);
+    expect(state.profile.spireRun.difficulty).toBe("nightmare");
+
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(5000, 4, "nightmare") } };
+    const nightmareBoss = state.profile.spireRun.nodes.find((node) => node.kind === "boss") || state.profile.spireRun.nodes[0];
+    state.profile.spireRun.availableNodeIds = [nightmareBoss.id];
+    state = selectSpireNode(state, nightmareBoss.id);
+    state = advanceSpireNode(state, 6000);
+
+    expect(state.profile.spireRun.act).toBe(1);
+    expect(state.profile.spireRun.difficulty).toBe("hell");
+  });
+
   it("prevents consecutive elite merchant or rest rooms before the pre-boss rest floor", () => {
     const run = createSpireRun(3000);
     const byId = new Map(run.nodes.map((node) => [node.id, node]));

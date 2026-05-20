@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge, Box, Group, Paper, Progress, Text, Tooltip } from "@mantine/core";
 type StaticImageData = string;
 
-import { getMonsterCurrentHealth } from "../lib/combatCore";
-import { getMonsterAttackType, getMonsterMaxHealth, getMonsterResistances, getUniqueMonsterBonusDescription, getUniqueMonsterBonuses, getUniqueMonsterName } from "../lib/monsterCore";
-import type { DamageType, Difficulty, Question, StudyState } from "../types/study";
+import { getCampaignMonsterMaxHealth, getMonsterCurrentHealth } from "../lib/combatCore";
+import { getMonsterAttackType, getMonsterResistances, getUniqueMonsterBonusDescription, getUniqueMonsterBonuses, getUniqueMonsterName } from "../lib/monsterCore";
+import { getCurrentSpireNode } from "../lib/spireMapCore";
+import type { DamageType, Difficulty, Question, SpireAct, StudyState } from "../types/study";
 import batArt from "../assets/hero_siege_monsters/bat.png";
 import bigEntArt from "../assets/hero_siege_monsters/big-ent.png";
 import bogMushroomArt from "../assets/hero_siege_monsters/bog-mushroom.png";
@@ -127,6 +128,12 @@ const BASE_MONSTERS = {
   voidTentacle: { art: goblinBomberArt, name: "Goblin Bomber" },
   watcherOrb: { art: goblinShamanArt, name: "Goblin Shaman" }
 } satisfies Record<string, MonsterDefinition>;
+const ACT_BOSS_MONSTERS: Partial<Record<SpireAct, MonsterDefinition>> = {
+  1: { art: demonKingArt, name: "Demon King" },
+  2: { art: desertBeastArt, name: "Desert Beast" },
+  3: { art: hellBeastArt, name: "Hell Beast" },
+  4: { art: sheepKingArt, name: "Sheep King" }
+};
 
 type BaseMonsterKind = keyof typeof BASE_MONSTERS;
 type MonsterKind = string;
@@ -169,11 +176,11 @@ export const MONSTER_WIKI_ENTRIES: MonsterWikiEntry[] = Object.entries(MONSTERS)
 });
 
 export function MonsterEncounter(props: { damagePop?: MonsterDamagePop | null; question: Question; state: StudyState }) {
-  const maxHealth = getMonsterMaxHealth(props.question);
+  const maxHealth = getCampaignMonsterMaxHealth(props.state, props.question);
   const currentHealth = getMonsterCurrentHealth(props.state, props.question);
   const activeDamage = props.damagePop?.questionId === props.question.id ? props.damagePop : null;
   const health = useAnimatedMonsterHealth({ currentHealth, damagePop: activeDamage, maxHealth });
-  const monster = getMonsterDefinition(props.question);
+  const monster = getMonsterDefinition(props.question, props.state);
   const uniqueName = getUniqueMonsterName(props.question);
   const bonuses = getUniqueMonsterBonuses(props.question);
   const attackType = getMonsterAttackType(props.question, bonuses);
@@ -407,7 +414,11 @@ function DamagePop(props: { damage: MonsterDamagePop }) {
   );
 }
 
-function getMonsterDefinition(question: Question) {
+function getMonsterDefinition(question: Question, state: StudyState) {
+  const currentNode = getCurrentSpireNode(state);
+  if (currentNode?.kind === "boss") {
+    return ACT_BOSS_MONSTERS[state.profile.spireRun.act] || ACT_BOSS_MONSTERS[1] || MONSTERS.hornedFiend;
+  }
   return MONSTERS[QUESTION_MONSTERS[question.id] || pickMonsterKind(question.id, MONSTER_POOLS[question.difficulty])];
 }
 
