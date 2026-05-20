@@ -1,10 +1,10 @@
 import type { HeatConditionId, HeatConditionRanks, SpireAct, SpireDifficulty, SpireRun } from "../types/study";
 
-const ACTS: Array<{ act: SpireAct; label: string; ratingBonus: number }> = [
-  { act: 1, label: "Act I - The Sightless Eye", ratingBonus: 0 },
-  { act: 2, label: "Act II - The Secret of the Vizjerei", ratingBonus: 220 },
-  { act: 3, label: "Act III - The Infernal Gate", ratingBonus: 440 },
-  { act: 4, label: "Act IV - The Harrowing", ratingBonus: 660 }
+const ACTS: Array<{ act: SpireAct; label: string }> = [
+  { act: 1, label: "Act I - The Sightless Eye" },
+  { act: 2, label: "Act II - The Secret of the Vizjerei" },
+  { act: 3, label: "Act III - The Infernal Gate" },
+  { act: 4, label: "Act IV - The Harrowing" }
 ];
 
 export const MAX_HEAT = 64;
@@ -94,7 +94,7 @@ export function getSpireCampaignLabel(run: Pick<SpireRun, "act" | "difficulty" |
 
 export function getSpireCampaignRatingBonus(run: Pick<SpireRun, "act" | "difficulty" | "heatConditions">) {
   const heat = getHeatLevel(run.heatConditions);
-  return getSpireActDefinition(run.act).ratingBonus + heat * 24 + getHeatRank(run, "benefitsPackage") * 80;
+  return heat * 24 + getHeatRank(run, "benefitsPackage") * 80;
 }
 
 export function getSpireDifficultyModifiers(run: Pick<SpireRun, "difficulty" | "heatConditions">) {

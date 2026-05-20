@@ -21,38 +21,12 @@ import { createShopStock } from "./shopCore";
 import { getMaxHealth, getMetaRelicChoiceBonus, getMetaStartingGoldBonus, getRunModifierTotals } from "./studyCore";
 import type { Difficulty, HeatConditionId, HeatConditionRanks, InventoryItem, ItemRarity, Question, Relic, RelicRarity, SpireAct, SpireDifficulty, SpireMapNode, SpireNodeKind, SpireRun, StudyState, UnknownEncounterKind } from "../types/study";
 
-const RATING_FLOOR_1 = 1500;
-const RATING_FLOOR_2 = 1650;
-const RATING_FLOOR_3 = 1800;
-const RATING_FLOOR_4 = 1950;
-const RATING_FLOOR_5 = 2100;
-const RATING_FLOOR_6 = 2250;
-const RATING_FLOOR_7 = 2400;
-const RATING_FLOOR_8 = 2550;
-const RATING_FLOOR_9 = 2700;
-const RATING_FLOOR_10 = 2850;
-const RATING_FLOOR_11 = 3000;
-const RATING_FLOOR_12 = 3150;
-const RATING_FLOOR_13 = 3300;
-const RATING_FLOOR_14 = 3400;
-const RATING_FLOOR_15 = 3500;
-export const SPIRE_RATINGS = [
-  RATING_FLOOR_1,
-  RATING_FLOOR_2,
-  RATING_FLOOR_3,
-  RATING_FLOOR_4,
-  RATING_FLOOR_5,
-  RATING_FLOOR_6,
-  RATING_FLOOR_7,
-  RATING_FLOOR_8,
-  RATING_FLOOR_9,
-  RATING_FLOOR_10,
-  RATING_FLOOR_11,
-  RATING_FLOOR_12,
-  RATING_FLOOR_13,
-  RATING_FLOOR_14,
-  RATING_FLOOR_15
-] as const;
+export const DEFAULT_SPIRE_MIN_RATING = 1500;
+export const SPIRE_MIN_RATING_MIN = 900;
+export const SPIRE_MIN_RATING_MAX = 3200;
+const ACT_RATING_SPAN = 500;
+const SPIRE_RATING_OFFSETS = [0, 40, 75, 115, 150, 190, 225, 265, 300, 340, 375, 415, 450, 475, 500] as const;
+export const SPIRE_RATINGS = SPIRE_RATING_OFFSETS.map((offset) => DEFAULT_SPIRE_MIN_RATING + offset);
 
 const FIRST_TIER = 0;
 const FIRST_NODE_ID = "tier-0-start";
@@ -173,9 +147,23 @@ type PathEdge = {
 
 type RelicRewardKind = NonNullable<SpireRun["pendingRelicReward"]>["rewardKind"];
 
-export function createSpireRun(seed = Date.now(), act: SpireAct = 1, difficulty: SpireDifficulty = "normal", heatConditions: Partial<HeatConditionRanks> = {}, heatSetupOpen = false): SpireRun {
-  const nodes = createSpireNodes(seed);
-  const availableNodeIds = nodes.filter((node) => node.rating === SPIRE_RATINGS[FIRST_TIER]).map((node) => node.id);
+export function normalizeSpireMinRating(value: number | undefined) {
+  return Math.min(SPIRE_MIN_RATING_MAX, Math.max(SPIRE_MIN_RATING_MIN, Math.round(Number.isFinite(value) ? value || DEFAULT_SPIRE_MIN_RATING : DEFAULT_SPIRE_MIN_RATING)));
+}
+
+export function getSpireActBaseRating(act: SpireAct, minRating = DEFAULT_SPIRE_MIN_RATING) {
+  return normalizeSpireMinRating(minRating) + (act - 1) * ACT_RATING_SPAN;
+}
+
+export function getSpireRatings(act: SpireAct = 1, minRating = DEFAULT_SPIRE_MIN_RATING) {
+  const baseRating = getSpireActBaseRating(act, minRating);
+  return SPIRE_RATING_OFFSETS.map((offset) => baseRating + offset);
+}
+
+export function createSpireRun(seed = Date.now(), act: SpireAct = 1, difficulty: SpireDifficulty = "normal", heatConditions: Partial<HeatConditionRanks> = {}, heatSetupOpen = false, minRating = DEFAULT_SPIRE_MIN_RATING): SpireRun {
+  const spireMinRating = normalizeSpireMinRating(minRating);
+  const nodes = createSpireNodes(seed, getSpireRatings(act, spireMinRating));
+  const availableNodeIds = nodes.filter((node) => node.tierIndex === FIRST_TIER).map((node) => node.id);
   const currentNodeId = availableNodeIds[DEFAULT_FIRST_SLOT] || nodes[0]?.id || FIRST_NODE_ID;
   return {
     act,
@@ -200,20 +188,22 @@ export function createSpireRun(seed = Date.now(), act: SpireAct = 1, difficulty:
 }
 
 // eslint-disable-next-line complexity
-export function normalizeSpireRun(run: Partial<SpireRun> | undefined): SpireRun {
-  const normalizedNodes = normalizeForcedRoomKinds(run?.nodes || []);
+export function normalizeSpireRun(run: Partial<SpireRun> | undefined, minRating = DEFAULT_SPIRE_MIN_RATING): SpireRun {
+  const act = normalizeSpireAct(run?.act);
+  const spireMinRating = normalizeSpireMinRating(minRating);
+  const normalizedNodes = normalizeForcedRoomKinds(normalizeNodeRatings(run?.nodes || [], act, spireMinRating));
   if (!normalizedNodes.length || !hasRequiredSpireFloors(normalizedNodes)) {
-    return createSpireRun(run?.mapSeed || Date.now(), normalizeSpireAct(run?.act), normalizeSpireDifficulty(run?.difficulty), run?.heatConditions, Boolean(run?.heatSetupOpen));
+    return createSpireRun(run?.mapSeed || Date.now(), act, normalizeSpireDifficulty(run?.difficulty), run?.heatConditions, Boolean(run?.heatSetupOpen), spireMinRating);
   }
   const sourceRun = run || {};
   const currentNode = normalizedNodes.find((node) => node.id === sourceRun.currentNodeId) || normalizedNodes[0];
-  const availableNodeIds = (sourceRun.availableNodeIds?.length ? sourceRun.availableNodeIds : normalizedNodes.filter((node) => node.rating === SPIRE_RATINGS[FIRST_TIER]).map((node) => node.id))
+  const availableNodeIds = (sourceRun.availableNodeIds?.length ? sourceRun.availableNodeIds : normalizedNodes.filter((node) => node.tierIndex === FIRST_TIER).map((node) => node.id))
     .filter((id) => normalizedNodes.some((node) => node.id === id));
   const knownQuestionIds = new Set(questions.map((question) => question.id));
   const roundQuestionIds = (sourceRun.roundQuestionIds || []).filter((id) => knownQuestionIds.has(id));
   const roundSolvedIds = (sourceRun.roundSolvedIds || []).filter((id) => roundQuestionIds.includes(id));
   return {
-    act: normalizeSpireAct(sourceRun.act),
+    act,
     availableNodeIds,
     completedNodeIds: sourceRun.completedNodeIds || [],
     currentNodeId: currentNode.id,
@@ -244,7 +234,7 @@ function shouldOpenHeatSetupForLegacyRun(run: Partial<SpireRun>, roundQuestionId
 }
 
 function hasRequiredSpireFloors(nodes: SpireMapNode[]) {
-  return SPIRE_RATINGS.every((rating) => nodes.some((node) => node.rating === rating));
+  return SPIRE_RATINGS.every((_rating, tierIndex) => nodes.some((node) => node.tierIndex === tierIndex));
 }
 
 function createDefaultUnknownEncounterMisses(): Record<UnknownEncounterKind, number> { return { elite: 0, monster: 0, shop: 0, treasure: 0 }; }
@@ -292,9 +282,34 @@ function normalizePendingRelicReward(choice: Partial<SpireRun["pendingRelicRewar
   };
 }
 
+function normalizeNodeRatings(nodes: SpireMapNode[], act: SpireAct, minRating: number) {
+  const ratings = getSpireRatings(act, minRating);
+  const sortedRatings = [...new Set(nodes.map((node) => node.rating))].sort((a, b) => a - b);
+  return nodes.map((node) => {
+    const tierIndex = getNodeTierIndex(node, sortedRatings);
+    return {
+      ...node,
+      rating: ratings[tierIndex] ?? ratings[FIRST_TIER],
+      tierIndex
+    };
+  });
+}
+
+function getNodeTierIndex(node: Partial<SpireMapNode>, sortedRatings?: number[]) {
+  if (Number.isFinite(node.tierIndex)) {
+    return Math.min(SPIRE_RATINGS.length - 1, Math.max(FIRST_TIER, Math.floor(node.tierIndex || FIRST_TIER)));
+  }
+  const idTier = typeof node.id === "string" ? /^tier-(\d+)-/.exec(node.id)?.[1] : undefined;
+  if (idTier !== undefined) {
+    return Math.min(SPIRE_RATINGS.length - 1, Math.max(FIRST_TIER, Math.floor(Number(idTier))));
+  }
+  const ratingIndex = sortedRatings?.findIndex((rating) => rating === node.rating) ?? SPIRE_RATINGS.findIndex((rating) => rating === node.rating);
+  return Math.min(SPIRE_RATINGS.length - 1, Math.max(FIRST_TIER, ratingIndex));
+}
+
 function normalizeForcedRoomKinds(nodes: SpireMapNode[]) {
   return nodes.map((node) => {
-    const tierIndex = SPIRE_RATINGS.findIndex((rating) => rating === node.rating);
+    const tierIndex = node.tierIndex;
     const forced = tierIndex >= FIRST_TIER ? getForcedNodeKind(tierIndex) : null;
     return forced && node.kind !== forced ? { ...node, kind: forced } : node;
   });
@@ -372,11 +387,11 @@ export function resetSpireHeat(state: StudyState): StudyState {
 }
 
 function isValidBranchingMap(nodes: SpireMapNode[]) {
-  const ratings = [...new Set(nodes.map((node) => node.rating))];
-  if (ratings.length !== SPIRE_RATINGS.length) {
+  const tiers = [...new Set(nodes.map((node) => node.tierIndex))];
+  if (tiers.length !== SPIRE_RATINGS.length) {
     return false;
   }
-  return SPIRE_RATINGS.every((rating) => nodes.some((node) => node.rating === rating)) && getMapValidators().every((validator) => validator(nodes));
+  return hasRequiredSpireFloors(nodes) && getMapValidators().every((validator) => validator(nodes));
 }
 
 function getMapValidators() {
@@ -418,13 +433,12 @@ function hasRequiredRoomDistribution(nodes: SpireMapNode[]) {
 
 function hasForcedRoomKinds(nodes: SpireMapNode[]) {
   return nodes.every((node) => {
-    const tierIndex = SPIRE_RATINGS.findIndex((rating) => rating === node.rating);
-    const forced = tierIndex >= FIRST_TIER ? getForcedNodeKind(tierIndex) : null;
+    const forced = node.tierIndex >= FIRST_TIER ? getForcedNodeKind(node.tierIndex) : null;
     return !forced || node.kind === forced;
   });
 }
 
-function hasSingleBossRoom(nodes: SpireMapNode[]) { const bossNodes = nodes.filter((node) => node.rating === SPIRE_RATINGS[BOSS_FLOOR_INDEX]); return bossNodes.length === 1 && bossNodes[0]?.kind === "boss" && bossNodes[0].column === BOSS_COLUMN; }
+function hasSingleBossRoom(nodes: SpireMapNode[]) { const bossNodes = nodes.filter((node) => node.tierIndex === BOSS_FLOOR_INDEX); return bossNodes.length === 1 && bossNodes[0]?.kind === "boss" && bossNodes[0].column === BOSS_COLUMN; }
 
 function getUnknownRoomCap(nodes: SpireMapNode[]) { return Math.max(1, Math.floor(nodes.length * UNKNOWN_ROOM_RATIO_CAP)); }
 
@@ -436,10 +450,9 @@ function hasValidOccupancy(nodes: SpireMapNode[]) {
 }
 
 function hasEnoughAdjacentConnectivity(nodes: SpireMapNode[]) {
-  const connectedPairs = SPIRE_RATINGS.slice(FIRST_TIER, EXCLUDE_LAST_FLOOR).filter((rating) => {
-    const currentFloorNodes = nodes.filter((node) => node.rating === rating);
-    const nextRating = SPIRE_RATINGS[SPIRE_RATINGS.findIndex((row) => row === rating) + 1];
-    const nextFloorIds = new Set(nodes.filter((node) => node.rating === nextRating).map((node) => node.id));
+  const connectedPairs = SPIRE_RATINGS.slice(FIRST_TIER, EXCLUDE_LAST_FLOOR).filter((_rating, tierIndex) => {
+    const currentFloorNodes = nodes.filter((node) => node.tierIndex === tierIndex);
+    const nextFloorIds = new Set(nodes.filter((node) => node.tierIndex === tierIndex + 1).map((node) => node.id));
     return currentFloorNodes.length > 0 && currentFloorNodes.every((node) => node.nextIds.some((id) => nextFloorIds.has(id)));
   }).length;
   return connectedPairs / Math.max(1, SPIRE_RATINGS.length - 1) >= MIN_ADJACENT_CONNECTIVITY_RATIO;
@@ -451,17 +464,17 @@ function hasAverageBranchingInRange(nodes: SpireMapNode[]) {
 }
 
 function getAverageBranchingFactor(nodes: SpireMapNode[]) {
-  const branchingNodes = nodes.filter((node) => node.rating !== SPIRE_RATINGS[BOSS_FLOOR_INDEX]);
+  const branchingNodes = nodes.filter((node) => node.tierIndex !== BOSS_FLOOR_INDEX);
   return branchingNodes.reduce((sum, node) => sum + node.nextIds.length, 0) / Math.max(1, branchingNodes.length);
 }
 
 function hasSingleGuaranteedTreasure(nodes: SpireMapNode[]) {
-  return nodes.filter((node) => GUARANTEED_TREASURE_FLOORS.has(getTierIndex(node.rating)) && node.kind === "treasure").length === 1;
+  return nodes.filter((node) => GUARANTEED_TREASURE_FLOORS.has(node.tierIndex) && node.kind === "treasure").length === 1;
 }
 
 function hasNoEarlySpecialRooms(nodes: SpireMapNode[]) {
   return nodes.every((node) => {
-    const tierIndex = getTierIndex(node.rating);
+    const tierIndex = node.tierIndex;
     if ((node.kind === "elite" || node.kind === "rest") && tierIndex < FLOOR_SIX_INDEX) {
       return false;
     }
@@ -479,8 +492,7 @@ function hasValidShopSpacing(nodes: SpireMapNode[]) {
   return SPIRE_RATINGS.every((_rating, tierIndex) => {
     const spanStart = Math.max(FIRST_TIER, tierIndex - 4);
     return nodes.filter((node) => {
-      const nodeTier = getTierIndex(node.rating);
-      return node.kind === "merchant" && nodeTier >= spanStart && nodeTier <= tierIndex;
+      return node.kind === "merchant" && node.tierIndex >= spanStart && node.tierIndex <= tierIndex;
     }).length <= 2;
   });
 }
@@ -506,7 +518,7 @@ function hasNoConsecutiveSpecialRooms(nodes: SpireMapNode[]) {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   return nodes.every((node) => !CONSECUTIVE_BLOCKED_KINDS.includes(node.kind) || node.nextIds.every((id) => {
     const next = byId.get(id);
-    return !next || next.rating >= SPIRE_RATINGS[BOSS_FLOOR_INDEX] || !CONSECUTIVE_BLOCKED_KINDS.includes(next.kind);
+    return !next || next.tierIndex >= BOSS_FLOOR_INDEX || !CONSECUTIVE_BLOCKED_KINDS.includes(next.kind);
   }));
 }
 
@@ -520,15 +532,15 @@ function hasLocalPathLinks(nodes: SpireMapNode[]) {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   return nodes.every((node) => node.nextIds.every((id) => {
     const next = byId.get(id);
-    return next && next.rating > node.rating && (next.rating === SPIRE_RATINGS[BOSS_FLOOR_INDEX] || Math.abs(next.column - node.column) <= MAX_PATH_STEP);
+    return next && next.tierIndex > node.tierIndex && (next.tierIndex === BOSS_FLOOR_INDEX || Math.abs(next.column - node.column) <= MAX_PATH_STEP);
   }));
 }
 
 function hasNoCrossedPathEdges(nodes: SpireMapNode[]) {
   const byId = new Map(nodes.map((node) => [node.id, node]));
-  for (const rating of SPIRE_RATINGS.slice(0, EXCLUDE_LAST_FLOOR)) {
+  for (const tierIndex of SPIRE_RATINGS.slice(0, EXCLUDE_LAST_FLOOR).map((_rating, index) => index)) {
     const edges = nodes
-      .filter((node) => node.rating === rating)
+      .filter((node) => node.tierIndex === tierIndex)
       .flatMap((node) => node.nextIds.map((id) => {
         const next = byId.get(id);
         return next ? { fromColumn: node.column, toColumn: next.column } : null;
@@ -560,10 +572,10 @@ function hasNoLongStraightPathChains(nodes: SpireMapNode[]) {
 
 function hasNoDeadRooms(nodes: SpireMapNode[]) {
   const incomingIds = new Set(nodes.flatMap((node) => node.nextIds));
-  return nodes.every((node) => node.rating === SPIRE_RATINGS[FIRST_TIER] || incomingIds.has(node.id));
+  return nodes.every((node) => node.tierIndex === FIRST_TIER || incomingIds.has(node.id));
 }
 
-function hasNoHangingRooms(nodes: SpireMapNode[]) { return nodes.every((node) => node.rating === SPIRE_RATINGS[BOSS_FLOOR_INDEX] || node.nextIds.length > 0); }
+function hasNoHangingRooms(nodes: SpireMapNode[]) { return nodes.every((node) => node.tierIndex === BOSS_FLOOR_INDEX || node.nextIds.length > 0); }
 
 function hasEveryStartReachBoss(nodes: SpireMapNode[]) {
   return getStartNodes(nodes).every((node) => canReachBoss(nodes, node.id));
@@ -579,7 +591,7 @@ function hasRequiredRouteRiskMix(nodes: SpireMapNode[]) {
 }
 
 function getStartNodes(nodes: SpireMapNode[]) {
-  return nodes.filter((node) => node.rating === SPIRE_RATINGS[FIRST_TIER]);
+  return nodes.filter((node) => node.tierIndex === FIRST_TIER);
 }
 
 function canReachBoss(nodes: SpireMapNode[], startId: string, options: { avoidElite?: boolean; requireElite?: boolean } = {}) {
@@ -1030,7 +1042,7 @@ function addMetaCurrency(state: StudyState, amount: number): StudyState {
 }
 
 function getRoomGoldBase(node: SpireMapNode, kind: SpireNodeKind) {
-  const floorIndex = Math.max(0, getTierIndex(node.rating));
+  const floorIndex = node.tierIndex;
   if (kind === "boss") {
     return 95 + floorIndex * 8;
   }
@@ -1086,9 +1098,9 @@ function getRoomRewardDifficulty(node: SpireMapNode, kind: string): Difficulty {
     return 5;
   }
   if (kind === "elite") {
-    return Math.min(5, Math.max(3, Math.ceil(getTierIndex(node.rating) / 3))) as Difficulty;
+    return Math.min(5, Math.max(3, Math.ceil(node.tierIndex / 3))) as Difficulty;
   }
-  return Math.min(5, Math.max(1, Math.ceil((getTierIndex(node.rating) + 1) / 3))) as Difficulty;
+  return Math.min(5, Math.max(1, Math.ceil((node.tierIndex + 1) / 3))) as Difficulty;
 }
 
 function maybeApplyHealingReward(state: StudyState, node: SpireMapNode, now: number, kind: string) {
@@ -1190,7 +1202,7 @@ export function selectSpireNode(state: StudyState, nodeId: string) {
         roundQuestionIds: [],
         roundSolvedIds: [],
         runCodeQuestionIds: [],
-        tierIndex: getTierIndex(node.rating)
+        tierIndex: node.tierIndex
       }
     }
   };
@@ -1215,7 +1227,7 @@ export function enterSpireNode(state: StudyState, now = Date.now()) {
         roundQuestionIds: isCombatNode(enteredNode) ? pickRoundQuestions(enteredState.profile.spireRun, enteredNode, state.profile.spireRun.mapSeed + now, state.profile.spireRun.roundQuestionIds, getRoundQuestionCount(enteredState.profile.spireRun, enteredNode, now)) : [],
         roundSolvedIds: [],
         runCodeQuestionIds: [],
-        tierIndex: getTierIndex(enteredNode?.rating || node.rating)
+        tierIndex: enteredNode?.tierIndex ?? node.tierIndex
       }
     }
   };
@@ -1309,7 +1321,7 @@ function completeSpireNode(state: StudyState, node: SpireMapNode, now: number, s
       currentId: null,
       profile: {
         ...rewarded.profile,
-        spireRun: createSpireRun(now + rewarded.profile.spireRun.mapSeed, nextCampaign.act, nextCampaign.difficulty, rewarded.profile.spireRun.heatConditions)
+        spireRun: createSpireRun(now + rewarded.profile.spireRun.mapSeed, nextCampaign.act, nextCampaign.difficulty, rewarded.profile.spireRun.heatConditions, false, rewarded.profile.spireMinRating)
       }
     };
   }
@@ -1341,7 +1353,7 @@ function completeVictoriousRun(state: StudyState, now: number): StudyState {
     heatUnlocked: true,
     highestHeat: Math.max(state.profile.metaProgress.highestHeat || 0, completedHeat)
   };
-  const nextRun = createSpireRun(now + state.profile.spireRun.mapSeed, 1, "normal", state.profile.spireRun.heatConditions, true);
+  const nextRun = createSpireRun(now + state.profile.spireRun.mapSeed, 1, "normal", state.profile.spireRun.heatConditions, true, state.profile.spireMinRating);
   const nextState = {
     ...state,
     currentId: null,
@@ -1381,19 +1393,19 @@ function tickActivePotionEffects(state: StudyState, completedNodeId: string): St
   };
 }
 
-function createSpireNodes(seed: number) {
+function createSpireNodes(seed: number, ratings = SPIRE_RATINGS) {
   for (let attempt = 0; attempt < MAP_GENERATION_ATTEMPTS; attempt += 1) {
     const attemptSeed = seed + attempt * MAP_ATTEMPT_SEED_STEP;
-    const nodes = assignRoomKinds(attemptSeed, createPathRows(attemptSeed)).flat();
+    const nodes = assignRoomKinds(attemptSeed, createPathRows(attemptSeed, ratings)).flat();
     if (isValidBranchingMap(nodes)) {
       return nodes;
     }
   }
-  return assignRoomKinds(seed, createPathRows(seed)).flat();
+  return assignRoomKinds(seed, createPathRows(seed, ratings)).flat();
 }
 
-function createPathRows(seed: number) {
-  const rowColumns = SPIRE_RATINGS.map(() => new Set<number>());
+function createPathRows(seed: number, ratings = SPIRE_RATINGS) {
+  const rowColumns = ratings.map(() => new Set<number>());
   const edges: PathEdge[] = [];
   const pathCount = getRandomWalkPathCount(seed);
   for (const column of START_NODE_COLUMNS) {
@@ -1418,7 +1430,7 @@ function createPathRows(seed: number) {
   ensureNodeConnectivity(rowColumns, edges);
   dedupeEdges(edges);
   addStrategicBranches(seed, rowColumns, edges);
-  return rowColumns.map((columns, tierIndex) => createTierNodesFromColumns(seed, tierIndex, [...columns].sort((a, b) => a - b), edges));
+  return rowColumns.map((columns, tierIndex) => createTierNodesFromColumns(seed, tierIndex, [...columns].sort((a, b) => a - b), edges, ratings));
 }
 
 function getRandomWalkPathCount(seed: number) {
@@ -1617,27 +1629,28 @@ function doEdgesCross(fromColumn: number, toColumn: number, otherFromColumn: num
   return (fromColumn < otherFromColumn && toColumn > otherToColumn) || (fromColumn > otherFromColumn && toColumn < otherToColumn);
 }
 
-function createTierNodesFromColumns(seed: number, tierIndex: number, columns: number[], edges: PathEdge[]) {
+function createTierNodesFromColumns(seed: number, tierIndex: number, columns: number[], edges: PathEdge[], ratings = SPIRE_RATINGS) {
   return columns.map((column) => {
-    const id = getNodeId(tierIndex, column);
+    const id = getNodeId(tierIndex, column, ratings);
     return {
       column,
       id,
       kind: "enemy" as SpireNodeKind,
-      nextIds: getNextIdsForColumn(tierIndex, column, edges),
-      rating: SPIRE_RATINGS[tierIndex],
+      nextIds: getNextIdsForColumn(tierIndex, column, edges, ratings),
+      rating: ratings[tierIndex],
+      tierIndex,
       x: getNodeX(seed, tierIndex, column),
       y: getNodeY(tierIndex)
     };
   });
 }
 
-function getNextIdsForColumn(tierIndex: number, column: number, edges: PathEdge[]) {
+function getNextIdsForColumn(tierIndex: number, column: number, edges: PathEdge[], ratings = SPIRE_RATINGS) {
   const nextColumns = Array.from(new Set(edges.filter((edge) => edge.fromTier === tierIndex && edge.fromColumn === column).map((edge) => edge.toColumn)));
-  return nextColumns.map((nextColumn) => getNodeId(tierIndex + 1, nextColumn));
+  return nextColumns.map((nextColumn) => getNodeId(tierIndex + 1, nextColumn, ratings));
 }
 
-function getNodeId(tierIndex: number, column: number) { return `tier-${tierIndex}-${column}-${SPIRE_RATINGS[tierIndex]}`; }
+function getNodeId(tierIndex: number, column: number, ratings = SPIRE_RATINGS) { return `tier-${tierIndex}-${column}-${ratings[tierIndex]}`; }
 
 function assignRoomKinds(seed: number, rows: SpireMapNode[][]) {
   const assignedByOrigin = new Map<string, Set<SpireNodeKind>>();
@@ -1734,7 +1747,7 @@ function ensureEliteCampfireSupport(seed: number, rows: SpireMapNode[][]) {
   const supportIds = new Set(elites
     .filter((node) => !getAncestorNodesWithinFloors(flatRows, node, 3).some((ancestor) => ancestor.kind === "rest"))
     .flatMap((elite) => getAncestorNodesWithinFloors(flatRows, elite, 3)
-      .filter((ancestor) => canForceRoomKind(rows, getTierIndex(ancestor.rating), ancestor, "rest"))
+      .filter((ancestor) => canForceRoomKind(rows, ancestor.tierIndex, ancestor, "rest"))
       .sort((a, b) => getRoll(`${seed}:elite-rest:${elite.id}:${a.id}`) - getRoll(`${seed}:elite-rest:${elite.id}:${b.id}`))
       .slice(0, 1))
     .sort((a, b) => getRoll(`${seed}:support-rest:${a.id}`) - getRoll(`${seed}:support-rest:${b.id}`))
@@ -1765,8 +1778,7 @@ function canForceRoomKind(rows: SpireMapNode[][], tierIndex: number, node: Spire
 function getShopCountInFiveFloorSpan(nodes: SpireMapNode[], tierIndex: number) {
   const spanStart = Math.max(FIRST_TIER, tierIndex - 4);
   return nodes.filter((node) => {
-    const nodeTier = getTierIndex(node.rating);
-    return node.kind === "merchant" && nodeTier >= spanStart && nodeTier <= tierIndex;
+    return node.kind === "merchant" && node.tierIndex >= spanStart && node.tierIndex <= tierIndex;
   }).length;
 }
 
@@ -1828,6 +1840,9 @@ function getForcedNodeKind(tierIndex: number): SpireNodeKind | null {
   if (tierIndex === FLOOR_ONE_INDEX) {
     return "enemy";
   }
+  if (tierIndex === FLOOR_FOURTEEN_INDEX) {
+    return "rest";
+  }
   if (tierIndex === BOSS_FLOOR_INDEX) {
     return "boss";
   }
@@ -1885,8 +1900,6 @@ function getNodeX(seed: number, tierIndex: number, column: number) {
   const jitter = Math.round((getRoll(`${seed}:x:${tierIndex}:${column}`) - RANDOM_CENTER) * NODE_X_JITTER);
   return Math.min(MAP_X_MIN + MAP_X_SPREAD, Math.max(MAP_X_MIN, Math.round(base + jitter)));
 }
-
-function getTierIndex(rating: number) { return Math.max(FIRST_TIER, SPIRE_RATINGS.findIndex((row) => row === rating)); }
 
 function getRoundQuestionCount(run: SpireRun, node: SpireMapNode, now: number) {
   const baseCount = node.kind === "elite" || node.kind === "boss"

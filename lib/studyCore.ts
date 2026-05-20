@@ -8,7 +8,7 @@ import { ALL_MODIFIER_KEYS } from "./modifierAffixes";
 import { applyElementalResistance, getResistancesFromModifiers } from "./resistanceCore";
 import { getWarriorSkillBonuses, normalizeWarriorSkillRanks } from "./skillCore";
 import { createShopStock, normalizeShopStock } from "./shopCore";
-import { createSpireRun, normalizeSpireRun } from "./spireMapCore";
+import { DEFAULT_SPIRE_MIN_RATING, createSpireRun, getSpireRatings, normalizeSpireMinRating, normalizeSpireRun } from "./spireMapCore";
 import { getUniqueMonsterBonuses } from "./monsterCore";
 import type { ActivePotionEffect, CardState, CharacterStatKey, CharacterStats, DamageType, EquipmentSlot, InventoryItem, InventoryItemPosition, ItemModifierKey, Question, StudyState } from "../types/study";
 
@@ -107,6 +107,7 @@ function createDefaultStateBase(): StudyState {
       health: MAX_HEALTH,
       mana: 0,
       rating: DEFAULT_PLAYER_RATING,
+      spireMinRating: DEFAULT_SPIRE_MIN_RATING,
       godMode: false,
       statPoints: 0,
       statPointsAwardedLevel: FIRST_STAT_LEVEL,
@@ -124,7 +125,7 @@ function createDefaultStateBase(): StudyState {
       shopLastRefreshedAt: null,
       shopStock: [],
       relics: [],
-      spireRun: createSpireRun(),
+      spireRun: createSpireRun(Date.now(), 1, "normal", undefined, false, DEFAULT_SPIRE_MIN_RATING),
       unlockedAchievementIds: []
     },
     cards: {}
@@ -184,6 +185,7 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
       godMode: Boolean(profile.godMode),
       experience: 0,
       rating: normalizeRating(stored, fallback),
+      spireMinRating: normalizeSpireMinRating(profile.spireMinRating),
       statPoints: 0,
       statPointsAwardedLevel: FIRST_STAT_LEVEL,
       stats: normalizeCharacterStats(profile.stats),
@@ -197,7 +199,7 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
       shopLastRefreshedAt: profile.shopLastRefreshedAt ?? fallback.profile.shopLastRefreshedAt,
       shopStock: normalizeShopStock(profile.shopStock),
       relics: normalizeRelics(profile.relics),
-      spireRun: normalizeSpireRun(profile.spireRun),
+      spireRun: normalizeSpireRun(profile.spireRun, normalizeSpireMinRating(profile.spireMinRating)),
       unlockedAchievementIds: normalizeUnlockedAchievementIds(profile.unlockedAchievementIds)
     },
     cards: normalizeCards(stored.cards)
@@ -465,6 +467,28 @@ export const getMetaStartingGoldBonus = (state: StudyState) => Math.max(0, state
 export const getMetaMaxHealthBonus = (state: StudyState) => Math.max(0, state.profile.metaProgress.upgrades.toughStart || 0) * META_TOUGH_START_HEALTH;
 
 export const getMetaRelicChoiceBonus = (state: StudyState) => Math.min(META_RELIC_CHOICE_BONUS_CAP, Math.max(0, state.profile.metaProgress.upgrades.relicChoice || 0));
+
+export function setSpireMinimumRating(state: StudyState, value: number): StudyState {
+  const spireMinRating = normalizeSpireMinRating(value);
+  if (spireMinRating === state.profile.spireMinRating) {
+    return state;
+  }
+  const ratings = getSpireRatings(state.profile.spireRun.act, spireMinRating);
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      spireMinRating,
+      spireRun: {
+        ...state.profile.spireRun,
+        nodes: state.profile.spireRun.nodes.map((node) => ({
+          ...node,
+          rating: ratings[node.tierIndex] ?? ratings[0]
+        }))
+      }
+    }
+  };
+}
 
 export type MetaUpgradeId = keyof StudyState["profile"]["metaProgress"]["upgrades"];
 

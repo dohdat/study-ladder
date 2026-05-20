@@ -24,7 +24,7 @@ import { getTimerDisplay } from "../lib/timerDisplay";
 import { chooseNextSpireQuestion, completeSpireQuestion, getCurrentRoundQuestion, getCurrentSpireNode, isCombatNode as isSpireCombatNode } from "../lib/spireMapCore";
 import {
   HINT_COST, applyHealthPenalty, applyIncomingDamage, applyScheduleResult, buyHint, canBuyHint, cloneState, defaultState, getCard,
-  getHintCost, getIncomingDamageEffect, getMaxHealth, getMetaStartingGoldBonus, getModifiedQuestionTimeLimitMs, isQuestionInRecommendedRange, markQuestionRunCode, normalizeStudyState, setCard
+  getHintCost, getIncomingDamageEffect, getMaxHealth, getMetaStartingGoldBonus, getModifiedQuestionTimeLimitMs, isQuestionInRecommendedRange, markQuestionRunCode, normalizeStudyState, setCard, setSpireMinimumRating
 } from "../lib/studyCore";
 import { createHintPrompt } from "../lib/hintPrompt";
 import { createLocalHint } from "../lib/localHint";
@@ -747,7 +747,7 @@ export default function Home() {
   const timer = useQuestionTimer({ code, currentQuestion, failAndAdvance, sessionStarted, mode: state.mode, setConsoleRunResult, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer, questionTimeLimitMs });
   const actions = usePracticeActions({ code, currentQuestion, failAndAdvance, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setConsoleRunResult, setResults, setRunnerReady, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame, clearHint: hints.clearHint, startHint: hints.startHint, showHealthLoss, showPlayerImpact, showRewards, showMonsterDamage, timeRemainingMs: timer.timeRemainingMs });
   const resetAfterDeath = useCallback(() => {
-    const freshState = defaultState();
+    let freshState = defaultState();
     freshState.cards = state.cards;
     freshState.totalCorrect = state.totalCorrect;
     freshState.profile.unlockedAchievementIds = state.profile.unlockedAchievementIds;
@@ -762,6 +762,7 @@ export default function Home() {
       heatConditions: { ...state.profile.spireRun.heatConditions },
       heatSetupOpen: Boolean(state.profile.metaProgress.heatUnlocked)
     };
+    freshState = setSpireMinimumRating(freshState, state.profile.spireMinRating);
     freshState.profile.coins = getMetaStartingGoldBonus(freshState);
     freshState.profile.health = getMaxHealth(freshState);
     const picked = getCurrentRoundQuestion(freshState, null);
@@ -778,7 +779,7 @@ export default function Home() {
     setRunTone("default");
     setRunStatus("Run ended. Preserved question progress and gained 5 insight.");
     hints.clearHint();
-  }, [hints, runTimer, state.cards, state.profile.metaProgress, state.profile.spireRun.heatConditions, state.profile.unlockedAchievementIds, state.totalCorrect]);
+  }, [hints, runTimer, state.cards, state.profile.metaProgress, state.profile.spireMinRating, state.profile.spireRun.heatConditions, state.profile.unlockedAchievementIds, state.totalCorrect]);
   const pauseQuestionForFocusLoss = useCallback(() => { activeRunId.current = null; clearRunTimer(runTimer); setRunning(false); setResults([]); setConsoleRunResult(null); setSessionStarted(false); hints.clearHint(); }, [hints, runTimer]);
   const isDead = state.profile.health <= 0;
   useStudyTimeTracker(state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished && !isDead);

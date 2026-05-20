@@ -7,13 +7,14 @@ import { EXPERIENCE_PER_LEVEL, defaultState, getMaxHealth, getMaxMana } from "..
 import type { SpireNodeKind } from "../types/study";
 
 const FLOOR_ONE = 1500;
-const FLOOR_FOUR = 1950;
-const FLOOR_FIVE = 2100;
-const FLOOR_SIX = 2250;
-const FLOOR_SEVEN = 2400;
-const FLOOR_EIGHT = 2550;
-const FLOOR_TEN = 2850;
-const FLOOR_FIFTEEN = 3500;
+const FLOOR_FOUR = 1615;
+const FLOOR_FIVE = 1650;
+const FLOOR_SIX = 1690;
+const FLOOR_SEVEN = 1725;
+const FLOOR_EIGHT = 1765;
+const FLOOR_TEN = 1840;
+const FLOOR_FOURTEEN = 1975;
+const FLOOR_FIFTEEN = 2000;
 const DEAD_ROOM_SAMPLE_COUNT = 25;
 const MAX_PATH_STEP = 1;
 const MAX_MAP_COLUMNS = 7;
@@ -28,7 +29,7 @@ const UNKNOWN_ROOM_RATIO_CAP = 0.2;
 const CONSECUTIVE_BLOCKED_KINDS: SpireNodeKind[] = ["elite", "merchant", "rest"];
 
 describe("spireMapCore", () => {
-  it("creates a randomized fifteen-floor map from 1500 to 3500", () => {
+  it("creates a randomized fifteen-floor map from 1500 to 2000", () => {
     const run = createSpireRun(1000);
 
     expect([...new Set(run.nodes.map((node) => node.rating))]).toEqual([...SPIRE_RATINGS]);
@@ -36,7 +37,24 @@ describe("spireMapCore", () => {
     expect(run.roundQuestionIds).toHaveLength(0);
     expect(run.availableNodeIds.length).toBeGreaterThan(1);
     expect(run.nodes[0].rating).toBe(FLOOR_ONE);
-    expect(run.nodes[run.nodes.length - 1].rating).toBe(3500);
+    expect(run.nodes[run.nodes.length - 1].rating).toBe(FLOOR_FIFTEEN);
+  });
+
+  it("scales act rating bands from the configured minimum rating", () => {
+    const actOne = createSpireRun(1000, 1, "normal", {}, false, 1500);
+    const actTwo = createSpireRun(1000, 2, "normal", {}, false, 1500);
+    const actThree = createSpireRun(1000, 3, "normal", {}, false, 1500);
+    const actFour = createSpireRun(1000, 4, "normal", {}, false, 1500);
+    expect(actOne.nodes[actOne.nodes.length - 1].rating).toBe(2000);
+    expect(actTwo.nodes[0].rating).toBe(2000);
+    expect(actTwo.nodes[actTwo.nodes.length - 1].rating).toBe(2500);
+    expect(actThree.nodes[0].rating).toBe(2500);
+    expect(actFour.nodes[0].rating).toBe(3000);
+
+    const shiftedActOne = createSpireRun(1000, 1, "normal", {}, false, 1800);
+    const shiftedActFour = createSpireRun(1000, 4, "normal", {}, false, 1800);
+    expect(shiftedActOne.nodes[0].rating).toBe(1800);
+    expect(shiftedActFour.nodes[0].rating).toBe(3300);
   });
 
   it("applies fixed floor and room assignment rules", () => {
@@ -46,6 +64,8 @@ describe("spireMapCore", () => {
     expect(run.nodes.filter((node) => node.rating === FLOOR_ONE).every((node) => node.kind === "enemy")).toBe(true);
     expect(run.nodes.filter((node) => node.rating === FLOOR_ONE)).toHaveLength(START_NODE_COUNT);
     expect(run.nodes.filter((node) => node.rating >= FLOOR_EIGHT && node.rating <= FLOOR_TEN && node.kind === "treasure")).toHaveLength(1);
+    expect(run.nodes.filter((node) => node.rating === FLOOR_FOURTEEN).every((node) => node.kind === "rest")).toBe(true);
+    expect(run.nodes.filter((node) => node.rating === FLOOR_FOURTEEN).length).toBeGreaterThan(0);
     expect(run.nodes.filter((node) => node.rating === FLOOR_FIFTEEN).every((node) => node.kind === "boss")).toBe(true);
     expect(run.nodes.filter((node) => node.rating === FLOOR_FIFTEEN)).toHaveLength(1);
     expect(run.nodes.filter((node) => node.rating < FLOOR_SIX).some((node) => node.kind === "rest")).toBe(false);

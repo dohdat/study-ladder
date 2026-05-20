@@ -222,6 +222,7 @@ export type SpireMapNode = {
   id: string;
   kind: SpireNodeKind;
   rating: number;
+  tierIndex: number;
   x: number;
   y: number;
   nextIds: string[];
@@ -353,6 +354,7 @@ export type StudyState = {
     health: number;
     mana: number;
     rating: number;
+    spireMinRating: number;
     godMode: boolean;
     statPoints: number;
     statPointsAwardedLevel: number;

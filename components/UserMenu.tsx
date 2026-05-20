@@ -60,6 +60,7 @@ import {
 } from "../lib/heroSiegeWikiCatalog";
 import { RELIC_DEFINITIONS } from "../lib/relicCore";
 import { formatModifier } from "../lib/modifierFormat";
+import { SPIRE_MIN_RATING_MAX, SPIRE_MIN_RATING_MIN, getSpireActBaseRating, normalizeSpireMinRating } from "../lib/spireMapCore";
 import {
   META_UPGRADE_DEFINITIONS,
   canPurchaseMetaUpgrade,
@@ -74,10 +75,11 @@ import {
   getRunModifierTotals,
   getWarriorSkillBonusTotals,
   purchaseMetaUpgrade,
+  setSpireMinimumRating,
   spendStatPoint
 } from "../lib/studyCore";
 import { getMonsterAttackType, getMonsterMaxHealth, getMonsterResistances, getUniqueMonsterBonuses } from "../lib/monsterCore";
-import type { CharacterStatKey, Difficulty, Question, Relic, RelicRarity, StudyState } from "../types/study";
+import type { CharacterStatKey, Difficulty, Question, Relic, RelicRarity, SpireAct, StudyState } from "../types/study";
 
 const ICON_SIZE = 16;
 const MENU_WIDTH = 180;
@@ -988,6 +990,16 @@ function SettingsPanel(props: { setState: React.Dispatch<React.SetStateAction<St
         value={settings.dailyMinutes}
         onChange={(value) => updateSettings({ ...settings, dailyMinutes: normalizeDailyMinutes(value) })}
       />
+      <NumberInput
+        allowDecimal={false}
+        label="Spire minimum rating"
+        description={getSpireRatingRangeSummary(props.state.profile.spireMinRating)}
+        min={SPIRE_MIN_RATING_MIN}
+        max={SPIRE_MIN_RATING_MAX}
+        step={50}
+        value={props.state.profile.spireMinRating}
+        onChange={(value) => props.setState((previous) => setSpireMinimumRating(previous, normalizeSpireMinInput(value)))}
+      />
       <Textarea
         autosize
         minRows={SITE_TEXTAREA_MIN_ROWS}
@@ -1014,6 +1026,20 @@ function SettingsPanel(props: { setState: React.Dispatch<React.SetStateAction<St
       </Group>
     </Stack>
   );
+}
+
+function getSpireRatingRangeSummary(minRating: number) {
+  return ([1, 2, 3, 4] as SpireAct[])
+    .map((act) => {
+      const start = getSpireActBaseRating(act, minRating);
+      return `Act ${act}: ${start}-${start + 500}`;
+    })
+    .join(" | ");
+}
+
+function normalizeSpireMinInput(value: string | number) {
+  const numericValue = typeof value === "number" ? value : Number(value);
+  return normalizeSpireMinRating(numericValue);
 }
 
 function normalizeDailyMinutes(value: string | number) {
