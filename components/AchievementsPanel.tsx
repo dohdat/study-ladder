@@ -105,19 +105,27 @@ const ACHIEVEMENT_ICON_BY_ID: Partial<Record<Achievement["id"], StaticImageData>
   "zealot-streak": battleTranceArt
 };
 
-const ACHIEVEMENT_ICON_BY_METRIC: Record<Achievement["metric"], StaticImageData> = {
+const ACHIEVEMENT_ICON_BY_METRIC: Partial<Record<Achievement["metric"], StaticImageData>> = {
+  actReached: lanternArt,
   allStats: naturalResistanceArt,
   coins: midasHandArt,
+  currentHeat: devilSkullArt,
   defeats: swordArt,
+  heatUnlocked: holyGrailArt,
+  highestHeat: demonFormArt,
   hints: lanternArt,
   level: helmetArt,
   mastered: bookOfBelialArt,
   metaCurrency: tokenLuckArt,
   metaTotalEarned: gemAngelicArt,
   metaUpgrades: shieldArt,
+  pactConditions: satansEyeArt,
+  pactRanks: devilSkullArt,
   ratingSolved: demonFormArt,
+  relicRarity: holyGrailArt,
   relics: holyGrailArt,
   solved: oddBookArt,
+  specificMetaUpgrade: shieldArt,
   stat: axeMasteryArt,
   streak: frenzyArt
 };
@@ -179,7 +187,7 @@ function AchievementCard(props: { achievement: Achievement }) {
 
 function AchievementBadge(props: { achievement: Achievement }) {
   const colors = props.achievement.unlocked ? props.achievement.colors : [LOCKED_BADGE_COLOR, "#2d2d2d", "#777"] as [string, string, string];
-  const icon = ACHIEVEMENT_ICON_BY_ID[props.achievement.id] || ACHIEVEMENT_ICON_BY_METRIC[props.achievement.metric];
+  const icon = ACHIEVEMENT_ICON_BY_ID[props.achievement.id] || ACHIEVEMENT_ICON_BY_METRIC[props.achievement.metric] || oddBookArt;
   return (
     <Tooltip label={props.achievement.title} withArrow withinPortal={false}>
       <Box

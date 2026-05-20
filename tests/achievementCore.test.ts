@@ -32,8 +32,7 @@ describe("achievementCore", () => {
     const achievements = getAchievements(state);
 
     expect(achievements.find((achievement) => achievement.id === "first-blood")?.unlocked).toBe(true);
-    expect(achievements.find((achievement) => achievement.id === "first-cache")?.unlocked).toBe(true);
-    expect(achievements.find((achievement) => achievement.id === "one-good-hint")?.unlocked).toBe(true);
+    expect(achievements.find((achievement) => achievement.id === "study-route")?.unlocked).toBe(false);
     expect(achievements.find((achievement) => achievement.id === "completed-grimoire")?.unlocked).toBe(false);
   });
 
@@ -61,13 +60,44 @@ describe("achievementCore", () => {
     state.profile.metaProgress.currency = 25;
     state.profile.metaProgress.totalEarned = 100;
     state.profile.metaProgress.upgrades.coinPurse = 1;
+    state.profile.metaProgress.upgrades.starterRelics = 1;
+    state.profile.relics.push({
+      description: "Test unique relic",
+      id: "test-unique-relic",
+      modifiers: [],
+      name: "Test Unique Relic",
+      rarity: "unique",
+      source: "any"
+    });
 
     const achievements = getAchievements(state);
 
     expect(achievements.find((achievement) => achievement.id === "first-relic")?.unlocked).toBe(true);
     expect(achievements.find((achievement) => achievement.id === "relic-collector")?.unlocked).toBe(true);
     expect(achievements.find((achievement) => achievement.id === "first-insight-upgrade")?.unlocked).toBe(true);
+    expect(achievements.find((achievement) => achievement.id === "mirror-starter-relic")?.unlocked).toBe(true);
     expect(achievements.find((achievement) => achievement.id === "insight-stash")?.unlocked).toBe(true);
     expect(achievements.find((achievement) => achievement.id === "insight-memory")?.unlocked).toBe(true);
+    expect(achievements.find((achievement) => achievement.id === "unique-relic")?.unlocked).toBe(true);
+  });
+
+  it("unlocks pact and heat achievements from roguelike progression", () => {
+    const state = defaultState();
+    state.profile.metaProgress.heatUnlocked = true;
+    state.profile.metaProgress.highestHeat = 16;
+    state.profile.spireRun.heatConditions.hardLabor = 5;
+    state.profile.spireRun.heatConditions.tightDeadline = 5;
+    state.profile.spireRun.heatConditions.noRunCode = 1;
+    state.profile.spireRun.heatConditions.noHints = 1;
+    state.profile.spireRun.heatConditions.approvalProcess = 2;
+    state.profile.spireRun.act = 4;
+
+    const achievements = getAchievements(state);
+
+    expect(achievements.find((achievement) => achievement.id === "first-escape")?.unlocked).toBe(true);
+    expect(achievements.find((achievement) => achievement.id === "heat-sixteen-clear")?.unlocked).toBe(true);
+    expect(achievements.find((achievement) => achievement.id === "heat-thirty-two-clear")?.unlocked).toBe(false);
+    expect(achievements.find((achievement) => achievement.id === "pact-five-conditions")?.unlocked).toBe(true);
+    expect(achievements.find((achievement) => achievement.id === "act-four-threshold")?.unlocked).toBe(true);
   });
 });

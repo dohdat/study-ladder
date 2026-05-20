@@ -1,6 +1,8 @@
 import { questions } from "../data/questions";
-import { getCard, getEffectiveCharacterStats, getLevelProgress, getProfileStats, MAX_CHARACTER_LEVEL, META_UPGRADE_DEFINITIONS } from "./studyCore";
-import type { CharacterStatKey, Difficulty, StudyState } from "../types/study";
+import { HEAT_CONDITION_DEFINITIONS, getHeatLevel } from "./campaignCore";
+import { getCard, getProfileStats, META_UPGRADE_DEFINITIONS } from "./studyCore";
+import type { MetaUpgradeId } from "./studyCore";
+import type { CharacterStatKey, Difficulty, RelicRarity, StudyState } from "../types/study";
 
 const ACHIEVEMENT_COUNT = 43;
 const TOP_RATING_TARGET = 3000;
@@ -10,15 +12,23 @@ type AchievementMetric =
   | "allStats"
   | "coins"
   | "defeats"
+  | "actReached"
   | "hints"
+  | "heatUnlocked"
+  | "highestHeat"
+  | "currentHeat"
   | "level"
   | "mastered"
   | "metaCurrency"
   | "metaTotalEarned"
   | "metaUpgrades"
+  | "pactConditions"
+  | "pactRanks"
   | "ratingSolved"
   | "relics"
+  | "relicRarity"
   | "solved"
+  | "specificMetaUpgrade"
   | "stat"
   | "streak";
 
@@ -29,9 +39,11 @@ type AchievementDefinition = {
   difficulty?: Difficulty;
   id: string;
   metric: AchievementMetric;
+  rarity?: RelicRarity;
   stat?: CharacterStatKey;
   target: number;
   title: string;
+  upgrade?: MetaUpgradeId;
 };
 
 export type Achievement = AchievementDefinition & {
@@ -45,49 +57,49 @@ type MetricReader = (definition: AchievementDefinition, summary: AchievementSumm
 export const ACHIEVEMENT_TOTAL = ACHIEVEMENT_COUNT;
 
 export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] = [
-  { badge: "FB", colors: ["#7a2e1f", "#d46a3a", "#ffd0a1"], description: "Defeat your first question monster.", id: "first-blood", metric: "defeats", target: 1, title: "First Blood" },
-  { badge: "FP", colors: ["#49301c", "#c88733", "#ffe2a3"], description: "Defeat 5 question monsters.", id: "fallen-pack", metric: "defeats", target: 5, title: "Fallen Pack" },
-  { badge: "CH", colors: ["#4a1d2f", "#d14b74", "#ffd1df"], description: "Defeat 10 question monsters.", id: "champion-hunter", metric: "defeats", target: 10, title: "Champion Hunter" },
-  { badge: "BS", colors: ["#271c4f", "#6f5bd6", "#d6d0ff"], description: "Defeat 25 question monsters.", id: "baseline-slayer", metric: "defeats", target: 25, title: "Baseline Slayer" },
-  { badge: "AA", colors: ["#123c35", "#28a58b", "#b8fff2"], description: "Defeat 50 question monsters.", id: "adept-aggressor", metric: "defeats", target: 50, title: "Adept Aggressor" },
-  { badge: "MM", colors: ["#431414", "#c62626", "#ffd3d3"], description: "Defeat 100 question monsters.", id: "murder-machine", metric: "defeats", target: 100, title: "Murder Machine" },
-  { badge: "FC", colors: ["#4f3c10", "#d6a42f", "#fff0a8"], description: "Hold 50 gold.", id: "first-cache", metric: "coins", target: 50, title: "First Cache" },
-  { badge: "DP", colors: ["#59430d", "#e0bb3d", "#fff5bd"], description: "Hold 250 gold.", id: "deep-pockets", metric: "coins", target: 250, title: "Deep Pockets" },
-  { badge: "MB", colors: ["#3d3106", "#f2c94c", "#fff9cf"], description: "Hold 1,000 gold.", id: "money-bags", metric: "coins", target: 1000, title: "Mr. Money Bags" },
-  { badge: "EG", colors: ["#18324d", "#3f8fd2", "#c8e9ff"], description: "Solve 3 different questions.", id: "eastgate", metric: "solved", target: 3, title: "Welcome to Eastgate" },
-  { badge: "PF", colors: ["#2d285c", "#7f72ff", "#dedbff"], description: "Solve 6 different questions.", id: "nightmare-opens", metric: "solved", target: 6, title: "Pact Foreshadowed" },
-  { badge: "HR", colors: ["#4e1717", "#ef4444", "#ffd4d4"], description: "Solve 9 different questions.", id: "hell-opens", metric: "solved", target: 9, title: "Heat Rises" },
-  { badge: "CG", colors: ["#2f2413", "#c49a4a", "#ffe7ae"], description: "Solve every current LeetCode question.", id: "completed-grimoire", metric: "solved", target: questions.length, title: "Completed Grimoire" },
-  { badge: "L5", colors: ["#1d3c24", "#3dbb60", "#c9ffd4"], description: "Reach character level 5.", id: "level-5", metric: "level", target: 5, title: "Apprentice Warrior" },
-  { badge: "L10", colors: ["#24423f", "#50c8bd", "#d2fff9"], description: "Reach character level 10.", id: "level-10", metric: "level", target: 10, title: "Veteran Warrior" },
-  { badge: "L25", colors: ["#242c54", "#6578e8", "#d7ddff"], description: "Reach character level 25.", id: "level-25", metric: "level", target: 25, title: "Paragon Path" },
-  { badge: "L50", colors: ["#43245a", "#b15bea", "#efdbff"], description: "Reach character level 50.", id: "level-50", metric: "level", target: 50, title: "Ancients Remember" },
-  { badge: "L100", colors: ["#4b2d05", "#f0b429", "#fff2b5"], description: "Reach character level 100.", id: "level-100", metric: "level", target: MAX_CHARACTER_LEVEL, title: "It's Only One More Level" },
-  { badge: "FM", colors: ["#273143", "#7aa2f7", "#d8e5ff"], description: "Solve one question.", id: "first-mastery", metric: "mastered", target: 1, title: "First Mastery" },
-  { badge: "TB", colors: ["#2c3340", "#8aa1c1", "#edf4ff"], description: "Solve 3 questions.", id: "tome-binder", metric: "mastered", target: 3, title: "Tome Binder" },
-  { badge: "AM", colors: ["#34234e", "#9d6bff", "#eadcff"], description: "Solve 6 questions.", id: "archmage-memory", metric: "mastered", target: 6, title: "Archmage Memory" },
-  { badge: "PM", colors: ["#4b3b14", "#f6d365", "#fff7ca"], description: "Solve every current question.", id: "perfect-memory", metric: "mastered", target: questions.length, title: "Perfect Memory" },
-  { badge: "HS", colors: ["#23320f", "#7cb342", "#e5ffc8"], description: "Pass 3 submissions in a row.", id: "hot-streak", metric: "streak", target: 3, title: "Hot Streak" },
-  { badge: "ZS", colors: ["#13352f", "#39c5a3", "#d2fff5"], description: "Pass 5 submissions in a row.", id: "zealot-streak", metric: "streak", target: 5, title: "Zealot Streak" },
-  { badge: "FS", colors: ["#3d1f13", "#ff8a3d", "#ffe1c8"], description: "Pass 10 submissions in a row.", id: "frenzy-streak", metric: "streak", target: 10, title: "Frenzy Streak" },
-  { badge: "OH", colors: ["#213347", "#5fa8ff", "#d7ecff"], description: "Use one Codex hint.", id: "one-good-hint", metric: "hints", target: 1, title: "One Good Hint" },
-  { badge: "OD", colors: ["#182a45", "#6ea8fe", "#dbeafe"], description: "Use 5 Codex hints.", id: "oracle-debt", metric: "hints", target: 5, title: "Oracle's Debt" },
-  { badge: "FR", colors: ["#33302a", "#b7a37a", "#fff0c4"], description: "Claim your first relic.", id: "first-relic", metric: "relics", target: 1, title: "First Relic" },
-  { badge: "RC", colors: ["#3c3120", "#c19a55", "#ffe2aa"], description: "Carry 10 relics in one run.", id: "relic-collector", metric: "relics", target: 10, title: "Relic Collector" },
-  { badge: "RS", colors: ["#4c3514", "#d59c35", "#ffe9bc"], description: "Carry 25 relics in one run.", id: "relic-storm", metric: "relics", target: 25, title: "Relic Storm" },
-  { badge: "IU", colors: ["#1e3446", "#4aa3df", "#d1edff"], description: "Buy your first permanent insight upgrade.", id: "first-insight-upgrade", metric: "metaUpgrades", target: 1, title: "First Insight Upgrade" },
-  { badge: "MU", colors: ["#2c2c32", "#9ca3af", "#f3f4f6"], description: "Buy every permanent insight upgrade.", id: "maxed-mirror", metric: "metaUpgrades", target: getMaxMetaUpgradeRanks(), title: "Maxed Mirror" },
+  { badge: "FB", colors: ["#7a2e1f", "#d46a3a", "#ffd0a1"], description: "Clear your first combat question in a roguelike run.", id: "first-blood", metric: "defeats", target: 1, title: "First Blood" },
+  { badge: "CR", colors: ["#49301c", "#c88733", "#ffe2a3"], description: "Clear 10 combat questions across runs.", id: "combat-route", metric: "defeats", target: 10, title: "Combat Route" },
+  { badge: "CH", colors: ["#4a1d2f", "#d14b74", "#ffd1df"], description: "Clear 50 combat questions across runs.", id: "chamber-hunter", metric: "defeats", target: 50, title: "Chamber Hunter" },
+  { badge: "SR", colors: ["#18324d", "#3f8fd2", "#c8e9ff"], description: "Solve 10 different LeetCode rooms.", id: "study-route", metric: "solved", target: 10, title: "Study Route" },
+  { badge: "CG", colors: ["#2f2413", "#c49a4a", "#ffe7ae"], description: "Solve every current LeetCode room in the bank.", id: "completed-grimoire", metric: "solved", target: questions.length, title: "Completed Grimoire" },
+  { badge: "PM", colors: ["#4b3b14", "#f6d365", "#fff7ca"], description: "Master every current LeetCode room.", id: "perfect-memory", metric: "mastered", target: questions.length, title: "Perfect Memory" },
+  { badge: "GK", colors: ["#3d1111", "#f97316", "#ffedd5"], description: "Solve a question rated 3000 or higher.", id: "giant-killer", metric: "ratingSolved", target: TOP_RATING_TARGET, title: "Giant Killer" },
+  { badge: "A2", colors: ["#5a3514", "#d9913d", "#ffe2aa"], description: "Reach Act II during a run.", id: "act-two-gates", metric: "actReached", target: 2, title: "Act II Gates" },
+  { badge: "A3", colors: ["#4e1717", "#ef4444", "#ffd4d4"], description: "Reach Act III during a run.", id: "act-three-descent", metric: "actReached", target: 3, title: "Act III Descent" },
+  { badge: "A4", colors: ["#31205f", "#8b5cf6", "#ede9fe"], description: "Reach Act IV during a run.", id: "act-four-threshold", metric: "actReached", target: 4, title: "Act IV Threshold" },
+  { badge: "ES", colors: ["#4b2d05", "#f0b429", "#fff2b5"], description: "Clear Act IV once and unlock the Pact of Conditions.", id: "first-escape", metric: "heatUnlocked", target: 1, title: "First Escape" },
+  { badge: "H1", colors: ["#581c15", "#f97316", "#ffedd5"], description: "Clear a run at Heat 1 or higher.", id: "heat-one-clear", metric: "highestHeat", target: 1, title: "First Heat" },
+  { badge: "H4", colors: ["#5f1f13", "#fb923c", "#fed7aa"], description: "Clear a run at Heat 4 or higher.", id: "heat-four-clear", metric: "highestHeat", target: 4, title: "Kindled Contract" },
+  { badge: "H8", colors: ["#621b1b", "#ef4444", "#fecaca"], description: "Clear a run at Heat 8 or higher.", id: "heat-eight-clear", metric: "highestHeat", target: 8, title: "Burning Contract" },
+  { badge: "H16", colors: ["#4c0519", "#e11d48", "#fecdd3"], description: "Clear a run at Heat 16 or higher.", id: "heat-sixteen-clear", metric: "highestHeat", target: 16, title: "Blazing Contract" },
+  { badge: "H32", colors: ["#2e1065", "#a855f7", "#f3e8ff"], description: "Clear a run at Heat 32 or higher.", id: "heat-thirty-two-clear", metric: "highestHeat", target: 32, title: "Infernal Contract" },
+  { badge: "HX", colors: ["#111827", "#f43f5e", "#fff1f2"], description: "Clear the highest challenge: Heat 64.", id: "heat-sixty-four-clear", metric: "highestHeat", target: 64, title: "No Escape Clause" },
+  { badge: "PR", colors: ["#271c4f", "#6f5bd6", "#d6d0ff"], description: "Add your first rank to the Pact of Conditions.", id: "first-pact-rank", metric: "pactRanks", target: 1, title: "Signed in Blood" },
+  { badge: "PC", colors: ["#3d1f13", "#ff8a3d", "#ffe1c8"], description: "Enable 5 different Pact conditions at once.", id: "pact-five-conditions", metric: "pactConditions", target: 5, title: "Fine Print" },
+  { badge: "PA", colors: ["#431414", "#c62626", "#ffd3d3"], description: "Enable every Pact condition at least once.", id: "pact-all-conditions", metric: "pactConditions", target: HEAT_CONDITION_DEFINITIONS.length, title: "Every Clause" },
+  { badge: "P64", colors: ["#020617", "#dc2626", "#fee2e2"], description: "Set the Pact to Heat 64 before entering a run.", id: "pact-sixty-four-set", metric: "currentHeat", target: 64, title: "Marked for Fire" },
+  { badge: "IU", colors: ["#1e3446", "#4aa3df", "#d1edff"], description: "Buy your first Mirror upgrade with insight.", id: "first-insight-upgrade", metric: "metaUpgrades", target: 1, title: "First Mirror Spark" },
+  { badge: "M10", colors: ["#12345b", "#5fa8ff", "#dbeafe"], description: "Buy 10 total Mirror ranks.", id: "mirror-ten-ranks", metric: "metaUpgrades", target: 10, title: "Polished Mirror" },
+  { badge: "MH", colors: ["#2c3340", "#8aa1c1", "#edf4ff"], description: "Buy half of all available Mirror ranks.", id: "mirror-half-lit", metric: "metaUpgrades", target: Math.ceil(getMaxMetaUpgradeRanks() / 2), title: "Half-Lit Mirror" },
+  { badge: "MU", colors: ["#2c2c32", "#9ca3af", "#f3f4f6"], description: "Buy every permanent Mirror rank.", id: "maxed-mirror", metric: "metaUpgrades", target: getMaxMetaUpgradeRanks(), title: "Maxed Mirror" },
+  { badge: "SR1", colors: ["#12391f", "#22c55e", "#bbf7d0"], description: "Unlock one starting relic from the Mirror.", id: "mirror-starter-relic", metric: "specificMetaUpgrade", target: 1, title: "Keepsake Drawer", upgrade: "starterRelics" },
+  { badge: "SR3", colors: ["#14532d", "#4ade80", "#dcfce7"], description: "Start runs with three Mirror relics.", id: "mirror-three-starters", metric: "specificMetaUpgrade", target: 3, title: "Loaded Departure", upgrade: "starterRelics" },
+  { badge: "LU", colors: ["#3d3106", "#f2c94c", "#fff9cf"], description: "Max the Mirror upgrade that improves relic rarity odds.", id: "mirror-luck-maxed", metric: "specificMetaUpgrade", target: getMetaUpgradeMaxRank("relicLuck"), title: "Fated Luck", upgrade: "relicLuck" },
+  { badge: "TS", colors: ["#213347", "#5fa8ff", "#d7ecff"], description: "Unlock hidden submission test visibility from the Mirror.", id: "mirror-test-sight", metric: "specificMetaUpgrade", target: 1, title: "Test Sight", upgrade: "revealSubmitTests" },
+  { badge: "DD", colors: ["#491818", "#ef4444", "#fecaca"], description: "Buy your first Mirror revive rank.", id: "mirror-death-defiance", metric: "specificMetaUpgrade", target: 1, title: "Death Defiance", upgrade: "deathDefiance" },
+  { badge: "DM", colors: ["#4c1d95", "#c084fc", "#f3e8ff"], description: "Max the Mirror revive ranks.", id: "mirror-defiance-maxed", metric: "specificMetaUpgrade", target: getMetaUpgradeMaxRank("deathDefiance"), title: "Stubborn Return", upgrade: "deathDefiance" },
   { badge: "IS", colors: ["#12391f", "#22c55e", "#bbf7d0"], description: "Hold 25 unspent insight.", id: "insight-stash", metric: "metaCurrency", target: 25, title: "Insight Stash" },
   { badge: "IM", colors: ["#16361f", "#4ade80", "#dcfce7"], description: "Earn 100 total insight across runs.", id: "insight-memory", metric: "metaTotalEarned", target: 100, title: "Insight Memory" },
-  { badge: "IB", colors: ["#12345b", "#5fa8ff", "#dbeafe"], description: "Earn 250 total insight across runs.", id: "insight-bank", metric: "metaTotalEarned", target: 250, title: "Insight Bank" },
-  { badge: "IR", colors: ["#35205f", "#a855f7", "#f3e8ff"], description: "Earn 500 total insight across runs.", id: "insight-reservoir", metric: "metaTotalEarned", target: 500, title: "Insight Reservoir" },
-  { badge: "IL", colors: ["#493713", "#eab308", "#fef3c7"], description: "Hold 100 unspent insight.", id: "insight-lord", metric: "metaCurrency", target: 100, title: "Insight Lord" },
-  { badge: "ST", colors: ["#491818", "#ef4444", "#fecaca"], description: "Reach 10 Strength.", id: "iron-strength", metric: "stat", stat: "strength", target: 10, title: "Iron Strength" },
-  { badge: "CN", colors: ["#1c3d2a", "#4ade80", "#bbf7d0"], description: "Reach 10 Constitution.", id: "stone-constitution", metric: "stat", stat: "constitution", target: 10, title: "Stone Constitution" },
-  { badge: "PE", colors: ["#18425a", "#38bdf8", "#cffafe"], description: "Reach 10 Perception.", id: "keen-perception", metric: "stat", stat: "perception", target: 10, title: "Keen Perception" },
-  { badge: "IN", colors: ["#31205f", "#8b5cf6", "#ede9fe"], description: "Reach 10 Intelligence.", id: "arcane-intelligence", metric: "stat", stat: "intelligence", target: 10, title: "Arcane Intelligence" },
-  { badge: "BB", colors: ["#233025", "#84cc16", "#ecfccb"], description: "Reach 10 in all four stats.", id: "balanced-build", metric: "allStats", target: 10, title: "Balanced Build" },
-  { badge: "GK", colors: ["#3d1111", "#f97316", "#ffedd5"], description: "Solve a question rated 3000 or higher.", id: "giant-killer", metric: "ratingSolved", target: TOP_RATING_TARGET, title: "Giant Killer" }
+  { badge: "IV", colors: ["#35205f", "#a855f7", "#f3e8ff"], description: "Earn 500 total insight across runs.", id: "insight-vault", metric: "metaTotalEarned", target: 500, title: "Insight Vault" },
+  { badge: "FR", colors: ["#33302a", "#b7a37a", "#fff0c4"], description: "Claim your first relic in a run.", id: "first-relic", metric: "relics", target: 1, title: "First Relic" },
+  { badge: "RC", colors: ["#3c3120", "#c19a55", "#ffe2aa"], description: "Carry 10 relics in one run.", id: "relic-collector", metric: "relics", target: 10, title: "Relic Collector" },
+  { badge: "RS", colors: ["#4c3514", "#d59c35", "#ffe9bc"], description: "Carry 20 relics in one run.", id: "relic-storm", metric: "relics", target: 20, title: "Relic Storm" },
+  { badge: "UR", colors: ["#45206a", "#c084fc", "#f3e8ff"], description: "Carry a unique relic.", id: "unique-relic", metric: "relicRarity", rarity: "unique", target: 1, title: "Unique Spark" },
+  { badge: "BR", colors: ["#4a0711", "#ef233c", "#ffd1d8"], description: "Carry a boss relic.", id: "boss-relic", metric: "relicRarity", rarity: "boss", target: 1, title: "Boss Trophy" },
+  { badge: "SH", colors: ["#0c4a6e", "#38bdf8", "#e0f2fe"], description: "Carry a shop relic from a merchant.", id: "shop-relic", metric: "relicRarity", rarity: "shop", target: 1, title: "Merchant's Mark" },
+  { badge: "ER", colors: ["#3b1b58", "#b674ff", "#eadcff"], description: "Carry an event relic from an event room.", id: "event-relic", metric: "relicRarity", rarity: "event", target: 1, title: "Strange Bargain" },
+  { badge: "BL", colors: ["#1f2937", "#60a5fa", "#dbeafe"], description: "Accept a blight relic.", id: "first-blight", metric: "relicRarity", rarity: "blight", target: 1, title: "Cursed Choice" },
+  { badge: "B3", colors: ["#0f172a", "#38bdf8", "#cffafe"], description: "Carry three blight relics in one run.", id: "blight-stack", metric: "relicRarity", rarity: "blight", target: 3, title: "Blight Stack" }
 ];
 
 export function getAchievements(state: StudyState): Achievement[] {
@@ -113,17 +125,21 @@ function isAchievementUnlocked(definition: AchievementDefinition, state: StudySt
 
 function getAchievementSummary(state: StudyState) {
   const profile = getProfileStats(state);
-  const stats = getEffectiveCharacterStats(state);
+  const currentHeat = getHeatLevel(state.profile.spireRun.heatConditions);
   return {
+    actReached: state.profile.spireRun.act,
+    currentHeat,
     highestSolvedRating: getHighestSolvedRating(state),
-    level: getLevelProgress(state).level,
+    highestHeat: Math.max(state.profile.metaProgress.highestHeat || 0, currentHeat),
+    heatUnlocked: state.profile.metaProgress.heatUnlocked ? 1 : 0,
     metaTotalEarned: state.profile.metaProgress.totalEarned,
     metaCurrency: state.profile.metaProgress.currency,
     metaUpgrades: getPurchasedMetaUpgradeRanks(state),
+    pactConditions: getActivePactConditionCount(state),
+    pactRanks: getPactRankCount(state),
     profile,
     relics: state.profile.relics,
     state,
-    stats
   };
 }
 
@@ -132,19 +148,27 @@ function getAchievementCurrent(definition: AchievementDefinition, summary: Retur
 }
 
 const METRIC_READERS: Record<AchievementMetric, MetricReader> = {
-  allStats: (_definition, summary) => Math.min(summary.stats.strength, summary.stats.constitution, summary.stats.perception, summary.stats.intelligence),
+  actReached: (_definition, summary) => summary.actReached,
+  allStats: (_definition, _summary) => 0,
   coins: (_definition, summary) => summary.state.profile.coins,
+  currentHeat: (_definition, summary) => summary.currentHeat,
   defeats: (_definition, summary) => summary.state.totalCorrect,
+  heatUnlocked: (_definition, summary) => summary.heatUnlocked,
+  highestHeat: (_definition, summary) => summary.highestHeat,
   hints: (_definition, summary) => summary.state.profile.hintsBought,
-  level: (_definition, summary) => summary.level,
+  level: (_definition, _summary) => 0,
   mastered: (_definition, summary) => summary.profile.mastered,
   metaCurrency: (_definition, summary) => summary.metaCurrency,
   metaTotalEarned: (_definition, summary) => summary.metaTotalEarned,
   metaUpgrades: (_definition, summary) => summary.metaUpgrades,
+  pactConditions: (_definition, summary) => summary.pactConditions,
+  pactRanks: (_definition, summary) => summary.pactRanks,
   ratingSolved: (_definition, summary) => summary.highestSolvedRating,
+  relicRarity: (definition, summary) => definition.rarity ? summary.relics.filter((relic) => relic.rarity === definition.rarity).length : 0,
   relics: (_definition, summary) => summary.relics.length,
   solved: (_definition, summary) => summary.profile.solved,
-  stat: (definition, summary) => definition.stat ? summary.stats[definition.stat] : 0,
+  specificMetaUpgrade: (definition, summary) => definition.upgrade ? summary.state.profile.metaProgress.upgrades[definition.upgrade] || 0 : 0,
+  stat: (_definition, _summary) => 0,
   streak: (_definition, summary) => summary.state.streak
 };
 
@@ -154,6 +178,18 @@ function getPurchasedMetaUpgradeRanks(state: StudyState) {
 
 function getMaxMetaUpgradeRanks() {
   return META_UPGRADE_DEFINITIONS.reduce((sum, upgrade) => sum + upgrade.maxRank, 0);
+}
+
+function getMetaUpgradeMaxRank(id: MetaUpgradeId) {
+  return META_UPGRADE_DEFINITIONS.find((upgrade) => upgrade.id === id)?.maxRank || 0;
+}
+
+function getPactRankCount(state: StudyState) {
+  return Object.values(state.profile.spireRun.heatConditions).reduce((sum, rank) => sum + Math.max(0, Math.floor(rank || 0)), 0);
+}
+
+function getActivePactConditionCount(state: StudyState) {
+  return Object.values(state.profile.spireRun.heatConditions).filter((rank) => Math.max(0, Math.floor(rank || 0)) > 0).length;
 }
 
 function getHighestSolvedRating(state: StudyState) {

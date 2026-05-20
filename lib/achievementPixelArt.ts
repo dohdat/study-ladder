@@ -22,7 +22,7 @@ const ACCENT_PIXEL = "A";
 type Pixel = "." | "O" | "M" | typeof LIGHT_PIXEL | typeof ACCENT_PIXEL;
 type Sprite = Pixel[][];
 
-const BASE_SPRITES: Record<Achievement["metric"], string[]> = {
+const BASE_SPRITES: Partial<Record<Achievement["metric"], string[]>> = {
   allStats: [
     "..........",
     "..OOOOOO..",
@@ -194,7 +194,7 @@ const BASE_SPRITES: Record<Achievement["metric"], string[]> = {
 };
 
 export function getAchievementPixelArt(achievement: Achievement) {
-  const sprite = cloneSprite(BASE_SPRITES[achievement.metric]);
+  const sprite = cloneSprite((BASE_SPRITES[achievement.metric] || BASE_SPRITES.solved) as string[]);
   addAchievementDecorations(sprite, achievement);
   addAchievementSignature(sprite, achievement);
   return sprite.map((row) => row.join(""));
