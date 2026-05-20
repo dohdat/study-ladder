@@ -2701,6 +2701,276 @@ const EXTERNAL_RATED_QUESTION_SEEDS: ExternalRatedQuestionSeed[] = [
     starterArgs: "nums",
     title: "Maximum Circular Subarray Sum",
     topics: ["Arrays", "Dynamic Programming"]
+  },
+  {
+    cases: makeCases([[[1, 0, 1, 0, 1], 2], [[0, 0, 0, 0, 0], 0], [[1, 1, 1], 2], [[1, 0, 0, 1, 0], 1], [[0, 1, 1, 0, 1], 2], [[1], 1], [[0], 1], [[1, 0, 1, 0, 0, 1], 2], [[0, 1, 0, 1, 0], 0], [[1, 1, 0, 1, 0, 1], 3]], "counts binary subarrays"),
+    constraints: ["nums contains only 0 and 1.", "goal is a non-negative integer.", "Count contiguous subarrays whose sum equals goal."],
+    difficulty: 3,
+    examples: [
+      { input: "nums = [1,0,1,0,1], goal = 2", output: "4", explanation: "Four windows contain exactly two ones after the zero padding is considered." },
+      { input: "nums = [0,0,0,0,0], goal = 0", output: "15", explanation: "Every non-empty subarray has sum zero." }
+    ],
+    functionName: "countBinarySubarraysWithSum",
+    id: "external-binary-subarrays-with-sum",
+    prompt: "Return how many contiguous subarrays in the binary array have sum exactly equal to goal.",
+    rating: 1592,
+    source: { dislikes: 169, likes: 4906, slug: "binary-subarrays-with-sum" },
+    solver: (args) => countBinarySubarraysWithSum(args[0] as number[], args[1] as number),
+    starterArgs: "nums, goal",
+    title: "Binary Subarrays With Target Sum",
+    topics: ["Hash Map", "Sliding Window", "Prefix Sum"]
+  },
+  {
+    cases: makeCases([["abcd", "cdab", 2], ["aabbcc", "bbaacc", 3], ["abcd", "acbd", 2], ["leetcode", "codeleet", 2], ["aaaa", "aaaa", 4], ["abcabc", "abcabc", 3], ["abcabc", "bcabca", 3], ["xyzxyz", "zxyxyz", 2], ["abab", "baba", 2], ["abcdef", "fedcba", 3]], "checks chunk rearrangement"),
+    constraints: ["s and target have the same length.", "k must divide the string length.", "Only whole equal-length chunks may be rearranged."],
+    difficulty: 3,
+    examples: [
+      { input: 's = "abcd", target = "cdab", k = 2', output: "true", explanation: "Split into ab and cd, then swap the two chunks." },
+      { input: 's = "abcd", target = "acbd", k = 2', output: "false", explanation: "The target chunks ac and bd are not the same multiset as ab and cd." }
+    ],
+    functionName: "canRearrangeKSubstrings",
+    id: "external-rearrange-k-substrings",
+    prompt: "Split both strings into k equal-length chunks and return true when s chunks can be rearranged to form target.",
+    rating: 1514,
+    source: { dislikes: 7, likes: 89, slug: "rearrange-k-substrings-to-form-target-string" },
+    solver: (args) => canRearrangeKSubstrings(args[0] as string, args[1] as string, args[2] as number),
+    starterArgs: "s, target, k",
+    title: "Rearrange K Substrings",
+    topics: ["Hash Map", "Strings", "Sorting"]
+  },
+  {
+    cases: makeCases([[[4, 3, 1, 2, 4]], [[1, 10, 4]], [[0, 0, 0]], [[5, 5, 5, 5]], [[2, 3, 1, 6, 7]], [[7]], [[1, 2, 3, 4, 5]], [[8, 1, 9, 1, 8]], [[6, 6, 6]], [[10, 20, 30, 40]]], "counts beautiful subarrays"),
+    constraints: ["Values are non-negative integers.", "A beautiful subarray has bitwise xor equal to 0.", "Return the number of contiguous beautiful subarrays."],
+    difficulty: 3,
+    examples: [
+      { input: "nums = [4,3,1,2,4]", output: "2", explanation: "The zero-xor windows are [3,1,2] and the full array." },
+      { input: "nums = [1,10,4]", output: "0", explanation: "No contiguous window has xor zero." }
+    ],
+    functionName: "countBeautifulSubarrays",
+    id: "external-beautiful-subarrays",
+    prompt: "Return the number of contiguous subarrays whose bitwise xor is zero.",
+    rating: 1697,
+    source: { dislikes: 23, likes: 563, slug: "count-the-number-of-beautiful-subarrays" },
+    solver: (args) => countBeautifulSubarrays(args[0] as number[]),
+    starterArgs: "nums",
+    title: "Beautiful Zero-Xor Subarrays",
+    topics: ["Hash Map", "Bit Manipulation", "Prefix"]
+  },
+  {
+    cases: makeCases([[[12, 33, 4, 56, 22, 2, 34, 33, 22, 12, 34], [[1, 2, 4], [0, 11, 33], [0, 5, 22]]], [[1, 1, 1, 2, 2], [[0, 2, 1], [2, 4, 1], [0, 4, 2]]], [[5], [[0, 0, 5], [0, 0, 4]]], [[3, 4, 3, 4, 3], [[0, 4, 3], [1, 3, 4], [2, 2, 3]]], [[7, 8, 9, 7, 8, 9], [[0, 5, 9], [1, 4, 7]]], [[2, 2, 2, 2], [[1, 2, 2], [0, 3, 3]]], [[10, 20, 10, 30, 10], [[0, 4, 10], [2, 3, 10]]], [[1, 2, 3], [[0, 2, 4], [1, 1, 2]]], [[6, 6, 7, 7, 6, 7], [[0, 5, 6], [2, 5, 7]]], [[9, 1, 9, 1, 9], [[0, 4, 1], [1, 3, 9]]]], "answers range frequencies"),
+    constraints: ["Each query is [left, right, value].", "left and right are inclusive indexes.", "Return one frequency per query."],
+    difficulty: 3,
+    examples: [
+      { input: "arr = [12,33,4,56,22,2,34,33,22,12,34], queries = [[1,2,4],[0,11,33],[0,5,22]]", output: "[1,2,1]", explanation: "Each answer counts the requested value only inside the inclusive range." },
+      { input: "arr = [1,1,1,2,2], queries = [[0,2,1],[2,4,1],[0,4,2]]", output: "[3,1,2]", explanation: "The index lists for 1 and 2 make each range count direct." }
+    ],
+    functionName: "rangeFrequencyValues",
+    id: "external-range-frequency-queries",
+    prompt: "For each query, count how many times value appears between left and right inclusive.",
+    rating: 1702,
+    source: { dislikes: 29, likes: 756, slug: "range-frequency-queries" },
+    solver: (args) => rangeFrequencyValues(args[0] as number[], args[1] as Array<[number, number, number]>),
+    starterArgs: "arr, queries",
+    title: "Range Frequency Queries",
+    topics: ["Hash Map", "Binary Search", "Design"]
+  },
+  {
+    cases: makeCases([["1-2--3--4-5--6--7"], ["1-401--349---90--88"], ["10"], ["5-3--2--4-8--7--9"], ["1-2--3---4-5"], ["7-6--5---4----3"], ["9-8-7"], ["12-7--3--9-20--15--25"], ["1-2--3---4----5-6"], ["4-2--1--3-6--5--7"]], "recovers preorder tree"),
+    constraints: ["Traversal uses dashes to mark depth.", "Node values are positive integers.", "Return the recovered tree as trimmed level-order values."],
+    difficulty: 4,
+    examples: [
+      { input: 'traversal = "1-2--3--4-5--6--7"', output: "[1,2,5,3,4,6,7]", explanation: "Dash depth places 2 and 5 under 1, then their depth-two children fill the next level." },
+      { input: 'traversal = "1-401--349---90--88"', output: "[1,401,null,349,88,90]", explanation: "The depth-three value 90 becomes the left child of 349 before 88 closes that branch." }
+    ],
+    functionName: "recoverPreorderLevelValues",
+    id: "external-recover-tree-preorder",
+    prompt: "Recover the binary tree encoded by preorder depth markers and return its trimmed level-order values.",
+    rating: 1797,
+    source: { dislikes: 70, likes: 2296, slug: "recover-a-tree-from-preorder-traversal" },
+    solver: (args) => recoverPreorderLevelValues(args[0] as string),
+    starterArgs: "traversal",
+    title: "Recover Preorder Tree",
+    topics: ["Trees", "DFS", "Strings"]
+  },
+  {
+    cases: makeCases([[[5, 1, 2, 3, null, 6, 4], 3, 6], [[2, 1], 2, 1], [[1, 2, 3, 4], 4, 3], [[1, 2, 3, null, 4, 5, 6], 4, 6], [[10, 5, 15, 3, 7, 12, 18], 3, 18], [[7, 3, 9, 1, 5, 8, 10], 5, 8], [[1, null, 2, null, 3], 3, 2], [[4, 2, 6, 1, 3, 5, 7], 1, 7], [[8, 4, 12, 2, 6, 10, 14, null, 3], 3, 10], [[6, 2, 8, 1, 4, 7, 9, null, null, 3, 5], 5, 7]], "finds tree directions"),
+    constraints: ["root is a level-order array with null for missing children.", "startValue and destValue exist in the tree.", "Return a string made from U, L, and R."],
+    difficulty: 4,
+    examples: [
+      { input: "root = [5,1,2,3,null,6,4], startValue = 3, destValue = 6", output: "UURL", explanation: "Move up from 3 to 5, then go right to 2 and left to 6." },
+      { input: "root = [2,1], startValue = 2, destValue = 1", output: "L", explanation: "The destination is the left child of the starting node." }
+    ],
+    functionName: "directionsBetweenTreeNodes",
+    id: "external-step-directions-tree",
+    prompt: "Return the directions needed to travel from startValue to destValue in the given binary tree.",
+    rating: 1805,
+    source: { dislikes: 171, likes: 3272, slug: "step-by-step-directions-from-a-binary-tree-node-to-another" },
+    solver: (args) => directionsBetweenTreeNodes(args[0] as Array<number | null>, args[1] as number, args[2] as number),
+    starterArgs: "root, startValue, destValue",
+    title: "Directions Between Tree Nodes",
+    topics: ["Trees", "DFS", "Strings"]
+  },
+  {
+    cases: makeCases([[1], [2], [3], [5], [7], [9], [11], [13], [15], [17]], "counts full binary trees"),
+    constraints: ["A full binary tree node has either zero or two children.", "Return the number of possible shapes for n nodes.", "Even n has no valid full binary tree."],
+    difficulty: 4,
+    examples: [
+      { input: "n = 7", output: "5", explanation: "Splitting the remaining six nodes between left and right subtrees produces five ordered shapes." },
+      { input: "n = 2", output: "0", explanation: "Two nodes cannot make every internal node have exactly two children." }
+    ],
+    functionName: "countFullBinaryTreeShapes",
+    id: "external-full-binary-tree-count",
+    prompt: "Return how many ordered full binary tree shapes can be built with exactly n nodes.",
+    rating: 1784,
+    source: { dislikes: 369, likes: 5262, slug: "all-possible-full-binary-trees" },
+    solver: (args) => countFullBinaryTreeShapes(args[0] as number),
+    starterArgs: "n",
+    title: "Full Binary Tree Shape Count",
+    topics: ["Trees", "Dynamic Programming", "Recursion"]
+  },
+  {
+    cases: makeCases([[[[1, 1, 1, 0, 0], [0, 1, 1, 1, 1], [0, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 0, 1, 1]], [[1, 1, 1, 0, 0], [0, 0, 1, 1, 1], [0, 1, 0, 0, 0], [1, 0, 1, 1, 0], [0, 1, 0, 1, 0]]], [[[1]], [[1]]], [[[1]], [[0]]], [[[1, 0], [0, 1]], [[1, 0], [0, 1]]], [[[1, 0], [0, 1]], [[1, 1], [0, 1]]], [[[1, 1, 0], [1, 1, 0], [0, 0, 1]], [[1, 0, 0], [1, 1, 0], [0, 0, 1]]], [[[1, 1, 1], [1, 0, 1], [1, 1, 1]], [[0, 1, 0], [1, 1, 1], [0, 1, 0]]], [[[0, 0], [0, 0]], [[1, 0], [0, 1]]], [[[1, 1, 1, 1]], [[1, 1, 0, 1]]], [[[1, 0, 1], [1, 1, 1]], [[1, 0, 1], [0, 1, 1]]]], "counts sub-islands"),
+    constraints: ["grid1 and grid2 have the same dimensions.", "Cells use 1 for land and 0 for water.", "A grid2 island counts only when every cell is land in grid1."],
+    difficulty: 3,
+    examples: [
+      { input: "grid1 = [[1,1,1,0,0],[0,1,1,1,1],[0,0,0,0,0],[1,0,0,0,0],[1,1,0,1,1]], grid2 = [[1,1,1,0,0],[0,0,1,1,1],[0,1,0,0,0],[1,0,1,1,0],[0,1,0,1,0]]", output: "3", explanation: "Three grid2 islands are fully covered by land in grid1." },
+      { input: "grid1 = [[1]], grid2 = [[0]]", output: "0", explanation: "There is no land island to count in grid2." }
+    ],
+    functionName: "countSubIslands",
+    id: "external-count-sub-islands",
+    prompt: "Count islands in grid2 that are entirely contained inside land cells of grid1.",
+    rating: 1679,
+    source: { dislikes: 92, likes: 2656, slug: "count-sub-islands" },
+    solver: (args) => countSubIslands(args[0] as number[][], args[1] as number[][]),
+    starterArgs: "grid1, grid2",
+    title: "Count Sub Islands",
+    topics: ["Graphs", "DFS", "Grid"]
+  },
+  {
+    cases: makeCases([[3, [[1, 2], [1, 0], [2, 0]], [[1, 0], [1, 2]]], [2, [[1, 0]], [[0, 1], [1, 0]]], [5, [[0, 1], [1, 2], [2, 3], [3, 4]], [[0, 4], [1, 3], [3, 0]]], [4, [], [[0, 1], [2, 3]]], [4, [[0, 1], [2, 3]], [[0, 1], [2, 3], [0, 3]]], [6, [[0, 2], [2, 4], [1, 3], [3, 5]], [[0, 4], [1, 5], [0, 5]]], [3, [[0, 1], [1, 2], [0, 2]], [[0, 2], [2, 0]]], [5, [[1, 2], [2, 4], [1, 3], [3, 4]], [[1, 4], [2, 3]]], [1, [], [[0, 0]]], [4, [[0, 2], [1, 2], [2, 3]], [[0, 3], [1, 3], [3, 0]]]], "answers prerequisite queries"),
+    constraints: ["Courses are numbered from 0 to numCourses - 1.", "Each prerequisite is [before, after].", "Return one boolean per query."],
+    difficulty: 4,
+    examples: [
+      { input: "numCourses = 3, prerequisites = [[1,2],[1,0],[2,0]], queries = [[1,0],[1,2]]", output: "[true,true]", explanation: "Course 1 reaches both 2 and 0 through the prerequisite graph." },
+      { input: "numCourses = 2, prerequisites = [[1,0]], queries = [[0,1],[1,0]]", output: "[false,true]", explanation: "The only known dependency direction is 1 before 0." }
+    ],
+    functionName: "courseSchedulePrerequisites",
+    id: "external-course-schedule-iv",
+    prompt: "For each query, return whether the first course is a prerequisite of the second course.",
+    rating: 1693,
+    source: { dislikes: 94, likes: 2149, slug: "course-schedule-iv" },
+    solver: (args) => courseSchedulePrerequisites(args[0] as number, args[1] as Array<[number, number]>, args[2] as Array<[number, number]>),
+    starterArgs: "numCourses, prerequisites, queries",
+    title: "Course Schedule Prerequisite Queries",
+    topics: ["Graphs", "Topological Sort", "DFS"]
+  },
+  {
+    cases: makeCases([[3, [[1, 3], [2, 3]]], [3, [[1, 2], [2, 3], [3, 1]]], [5, [[1, 5], [2, 5], [3, 5], [3, 4], [4, 5]]], [1, []], [2, [[1, 2]]], [4, [[1, 2], [1, 3], [3, 4]]], [4, [[1, 2], [2, 4], [1, 3], [3, 4]]], [6, [[1, 4], [2, 4], [3, 5], [5, 6]]], [5, []], [4, [[1, 2], [2, 3], [1, 3], [3, 4]]]], "computes minimum semesters"),
+    constraints: ["Courses are numbered from 1 to n.", "Each relation is [before, after].", "Return -1 when a cycle prevents completion."],
+    difficulty: 4,
+    examples: [
+      { input: "n = 3, relations = [[1,3],[2,3]]", output: "2", explanation: "Take courses 1 and 2 first, then course 3." },
+      { input: "n = 3, relations = [[1,2],[2,3],[3,1]]", output: "-1", explanation: "The cycle means no course order can finish all classes." }
+    ],
+    functionName: "minimumCourseSemesters",
+    id: "external-parallel-courses",
+    prompt: "Return the minimum number of semesters needed when any number of currently available courses may be taken together.",
+    rating: 1710,
+    source: { dislikes: 27, likes: 1225, slug: "parallel-courses" },
+    solver: (args) => minimumCourseSemesters(args[0] as number, args[1] as Array<[number, number]>),
+    starterArgs: "n, relations",
+    title: "Parallel Courses",
+    topics: ["Graphs", "Topological Sort", "BFS"]
+  },
+  {
+    cases: makeCases([[[1, 2, 3, 1, 2, 3, 1, 2], 2], [[1, 2, 1, 2, 1, 2, 1], 1], [[5, 5, 5, 5], 2], [[1, 2, 3, 4], 1], [[1, 1, 2, 2, 3, 3], 2], [[4, 4, 4, 1, 2, 3], 2], [[7], 1], [[1, 2, 1, 3, 1, 4, 1], 2], [[2, 3, 2, 3, 2, 3], 3], [[9, 8, 9, 8, 7, 7, 7], 2]], "finds longest capped-frequency window"),
+    constraints: ["k is at least 1.", "Each distinct value may appear at most k times in the chosen subarray.", "Return the longest valid window length."],
+    difficulty: 3,
+    examples: [
+      { input: "nums = [1,2,3,1,2,3,1,2], k = 2", output: "6", explanation: "The first six numbers keep each value at most twice." },
+      { input: "nums = [1,2,1,2,1,2,1], k = 1", output: "2", explanation: "Any longer window repeats either 1 or 2." }
+    ],
+    functionName: "longestSubarrayAtMostKFrequency",
+    id: "external-longest-subarray-at-most-k-frequency",
+    prompt: "Return the length of the longest contiguous subarray where no value appears more than k times.",
+    rating: 1535,
+    source: { dislikes: 37, likes: 1197, slug: "length-of-longest-subarray-with-at-most-k-frequency" },
+    solver: (args) => longestSubarrayAtMostKFrequency(args[0] as number[], args[1] as number),
+    starterArgs: "nums, k",
+    title: "Longest Subarray With Capped Frequency",
+    topics: ["Sliding Window", "Hash Map", "Counting"]
+  },
+  {
+    cases: makeCases([[[8, 2, 4, 7], 4], [[10, 1, 2, 4, 7, 2], 5], [[4, 2, 2, 2, 4, 4, 2, 2], 0], [[1, 5, 6, 7, 8, 10, 6, 5, 6], 4], [[1], 0], [[1, 2, 3, 4], 3], [[1, 10, 1, 10], 0], [[6, 6, 6], 0], [[3, 1, 2, 5, 4], 2], [[9, 7, 5, 3, 1], 4]], "finds limited-difference window"),
+    constraints: ["Return a window length.", "The chosen subarray must have max minus min at most limit.", "Use contiguous elements only."],
+    difficulty: 4,
+    examples: [
+      { input: "nums = [8,2,4,7], limit = 4", output: "2", explanation: "The window [2,4] has max-min equal to 2, while longer windows exceed the limit." },
+      { input: "nums = [10,1,2,4,7,2], limit = 5", output: "4", explanation: "The window [2,4,7,2] stays within a spread of 5." }
+    ],
+    functionName: "longestContinuousLimitedSubarray",
+    id: "external-longest-continuous-limited-subarray",
+    prompt: "Return the longest contiguous subarray length whose maximum and minimum differ by at most limit.",
+    rating: 1672,
+    source: { dislikes: 229, likes: 4533, slug: "longest-continuous-subarray-with-absolute-diff-less-than-or-equal-to-limit" },
+    solver: (args) => longestContinuousLimitedSubarray(args[0] as number[], args[1] as number),
+    starterArgs: "nums, limit",
+    title: "Longest Limited-Difference Subarray",
+    topics: ["Sliding Window", "Heap", "Queues"]
+  },
+  {
+    cases: makeCases([[[[5, 10], [6, 8], [1, 5], [2, 3], [1, 10]]], [[[1, 3], [5, 6], [8, 10], [11, 13]]], [[[1, 2], [2, 3], [3, 4]]], [[[1, 10]]], [[[1, 4], [2, 5], [7, 9]]], [[[3, 6], [1, 2], [2, 4], [8, 9]]], [[[1, 100], [2, 3], [4, 5], [6, 7]]], [[[10, 20], [1, 5], [6, 9], [9, 11]]], [[[1, 1], [1, 1], [2, 2]]], [[[4, 6], [6, 8], [8, 10], [1, 3]]]], "groups overlapping intervals"),
+    constraints: ["Intervals are closed and inclusive.", "Intervals in the same group must not overlap.", "Return the minimum number of groups needed."],
+    difficulty: 3,
+    examples: [
+      { input: "intervals = [[5,10],[6,8],[1,5],[2,3],[1,10]]", output: "3", explanation: "At most three closed intervals overlap at the same time." },
+      { input: "intervals = [[1,3],[5,6],[8,10],[11,13]]", output: "1", explanation: "No intervals overlap, so one group can hold them all." }
+    ],
+    functionName: "minIntervalGroups",
+    id: "external-divide-intervals-groups",
+    prompt: "Return the fewest groups needed so no two intervals in a group overlap.",
+    rating: 1713,
+    source: { dislikes: 43, likes: 1469, slug: "divide-intervals-into-minimum-number-of-groups" },
+    solver: (args) => minIntervalGroups(args[0] as Array<[number, number]>),
+    starterArgs: "intervals",
+    title: "Minimum Interval Groups",
+    topics: ["Heap", "Intervals", "Sorting"]
+  },
+  {
+    cases: makeCases([[2, [[0, 10], [1, 5], [2, 7], [3, 4]]], [3, [[1, 20], [2, 10], [3, 5], [4, 9], [6, 8]]], [1, [[0, 5], [1, 2], [2, 3]]], [2, [[0, 1], [1, 2], [2, 3], [3, 4]]], [3, [[0, 5], [0, 4], [0, 3]]], [4, [[1, 3], [2, 4], [3, 5], [4, 6], [5, 7]]], [2, [[5, 10], [6, 8], [7, 12]]], [3, [[0, 2], [1, 3], [2, 4], [3, 5], [4, 6]]], [2, [[0, 100], [1, 2], [2, 3], [3, 4]]], [4, [[10, 20], [11, 12], [12, 13], [13, 14], [14, 15]]]], "finds busiest room"),
+    constraints: ["Rooms are numbered from 0 to n - 1.", "Use the smallest available room number.", "When all rooms are busy, delay the meeting until the earliest room frees."],
+    difficulty: 4,
+    examples: [
+      { input: "n = 2, meetings = [[0,10],[1,5],[2,7],[3,4]]", output: "0", explanation: "Room 0 hosts the most meetings after delayed assignments are applied." },
+      { input: "n = 1, meetings = [[0,5],[1,2],[2,3]]", output: "0", explanation: "Only room 0 exists, so every meeting eventually uses it." }
+    ],
+    functionName: "mostBookedMeetingRoom",
+    id: "external-meeting-rooms-iii",
+    prompt: "Simulate room assignment and return the room number that hosts the most meetings.",
+    rating: 2093,
+    source: { dislikes: 141, likes: 2498, slug: "meeting-rooms-iii" },
+    solver: (args) => mostBookedMeetingRoom(args[0] as number, args[1] as Array<[number, number]>),
+    starterArgs: "n, meetings",
+    title: "Most Booked Meeting Room",
+    topics: ["Heap", "Sorting", "Simulation"]
+  },
+  {
+    cases: makeCases([[[5, 2, 6, 3, 9, 1, 7, 3, 8, 4]], [[1, 1, 0, 6]], [[1, 2, 3, 4, 5]], [[1]], [[1, 2]], [[1, 2, 3]], [[1, 2, 3, 4]], [[10, 20, 30, 40, 50, 60]], [[7, 6, 5, 4, 3, 2, 1]], [[3, 1, 4, 1, 5, 9, 2]]], "reverses even node groups"),
+    constraints: ["The input is the linked-list values in order.", "Group sizes increase as 1, 2, 3, and so on.", "Reverse only groups whose actual length is even."],
+    difficulty: 4,
+    examples: [
+      { input: "values = [5,2,6,3,9,1,7,3,8,4]", output: "[5,6,2,3,9,1,4,8,3,7]", explanation: "Groups of lengths 2 and 4 are reversed, while odd-length groups keep their order." },
+      { input: "values = [1,1,0,6]", output: "[1,0,1,6]", explanation: "The second group has length two, then the last one-node group remains unchanged." }
+    ],
+    functionName: "reverseEvenLengthGroups",
+    id: "external-reverse-even-length-groups",
+    prompt: "Given linked-list values, group nodes by increasing group size and reverse each group whose actual length is even.",
+    rating: 1685,
+    source: { dislikes: 376, likes: 894, slug: "reverse-nodes-in-even-length-groups" },
+    solver: (args) => reverseEvenLengthGroups(args[0] as number[]),
+    starterArgs: "values",
+    title: "Reverse Even-Length Node Groups",
+    topics: ["Linked Lists", "Arrays", "Simulation"]
   }
 ];
 
@@ -5471,6 +5741,357 @@ function maxCircularSubarraySum(nums: number[]) {
 
 function makeCases(argsList: unknown[][], label: string): TestInput[] {
   return argsList.map((args, index) => ({ args, name: `${label} ${index + 1}` }));
+}
+
+function countBinarySubarraysWithSum(nums: number[], goal: number) {
+  const prefixCounts = new Map([[0, 1]]);
+  let prefix = 0;
+  let total = 0;
+  for (const num of nums) {
+    prefix += num;
+    total += prefixCounts.get(prefix - goal) || 0;
+    prefixCounts.set(prefix, (prefixCounts.get(prefix) || 0) + 1);
+  }
+  return total;
+}
+
+function canRearrangeKSubstrings(s: string, target: string, k: number) {
+  if (s.length !== target.length || k <= 0 || s.length % k !== 0) {
+    return false;
+  }
+  const chunkLength = s.length / k;
+  const counts = new Map<string, number>();
+  for (let index = 0; index < s.length; index += chunkLength) {
+    const chunk = s.slice(index, index + chunkLength);
+    counts.set(chunk, (counts.get(chunk) || 0) + 1);
+  }
+  for (let index = 0; index < target.length; index += chunkLength) {
+    const chunk = target.slice(index, index + chunkLength);
+    const count = counts.get(chunk) || 0;
+    if (!count) {
+      return false;
+    }
+    count === 1 ? counts.delete(chunk) : counts.set(chunk, count - 1);
+  }
+  return counts.size === 0;
+}
+
+function countBeautifulSubarrays(nums: number[]) {
+  const prefixCounts = new Map([[0, 1]]);
+  let xor = 0;
+  let total = 0;
+  for (const num of nums) {
+    xor ^= num;
+    total += prefixCounts.get(xor) || 0;
+    prefixCounts.set(xor, (prefixCounts.get(xor) || 0) + 1);
+  }
+  return total;
+}
+
+function rangeFrequencyValues(arr: number[], queries: Array<[number, number, number]>) {
+  const positions = new Map<number, number[]>();
+  arr.forEach((value, index) => {
+    if (!positions.has(value)) {
+      positions.set(value, []);
+    }
+    positions.get(value)?.push(index);
+  });
+  return queries.map(([left, right, value]) => {
+    const indexes = positions.get(value) || [];
+    return lowerBound(indexes, right + 1) - lowerBound(indexes, left);
+  });
+}
+
+function recoverPreorderLevelValues(traversal: string) {
+  const stack: Array<{ depth: number; node: TreeNode }> = [];
+  let index = 0;
+  let root: TreeNode | null = null;
+  while (index < traversal.length) {
+    let depth = 0;
+    while (traversal[index] === "-") {
+      depth += 1;
+      index += 1;
+    }
+    let value = 0;
+    while (index < traversal.length && traversal[index] !== "-") {
+      value = value * 10 + Number(traversal[index]);
+      index += 1;
+    }
+    const node: TreeNode = { val: value, left: null, right: null };
+    while (stack.length > depth) {
+      stack.pop();
+    }
+    const parent = stack[stack.length - 1]?.node;
+    if (!parent) {
+      root = node;
+    } else if (!parent.left) {
+      parent.left = node;
+    } else {
+      parent.right = node;
+    }
+    stack.push({ depth, node });
+  }
+  return serializeLevelOrder(root);
+}
+
+function directionsBetweenTreeNodes(rootValues: Array<number | null>, startValue: number, destValue: number) {
+  const root = buildTreeFromLevelOrder(rootValues);
+  const startPath: string[] = [];
+  const destPath: string[] = [];
+  findTreePath(root, startValue, startPath);
+  findTreePath(root, destValue, destPath);
+  let shared = 0;
+  while (shared < startPath.length && shared < destPath.length && startPath[shared] === destPath[shared]) {
+    shared += 1;
+  }
+  return "U".repeat(startPath.length - shared) + destPath.slice(shared).join("");
+}
+
+function countFullBinaryTreeShapes(n: number) {
+  if (n % 2 === 0) {
+    return 0;
+  }
+  const ways = Array(n + 1).fill(0);
+  ways[1] = 1;
+  for (let nodes = 3; nodes <= n; nodes += 2) {
+    for (let left = 1; left < nodes; left += 2) {
+      ways[nodes] += ways[left] * ways[nodes - 1 - left];
+    }
+  }
+  return ways[n];
+}
+
+function countSubIslands(grid1: number[][], grid2: number[][]) {
+  const rows = grid2.length;
+  const columns = grid2[0]?.length || 0;
+  const seen = Array.from({ length: rows }, () => Array(columns).fill(false));
+  let total = 0;
+  const walk = (row: number, column: number): boolean => {
+    if (row < 0 || column < 0 || row >= rows || column >= columns || grid2[row][column] === 0 || seen[row][column]) {
+      return true;
+    }
+    seen[row][column] = true;
+    let covered = grid1[row][column] === 1;
+    covered = walk(row + 1, column) && covered;
+    covered = walk(row - 1, column) && covered;
+    covered = walk(row, column + 1) && covered;
+    covered = walk(row, column - 1) && covered;
+    return covered;
+  };
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      if (grid2[row][column] === 1 && !seen[row][column] && walk(row, column)) {
+        total += 1;
+      }
+    }
+  }
+  return total;
+}
+
+function courseSchedulePrerequisites(numCourses: number, prerequisites: Array<[number, number]>, queries: Array<[number, number]>) {
+  const reachable = Array.from({ length: numCourses }, () => Array(numCourses).fill(false));
+  for (const [before, after] of prerequisites) {
+    reachable[before][after] = true;
+  }
+  for (let through = 0; through < numCourses; through += 1) {
+    for (let from = 0; from < numCourses; from += 1) {
+      if (!reachable[from][through]) {
+        continue;
+      }
+      for (let to = 0; to < numCourses; to += 1) {
+        reachable[from][to] = reachable[from][to] || reachable[through][to];
+      }
+    }
+  }
+  return queries.map(([before, after]) => reachable[before][after]);
+}
+
+function minimumCourseSemesters(n: number, relations: Array<[number, number]>) {
+  const graph = Array.from({ length: n + 1 }, () => [] as number[]);
+  const indegree = Array(n + 1).fill(0);
+  for (const [before, after] of relations) {
+    graph[before].push(after);
+    indegree[after] += 1;
+  }
+  const queue = Array.from({ length: n }, (_value, index) => index + 1).filter((course) => indegree[course] === 0);
+  let semester = 0;
+  let taken = 0;
+  for (let cursor = 0; cursor < queue.length;) {
+    const levelSize = queue.length - cursor;
+    semester += 1;
+    for (let count = 0; count < levelSize; count += 1) {
+      const course = queue[cursor++];
+      taken += 1;
+      for (const next of graph[course]) {
+        indegree[next] -= 1;
+        if (indegree[next] === 0) {
+          queue.push(next);
+        }
+      }
+    }
+  }
+  return taken === n ? semester : -1;
+}
+
+function longestSubarrayAtMostKFrequency(nums: number[], k: number) {
+  const counts = new Map<number, number>();
+  let left = 0;
+  let best = 0;
+  for (let right = 0; right < nums.length; right += 1) {
+    counts.set(nums[right], (counts.get(nums[right]) || 0) + 1);
+    while ((counts.get(nums[right]) || 0) > k) {
+      counts.set(nums[left], (counts.get(nums[left]) || 0) - 1);
+      left += 1;
+    }
+    best = Math.max(best, right - left + 1);
+  }
+  return best;
+}
+
+function longestContinuousLimitedSubarray(nums: number[], limit: number) {
+  const maxDeque: number[] = [];
+  const minDeque: number[] = [];
+  let left = 0;
+  let best = 0;
+  for (let right = 0; right < nums.length; right += 1) {
+    while (maxDeque.length && nums[maxDeque[maxDeque.length - 1]] < nums[right]) {
+      maxDeque.pop();
+    }
+    while (minDeque.length && nums[minDeque[minDeque.length - 1]] > nums[right]) {
+      minDeque.pop();
+    }
+    maxDeque.push(right);
+    minDeque.push(right);
+    while (nums[maxDeque[0]] - nums[minDeque[0]] > limit) {
+      left += 1;
+      if (maxDeque[0] < left) {
+        maxDeque.shift();
+      }
+      if (minDeque[0] < left) {
+        minDeque.shift();
+      }
+    }
+    best = Math.max(best, right - left + 1);
+  }
+  return best;
+}
+
+function minIntervalGroups(intervals: Array<[number, number]>) {
+  const ends: number[] = [];
+  let best = 0;
+  for (const [start, end] of [...intervals].sort((a, b) => a[0] - b[0] || a[1] - b[1])) {
+    if (ends.length && ends[0] < start) {
+      ends.shift();
+    }
+    sortedInsert(ends, end);
+    best = Math.max(best, ends.length);
+  }
+  return best;
+}
+
+function mostBookedMeetingRoom(n: number, meetings: Array<[number, number]>) {
+  const free = Array.from({ length: n }, (_value, index) => index);
+  const busy: Array<[number, number]> = [];
+  const counts = Array(n).fill(0);
+  for (const [start, end] of [...meetings].sort((a, b) => a[0] - b[0])) {
+    while (busy.length && busy[0][0] <= start) {
+      const [, room] = busy.shift() as [number, number];
+      sortedInsert(free, room);
+    }
+    const duration = end - start;
+    if (free.length) {
+      const room = free.shift() as number;
+      counts[room] += 1;
+      sortedInsertPair(busy, [end, room]);
+      continue;
+    }
+    const [availableAt, room] = busy.shift() as [number, number];
+    counts[room] += 1;
+    sortedInsertPair(busy, [availableAt + duration, room]);
+  }
+  return counts.reduce((bestRoom, count, room) => count > counts[bestRoom] ? room : bestRoom, 0);
+}
+
+function reverseEvenLengthGroups(values: number[]) {
+  const result = [...values];
+  let start = 0;
+  let groupSize = 1;
+  while (start < result.length) {
+    const end = Math.min(start + groupSize, result.length);
+    if ((end - start) % 2 === 0) {
+      result.splice(start, end - start, ...result.slice(start, end).reverse());
+    }
+    start = end;
+    groupSize += 1;
+  }
+  return result;
+}
+
+function lowerBound(nums: number[], target: number) {
+  let left = 0;
+  let right = nums.length;
+  while (left < right) {
+    const middle = Math.floor((left + right) / 2);
+    if (nums[middle] < target) {
+      left = middle + 1;
+    } else {
+      right = middle;
+    }
+  }
+  return left;
+}
+
+function serializeLevelOrder(root: TreeNode | null) {
+  if (!root) {
+    return [] as Array<number | null>;
+  }
+  const result: Array<number | null> = [];
+  const queue: Array<TreeNode | null> = [root];
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const node = queue[cursor];
+    if (!node) {
+      result.push(null);
+      continue;
+    }
+    result.push(node.val);
+    queue.push(node.left || null, node.right || null);
+  }
+  while (result[result.length - 1] === null) {
+    result.pop();
+  }
+  return result;
+}
+
+function findTreePath(node: TreeNode | null, target: number, path: string[]) {
+  if (!node) {
+    return false;
+  }
+  if (node.val === target) {
+    return true;
+  }
+  path.push("L");
+  if (findTreePath(node.left || null, target, path)) {
+    return true;
+  }
+  path.pop();
+  path.push("R");
+  if (findTreePath(node.right || null, target, path)) {
+    return true;
+  }
+  path.pop();
+  return false;
+}
+
+function sortedInsert(nums: number[], value: number) {
+  nums.splice(lowerBound(nums, value), 0, value);
+}
+
+function sortedInsertPair(pairs: Array<[number, number]>, pair: [number, number]) {
+  let index = 0;
+  while (index < pairs.length && (pairs[index][0] < pair[0] || (pairs[index][0] === pair[0] && pairs[index][1] < pair[1]))) {
+    index += 1;
+  }
+  pairs.splice(index, 0, pair);
 }
 
 function isSpecialParityArray(nums: number[], queries: Array<[number, number]>) {
