@@ -338,11 +338,11 @@ function SkillTooltip(props: { level: number; skill: (typeof WARRIOR_SKILLS)[num
       <Text size="xs" c="red.2" fw={700}>{props.skill.description}</Text>
       {breakdown.activeCost ? (
         <Stack gap={1}>
-          <Text size="xs" c="red.2" fw={800}>Mana Cost: {breakdown.activeCost.mana}</Text>
+          <Text size="xs" c="red.2" fw={800}>Active skill</Text>
           {breakdown.activeCost.health ? <Text size="xs" c="red.2" fw={800}>Life Cost: {breakdown.activeCost.health}</Text> : null}
         </Stack>
       ) : (
-        <Text size="xs" c="green.3" fw={800}>Passive. No mana cost.</Text>
+        <Text size="xs" c="green.3" fw={800}>Passive</Text>
       )}
       <Text size="xs" c="gray.1" fw={800}>Current Skill Level: {currentRank} / {props.skill.maxRank}</Text>
       <SkillTooltipSection color="blue.2" lines={breakdown.effects} title="Current Effects" />

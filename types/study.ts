@@ -38,6 +38,8 @@ export type CardState = {
   lastAttemptAt?: number;
   masteredAt?: number;
   monsterHealth?: number;
+  relicFirstHitBlocked?: boolean;
+  relicReviveUsed?: boolean;
   draft?: string;
 };
 
@@ -114,6 +116,7 @@ export type ItemModifierKey =
   | "armor"
   | "armorPenetrationPercent"
   | "blockChancePercent"
+  | "blockFirstHit"
   | "bonusDamageVsElitesPercent"
   | "bonusDamageWhileFullHealthPercent"
   | "bonusDamageWhileLowHealthPercent"
@@ -130,8 +133,10 @@ export type ItemModifierKey =
   | "extraAttackChancePercent"
   | "fireResistPercent"
   | "fireDamage"
+  | "freeHintPerRoom"
   | "goldFindPercent"
   | "healthRegen"
+  | "incomingDamagePercent"
   | "increasedHealingReceivedPercent"
   | "increasedLootDropChancePercent"
   | "increasedRareDropChancePercent"
@@ -140,9 +145,8 @@ export type ItemModifierKey =
   | "lightningResistPercent"
   | "lightningDamage"
   | "magicFindPercent"
-  | "manaOnKill"
   | "maxLife"
-  | "maxMana"
+  | "noRunDamagePercent"
   | "parryChancePercent"
   | "physicalDamage"
   | "physicalResistPercent"
@@ -150,6 +154,18 @@ export type ItemModifierKey =
   | "poisonResistPercent"
   | "reducedEnemyArmorPercent"
   | "reducedEnemyDamagePercent"
+  | "relicChoiceBonus"
+  | "relicRerollBonus"
+  | "revealTopicCount"
+  | "revivePercent"
+  | "shopDiscountPercent"
+  | "shopPriceIncreasePercent"
+  | "shopRelicStock"
+  | "skipRelicMetaBonus"
+  | "submitFailDamageStackPercent"
+  | "timerDamagePercent"
+  | "timerPenaltyPercent"
+  | "timerPauseSeconds"
   | "resistancePenetrationPercent";
 
 export type ItemModifier = {
@@ -157,7 +173,7 @@ export type ItemModifier = {
   value: number;
 };
 
-export type RelicRarity = "starter" | "common" | "uncommon" | "rare" | "boss" | "shop" | "event" | "blight" | "special";
+export type RelicRarity = "starter" | "common" | "uncommon" | "rare" | "unique" | "boss" | "shop" | "event" | "blight" | "special";
 
 export type RelicSource = "any" | "ironclad";
 
@@ -201,17 +217,30 @@ export type SpireRun = {
   tierIndex: number;
   currentNodeId: string;
   completedNodeIds: string[];
+  failDamageStacks: number;
   mapOpen: boolean;
   mapSeed: number;
   nodes: SpireMapNode[];
+  pendingRelicReward: RelicRewardChoice | null;
   roomRewardClaims: Record<string, {
     gold?: number;
     itemIds?: string[];
+    metaCurrency?: number;
     relicIds?: string[];
   }>;
   roundQuestionIds: string[];
   roundSolvedIds: string[];
+  runCodeQuestionIds: string[];
   unknownEncounterMisses: Partial<Record<UnknownEncounterKind, number>>;
+};
+
+export type RelicRewardChoice = {
+  choices: Relic[];
+  nodeId: string;
+  rerollsRemaining: number;
+  rewardKind: "enemy" | "elite" | "boss" | "treasure" | "event" | "rest";
+  seed: string;
+  skipMetaCurrency: number;
 };
 
 export type InventoryItem = {
@@ -246,7 +275,7 @@ export type InventoryItemPosition = {
   tab: number;
 };
 
-export type ShopConsumableType = "health" | "mana" | "random";
+export type ShopConsumableType = "health" | "random";
 
 export type ActivePotionEffect = {
   id: string;
@@ -281,6 +310,16 @@ export type ShopItem =
       relic: Relic;
     };
 
+export type MetaProgress = {
+  currency: number;
+  totalEarned: number;
+  upgrades: {
+    coinPurse: number;
+    relicChoice: number;
+    toughStart: number;
+  };
+};
+
 export type StudyState = {
   mode: "leetcode" | "system";
   currentId: string | null;
@@ -305,6 +344,7 @@ export type StudyState = {
     inventory: InventoryItem[];
     inventorySlots: Record<string, InventoryItemPosition>;
     equipment: Record<EquipmentSlot, string | null>;
+    metaProgress: MetaProgress;
     shopLastRefreshedAt: number | null;
     shopStock: ShopItem[];
     relics: Relic[];

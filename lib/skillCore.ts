@@ -40,7 +40,7 @@ export type WarriorSkillBonuses = {
 };
 
 export type WarriorSkillTooltipBreakdown = {
-  activeCost?: { health?: number; mana: number };
+  activeCost?: { health?: number };
   effects: string[];
   grantsBonusesTo: string[];
   receivesBonusesFrom: string[];
@@ -166,7 +166,7 @@ export function getWarriorSkillTooltipBreakdown(ranks: StudyState["profile"]["sk
   const active = getActiveWarriorSkillByTreeId(skillId);
   const effects = active ? getActiveSkillTooltipEffects(skillId, ranks) : getPassiveSkillTooltipEffects(skillId, currentRank, ranks);
   return {
-    activeCost: active ? { health: active.healthCost, mana: active.cost } : undefined,
+    activeCost: active ? { health: active.healthCost } : undefined,
     effects,
     grantsBonusesTo: getGrantedSkillBonuses(skillId),
     receivesBonusesFrom: getReceivedSkillBonuses(skillId, currentRank, ranks)
@@ -200,7 +200,7 @@ export function normalizeWarriorSkillRanks(ranks: StudyState["profile"]["skillRa
 }
 
 export function getAvailableWarriorSkillPoints(state: StudyState, level: number) {
-  return Math.max(NO_POINTS, level - FIRST_LEVEL - getSpentWarriorSkillPoints(state.profile.skillRanks));
+  return NO_POINTS;
 }
 
 export function canSpendWarriorSkillPoint(state: StudyState, skillId: WarriorSkillId, level: number) {
@@ -236,7 +236,7 @@ export function getActiveWarriorSkillByTreeId(skillId: WarriorSkillId) {
 
 export function canUseActiveWarriorSkill(state: StudyState, skillId: ActiveWarriorSkillId) {
   const skill = getActiveWarriorSkill(skillId);
-  return Boolean(skill && !state.profile.activeSkill && state.profile.mana >= skill.cost && state.profile.health > (skill.healthCost || NO_POINTS) && getWarriorSkillRank(state.profile.skillRanks, skill.id) > NO_POINTS);
+  return Boolean(skill && !state.profile.activeSkill && state.profile.health > (skill.healthCost || NO_POINTS) && getWarriorSkillRank(state.profile.skillRanks, skill.id) > NO_POINTS);
 }
 
 export function activateWarriorSkill(state: StudyState, skillId: ActiveWarriorSkillId): StudyState {
@@ -250,7 +250,7 @@ export function activateWarriorSkill(state: StudyState, skillId: ActiveWarriorSk
       ...state.profile,
       activeSkill: skillId,
       health: Math.max(REQUIRED_RANK, state.profile.health - (skill?.healthCost || NO_POINTS)),
-      mana: Math.max(NO_POINTS, state.profile.mana - (skill?.cost || NO_POINTS))
+      mana: 0
     }
   };
 }

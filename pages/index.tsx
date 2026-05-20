@@ -23,8 +23,8 @@ import { applyPassedCombatResult, getElapsedPressureRatio, getTimedMonsterAttack
 import { getTimerDisplay } from "../lib/timerDisplay";
 import { chooseNextSpireQuestion, completeSpireQuestion, getCurrentRoundQuestion, getCurrentSpireNode, isCombatNode as isSpireCombatNode } from "../lib/spireMapCore";
 import {
-  HINT_COST, applyHealthPenalty, applyScheduleResult, buyHint, canBuyHint, cloneState, defaultState, getCard,
-  getHealthLoss, getHintCost, getQuestionTimeLimitMs, isQuestionInRecommendedRange, normalizeStudyState, setCard
+  HINT_COST, applyHealthPenalty, applyIncomingDamage, applyScheduleResult, buyHint, canBuyHint, cloneState, defaultState, getCard,
+  getHintCost, getIncomingDamageEffect, getMaxHealth, getMetaStartingGoldBonus, getModifiedQuestionTimeLimitMs, isQuestionInRecommendedRange, markQuestionRunCode, normalizeStudyState, setCard
 } from "../lib/studyCore";
 import { createHintPrompt } from "../lib/hintPrompt";
 import { createLocalHint } from "../lib/localHint";
@@ -107,6 +107,7 @@ function useQuestionTimer(params: {
   setTone: (tone: StatusTone) => void;
   activeRunId: React.MutableRefObject<string | null>;
   runTimer: React.MutableRefObject<number | null>;
+  questionTimeLimitMs: number;
 }): TimerControls {
   const [timeRemainingMs, setTimeRemainingMs] = useState(0);
   const [questionFinished, setQuestionFinished] = useState(false);
@@ -118,8 +119,8 @@ function useQuestionTimer(params: {
     }
     timedOutQuestionId.current = null;
     setQuestionFinished(false);
-    setTimeRemainingMs(getQuestionTimeLimitMs(params.currentQuestion));
-  }, [params.currentQuestion]);
+    setTimeRemainingMs(params.questionTimeLimitMs);
+  }, [params.currentQuestion, params.questionTimeLimitMs]);
   useTimerInterval({ ...params, questionFinished, setQuestionFinished, setTimeRemainingMs, timedOutQuestionId });
   return { timeRemainingMs, questionFinished, setQuestionFinished };
 }
@@ -236,7 +237,7 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
   if (!message.ok) {
     const now = Date.now();
     const attack = getTimedMonsterAttack(question, params.timeRemainingMs, now, "retaliation");
-    const healthLoss = getHealthLoss(params.state, attack.damage, attack.element);
+    const healthLoss = getIncomingDamageEffect(params.state, attack.damage, attack.manaDamage, question.id, attack.element).healthLoss;
     if (healthLoss > 0) {
       params.showPlayerImpact(createPlayerImpact(question, attack, healthLoss, now));
     }
@@ -254,7 +255,10 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
 function completePassedSubmit(params: Parameters<typeof useRunnerMessages>[0], question: Question) {
   const now = Date.now();
   const timePressureRatio = getElapsedPressureRatio(question, params.timeRemainingMs);
-  const combat = applyPassedCombatResult(params.state, question.id, params.code, now, { timePressureRatio });
+  const timeLimitMs = getModifiedQuestionTimeLimitMs(params.state, question);
+  const timeRemainingRatio = timeLimitMs > 0 ? Math.max(0, Math.min(1, params.timeRemainingMs / timeLimitMs)) : 0;
+  const usedRunCode = params.state.profile.spireRun.runCodeQuestionIds.includes(question.id);
+  const combat = applyPassedCombatResult(params.state, question.id, params.code, now, { timePressureRatio, timeRemainingRatio, usedRunCode });
   if (combat.hit) {
     params.showMonsterDamage({
       amount: combat.hit.damage,
@@ -311,22 +315,8 @@ function finishPassedSubmit(params: Parameters<typeof useRunnerMessages>[0], que
 
 function applyElapsedCombatDamage(state: StudyState, question: Question, timeRemainingMs: number, now: number) {
   const attack = getElapsedMonsterAttack(question, timeRemainingMs, now);
-  const healthLoss = attack.damage > 0 ? getHealthLoss(state, attack.damage, attack.element) : 0;
-  if (healthLoss <= 0 && attack.manaDamage <= 0) {
-    return { attack, healthLoss, state };
-  }
-  return {
-    attack,
-    healthLoss,
-    state: {
-      ...state,
-      profile: {
-        ...state.profile,
-        health: Math.max(0, state.profile.health - healthLoss),
-        mana: state.profile.godMode ? state.profile.mana : Math.max(0, state.profile.mana - attack.manaDamage)
-      }
-    }
-  };
+  const result = applyIncomingDamage(state, attack.damage, attack.manaDamage, question.id, attack.element);
+  return { attack, healthLoss: result.healthLoss, state: result.state };
 }
 
 function getElapsedMonsterAttack(question: Question, timeRemainingMs: number, now: number) {
@@ -338,8 +328,7 @@ function getTimeDamageStatus(result: ReturnType<typeof applyElapsedCombatDamage>
     return "";
   }
   const hitCount = result.attack.hitCount > 1 ? ` x${result.attack.hitCount}` : "";
-  const manaBurn = result.attack.manaDamage ? ` Mana Burn drained ${result.attack.manaDamage}.` : "";
-  return `Time pressure hit${hitCount} for ${result.healthLoss}.${manaBurn} `;
+  return `Time pressure hit${hitCount} for ${result.healthLoss}. `;
 }
 
 function handleCodeRunMessage(message: CodeRunMessage, params: Parameters<typeof useRunnerMessages>[0]) {
@@ -360,8 +349,7 @@ function formatHitStatus(hit: NonNullable<ReturnType<typeof applyPassedCombatRes
 function getFailStatus(attack: ReturnType<typeof getTimedMonsterAttack>) {
   const prefix = attack.hitCount > 1 ? `Multi-Shot hit ${attack.hitCount} times` : "Monster hit";
   const element = attack.element ? ` ${attack.element[0].toUpperCase()}${attack.element.slice(1)}` : "";
-  const manaBurn = attack.manaDamage ? ` Mana Burn drained ${attack.manaDamage}.` : "";
-  return `${prefix} for ${attack.damage}${element} damage.${manaBurn} Wrong Answer`;
+  return `${prefix} for ${attack.damage}${element} damage. Wrong Answer`;
 }
 
 function clearRunTimer(runTimer: React.MutableRefObject<number | null>) {
@@ -488,7 +476,7 @@ function useBuyHint(params: Parameters<typeof usePracticeActions>[0]) {
     const cost = getHintCost(params.state, question.id);
     params.setState((previous) => buyHint(previous, question.id));
     params.setTone("default");
-    params.setStatus(`Spent ${cost} gold. Asking Codex for one next step.`);
+    params.setStatus(cost > 0 ? `Spent ${cost} gold. Asking Codex for one next step.` : "Used your free room hint. Asking Codex for one next step.");
     params.startHint(prompt, createLocalHint(question));
     navigator.clipboard?.writeText(prompt).catch(() => undefined);
   }, [params]);
@@ -555,6 +543,7 @@ function useRunCode(params: Parameters<typeof usePracticeActions>[0] & {
     if (formattedCode !== params.code) {
       params.updateDraft(formattedCode);
     }
+    params.setState((previous) => params.currentQuestion ? markQuestionRunCode(previous, params.currentQuestion.id) : previous);
     startConsoleRun(runId, formattedCode, params);
   }, [params]);
 }
@@ -644,8 +633,8 @@ function useFailAndAdvance(params: {
       return;
     }
     const now = Date.now();
-    const attack = getTimedMonsterAttack(currentQuestion, timeRemainingMs ?? getQuestionTimeLimitMs(currentQuestion), now, "retaliation");
-    const healthLoss = getHealthLoss(state, attack.damage, attack.element);
+    const attack = getTimedMonsterAttack(currentQuestion, timeRemainingMs ?? getModifiedQuestionTimeLimitMs(state, currentQuestion), now, "retaliation");
+    const healthLoss = getIncomingDamageEffect(state, attack.damage, attack.manaDamage, currentQuestion.id, attack.element).healthLoss;
     const scheduled = applyScheduleResult(state, currentQuestion.id, false, draft, now, attack.damage, attack.manaDamage, attack.element);
     const picked = chooseNextSpireQuestion(scheduled, currentQuestion);
     const nextState = { ...scheduled, currentId: picked.id };
@@ -754,11 +743,21 @@ export default function Home() {
   const showPlayerImpact = usePlayerImpact(setPlayerImpact);
   usePersistStudy(state, hydrated, setRunTone, setRunStatus);
   const failAndAdvance = useFailAndAdvance({ code, currentQuestion, setCode, setCurrentQuestion, setConsoleRunResult, setResults, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, clearHint: hints.clearHint, showHealthLoss, showPlayerImpact });
-  const timer = useQuestionTimer({ code, currentQuestion, failAndAdvance, sessionStarted, mode: state.mode, setConsoleRunResult, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer });
+  const questionTimeLimitMs = currentQuestion ? getModifiedQuestionTimeLimitMs(state, currentQuestion) : 0;
+  const timer = useQuestionTimer({ code, currentQuestion, failAndAdvance, sessionStarted, mode: state.mode, setConsoleRunResult, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer, questionTimeLimitMs });
   const actions = usePracticeActions({ code, currentQuestion, failAndAdvance, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setConsoleRunResult, setResults, setRunnerReady, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame, clearHint: hints.clearHint, startHint: hints.startHint, showHealthLoss, showPlayerImpact, showRewards, showMonsterDamage, timeRemainingMs: timer.timeRemainingMs });
   const resetAfterDeath = useCallback(() => {
     const freshState = defaultState();
+    freshState.cards = state.cards;
+    freshState.totalCorrect = state.totalCorrect;
     freshState.profile.unlockedAchievementIds = state.profile.unlockedAchievementIds;
+    freshState.profile.metaProgress = {
+      currency: state.profile.metaProgress.currency + 5,
+      totalEarned: state.profile.metaProgress.totalEarned + 5,
+      upgrades: { ...state.profile.metaProgress.upgrades }
+    };
+    freshState.profile.coins = getMetaStartingGoldBonus(freshState);
+    freshState.profile.health = getMaxHealth(freshState);
     const picked = getCurrentRoundQuestion(freshState, null);
     activeRunId.current = null;
     clearRunTimer(runTimer);
@@ -771,15 +770,15 @@ export default function Home() {
     setCurrentQuestion(picked);
     setCode(picked.starter);
     setRunTone("default");
-    setRunStatus("Character reset to level 1.");
+    setRunStatus("Run ended. Preserved question progress and gained 5 insight.");
     hints.clearHint();
-  }, [hints, runTimer, state.profile.unlockedAchievementIds]);
+  }, [hints, runTimer, state.cards, state.profile.metaProgress.currency, state.profile.metaProgress.totalEarned, state.profile.unlockedAchievementIds, state.totalCorrect]);
   const pauseQuestionForFocusLoss = useCallback(() => { activeRunId.current = null; clearRunTimer(runTimer); setRunning(false); setResults([]); setConsoleRunResult(null); setSessionStarted(false); hints.clearHint(); }, [hints, runTimer]);
   const isDead = state.profile.health <= 0;
   useStudyTimeTracker(state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished && !isDead);
   useFullscreenGuard({ active: state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished && !isDead, pauseQuestion: pauseQuestionForFocusLoss, setStatus: setRunStatus, setTone: setRunTone });
   const headerStats = useHeaderStats(state);
-  const timerDisplay = getTimerDisplay(currentQuestion, timer.timeRemainingMs);
+  const timerDisplay = getTimerDisplay(currentQuestion, timer.timeRemainingMs, questionTimeLimitMs);
   const currentSpireNode = getCurrentSpireNode(state);
   const mapOpen = state.profile.spireRun.mapOpen;
   const showPractice = !mapOpen && isSpireCombatNode(currentSpireNode);
@@ -807,15 +806,10 @@ export default function Home() {
         <Stack gap="md" style={mapOpen ? { height: "100%", minHeight: 0 } : undefined}>
           <AppHeader
             coins={state.profile.coins}
-            currentExperience={headerStats.levelProgress.currentExperience}
             health={state.profile.health}
             hidePlayerStatus={mapOpen}
-            level={headerStats.levelProgress.level}
-            mana={state.profile.mana}
             maxHealth={headerStats.maxHealth}
-            maxMana={headerStats.maxMana}
             modeValue={state.mode}
-            nextLevelExperience={headerStats.levelProgress.nextLevelExperience}
             playerImpact={playerImpact}
             rating={headerStats.estimatedRating}
             state={state}

@@ -155,7 +155,6 @@ describe("wiki icon uniqueness", () => {
     const visibleRelicStats = HERO_SIEGE_WIKI_CHARMS.flatMap((item) => getVisibleWikiRelicStats(item));
 
     expect([...visibleItemStats, ...visibleRelicStats].some((stat) => disallowed.test(stat))).toBe(false);
-    expect(RELIC_DEFINITIONS.flatMap((relic) => relic.modifiers || []).some((modifier) => modifier.key === "manaOnKill")).toBe(false);
   });
 
   it("does not expose socketed wiki stats", () => {

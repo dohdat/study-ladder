@@ -12,7 +12,7 @@ describe("monsterCore", () => {
     expect(counts.some((count) => count === 1)).toBe(true);
   });
 
-  it("picks unique bonuses from the thirteen Diablo II bonus categories", () => {
+  it("picks unique bonuses from the Hades-style monster bonus categories", () => {
     const question = findQuestion((bonuses) => bonuses.length === 3);
     const bonuses = getUniqueMonsterBonuses(question);
     expect(bonuses).toHaveLength(3);
@@ -37,12 +37,11 @@ describe("monsterCore", () => {
 
   it("applies every unique bonus to combat math", () => {
     const extraFast = findQuestion((bonuses) => bonuses.includes("Extra Fast") && !bonuses.includes("Multi-Shot"));
-    const manaBurn = findQuestion((bonuses) => bonuses.includes("Mana Burn"));
     const stoneSkin = findQuestion((bonuses) => bonuses.includes("Stone Skin"));
     const plainHealth = findQuestion((bonuses) => !bonuses.includes("Stone Skin") && !bonuses.includes("Magic Resistant"));
 
     expect(getMonsterAttackProfile(extraFast, 5, 1000).hitCount).toBe(2);
-    expect(getMonsterAttackProfile(manaBurn, 5, 1000).manaDamage).toBeGreaterThan(0);
+    expect(UNIQUE_MONSTER_BONUSES).not.toContain("Mana Burn");
     expect(getMonsterMaxHealth(stoneSkin)).toBeGreaterThan(getMonsterMaxHealth(plainHealth));
     expect(getMonsterPlayerDamage(stoneSkin, 40)).toBeLessThan(40);
   });

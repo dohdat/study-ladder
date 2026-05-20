@@ -62,7 +62,6 @@ export const UNIQUE_MONSTER_BONUSES = [
   "Fire Enchanted",
   "Lightning Enchanted",
   "Magic Resistant",
-  "Mana Burn",
   "Multi-Shot",
   "Spectral Hit",
   "Stone Skin",
@@ -78,7 +77,6 @@ const UNIQUE_MONSTER_BONUS_DESCRIPTIONS: Record<(typeof UNIQUE_MONSTER_BONUSES)[
   "Fire Enchanted": "Fire attacks add burst damage on failed submissions.",
   "Lightning Enchanted": "Lightning attacks can spike damage on mistakes.",
   "Magic Resistant": "The monster resists easy progress and has sturdier health.",
-  "Mana Burn": "Failed attempts drain mana pressure from your character.",
   "Multi-Shot": "The monster can punish several weak attempts in one encounter.",
   "Spectral Hit": "The monster's hit carries mixed elemental power, making its damage less predictable.",
   "Stone Skin": "The monster has tougher defenses and is harder to bring down.",
@@ -218,7 +216,7 @@ export function getMonsterAttackProfile(question: Question, baseDamage: number, 
     damage,
     element,
     hitCount,
-    manaDamage: bonuses.includes("Mana Burn") ? Math.ceil(damage * MANA_BURN_DAMAGE_RATIO) : 0,
+    manaDamage: 0,
     perHitDamage
   };
 }

@@ -1,5 +1,6 @@
 import { ITEM_BASE_NAMES, ITEM_NAME_POOL_COUNT } from "./itemNames";
 import { applyWikiItemData, createWikiMechanicalStats, createWikiModifiers, pickWikiEquipmentItem } from "./heroSiegeWikiCatalog";
+import { getModifierRollRange, getSynergyModifierKeys } from "./modifierAffixes";
 import type { CharacterStatKey, CharacterStats, EquipmentSlot, InventoryItem, ItemModifierKey, ItemRarity, Question } from "../types/study";
 
 const FIRST_STAT_LEVEL = 1;
@@ -37,49 +38,6 @@ const UNCOMMON_MAX_LEVEL = 8;
 const RARE_MAX_LEVEL = 20;
 const EPIC_MAX_LEVEL = 40;
 const STAT_KEYS: CharacterStatKey[] = ["strength", "constitution", "perception", "intelligence"];
-const MODIFIER_POOLS: Array<{ key: ItemModifierKey; min: number; max: number }> = [
-  { key: "accuracyPercent", min: 2, max: 10 },
-  { key: "armor", min: 1, max: 8 },
-  { key: "armorPenetrationPercent", min: 3, max: 20 },
-  { key: "blockChancePercent", min: 2, max: 8 },
-  { key: "bonusDamageVsElitesPercent", min: 5, max: 25 },
-  { key: "bonusDamageWhileFullHealthPercent", min: 5, max: 20 },
-  { key: "bonusDamageWhileLowHealthPercent", min: 5, max: 25 },
-  { key: "bonusXpPercent", min: 5, max: 20 },
-  { key: "coldResistPercent", min: 5, max: 30 },
-  { key: "coldDamage", min: 1, max: 10 },
-  { key: "criticalChancePercent", min: 2, max: 8 },
-  { key: "criticalDamagePercent", min: 10, max: 40 },
-  { key: "damageReduction", min: 1, max: 4 },
-  { key: "dodgeChancePercent", min: 2, max: 8 },
-  { key: "eliteDropBonusPercent", min: 5, max: 20 },
-  { key: "enhancedDamagePercent", min: 8, max: 30 },
-  { key: "executeChancePercent", min: 2, max: 8 },
-  { key: "extraAttackChancePercent", min: 2, max: 8 },
-  { key: "fireResistPercent", min: 5, max: 30 },
-  { key: "fireDamage", min: 1, max: 10 },
-  { key: "goldFindPercent", min: 8, max: 35 },
-  { key: "healthRegen", min: 1, max: 5 },
-  { key: "increasedHealingReceivedPercent", min: 5, max: 25 },
-  { key: "increasedLootDropChancePercent", min: 5, max: 25 },
-  { key: "increasedRareDropChancePercent", min: 3, max: 12 },
-  { key: "lifeOnKill", min: 2, max: 8 },
-  { key: "lifeStealPercent", min: 1, max: 6 },
-  { key: "lightningResistPercent", min: 5, max: 30 },
-  { key: "lightningDamage", min: 1, max: 10 },
-  { key: "magicFindPercent", min: 5, max: 25 },
-  { key: "maxLife", min: 5, max: 20 },
-  { key: "maxMana", min: 5, max: 20 },
-  { key: "parryChancePercent", min: 2, max: 8 },
-  { key: "physicalDamage", min: 1, max: 12 },
-  { key: "physicalResistPercent", min: 3, max: 20 },
-  { key: "poisonDamage", min: 1, max: 10 },
-  { key: "poisonResistPercent", min: 5, max: 30 },
-  { key: "reducedEnemyArmorPercent", min: 3, max: 20 },
-  { key: "reducedEnemyDamagePercent", min: 3, max: 15 },
-  { key: "resistancePenetrationPercent", min: 3, max: 20 }
-];
-
 export const ITEM_BASE_NAME_COUNT = ITEM_NAME_POOL_COUNT;
 export const EQUIPMENT_SLOTS: EquipmentSlot[] = ["mainHand", "offHand", "headgear", "armor", "headAccessory", "eyewear", "ringTwo", "bodyAccessory", "backAccessory", "feet"];
 const LOW_LEVEL_ITEM_BASE_NAMES: Record<EquipmentSlot, string[]> = {
@@ -273,15 +231,7 @@ function rollStatValue(rarity: ItemRarity, itemLevel: number, seed: string) {
 
 function rollItemModifiers(rarity: ItemRarity, itemLevel: number, seed: string) {
   const modifierCount = getModifierCountCap(rarity, itemLevel);
-  const picked: ItemModifierKey[] = [];
-  for (let index = 0; index < modifierCount; index += FIRST_STAT_LEVEL) {
-    const poolItem = pickAvailableModifier(picked, `${seed}:modifier:${index}`);
-    picked.push(poolItem.key);
-  }
-  return picked.map((key, index) => {
-    const poolItem = MODIFIER_POOLS.find((modifier) => modifier.key === key) || MODIFIER_POOLS[0];
-    return { key, value: rollModifierValue(poolItem, itemLevel, `${seed}:modifier-value:${key}:${index}`) };
-  });
+  return getSynergyModifierKeys(`${seed}:modifier`, modifierCount).map((key, index) => ({ key, value: rollModifierValue(key, itemLevel, `${seed}:modifier-value:${key}:${index}`) }));
 }
 
 function mergeItemModifiers(base: InventoryItem["modifiers"], wikiModifiers: InventoryItem["modifiers"]) {
@@ -303,14 +253,11 @@ function getModifierCountCap(rarity: ItemRarity, itemLevel: number) {
   return Math.min(RARITY_MODIFIER_COUNTS[rarity], getLevelModifierCap(itemLevel));
 }
 
-function pickAvailableModifier(picked: ItemModifierKey[], seed: string) {
-  const available = MODIFIER_POOLS.filter((modifier) => !picked.includes(modifier.key));
-  return pickFrom(available.length ? available : MODIFIER_POOLS, seededRandom(seed));
-}
-
-function rollModifierValue(poolItem: { min: number; max: number }, itemLevel: number, seed: string) {
-  const scaledMax = Math.max(FIRST_STAT_LEVEL, Math.ceil(poolItem.max * (itemLevel / MAX_ITEM_LEVEL)));
-  const scaledMin = Math.min(poolItem.min, scaledMax);
+function rollModifierValue(key: ItemModifierKey, itemLevel: number, seed: string) {
+  const range = getModifierRollRange(key);
+  const levelRatio = Math.min(1, Math.max(0, itemLevel / MAX_ITEM_LEVEL));
+  const scaledMax = Math.max(range.min, Math.ceil(range.max * (0.4 + levelRatio * 0.6)));
+  const scaledMin = Math.min(range.min, scaledMax);
   return scaledMin + Math.floor(seededRandom(seed) * (scaledMax - scaledMin + FIRST_STAT_LEVEL));
 }
 

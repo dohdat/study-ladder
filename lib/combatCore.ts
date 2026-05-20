@@ -4,8 +4,8 @@ import { getMonsterAttackProfile, getMonsterMaxHealth, getMonsterPlayerDamage } 
 import { getActiveWarriorSkill, getWarriorSkillRank } from "./skillCore";
 import {
   applyHealingReceived, applyScheduleResult, cloneState, getAttackDamage, getCard, getCoinReward, getCriticalChance, getCriticalDamageMultiplier,
-  getExperienceReward, getMaxHealth, getMonsterDamageRoll, getQuestionDrop, getQuestionTimeLimitMs, getRunModifierTotals, getWarriorSkillBonusTotals,
-  grantPendingStatPoints, setCard
+  getMaxHealth, getMonsterDamageRoll, getQuestionDrop, getQuestionTimeLimitMs, getRunModifierTotals, getWarriorSkillBonusTotals,
+  setCard
 } from "./studyCore";
 import type { DamageType, Question, StudyState } from "../types/study";
 
@@ -34,9 +34,13 @@ const PERCENT = 100;
 const TIME_DAMAGE_FREE_RATIO = 0.18;
 const TIME_DAMAGE_MIN_RATIO = 0.18;
 const TIME_DAMAGE_RATIO_RANGE = 0.82;
+const MAX_CORRECT_HITS_BY_DIFFICULTY: Record<Question["difficulty"], number> = { 1: 3, 2: 3, 3: 4, 4: 5, 5: 6 };
+const MIN_REGULAR_HITS_BY_DIFFICULTY: Record<Question["difficulty"], number> = { 1: 1, 2: 2, 3: 2, 4: 3, 5: 3 };
 
 export type MonsterHitOptions = {
   timePressureRatio?: number;
+  timeRemainingRatio?: number;
+  usedRunCode?: boolean;
 };
 
 export type MonsterHitResult = {
@@ -84,19 +88,55 @@ export const getMonsterHit = (state: StudyState, question: Question, now = Date.
   const rawPerHitDamage = getMonsterPlayerDamage(question, physicalDamage, "physical", armorPenetration, timeHardening.resistancePercent)
     + getElementalDamage(question, modifiers, resistancePenetration, timeHardening.resistancePercent);
   const perHitDamage = applyTimeDefense(rawPerHitDamage, timeHardening.defensePercent);
-  const totalDamage = perHitDamage * (activeHit.hitCount + extraAttack);
+  const hitCount = activeHit.hitCount + extraAttack;
+  const relicDamage = getRelicDamageBonus(state, modifiers, options);
+  const totalDamage = applyRelicDamageBonus(applyCombatPacing(perHitDamage * hitCount, currentHealth, maxHealth, question.difficulty, Boolean(activeSkill || executeProc)), relicDamage.bonusPercent);
   const lifeSteal = Math.floor(totalDamage * (modifiers.lifeStealPercent || 0) / 100);
   return {
     activeSkillName: activeSkill?.name,
     critical,
     damage: totalDamage,
     damageTypes,
-    effects: [...activeHit.effects, ...(timeHardening.defensePercent || timeHardening.resistancePercent ? ["Time armor"] : []), ...(executeProc ? ["Execute proc"] : []), ...(extraAttack ? ["Extra attack"] : [])],
-    hitCount: activeHit.hitCount + extraAttack,
+    effects: [...activeHit.effects, ...(timeHardening.defensePercent || timeHardening.resistancePercent ? ["Time armor"] : []), ...(executeProc ? ["Execute proc"] : []), ...(extraAttack ? ["Extra attack"] : []), ...relicDamage.effects],
+    hitCount,
     lifeRestored: applyHealingReceived(state, activeHit.lifeRestored + lifeSteal),
     perHitDamage
   };
 };
+
+function getRelicDamageBonus(state: StudyState, modifiers: ReturnType<typeof getRunModifierTotals>, options: MonsterHitOptions) {
+  const noRunBonus = options.usedRunCode === false ? Math.max(0, modifiers.noRunDamagePercent || 0) : 0;
+  const timerBonus = Math.round(Math.max(0, Math.min(1, options.timeRemainingRatio || 0)) * Math.max(0, modifiers.timerDamagePercent || 0));
+  const failStackBonus = Math.max(0, state.profile.spireRun.failDamageStacks || 0) * Math.max(0, modifiers.submitFailDamageStackPercent || 0);
+  return {
+    bonusPercent: noRunBonus + timerBonus + failStackBonus,
+    effects: [
+      ...(noRunBonus ? ["No-run bonus"] : []),
+      ...(timerBonus ? ["Timer damage"] : []),
+      ...(failStackBonus ? [`Failure stacks x${state.profile.spireRun.failDamageStacks}`] : [])
+    ]
+  };
+}
+
+function applyRelicDamageBonus(damage: number, bonusPercent: number) {
+  if (bonusPercent <= 0) {
+    return damage;
+  }
+  return Math.max(1, Math.round(damage * (1 + bonusPercent / PERCENT)));
+}
+
+function applyCombatPacing(damage: number, currentHealth: number, maxHealth: number, difficulty: Question["difficulty"], isBurstHit: boolean) {
+  if (damage <= 0 || maxHealth <= 0) {
+    return damage;
+  }
+  const minimumProgressDamage = Math.max(1, Math.ceil(maxHealth / MAX_CORRECT_HITS_BY_DIFFICULTY[difficulty]));
+  const floorDamage = Math.max(damage, minimumProgressDamage);
+  if (isBurstHit) {
+    return floorDamage;
+  }
+  const regularHitCap = Math.ceil(maxHealth / MIN_REGULAR_HITS_BY_DIFFICULTY[difficulty]);
+  return currentHealth > regularHitCap ? Math.min(floorDamage, regularHitCap) : floorDamage;
+}
 
 function getTimeHardening(timePressureRatio = 0) {
   const pressure = Math.min(1, Math.max(0, timePressureRatio || 0));
@@ -249,10 +289,6 @@ function applyPartialRewards(next: StudyState, question: Question | undefined, r
     return;
   }
   next.profile.coins += getCoinReward(question, next);
-  next.profile.experience += getExperienceReward(question, next);
-  const leveled = grantPendingStatPoints(next);
-  next.profile.statPoints = leveled.profile.statPoints;
-  next.profile.statPointsAwardedLevel = leveled.profile.statPointsAwardedLevel;
   const modifiers = getRunModifierTotals(next);
   next.profile.health = Math.min(getMaxHealth(next), next.profile.health + applyHealingReceived(next, (modifiers.lifeOnKill || 0) + (modifiers.healthRegen || 0) + getWarriorSkillBonusTotals(next).lifeOnKill));
   const drop = getQuestionDrop(question, rewardState, now);

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
 import { buyShopItem } from "../lib/shopCore";
-import { advanceSpireNode, claimCurrentSpireRoomReward, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, leaveSpireRoom, normalizeSpireRun, selectSpireNode, smithSpireNode, SPIRE_RATINGS, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
+import { advanceSpireNode, choosePendingRelicReward, claimCurrentSpireRoomReward, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, leaveSpireRoom, normalizeSpireRun, selectSpireNode, skipPendingRelicReward, smithSpireNode, SPIRE_RATINGS, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
 import { EXPERIENCE_PER_LEVEL, defaultState, getMaxHealth, getMaxMana } from "../lib/studyCore";
 import type { SpireNodeKind } from "../types/study";
 
@@ -77,6 +77,8 @@ describe("spireMapCore", () => {
     state.profile.spireRun.availableNodeIds = [actOneBoss.id];
     state = selectSpireNode(state, actOneBoss.id);
     state = advanceSpireNode(state, 2000);
+    state = skipPendingRelicReward(state);
+    state = leaveSpireRoom(state, 2001);
 
     expect(state.profile.spireRun.act).toBe(2);
     expect(state.profile.spireRun.difficulty).toBe("normal");
@@ -88,6 +90,8 @@ describe("spireMapCore", () => {
     state.profile.spireRun.availableNodeIds = [actFourBoss.id];
     state = selectSpireNode(state, actFourBoss.id);
     state = advanceSpireNode(state, 4000);
+    state = skipPendingRelicReward(state);
+    state = leaveSpireRoom(state, 4001);
 
     expect(state.profile.spireRun.act).toBe(1);
     expect(state.profile.spireRun.difficulty).toBe("nightmare");
@@ -97,6 +101,8 @@ describe("spireMapCore", () => {
     state.profile.spireRun.availableNodeIds = [nightmareBoss.id];
     state = selectSpireNode(state, nightmareBoss.id);
     state = advanceSpireNode(state, 6000);
+    state = skipPendingRelicReward(state);
+    state = leaveSpireRoom(state, 6001);
 
     expect(state.profile.spireRun.act).toBe(1);
     expect(state.profile.spireRun.difficulty).toBe("hell");
@@ -243,7 +249,25 @@ describe("spireMapCore", () => {
     expect(state.profile.spireRun.roundSolvedIds).toEqual([]);
   });
 
-  it("grants relics from treasure nodes", () => {
+  it("clears room-scoped relic combat state when leaving a room", () => {
+    let state = defaultState();
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
+    const nodeId = state.profile.spireRun.availableNodeIds[0];
+    state = selectSpireNode(state, nodeId);
+    state = enterSpireNode(state, 1000);
+    state.profile.spireRun.failDamageStacks = 3;
+    state.profile.spireRun.runCodeQuestionIds = [state.profile.spireRun.roundQuestionIds[0]];
+    const currentNode = getCurrentSpireNode(state);
+
+    state = leaveSpireRoom(state, 3000);
+
+    expect(state.profile.spireRun.mapOpen).toBe(true);
+    expect(state.profile.spireRun.availableNodeIds).toEqual(currentNode?.nextIds);
+    expect(state.profile.spireRun.failDamageStacks).toBe(0);
+    expect(state.profile.spireRun.runCodeQuestionIds).toEqual([]);
+  });
+
+  it("offers relic choices from treasure nodes", () => {
     let state = defaultState();
     state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
     const treasure = state.profile.spireRun.nodes.find((node) => node.kind === "treasure") || state.profile.spireRun.nodes[0];
@@ -251,11 +275,26 @@ describe("spireMapCore", () => {
 
     state = selectSpireNode(state, treasure.id);
     state = advanceSpireNode(state, 1000);
+    const choice = state.profile.spireRun.pendingRelicReward?.choices[0];
+    state = choosePendingRelicReward(state, choice?.id || "");
 
     expect(state.profile.relics).toHaveLength(1);
   });
 
-  it("caps map reward item requirements to the current character level", () => {
+  it("uses wider offerings meta ranks to add relic reward choices", () => {
+    let state = defaultState();
+    state.profile.metaProgress.upgrades.relicChoice = 2;
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
+    const treasure = state.profile.spireRun.nodes.find((node) => node.kind === "treasure") || state.profile.spireRun.nodes[0];
+    state.profile.spireRun.availableNodeIds = [treasure.id];
+
+    state = selectSpireNode(state, treasure.id);
+    state = advanceSpireNode(state, 1000);
+
+    expect(state.profile.spireRun.pendingRelicReward?.choices).toHaveLength(5);
+  });
+
+  it("caps map relic reward choices to the current character level", () => {
     let state = defaultState();
     state.profile.experience = EXPERIENCE_PER_LEVEL;
     state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
@@ -265,8 +304,8 @@ describe("spireMapCore", () => {
 
     state = advanceSpireNode(state, 1000);
 
-    expect(state.profile.inventory.length).toBeGreaterThan(0);
-    expect(state.profile.inventory.every((item) => item.requirements.level <= 2)).toBe(true);
+    expect(state.profile.spireRun.pendingRelicReward?.choices.length).toBeGreaterThan(0);
+    expect(state.profile.spireRun.pendingRelicReward?.choices.every((relic) => !relic.wikiLevel || relic.wikiLevel <= 2)).toBe(true);
   });
 
   it("grants enemy room gold when combat rooms are cleared", () => {
@@ -281,7 +320,7 @@ describe("spireMapCore", () => {
     expect(state.profile.coins).toBeGreaterThan(0);
   });
 
-  it("grants elite relics, gold, and high quality items", () => {
+  it("grants elite gold and offers upgraded relic choices", () => {
     let state = defaultState();
     state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(3500) } };
     const elite = state.profile.spireRun.nodes.find((node) => node.kind === "elite") || state.profile.spireRun.nodes[0];
@@ -290,9 +329,9 @@ describe("spireMapCore", () => {
 
     state = advanceSpireNode(state, 2000);
 
-    expect(state.profile.relics).toHaveLength(1);
+    expect(state.profile.spireRun.pendingRelicReward?.choices).toHaveLength(4);
     expect(state.profile.coins).toBeGreaterThan(0);
-    expect(state.profile.inventory.some((item) => ["rare", "epic", "legendary"].includes(item.rarity))).toBe(true);
+    expect(state.profile.inventory).toHaveLength(0);
   });
 
   it("rests for 50 percent of max health rounded down", () => {
@@ -333,7 +372,7 @@ describe("spireMapCore", () => {
     expect(state.profile.spireRun.completedNodeIds).toContain(rest.id);
   });
 
-  it("refreshes merchant stock with potions, items, and relics", () => {
+  it("refreshes merchant stock with potions and a larger relic stock", () => {
     let state = defaultState();
     state.profile.experience = EXPERIENCE_PER_LEVEL;
     state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(3500), shopStock: [] } };
@@ -344,22 +383,14 @@ describe("spireMapCore", () => {
     state = enterSpireNode(state, 4000);
 
     expect(state.profile.shopStock.some((item) => item.kind === "consumable")).toBe(true);
-    expect(state.profile.shopStock.some((item) => item.kind === "equipment")).toBe(true);
     expect(state.profile.shopStock.some((item) => item.kind === "relic")).toBe(true);
-    expect(state.profile.shopStock.filter((item) => item.kind === "equipment").every((item) => item.item.requirements.level <= 2)).toBe(true);
+    expect(state.profile.shopStock.filter((item) => item.kind === "equipment")).toHaveLength(0);
+    expect(state.profile.shopStock.filter((item) => item.kind === "relic")).toHaveLength(5);
   });
 
   it("opens merchant rooms for shopping before continuing to the map", () => {
     let state = defaultState();
     state.profile.coins = 100;
-    state.profile.inventory.push({
-      id: "plain-sword",
-      name: "Plain Sword",
-      rarity: "common",
-      requirements: { level: 1, stats: {} },
-      slot: "mainHand",
-      stats: { strength: 1 }
-    });
     state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(3500), shopStock: [] } };
     const merchant = state.profile.spireRun.nodes.find((node) => node.kind === "merchant") || state.profile.spireRun.nodes[0];
     state.profile.spireRun.availableNodeIds = [merchant.id];
@@ -368,15 +399,12 @@ describe("spireMapCore", () => {
     state = enterSpireNode(state, 4000);
 
     expect(state.profile.spireRun.mapOpen).toBe(false);
-    expect(state.profile.shopStock.some((item) => item.kind === "equipment")).toBe(true);
+    expect(state.profile.shopStock.some((item) => item.kind === "equipment")).toBe(false);
+    expect(state.profile.shopStock.some((item) => item.kind === "relic")).toBe(true);
 
     const randomPotion = state.profile.shopStock.find((item) => item.kind === "consumable" && item.type === "random");
     state = buyShopItem(state, randomPotion?.id || "", getMaxHealth(state), getMaxMana(state));
     expect(state.profile.activePotionEffects[0].roomsRemaining).toBe(3);
-
-    state = upgradeCurrentSpireRoomItem(state);
-    expect(state.profile.inventory[0].rarity).toBe("uncommon");
-    expect(state.profile.coins).toBeLessThan(100);
 
     state = leaveSpireRoom(state, 4100);
     expect(state.profile.spireRun.mapOpen).toBe(true);
@@ -400,9 +428,13 @@ describe("spireMapCore", () => {
     expect(state.profile.coins).toBeGreaterThan(0);
     const rewardClaim = state.profile.spireRun.roomRewardClaims[treasure.id];
     expect(rewardClaim?.gold).toBeGreaterThan(0);
-    expect((rewardClaim?.relicIds?.length || 0) + (rewardClaim?.itemIds?.length || 0)).toBe(1);
-    expect(state.profile.relics.length + state.profile.inventory.length).toBe(1);
+    expect(state.profile.spireRun.pendingRelicReward?.choices.length).toBeGreaterThan(1);
+    expect(state.profile.relics.length + state.profile.inventory.length).toBe(0);
     expect(state.profile.spireRun.mapOpen).toBe(false);
+
+    const choice = state.profile.spireRun.pendingRelicReward?.choices[0];
+    state = choosePendingRelicReward(state, choice?.id || "");
+    expect(state.profile.relics).toHaveLength(1);
 
     state = leaveSpireRoom(state, 4300);
     expect(state.profile.spireRun.mapOpen).toBe(true);

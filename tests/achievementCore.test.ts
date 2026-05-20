@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { questions } from "../data/questions";
 import { ACHIEVEMENT_DEFINITIONS, ACHIEVEMENT_TOTAL, getAchievements, syncUnlockedAchievements } from "../lib/achievementCore";
 import { getAchievementPixelArt } from "../lib/achievementPixelArt";
-import { applyScheduleResult, defaultState, equipItem } from "../lib/studyCore";
+import { applyScheduleResult, defaultState } from "../lib/studyCore";
 
 describe("achievementCore", () => {
   it("defines forty-three achievements with unique badge codes", () => {
@@ -48,20 +48,26 @@ describe("achievementCore", () => {
     expect(getAchievements(reset).find((achievement) => achievement.id === "first-blood")?.unlocked).toBe(true);
   });
 
-  it("unlocks equipment, set, and rarity achievements", () => {
+  it("unlocks relic and meta progression achievements", () => {
     let state = defaultState();
-    state.profile.inventory.push(
-      { id: "sigon-a", name: "Sigon's Gage", rarity: "rare", requirements: { level: 1, stats: {} }, setId: "sigons-complete-steel", slot: "mainHand", stats: { strength: 1 } },
-      { id: "sigon-b", name: "Sigon's Guard", rarity: "legendary", requirements: { level: 1, stats: {} }, setId: "sigons-complete-steel", slot: "offHand", stats: { constitution: 1 } }
-    );
-    state = equipItem(state, "sigon-a");
-    state = equipItem(state, "sigon-b");
+    state.profile.relics = Array.from({ length: 10 }, (_item, index) => ({
+      description: "Test relic",
+      id: `test-relic-${index}`,
+      modifiers: [],
+      name: `Test Relic ${index}`,
+      rarity: "common",
+      source: "any"
+    }));
+    state.profile.metaProgress.currency = 25;
+    state.profile.metaProgress.totalEarned = 100;
+    state.profile.metaProgress.upgrades.coinPurse = 1;
 
     const achievements = getAchievements(state);
 
-    expect(achievements.find((achievement) => achievement.id === "rare-taste")?.unlocked).toBe(true);
-    expect(achievements.find((achievement) => achievement.id === "legendary-find")?.unlocked).toBe(true);
-    expect(achievements.find((achievement) => achievement.id === "geared-up")?.unlocked).toBe(true);
-    expect(achievements.find((achievement) => achievement.id === "green-glow")?.unlocked).toBe(true);
+    expect(achievements.find((achievement) => achievement.id === "first-relic")?.unlocked).toBe(true);
+    expect(achievements.find((achievement) => achievement.id === "relic-collector")?.unlocked).toBe(true);
+    expect(achievements.find((achievement) => achievement.id === "first-insight-upgrade")?.unlocked).toBe(true);
+    expect(achievements.find((achievement) => achievement.id === "insight-stash")?.unlocked).toBe(true);
+    expect(achievements.find((achievement) => achievement.id === "insight-memory")?.unlocked).toBe(true);
   });
 });

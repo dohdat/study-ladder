@@ -1,21 +1,19 @@
 import { EQUIPMENT_SLOTS, createDropItem } from "./itemCore";
-import { getRelicCost, grantRelic, rollRelic } from "./relicCore";
+import { getRelicCost, getRelicModifierTotals, grantRelic, rollRelic } from "./relicCore";
 import type { ActivePotionEffect, CharacterStats, Difficulty, Question, ShopItem, StudyState } from "../types/study";
 
 const HASH_SEED = 2166136261;
 const HASH_MULTIPLIER = 16777619;
 const HASH_DIVISOR = 4294967296;
 const HEALTH_POTION_PERCENT = 20;
-const MANA_POTION_PERCENT = 40;
 const RANDOM_POTION_BASE_AMOUNT = 14;
 const HEALTH_POTION_COST = 16;
-const MANA_POTION_COST = 12;
 const RANDOM_POTION_COST = 20;
 const PERCENT_DIVISOR = 100;
 const POTION_LEVEL_COST_MULTIPLIER = 2;
 const RELIC_LEVEL_COST_MULTIPLIER = 4;
-const EQUIPMENT_STOCK_COUNT = 5;
-const RELIC_STOCK_COUNT = 3;
+const EQUIPMENT_STOCK_COUNT = 0;
+const RELIC_STOCK_COUNT = 5;
 const RANDOM_POTION_DURATION_ROOMS = 3;
 const SHOP_RATING_DISCOUNT = 180;
 const SHOP_RATING_STEP = 45;
@@ -25,8 +23,9 @@ const SHOP_ITEM_RARITY_BONUS = 0.04;
 const ITEM_LEVEL_COST_MULTIPLIER = 3;
 const ITEM_STAT_COST_MULTIPLIER = 6;
 const COMMON_RARITY_COST = 8;
+const MAX_SHOP_DISCOUNT_PERCENT = 70;
 const MERCHANT_RELIC_RARITIES = ["common", "uncommon", "rare", "shop"] as const;
-type ShopStockOptions = { maxItemLevel?: number };
+type ShopStockOptions = { extraRelicStock?: number; maxItemLevel?: number };
 
 const RARITY_COSTS = {
   common: COMMON_RARITY_COST,
@@ -41,20 +40,18 @@ export function createShopStock(question: Question, stats: CharacterStats, now: 
   const relics = createShopRelics(question, now, resolvedOptions);
   return [
     createHealthPotion(question, now, resolvedOptions),
-    createManaPotion(question, now, resolvedOptions),
     createRandomPotion(question, now, resolvedOptions),
-    ...createShopEquipmentStock(question, stats, now, resolvedOptions),
     ...relics
   ];
 }
 
-export function buyShopItem(state: StudyState, shopItemId: string, maxHealth: number, maxMana: number): StudyState {
+export function buyShopItem(state: StudyState, shopItemId: string, maxHealth: number, _maxMana = 0): StudyState {
   const listing = state.profile.shopStock.find((item) => item.id === shopItemId);
-  if (!listing || !canBuyShopItem(state, listing, maxHealth, maxMana)) {
+  if (!listing || !canBuyShopItem(state, listing, maxHealth)) {
     return state;
   }
   const next = cloneShopState(state);
-  next.profile.coins -= listing.cost;
+  next.profile.coins -= getShopItemCost(state, listing);
   next.profile.shopStock = next.profile.shopStock.filter((item) => item.id !== shopItemId);
   if (listing.kind === "equipment") {
     next.profile.inventory.push(listing.item);
@@ -63,12 +60,12 @@ export function buyShopItem(state: StudyState, shopItemId: string, maxHealth: nu
   if (listing.kind === "relic") {
     return grantRelic(next, listing.relic);
   }
-  applyConsumable(next, listing, maxHealth, maxMana);
+  applyConsumable(next, listing, maxHealth);
   return next;
 }
 
-export function canBuyShopItem(state: StudyState, listing: ShopItem, maxHealth: number, maxMana: number) {
-  if (state.profile.coins < listing.cost) {
+export function canBuyShopItem(state: StudyState, listing: ShopItem, maxHealth: number, _maxMana = 0) {
+  if (state.profile.coins < getShopItemCost(state, listing)) {
     return false;
   }
   if (listing.kind !== "consumable") {
@@ -77,10 +74,13 @@ export function canBuyShopItem(state: StudyState, listing: ShopItem, maxHealth: 
   if (listing.type === "health") {
     return state.profile.health < maxHealth;
   }
-  if (listing.type === "mana") {
-    return state.profile.mana < maxMana;
-  }
   return true;
+}
+
+export function getShopItemCost(state: StudyState, listing: ShopItem) {
+  const discount = Math.min(MAX_SHOP_DISCOUNT_PERCENT, Math.max(0, getRelicModifierTotals(state).shopDiscountPercent || 0));
+  const priceIncrease = Math.max(0, getRelicModifierTotals(state).shopPriceIncreasePercent || 0);
+  return Math.max(1, Math.ceil(listing.cost * (100 - discount + priceIncrease) / 100));
 }
 
 export function normalizeShopStock(items: ShopItem[] | undefined): ShopItem[] {
@@ -92,7 +92,7 @@ function isValidShopItem(item: ShopItem) {
     return false;
   }
   if (item.kind === "consumable") {
-    return item.amount > 0 && (item.type === "health" || item.type === "mana" || item.type === "random");
+    return item.amount > 0 && (item.type === "health" || item.type === "random");
   }
   if (item.kind === "equipment") {
     return Boolean(item.item);
@@ -102,10 +102,6 @@ function isValidShopItem(item: ShopItem) {
 
 function createHealthPotion(question: Question, now: number, options: ShopStockOptions): ShopItem {
   return { amount: HEALTH_POTION_PERCENT, cost: getScaledShopCost(HEALTH_POTION_COST + question.difficulty, options), id: `shop-health-${question.id}-${now}`, kind: "consumable", name: "Minor Healing Potion", type: "health" };
-}
-
-function createManaPotion(question: Question, now: number, options: ShopStockOptions): ShopItem {
-  return { amount: MANA_POTION_PERCENT, cost: getScaledShopCost(MANA_POTION_COST + question.difficulty, options), id: `shop-mana-${question.id}-${now}`, kind: "consumable", name: "Minor Mana Potion", type: "mana" };
 }
 
 function createRandomPotion(question: Question, now: number, options: ShopStockOptions): ShopItem {
@@ -150,7 +146,8 @@ function createShopRelic(question: Question, now: number, index: number, options
 function createShopRelics(question: Question, now: number, options: ShopStockOptions) {
   const relics: ShopItem[] = [];
   const seenIds = new Set<string>();
-  for (let attempt = 0; relics.length < RELIC_STOCK_COUNT && attempt < RELIC_STOCK_COUNT * 12; attempt += 1) {
+  const stockCount = RELIC_STOCK_COUNT + Math.max(0, Math.floor(options.extraRelicStock || 0));
+  for (let attempt = 0; relics.length < stockCount && attempt < stockCount * 12; attempt += 1) {
     const listing = createShopRelic(question, now, attempt, options);
     if (listing.kind === "relic" && !seenIds.has(listing.relic.id)) {
       seenIds.add(listing.relic.id);
@@ -206,13 +203,9 @@ function getScaledShopCost(baseCost: number, options: ShopStockOptions, levelMul
   return Math.max(1, Math.round(baseCost + (level - 1) * levelMultiplier));
 }
 
-function applyConsumable(state: StudyState, item: Extract<ShopItem, { kind: "consumable" }>, maxHealth: number, maxMana: number) {
+function applyConsumable(state: StudyState, item: Extract<ShopItem, { kind: "consumable" }>, maxHealth: number) {
   if (item.type === "health") {
     state.profile.health = Math.min(maxHealth, state.profile.health + Math.max(1, Math.floor(maxHealth * item.amount / PERCENT_DIVISOR)));
-    return;
-  }
-  if (item.type === "mana") {
-    state.profile.mana = Math.min(maxMana, state.profile.mana + Math.max(1, Math.floor(maxMana * item.amount / PERCENT_DIVISOR)));
     return;
   }
   state.profile.activePotionEffects = [...(state.profile.activePotionEffects || []), getRandomPotionEffect(item, state.profile.spireRun.currentNodeId)];
@@ -229,7 +222,7 @@ export function getRandomPotionEffect(item: Extract<ShopItem, { kind: "consumabl
     return { ...base, modifiers: [{ key: "maxLife", value: item.amount }], name: "Witches Potion", stats: { constitution: 1 } };
   }
   if (roll < 0.4) {
-    return { ...base, modifiers: [{ key: "maxMana", value: item.amount }], name: "Wizard Potion", stats: { intelligence: 1 } };
+    return { ...base, modifiers: [{ key: "timerDamagePercent", value: Math.max(6, Math.floor(item.amount / 2)) }], name: "Wizard Potion", stats: { intelligence: 1 } };
   }
   if (roll < 0.6) {
     return { ...base, modifiers: [{ key: "criticalChancePercent", value: 6 }], name: "Elixir of Death", stats: { strength: 1 } };
@@ -237,7 +230,7 @@ export function getRandomPotionEffect(item: Extract<ShopItem, { kind: "consumabl
   if (roll < 0.8) {
     return { ...base, modifiers: [{ key: "damageReduction", value: 1 }], name: "Blood of Spartan", stats: { constitution: 1, strength: 1 } };
   }
-  return { ...base, modifiers: [{ key: "bonusXpPercent", value: 8 }, { key: "goldFindPercent", value: 8 }], name: "Bottle of Radogate", stats: { perception: 1 } };
+  return { ...base, modifiers: [{ key: "goldFindPercent", value: 12 }, { key: "relicRerollBonus", value: 1 }], name: "Bottle of Radogate", stats: { perception: 1 } };
 }
 
 function cloneShopState(state: StudyState): StudyState {

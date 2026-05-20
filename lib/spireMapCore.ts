@@ -4,8 +4,8 @@ import { createDropItem, SLOT_STAT_BIAS } from "./itemCore";
 import { getUniqueMonsterBonusCount } from "./monsterCore";
 import { grantRelic, rollRelic } from "./relicCore";
 import { createShopStock } from "./shopCore";
-import { getMaxHealth, getMaxMana } from "./studyCore";
-import type { Difficulty, InventoryItem, ItemRarity, Question, SpireAct, SpireDifficulty, SpireMapNode, SpireNodeKind, SpireRun, StudyState, UnknownEncounterKind } from "../types/study";
+import { getMaxHealth, getMetaRelicChoiceBonus, getRunModifierTotals } from "./studyCore";
+import type { Difficulty, InventoryItem, ItemRarity, Question, Relic, RelicRarity, SpireAct, SpireDifficulty, SpireMapNode, SpireNodeKind, SpireRun, StudyState, UnknownEncounterKind } from "../types/study";
 
 const RATING_FLOOR_1 = 1500;
 const RATING_FLOOR_2 = 1650;
@@ -60,12 +60,19 @@ const HASH_MULTIPLIER = 16777619;
 const HASH_DIVISOR = 4294967296;
 const REST_HEALTH_RATIO = 0.5;
 const ENEMY_ROOM_ITEM_CHANCE = 0.3;
-const ENEMY_ROOM_POTION_CHANCE = 0.18;
+const ELITE_ROOM_HEALING_CHANCE = 0.18;
 const ELITE_ROOM_ITEM_COUNT = 1;
 const BOSS_ROOM_ITEM_COUNT = 2;
 export const MERCHANT_UPGRADE_COST = 35;
+const BASE_RELIC_CHOICE_COUNT = 3;
+const ELITE_RELIC_CHOICE_BONUS = 1;
+const BOSS_RELIC_CHOICE_BONUS = 1;
+const BASE_RELIC_REROLLS = 1;
+const SKIP_META_COMMON = 3;
+const SKIP_META_ELITE = 6;
+const SKIP_META_BOSS = 10;
+const EVENT_META_REWARD = 8;
 const POTION_HEALTH_RATIO = 0.25;
-const POTION_MANA_RATIO = 0.35;
 const UNKNOWN_MONSTER_WEIGHT = 45;
 const UNKNOWN_TREASURE_WEIGHT = 25;
 const UNKNOWN_SHOP_WEIGHT = 20;
@@ -150,6 +157,8 @@ type PathEdge = {
   toColumn: number;
 };
 
+type RelicRewardKind = NonNullable<SpireRun["pendingRelicReward"]>["rewardKind"];
+
 export function createSpireRun(seed = Date.now(), act: SpireAct = 1, difficulty: SpireDifficulty = "normal"): SpireRun {
   const nodes = createSpireNodes(seed);
   const availableNodeIds = nodes.filter((node) => node.rating === SPIRE_RATINGS[FIRST_TIER]).map((node) => node.id);
@@ -160,12 +169,15 @@ export function createSpireRun(seed = Date.now(), act: SpireAct = 1, difficulty:
     completedNodeIds: [],
     currentNodeId,
     difficulty,
+    failDamageStacks: 0,
     mapOpen: true,
     mapSeed: seed,
     nodes,
+    pendingRelicReward: null,
     roomRewardClaims: {},
     roundQuestionIds: [],
     roundSolvedIds: [],
+    runCodeQuestionIds: [],
     tierIndex: FIRST_TIER,
     unknownEncounterMisses: createDefaultUnknownEncounterMisses()
   };
@@ -190,12 +202,15 @@ export function normalizeSpireRun(run: Partial<SpireRun> | undefined): SpireRun 
     completedNodeIds: sourceRun.completedNodeIds || [],
     currentNodeId: currentNode.id,
     difficulty: normalizeSpireDifficulty(sourceRun.difficulty),
+    failDamageStacks: Math.max(0, Math.floor(sourceRun.failDamageStacks || 0)),
     mapOpen: typeof sourceRun.mapOpen === "boolean" ? sourceRun.mapOpen : true,
     mapSeed: Number.isFinite(sourceRun.mapSeed) ? sourceRun.mapSeed || Date.now() : Date.now(),
     nodes: normalizedNodes,
+    pendingRelicReward: normalizePendingRelicReward(sourceRun.pendingRelicReward),
     roomRewardClaims: normalizeRoomRewardClaims(sourceRun.roomRewardClaims),
     roundQuestionIds,
     roundSolvedIds,
+    runCodeQuestionIds: (sourceRun.runCodeQuestionIds || []).filter((id) => knownQuestionIds.has(id)),
     tierIndex: Math.min(SPIRE_RATINGS.length - 1, Math.max(FIRST_TIER, Math.floor(sourceRun.tierIndex || FIRST_TIER))),
     unknownEncounterMisses: normalizeUnknownEncounterMisses(sourceRun.unknownEncounterMisses)
   };
@@ -229,9 +244,24 @@ function normalizeRoomRewardClaims(claims: SpireRun["roomRewardClaims"] | undefi
     {
       gold: Number.isFinite(claim.gold) ? Math.max(0, Math.floor(claim.gold || 0)) : undefined,
       itemIds: Array.isArray(claim.itemIds) ? claim.itemIds.filter(Boolean) : undefined,
+      metaCurrency: Number.isFinite(claim.metaCurrency) ? Math.max(0, Math.floor(claim.metaCurrency || 0)) : undefined,
       relicIds: Array.isArray(claim.relicIds) ? claim.relicIds.filter(Boolean) : undefined
     }
   ])) as SpireRun["roomRewardClaims"];
+}
+
+function normalizePendingRelicReward(choice: Partial<SpireRun["pendingRelicReward"]> | undefined): SpireRun["pendingRelicReward"] {
+  if (!choice?.nodeId || !Array.isArray(choice.choices) || !choice.choices.length) {
+    return null;
+  }
+  return {
+    choices: choice.choices.filter((relic): relic is Relic => Boolean(relic?.id && relic.name)),
+    nodeId: choice.nodeId,
+    rerollsRemaining: Math.max(0, Math.floor(choice.rerollsRemaining || 0)),
+    rewardKind: choice.rewardKind || "treasure",
+    seed: choice.seed || `${choice.nodeId}:reward`,
+    skipMetaCurrency: Math.max(0, Math.floor(choice.skipMetaCurrency || 0))
+  };
 }
 
 function normalizeForcedRoomKinds(nodes: SpireMapNode[]) {
@@ -547,45 +577,47 @@ export function claimSpireNodeReward(state: StudyState, now = Date.now()) {
   if (currentNode.kind === "rest") {
     return applyRestRoomReward(state);
   }
+  if (currentNode.kind === "event") {
+    return applyEventRoomReward(state, currentNode, now);
+  }
   return state;
 }
 
 function applyEnemyRoomReward(state: StudyState, node: SpireMapNode, now: number) {
   const withGold = grantRoomGold(state, node, "enemy", now);
-  const withItem = maybeGrantRoomItem(withGold, node, now, "enemy", ENEMY_ROOM_ITEM_CHANCE);
-  return maybeApplyPotionReward(withItem, node, now, "enemy");
+  return maybeCreateEnemyRelicReward(withGold, node, now);
 }
 
 function applyEliteRoomReward(state: StudyState, node: SpireMapNode, now: number) {
-  const withRelic = grantRelic(state, rollRelic(state, `${node.id}:${now}:elite-relic`, { maxItemLevel: getStateLevel(state), minRarity: ["uncommon", "rare", "boss"] }));
-  const withGold = grantRoomGold(withRelic, node, "elite", now);
-  const withItems = grantRoomItems(withGold, node, now, "elite", ELITE_ROOM_ITEM_COUNT);
-  return maybeApplyPotionReward(withItems, node, now, "elite");
+  const withGold = grantRoomGold(state, node, "elite", now);
+  const withRelicChoice = createPendingRelicReward(withGold, node, now, "elite", {
+    choiceBonus: ELITE_RELIC_CHOICE_BONUS,
+    minRarity: ["uncommon", "rare", "unique"],
+    skipMetaCurrency: SKIP_META_ELITE
+  });
+  return maybeApplyHealingReward(withRelicChoice, node, now, "elite");
 }
 
 function applyBossRoomReward(state: StudyState, node: SpireMapNode, now: number) {
-  const withRelic = grantRelic(state, rollRelic(state, `${node.id}:${now}:boss-relic`, { maxItemLevel: getStateLevel(state), minRarity: ["boss"] }));
-  const withGold = grantRoomGold(withRelic, node, "boss", now);
-  const withItems = grantRoomItems(withGold, node, now, "boss", BOSS_ROOM_ITEM_COUNT);
-  return applyPotionReward(withItems, "health", node, now, "boss-health");
+  const withGold = grantRoomGold(state, node, "boss", now);
+  const withRelicChoice = createPendingRelicReward(withGold, node, now, "boss", {
+    choiceBonus: BOSS_RELIC_CHOICE_BONUS,
+    minRarity: ["boss"],
+    skipMetaCurrency: SKIP_META_BOSS
+  });
+  return applyPotionReward(withRelicChoice, "health", node, now, "boss-health");
 }
 
 function applyTreasureRoomReward(state: StudyState, node: SpireMapNode, now: number) {
   const gold = getRoomGold(state, node, "treasure", now);
-  const rewardKind = getRoll(`${node.id}:${now}:treasure-kind`) < 0.5 ? "relic" : "equipment";
-  if (rewardKind === "relic") {
-    const relic = rollRelic(state, `${node.id}:${now}:treasure-relic`, { maxItemLevel: getStateLevel(state) });
-    return recordRoomRewardClaim(addRoomGold(grantRelic(state, relic), gold), node.id, { gold, relicIds: [relic.id] });
+  return recordRoomRewardClaim(createPendingRelicReward(addRoomGold(state, gold), node, now, "treasure", { skipMetaCurrency: SKIP_META_COMMON }), node.id, { gold });
+}
+
+function maybeCreateEnemyRelicReward(state: StudyState, node: SpireMapNode, now: number) {
+  if (getRoll(`${node.id}:${now}:enemy-relic-chance`) > ENEMY_ROOM_ITEM_CHANCE) {
+    return state;
   }
-  const item = createRoomRewardItem(state, node, now, "treasure", 0);
-  return recordRoomRewardClaim({
-    ...state,
-    profile: {
-      ...state.profile,
-      coins: state.profile.coins + gold,
-      inventory: [...state.profile.inventory, item]
-    }
-  }, node.id, { gold, itemIds: [item.id] });
+  return createPendingRelicReward(state, node, now, "enemy", { skipMetaCurrency: SKIP_META_COMMON });
 }
 
 function applyMerchantRoomReward(state: StudyState, node: SpireMapNode, now: number) {
@@ -595,7 +627,7 @@ function applyMerchantRoomReward(state: StudyState, node: SpireMapNode, now: num
     profile: {
       ...state.profile,
       shopLastRefreshedAt: now,
-      shopStock: createShopStock(question, state.profile.stats, now, { maxItemLevel: getStateLevel(state) })
+    shopStock: createShopStock(question, state.profile.stats, now, { extraRelicStock: getRunModifierTotals(state).shopRelicStock, maxItemLevel: getStateLevel(state) })
     }
   };
 }
@@ -609,6 +641,14 @@ function applyRestRoomReward(state: StudyState) {
       health: Math.min(maxHealth, state.profile.health + Math.floor(maxHealth * REST_HEALTH_RATIO))
     }
   };
+}
+
+function applyEventRoomReward(state: StudyState, node: SpireMapNode, now: number) {
+  if (getRoll(`${node.id}:${now}:event-reward`) < 0.5) {
+    return createPendingRelicReward(state, node, now, "event", { minRarity: ["event", "rare"], skipMetaCurrency: SKIP_META_ELITE });
+  }
+  const withMeta = addMetaCurrency(state, EVENT_META_REWARD);
+  return recordRoomRewardClaim(withMeta, node.id, { metaCurrency: EVENT_META_REWARD });
 }
 
 export function getRestSpecialAction(state: StudyState): RestSpecialAction {
@@ -731,6 +771,140 @@ function recordRoomRewardClaim(state: StudyState, nodeId: string, claim: SpireRu
   };
 }
 
+function createPendingRelicReward(
+  state: StudyState,
+  node: SpireMapNode,
+  now: number,
+  rewardKind: RelicRewardKind,
+  options: { choiceBonus?: number; minRarity?: RelicRarity[]; rerolls?: number; skipMetaCurrency?: number } = {}
+) {
+  const seed = `${node.id}:${now}:${rewardKind}:relic-choice`;
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      spireRun: {
+        ...state.profile.spireRun,
+        pendingRelicReward: {
+          choices: rollRelicChoices(state, seed, BASE_RELIC_CHOICE_COUNT + getMetaRelicChoiceBonus(state) + getRunModifierTotals(state).relicChoiceBonus + (options.choiceBonus || 0), options.minRarity),
+          nodeId: node.id,
+          rerollsRemaining: (options.rerolls ?? BASE_RELIC_REROLLS) + Math.max(0, Math.floor(getRunModifierTotals(state).relicRerollBonus || 0)),
+          rewardKind,
+          seed,
+          skipMetaCurrency: (options.skipMetaCurrency ?? SKIP_META_COMMON) + Math.max(0, Math.floor(getRunModifierTotals(state).skipRelicMetaBonus || 0))
+        }
+      }
+    }
+  };
+}
+
+function rollRelicChoices(state: StudyState, seed: string, count: number, minRarity?: RelicRarity[]) {
+  let nextState = state;
+  const choices: Relic[] = [];
+  for (let index = 0; choices.length < count && index < count * 6; index += 1) {
+    const relic = rollRelic(nextState, `${seed}:${index}`, { includeEvents: minRarity?.includes("event"), maxItemLevel: getStateLevel(state), minRarity });
+    if (choices.some((choice) => choice.id === relic.id)) {
+      continue;
+    }
+    choices.push(relic);
+    nextState = grantRelic(nextState, relic);
+  }
+  return choices;
+}
+
+export function choosePendingRelicReward(state: StudyState, relicId: string) {
+  const pending = state.profile.spireRun.pendingRelicReward;
+  const relic = pending?.choices.find((choice) => choice.id === relicId);
+  if (!pending || !relic) {
+    return state;
+  }
+  const withRelic = grantRelic(state, relic);
+  return recordRoomRewardClaim(clearPendingRelicReward(withRelic), pending.nodeId, {
+    ...state.profile.spireRun.roomRewardClaims[pending.nodeId],
+    relicIds: [relic.id]
+  });
+}
+
+export function skipPendingRelicReward(state: StudyState) {
+  const pending = state.profile.spireRun.pendingRelicReward;
+  if (!pending) {
+    return state;
+  }
+  const metaCurrency = pending.skipMetaCurrency;
+  const withMeta = addMetaCurrency(state, metaCurrency);
+  return recordRoomRewardClaim(clearPendingRelicReward(withMeta), pending.nodeId, {
+    ...state.profile.spireRun.roomRewardClaims[pending.nodeId],
+    metaCurrency
+  });
+}
+
+export function rerollPendingRelicReward(state: StudyState) {
+  const pending = state.profile.spireRun.pendingRelicReward;
+  if (!pending || pending.rerollsRemaining <= 0) {
+    return state;
+  }
+  const seed = `${pending.seed}:reroll:${pending.rerollsRemaining}`;
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      spireRun: {
+        ...state.profile.spireRun,
+        pendingRelicReward: {
+          ...pending,
+          choices: rollRelicChoices(state, seed, pending.choices.length, getRelicChoiceRarities(pending.rewardKind)),
+          rerollsRemaining: pending.rerollsRemaining - 1,
+          seed
+        }
+      }
+    }
+  };
+}
+
+function getRelicChoiceRarities(kind: RelicRewardKind): RelicRarity[] | undefined {
+  if (kind === "boss") {
+    return ["boss"];
+  }
+  if (kind === "elite") {
+    return ["uncommon", "rare", "unique"];
+  }
+  if (kind === "event") {
+    return ["event", "rare"];
+  }
+  return undefined;
+}
+
+function clearPendingRelicReward(state: StudyState): StudyState {
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      spireRun: {
+        ...state.profile.spireRun,
+        pendingRelicReward: null
+      }
+    }
+  };
+}
+
+function addMetaCurrency(state: StudyState, amount: number): StudyState {
+  const earned = Math.max(0, Math.floor(amount || 0));
+  if (!earned) {
+    return state;
+  }
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      metaProgress: {
+        currency: state.profile.metaProgress.currency + earned,
+        totalEarned: state.profile.metaProgress.totalEarned + earned,
+        upgrades: { ...state.profile.metaProgress.upgrades }
+      }
+    }
+  };
+}
+
 function getRoomGoldBase(node: SpireMapNode, kind: SpireNodeKind) {
   const floorIndex = Math.max(0, getTierIndex(node.rating));
   if (kind === "boss") {
@@ -770,7 +944,7 @@ function createRoomRewardItem(state: StudyState, node: SpireMapNode, now: number
 }
 
 function getStateLevel(state: StudyState) {
-  return Math.min(MAX_CHARACTER_LEVEL, Math.floor(Math.max(0, state.profile.experience) / EXPERIENCE_PER_LEVEL) + 1);
+  return 1;
 }
 
 function createRoomRewardQuestion(state: StudyState, node: SpireMapNode, kind: string, now: number, suffix: string): Question {
@@ -793,36 +967,20 @@ function getRoomRewardDifficulty(node: SpireMapNode, kind: string): Difficulty {
   return Math.min(5, Math.max(1, Math.ceil((getTierIndex(node.rating) + 1) / 3))) as Difficulty;
 }
 
-function maybeApplyPotionReward(state: StudyState, node: SpireMapNode, now: number, kind: string) {
-  const healthRoll = getRoll(`${node.id}:${now}:${kind}:health-potion`);
-  const manaRoll = getRoll(`${node.id}:${now}:${kind}:mana-potion`);
-  let next = state;
-  if (healthRoll <= ENEMY_ROOM_POTION_CHANCE) {
-    next = applyPotionReward(next, "health", node, now, `${kind}-health`);
+function maybeApplyHealingReward(state: StudyState, node: SpireMapNode, now: number, kind: string) {
+  if (getRoll(`${node.id}:${now}:${kind}:healing`) > ELITE_ROOM_HEALING_CHANCE) {
+    return state;
   }
-  if (manaRoll <= ENEMY_ROOM_POTION_CHANCE) {
-    next = applyPotionReward(next, "mana", node, now, `${kind}-mana`);
-  }
-  return next;
+  return applyPotionReward(state, "health", node, now, `${kind}-health`);
 }
 
-function applyPotionReward(state: StudyState, type: "health" | "mana", _node: SpireMapNode, _now: number, _key: string) {
-  if (type === "health") {
-    const maxHealth = getMaxHealth(state);
-    return {
-      ...state,
-      profile: {
-        ...state.profile,
-        health: Math.min(maxHealth, state.profile.health + Math.max(1, Math.floor(maxHealth * POTION_HEALTH_RATIO)))
-      }
-    };
-  }
-  const maxMana = getMaxMana(state);
+function applyPotionReward(state: StudyState, type: "health", _node: SpireMapNode, _now: number, _key: string) {
+  const maxHealth = getMaxHealth(state);
   return {
     ...state,
     profile: {
       ...state.profile,
-      mana: Math.min(maxMana, state.profile.mana + Math.max(1, Math.floor(maxMana * POTION_MANA_RATIO)))
+      health: Math.min(maxHealth, state.profile.health + Math.max(1, Math.floor(maxHealth * POTION_HEALTH_RATIO)))
     }
   };
 }
@@ -837,7 +995,7 @@ export function advanceSpireNode(state: StudyState, now = Date.now()) {
 
 export function leaveSpireRoom(state: StudyState, now = Date.now()) {
   const currentNode = getCurrentSpireNode(state);
-  if (!currentNode || state.profile.spireRun.mapOpen) {
+  if (!currentNode || state.profile.spireRun.mapOpen || state.profile.spireRun.pendingRelicReward) {
     return state;
   }
   return completeSpireNode(markSpireRoomRewardClaimed(state, currentNode.id), currentNode, now, false);
@@ -845,7 +1003,7 @@ export function leaveSpireRoom(state: StudyState, now = Date.now()) {
 
 export function claimCurrentSpireRoomReward(state: StudyState, now = Date.now()) {
   const currentNode = getCurrentSpireNode(state);
-  if (!currentNode || state.profile.spireRun.mapOpen || isSpireRoomRewardClaimed(state, currentNode.id)) {
+  if (!currentNode || state.profile.spireRun.mapOpen || state.profile.spireRun.pendingRelicReward || isSpireRoomRewardClaimed(state, currentNode.id)) {
     return state;
   }
   if (currentNode.kind === "merchant") {
@@ -880,8 +1038,7 @@ export function digCurrentSpireRoomRelic(state: StudyState, now = Date.now()) {
   if (!currentNode || currentNode.kind !== "rest" || state.profile.spireRun.mapOpen || isSpireRoomRewardClaimed(state, currentNode.id) || getRestSpecialAction(state) !== "dig") {
     return state;
   }
-  const relic = rollRelic(state, `${currentNode.id}:${now}:rest-dig-relic`, { maxItemLevel: getStateLevel(state) });
-  return markSpireRoomRewardClaimed(grantRelic(state, relic), currentNode.id);
+  return markSpireRoomRewardClaimed(createPendingRelicReward(state, currentNode, now, "rest", { skipMetaCurrency: SKIP_META_COMMON }), currentNode.id);
 }
 
 export function smithSpireNode(state: StudyState, now = Date.now()) {
@@ -894,7 +1051,7 @@ export function smithSpireNode(state: StudyState, now = Date.now()) {
 
 export function selectSpireNode(state: StudyState, nodeId: string) {
   const node = state.profile.spireRun.nodes.find((row) => row.id === nodeId);
-  if (!node || !state.profile.spireRun.mapOpen || !canUseSpireNode(state, nodeId)) {
+  if (!node || !state.profile.spireRun.mapOpen || state.profile.spireRun.pendingRelicReward || !canUseSpireNode(state, nodeId)) {
     return state;
   }
   return {
@@ -908,6 +1065,7 @@ export function selectSpireNode(state: StudyState, nodeId: string) {
         mapOpen: true,
         roundQuestionIds: [],
         roundSolvedIds: [],
+        runCodeQuestionIds: [],
         tierIndex: getTierIndex(node.rating)
       }
     }
@@ -916,7 +1074,7 @@ export function selectSpireNode(state: StudyState, nodeId: string) {
 
 export function enterSpireNode(state: StudyState, now = Date.now()) {
   const node = getCurrentSpireNode(state);
-  if (!node || !state.profile.spireRun.mapOpen || !canUseSpireNode(state, node.id)) {
+  if (!node || !state.profile.spireRun.mapOpen || state.profile.spireRun.pendingRelicReward || !canUseSpireNode(state, node.id)) {
     return state;
   }
   const revealedState = node.kind === "unknown" ? revealUnknownSpireNode(state, node, now) : state;
@@ -932,6 +1090,7 @@ export function enterSpireNode(state: StudyState, now = Date.now()) {
         mapOpen: false,
         roundQuestionIds: isCombatNode(enteredNode) ? pickRoundQuestions(enteredState.profile.spireRun, enteredNode, state.profile.spireRun.mapSeed + now, state.profile.spireRun.roundQuestionIds, getRoundQuestionCount(enteredNode, now)) : [],
         roundSolvedIds: [],
+        runCodeQuestionIds: [],
         tierIndex: getTierIndex(enteredNode?.rating || node.rating)
       }
     }
@@ -998,6 +1157,23 @@ function markSpireRoomRewardClaimed(state: StudyState, nodeId: string) {
 
 function completeSpireNode(state: StudyState, node: SpireMapNode, now: number, shouldClaimReward = true) {
   const rewarded = tickActivePotionEffects(shouldClaimReward ? claimSpireNodeReward(state, now) : state, node.id);
+  if (rewarded.profile.spireRun.pendingRelicReward) {
+    return {
+      ...rewarded,
+      profile: {
+        ...rewarded.profile,
+        spireRun: {
+          ...rewarded.profile.spireRun,
+        completedNodeIds: Array.from(new Set([...rewarded.profile.spireRun.completedNodeIds, node.id])),
+        failDamageStacks: 0,
+        mapOpen: false,
+        roundQuestionIds: [],
+        roundSolvedIds: [],
+        runCodeQuestionIds: []
+        }
+      }
+    };
+  }
   const nextCampaign = node.kind === "boss" && !node.nextIds.length ? getNextSpireCampaignStage(rewarded.profile.spireRun) : null;
   if (nextCampaign) {
     return {
@@ -1019,9 +1195,11 @@ function completeSpireNode(state: StudyState, node: SpireMapNode, now: number, s
         availableNodeIds: nextIds,
         completedNodeIds: Array.from(new Set([...rewarded.profile.spireRun.completedNodeIds, node.id])),
         currentNodeId: nextIds[DEFAULT_FIRST_SLOT] || node.id,
+        failDamageStacks: 0,
         mapOpen: true,
         roundQuestionIds: [],
         roundSolvedIds: [],
+        runCodeQuestionIds: [],
         tierIndex: Math.min(SPIRE_RATINGS.length - 1, rewarded.profile.spireRun.tierIndex + 1)
       }
     }
@@ -1038,7 +1216,7 @@ function tickActivePotionEffects(state: StudyState, completedNodeId: string): St
       ...state.profile,
       activePotionEffects,
       health: Math.min(state.profile.health, getMaxHealth({ ...state, profile: { ...state.profile, activePotionEffects } })),
-      mana: Math.min(state.profile.mana, getMaxMana({ ...state, profile: { ...state.profile, activePotionEffects } }))
+      mana: 0
     }
   };
 }

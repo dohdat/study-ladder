@@ -1891,6 +1891,816 @@ const EXTERNAL_RATED_QUESTION_SEEDS: ExternalRatedQuestionSeed[] = [
     starterArgs: "times, targetFriend",
     title: "Smallest Unoccupied Chair",
     topics: ["Heap", "Simulation", "Arrays"]
+  },
+  {
+    cases: makeCases([[[3, 4, 1, 2, 6], [[0, 3], [1, 3], [2, 4]]], [[4, 3, 1, 6], [[0, 1], [1, 2], [2, 3], [0, 3]]], [[1], [[0, 0]]], [[2, 4, 6], [[0, 2], [1, 2]]], [[1, 2, 3, 4], [[0, 3], [1, 2]]], [[1, 3, 5, 7], [[0, 0], [0, 1], [2, 3]]], [[8, 5, 4, 7, 2], [[0, 4], [1, 3], [3, 4]]], [[9, 10, 12, 13], [[0, 1], [0, 2], [2, 3]]], [[6, 7, 8, 10, 11], [[0, 2], [2, 4], [3, 4]]], [[5, 6, 7, 8, 9, 10], [[0, 5], [2, 5], [4, 5]]]], "checks alternating parity ranges"),
+    constraints: ["A range is special when every adjacent pair inside it has different parity.", "Each query is [left, right].", "Return one boolean per query."],
+    difficulty: 3,
+    examples: [
+      { input: "nums = [3,4,1,2,6], queries = [[0,3],[1,3],[2,4]]", output: "[true,true,false]", explanation: "Ranges 0-3 and 1-3 alternate odd/even at every step; range 2-4 fails because 2 and 6 are both even." },
+      { input: "nums = [2,4,6], queries = [[0,2],[1,2]]", output: "[false,false]", explanation: "Every adjacent pair in the queried ranges has matching even parity, so neither range is special." }
+    ],
+    functionName: "isSpecialParityArray",
+    id: "external-special-array-ii",
+    prompt: "For each query, return whether the selected subarray alternates parity between every neighboring pair.",
+    rating: 1523,
+    source: { dislikes: 67, likes: 916, slug: "special-array-ii" },
+    solver: (args) => isSpecialParityArray(args[0] as number[], args[1] as Array<[number, number]>),
+    starterArgs: "nums, queries",
+    title: "Special Parity Ranges",
+    topics: ["Arrays", "Prefix Sum"]
+  },
+  {
+    cases: makeCases([[[[0, 2], [3, 6], [8, 10]], [4, 9]], [[[0, 5]], [2, 3]], [[[0, 2], [3, 4]], [5, 7]], [[[1, 5]], [1, 5]], [[[1, 10]], [3, 7]], [[[2, 4], [6, 8]], [3, 7]], [[[-5, -1], [0, 3]], [-3, 1]], [[[1, 2], [2, 3], [3, 4]], [2, 3]], [[[0, 100]], [20, 80]], [[[5, 7], [8, 12]], [6, 10]]], "removes interval overlap"),
+    constraints: ["Intervals are non-overlapping and sorted by start.", "Return the remaining interval pieces after removing the target interval.", "Keep all interval endpoints as numbers."],
+    difficulty: 3,
+    examples: [
+      { input: "intervals = [[0,2],[3,6],[8,10]], remove = [4,9]", output: "[[0,2],[3,4],[9,10]]", explanation: "The removal cuts the middle interval after 4 and the last interval before 9; [0,2] stays untouched." },
+      { input: "intervals = [[0,5]], remove = [2,3]", output: "[[0,2],[3,5]]", explanation: "Removing the center segment splits the original interval into the two outside pieces." }
+    ],
+    functionName: "removeIntervalPieces",
+    id: "external-remove-interval",
+    prompt: "Remove one interval from a sorted list of disjoint intervals and return the pieces that remain.",
+    rating: 1525,
+    source: { dislikes: 36, likes: 481, slug: "remove-interval" },
+    solver: (args) => removeIntervalPieces(args[0] as Array<[number, number]>, args[1] as [number, number]),
+    starterArgs: "intervals, remove",
+    title: "Remove Interval Pieces",
+    topics: ["Arrays", "Intervals"]
+  },
+  {
+    cases: makeCases([[[5, 5, 5]], [[1, 12, 1, 2, 5, 50, 3]], [[1, 1, 2]], [[3, 6, 2, 3]], [[2, 3, 4, 5, 10]], [[4, 4, 4, 4]], [[1, 2, 3, 4, 9]], [[6, 7, 8, 20, 21]], [[10, 21, 22, 100, 101, 102]], [[2, 2, 3, 4]]], "finds largest polygon perimeter"),
+    constraints: ["Use at least three side lengths.", "A polygon is valid when its longest side is shorter than the sum of the other chosen sides.", "Return -1 if no valid polygon can be formed."],
+    difficulty: 3,
+    examples: [
+      { input: "nums = [5,5,5]", output: "15", explanation: "All three sides can form an equilateral triangle, so the best perimeter is 5 + 5 + 5 = 15." },
+      { input: "nums = [1,12,1,2,5,50,3]", output: "12", explanation: "The side 50 is too long and 12 is not shorter than 1+1+2+3+5, but sides [1,1,2,3,5] form perimeter 12." }
+    ],
+    functionName: "largestPolygonPerimeter",
+    id: "external-largest-polygon-perimeter",
+    prompt: "Return the largest perimeter obtainable from a subset of side lengths that can form a polygon.",
+    rating: 1521,
+    source: { dislikes: 71, likes: 840, slug: "find-polygon-with-the-largest-perimeter" },
+    solver: (args) => largestPolygonPerimeter(args[0] as number[]),
+    starterArgs: "nums",
+    title: "Largest Polygon Perimeter",
+    topics: ["Arrays", "Greedy", "Sorting"]
+  },
+  {
+    cases: makeCases([["NESW"], ["NES"], ["NNSWWEWSSESSWENNW"], [""], ["N"], ["NS"], ["EESSWW"], ["NNESW"], ["NWSE"], ["NENESSWW"]], "detects crossed walking path"),
+    constraints: ["The path contains only N, S, E, and W.", "The starting point counts as visited.", "Return true as soon as any coordinate is visited twice."],
+    difficulty: 3,
+    examples: [
+      { input: 'path = "NESW"', output: "true", explanation: "The moves return to the starting coordinate after the final W, so the path crosses itself." },
+      { input: 'path = "NES"', output: "false", explanation: "The visited coordinates are all different: start, north, east, then south." }
+    ],
+    functionName: "doesPathCross",
+    id: "external-path-crossing",
+    prompt: "Return true when a grid walk ever visits a coordinate it has already visited.",
+    rating: 1508,
+    source: { dislikes: 50, likes: 1561, slug: "path-crossing" },
+    solver: (args) => doesPathCross(args[0] as string),
+    starterArgs: "path",
+    title: "Path Crossing",
+    topics: ["Hash Set", "Strings"]
+  },
+  {
+    cases: makeCases([["annabelle", 2], ["leetcode", 3], ["true", 4], ["yzyzyzyzyzyzyzy", 2], ["abc", 4], ["aabbcc", 3], ["abcba", 2], ["aaaa", 1], ["aabbc", 2], ["xyzxyz", 6]], "checks k palindrome construction"),
+    constraints: ["Use every character exactly once.", "Each constructed string must be a palindrome.", "Return false when k is larger than the string length."],
+    difficulty: 3,
+    examples: [
+      { input: 's = "annabelle", k = 2', output: "true", explanation: "Only b has an odd count, and one odd center can be placed among two palindromes." },
+      { input: 's = "leetcode", k = 3', output: "false", explanation: "Five letters have odd counts, but three palindromes can provide only three odd centers." }
+    ],
+    functionName: "canBuildKPalindromes",
+    id: "external-construct-k-palindrome-strings",
+    prompt: "Return whether all characters can be rearranged into exactly k palindrome strings.",
+    rating: 1531,
+    source: { dislikes: 160, likes: 1795, slug: "construct-k-palindrome-strings" },
+    solver: (args) => canBuildKPalindromes(args[0] as string, args[1] as number),
+    starterArgs: "s, k",
+    title: "Construct K Palindromes",
+    topics: ["Hash Map", "Strings", "Greedy"]
+  },
+  {
+    cases: makeCases([[["lc", "cl", "gg"]], [["ab", "ty", "yt", "lc", "cl", "ab"]], [["cc", "ll", "xx"]], [["aa", "aa", "bb", "bb"]], [["ab", "ba", "cd", "dc", "ee"]], [["ab", "cd", "ef"]], [["aa"]], [["aa", "bb", "aa"]], [["az", "za", "az", "za", "zz"]], [["mm", "mn", "nm", "nn", "nn"]]], "builds two-letter palindrome"),
+    constraints: ["Every word has length 2.", "Each word can be used at most once.", "Return the maximum palindrome length after concatenating selected words."],
+    difficulty: 3,
+    examples: [
+      { input: 'words = ["lc","cl","gg"]', output: "6", explanation: '"lc" and "cl" mirror each other for 4 characters, and "gg" can sit in the center for 2 more.' },
+      { input: 'words = ["ab","ty","yt","lc","cl","ab"]', output: "8", explanation: '"ty"+"yt" and "lc"+"cl" form two mirrored pairs, giving 8 characters total.' }
+    ],
+    functionName: "longestTwoLetterPalindrome",
+    id: "external-two-letter-word-palindrome",
+    prompt: "Return the longest palindrome length that can be built by concatenating two-letter words.",
+    rating: 1557,
+    source: { dislikes: 79, likes: 2966, slug: "longest-palindrome-by-concatenating-two-letter-words" },
+    solver: (args) => longestTwoLetterPalindrome(args[0] as string[]),
+    starterArgs: "words",
+    title: "Two-Letter Word Palindrome",
+    topics: ["Hash Map", "Strings", "Greedy"]
+  },
+  {
+    cases: makeCases([[[1, 2, 3, 4, 5, 6, 7], [3, 5]], [[1, 2, 4, null, 3], [3]], [[1], [1]], [[1, 2, 3], []], [[1, 2, 3, 4, null, null, 5], [2]], [[5, 3, 6, 2, 4, null, 7], [3, 7]], [[1, 2, 3, null, 4], [1]], [[1, null, 2, null, 3], [2]], [[8, 4, 10, 2, 6, 9, 12], [4, 10]], [[1, 2, 3, 4, 5], [4, 5]]], "returns forest root values"),
+    constraints: ["The tree is given as a level-order array with null for missing children.", "Delete every listed value.", "Return the remaining forest root values sorted ascending."],
+    difficulty: 3,
+    examples: [
+      { input: "root = [1,2,3,4,5,6,7], toDelete = [3,5]", output: "[1,6,7]", explanation: "Deleting 3 separates children 6 and 7 into new trees, while deleting 5 removes that leaf." },
+      { input: "root = [1], toDelete = [1]", output: "[]", explanation: "The only node is deleted, so no forest roots remain." }
+    ],
+    functionName: "forestRootValuesAfterDeleting",
+    id: "external-delete-nodes-forest-roots",
+    prompt: "Delete selected values from a binary tree and return the sorted values of the remaining forest roots.",
+    rating: 1511,
+    source: { dislikes: 145, likes: 4814, slug: "delete-nodes-and-return-forest" },
+    solver: (args) => forestRootValuesAfterDeleting(args[0] as Array<number | null>, args[1] as number[]),
+    starterArgs: "root, toDelete",
+    title: "Forest Roots After Deletions",
+    topics: ["Trees", "DFS", "Hash Set"]
+  },
+  {
+    cases: makeCases([[6, 2, [2, 2, -1, 2, 2, 2], [0, 0, 1, 0, 0, 0]], [1, 0, [-1], [0]], [7, 6, [1, 2, 3, 4, 5, 6, -1], [0, 6, 5, 4, 3, 2, 1]], [4, 0, [-1, 0, 0, 1], [2, 1, 1, 0]], [5, 4, [4, 4, 4, 4, -1], [0, 0, 0, 0, 3]], [8, 0, [-1, 0, 0, 1, 1, 2, 2, 6], [1, 2, 3, 4, 0, 0, 5, 0]], [3, 1, [1, -1, 1], [0, 2, 0]], [9, 8, [8, 8, 7, 7, 6, 6, 8, 8, -1], [0, 0, 0, 2, 2, 1, 1, 3, 4]], [2, 1, [1, -1], [0, 5]], [6, 0, [-1, 0, 1, 2, 3, 4], [1, 1, 1, 1, 1, 0]]], "computes inform time"),
+    constraints: ["Each employee has one manager except the head.", "A manager informs direct reports after informTime[manager] minutes.", "Return the time until every employee knows the news."],
+    difficulty: 3,
+    examples: [
+      { input: "n = 6, headID = 2, manager = [2,2,-1,2,2,2], informTime = [0,0,1,0,0,0]", output: "1", explanation: "Employee 2 is the head and needs 1 minute to inform all direct reports." },
+      { input: "n = 1, headID = 0, manager = [-1], informTime = [0]", output: "0", explanation: "The only employee already has the news, so no informing time is needed." }
+    ],
+    functionName: "minutesToInformEmployees",
+    id: "external-inform-all-employees",
+    prompt: "Return the number of minutes needed for the head employee to inform the whole company tree.",
+    rating: 1561,
+    source: { dislikes: 325, likes: 4260, slug: "time-needed-to-inform-all-employees" },
+    solver: (args) => minutesToInformEmployees(args[0] as number, args[1] as number, args[2] as number[], args[3] as number[]),
+    starterArgs: "n, headID, manager, informTime",
+    title: "Time To Inform Employees",
+    topics: ["Trees", "DFS", "BFS"]
+  },
+  {
+    cases: makeCases([[[1, 2, 3, null, 4], 3], [[1, 2, 3, 4, 5, 6, 7], 3], [[1, 2, 3, 4, 5, 6, 7], 4], [[1], 2], [[1, 2, null, 3, null, 4], 4], [[1, 2, 3, null, null, 4, 5], 3], [[1, 2, 3, 4, null, null, 5], 5], [[1, null, 2, null, 3], 2], [[1, 2, 3, 4, null, 5, null, 6], 4], [[1, 2, 3, 4, 5, null, null, 6, 7], 5]], "counts close leaf pairs"),
+    constraints: ["The tree is a level-order array.", "A good pair contains two different leaves.", "Count pairs whose shortest path length is at most distance."],
+    difficulty: 4,
+    examples: [
+      { input: "root = [1,2,3,null,4], distance = 3", output: "1", explanation: "Leaves 4 and 3 are connected by the path 4 -> 2 -> 1 -> 3, which has length 3." },
+      { input: "root = [1], distance = 2", output: "0", explanation: "A single leaf has no second leaf to pair with." }
+    ],
+    functionName: "countGoodLeafPairs",
+    id: "external-good-leaf-node-pairs",
+    prompt: "Count leaf pairs in a binary tree whose distance is within the given limit.",
+    rating: 1746,
+    source: { dislikes: 111, likes: 2502, slug: "number-of-good-leaf-nodes-pairs" },
+    solver: (args) => countGoodLeafPairs(args[0] as Array<number | null>, args[1] as number),
+    starterArgs: "root, distance",
+    title: "Good Leaf Node Pairs",
+    topics: ["Trees", "DFS"]
+  },
+  {
+    cases: makeCases([[6, [[0, 1], [0, 2], [2, 5], [3, 4], [4, 2]]], [5, [[0, 1], [2, 1], [3, 1], [1, 4]]], [3, []], [4, [[0, 1], [1, 2], [2, 3]]], [4, [[1, 0], [2, 0], [3, 0]]], [1, []], [7, [[0, 2], [1, 2], [3, 4], [5, 4]]], [6, [[0, 1], [2, 3], [4, 5]]], [5, [[0, 2], [2, 4], [1, 4]]], [8, [[0, 3], [1, 3], [2, 4], [5, 6], [6, 7]]]], "finds source vertices"),
+    constraints: ["Nodes are numbered from 0 to n - 1.", "Edges are directed.", "Return every node with no incoming edge in ascending order."],
+    difficulty: 3,
+    examples: [
+      { input: "n = 6, edges = [[0,1],[0,2],[2,5],[3,4],[4,2]]", output: "[0,3]", explanation: "Only nodes 0 and 3 have no incoming edges, so every other node can be reached from one of them." },
+      { input: "n = 3, edges = []", output: "[0,1,2]", explanation: "With no edges, each node must be chosen as its own starting point." }
+    ],
+    functionName: "smallestSourceVertices",
+    id: "external-minimum-source-vertices",
+    prompt: "Return the smallest set of starting vertices from which all nodes in a directed acyclic graph can be reached.",
+    rating: 1512,
+    source: { dislikes: 136, likes: 3878, slug: "minimum-number-of-vertices-to-reach-all-nodes" },
+    solver: (args) => smallestSourceVertices(args[0] as number, args[1] as Array<[number, number]>),
+    starterArgs: "n, edges",
+    title: "Minimum Source Vertices",
+    topics: ["Graphs", "Indegree"]
+  },
+  {
+    cases: makeCases([[[["+", ".", "+"], [".", ".", "+"], ["+", "+", "+"]], [1, 0]], [[[ "+", "+", "."], [".", ".", "."], ["+", "+", "+"]], [1, 0]], [[[ ".", "+"]], [0, 0]], [[[ ".", ".", "."], ["+", "+", "."], [".", ".", "."]], [1, 2]], [[[ "+", "+", "+", "+"], ["+", ".", ".", "+"], ["+", ".", ".", "+"], ["+", "+", ".", "+"]], [1, 1]], [[[ ".", ".", "+"], ["+", ".", "+"], ["+", ".", "."]], [1, 1]], [[[ "+", ".", "+"], ["+", ".", "+"], ["+", ".", "."]], [0, 1]], [[[ "+", "+", "+"], ["+", ".", "+"], ["+", "+", "+"]], [1, 1]], [[[ ".", ".", "."], [".", "+", "."], [".", ".", "."]], [1, 0]], [[[ "+", ".", ".", "+"], ["+", ".", "+", "+"], ["+", ".", ".", "."]], [1, 1]]], "finds nearest maze exit"),
+    constraints: ["The maze contains '.' for open cells and '+' for walls.", "The entrance cell is not counted as an exit even if it is on the border.", "Return -1 if no border exit is reachable."],
+    difficulty: 3,
+    examples: [
+      { input: 'maze = [["+","." , "+"],[".",".","+"],["+","+","+"]], entrance = [1,0]', output: "2", explanation: "From the entrance, move right to [1,1] and then up to the border exit [0,1]." },
+      { input: 'maze = [[".","+"]], entrance = [0,0]', output: "-1", explanation: "The entrance is the only open border cell and it cannot count as its own exit." }
+    ],
+    functionName: "nearestMazeExit",
+    id: "external-nearest-maze-exit",
+    prompt: "Return the fewest moves from the entrance to any reachable maze exit.",
+    rating: 1638,
+    source: { dislikes: 128, likes: 2645, slug: "nearest-exit-from-entrance-in-maze" },
+    solver: (args) => nearestMazeExit(args[0] as string[][], args[1] as [number, number]),
+    starterArgs: "maze, entrance",
+    title: "Nearest Maze Exit",
+    topics: ["Graphs", "BFS", "Grid"]
+  },
+  {
+    cases: makeCases([[[[0, 0, 0, 0], [1, 0, 1, 0], [0, 1, 1, 0], [0, 0, 0, 0]]], [[[0, 1, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 0, 0]]], [[[1, 1], [1, 1]]], [[[0, 0], [0, 0]]], [[[0, 0, 0], [0, 1, 0], [0, 0, 0]]], [[[1, 0, 1], [0, 1, 0], [1, 0, 1]]], [[[0, 1, 0], [1, 1, 1], [0, 1, 0]]], [[[0, 0, 0, 0], [0, 1, 1, 0], [0, 1, 0, 0], [0, 0, 0, 0]]], [[[1, 0, 0], [0, 1, 0], [0, 0, 1]]], [[[0, 0, 0, 0, 0], [0, 1, 1, 1, 0], [0, 1, 0, 1, 0], [0, 0, 0, 0, 0]]]], "counts enclave land"),
+    constraints: ["Land is 1 and water is 0.", "Land connected to the border can walk off the grid.", "Count land cells that cannot reach any border through four-direction moves."],
+    difficulty: 3,
+    examples: [
+      { input: "grid = [[0,0,0,0],[1,0,1,0],[0,1,1,0],[0,0,0,0]]", output: "3", explanation: "The three center land cells connect to each other but not to any border land." },
+      { input: "grid = [[1,1],[1,1]]", output: "0", explanation: "All land cells touch the border directly or through border land, so none are enclaves." }
+    ],
+    functionName: "countEnclaveLand",
+    id: "external-number-of-enclaves",
+    prompt: "Count land cells that cannot reach the grid boundary by walking across land.",
+    rating: 1616,
+    source: { dislikes: 91, likes: 4644, slug: "number-of-enclaves" },
+    solver: (args) => countEnclaveLand(args[0] as number[][]),
+    starterArgs: "grid",
+    title: "Number Of Enclaves",
+    topics: ["Graphs", "DFS", "Grid"]
+  },
+  {
+    cases: makeCases([[[[0, 1, 1, 1], [1, 1, 1, 1], [0, 1, 1, 1]]], [[[1, 0, 1], [1, 1, 0], [1, 1, 0]]], [[[1]]], [[[0]]], [[[1, 1], [1, 1]]], [[[1, 1, 1], [1, 1, 1], [1, 1, 1]]], [[[1, 0], [0, 1]]], [[[1, 1, 0], [1, 1, 1], [0, 1, 1]]], [[[0, 0, 0], [0, 0, 0]]], [[[1, 1, 1, 1]]]], "counts all one squares"),
+    constraints: ["The matrix contains only 0 and 1.", "Count every square submatrix made entirely of 1 values.", "Return a number."],
+    difficulty: 3,
+    examples: [
+      { input: "matrix = [[0,1,1,1],[1,1,1,1],[0,1,1,1]]", output: "15", explanation: "There are ten 1x1 squares, four 2x2 squares, and one 3x3 square." },
+      { input: "matrix = [[1,1],[1,1]]", output: "5", explanation: "The matrix has four single-cell squares and one 2x2 square." }
+    ],
+    functionName: "countSquareSubmatrices",
+    id: "external-count-square-submatrices",
+    prompt: "Return how many square submatrices contain only 1 values.",
+    rating: 1613,
+    source: { dislikes: 117, likes: 5961, slug: "count-square-submatrices-with-all-ones" },
+    solver: (args) => countSquareSubmatrices(args[0] as number[][]),
+    starterArgs: "matrix",
+    title: "Count Square Submatrices",
+    topics: ["Dynamic Programming", "Arrays", "Matrix"]
+  },
+  {
+    cases: makeCases([[1, 6, 3], [2, 6, 7], [2, 5, 10], [1, 2, 3], [3, 6, 7], [30, 30, 500], [2, 4, 5], [3, 3, 9], [4, 2, 5], [5, 6, 18]], "counts dice roll sums"),
+    constraints: ["Use exactly n dice.", "Each die has faces 1 through k.", "Return the count modulo 1,000,000,007."],
+    difficulty: 3,
+    examples: [
+      { input: "n = 2, k = 6, target = 7", output: "6", explanation: "The valid pairs are (1,6), (2,5), (3,4), (4,3), (5,2), and (6,1)." },
+      { input: "n = 1, k = 2, target = 3", output: "0", explanation: "One die with faces 1 and 2 cannot produce total 3." }
+    ],
+    functionName: "diceRollTargetWays",
+    id: "external-dice-rolls-target-sum",
+    prompt: "Return how many ways exactly n k-sided dice can sum to target.",
+    rating: 1654,
+    source: { dislikes: 186, likes: 5337, slug: "number-of-dice-rolls-with-target-sum" },
+    solver: (args) => diceRollTargetWays(args[0] as number, args[1] as number, args[2] as number),
+    starterArgs: "n, k, target",
+    title: "Dice Rolls With Target Sum",
+    topics: ["Dynamic Programming"]
+  },
+  {
+    cases: makeCases([[[1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0], 2], [[0, 0, 1, 1, 1, 0, 0], 0], [[0, 0, 0, 1], 4], [[1, 1, 1], 0], [[0, 0, 0], 1], [[1, 0, 1, 0, 1], 1], [[1, 0, 0, 1, 1, 0, 1], 2], [[0], 0], [[0], 1], [[1, 0, 1, 1, 0, 1, 1, 1], 1]], "finds longest ones after flips"),
+    constraints: ["The array contains only 0 and 1.", "You may flip at most k zeroes to ones.", "Return the maximum length of a contiguous all-ones window after flips."],
+    difficulty: 3,
+    examples: [
+      { input: "nums = [1,1,1,0,0,0,1,1,1,1,0], k = 2", output: "6", explanation: "Flip two zeroes around the run near the end to form a six-length window of ones." },
+      { input: "nums = [0,0,1,1,1,0,0], k = 0", output: "3", explanation: "No flips are available, so the best window is the existing run [1,1,1]." }
+    ],
+    functionName: "longestOnesAfterFlips",
+    id: "external-max-consecutive-ones-iii",
+    prompt: "Return the longest contiguous run of ones obtainable after flipping at most k zeroes.",
+    rating: 1656,
+    source: { dislikes: 192, likes: 10526, slug: "max-consecutive-ones-iii" },
+    solver: (args) => longestOnesAfterFlips(args[0] as number[], args[1] as number),
+    starterArgs: "nums, k",
+    title: "Max Consecutive Ones III",
+    topics: ["Sliding Window", "Arrays"]
+  },
+  {
+    cases: makeCases([[[[1, 2, 10], [2, 3, 20], [2, 5, 25]], 5], [[[1, 2, 10], [2, 2, 15]], 2], [[[1, 1, 5]], 1], [[[1, 3, 10]], 4], [[[2, 4, 7], [1, 2, 3]], 4], [[[1, 5, 10], [2, 3, 5], [4, 5, 2]], 5], [[[3, 3, 8], [1, 4, 2]], 4], [[[1, 2, 4], [2, 4, 6], [3, 5, 8]], 5], [[[5, 5, 9]], 5], [[[1, 10, 1], [3, 7, 2], [6, 10, 3]], 10]], "applies range seat bookings"),
+    constraints: ["Each booking is [firstFlight, lastFlight, seats].", "Flight numbers are 1-based.", "Return booked seats for every flight from 1 through n."],
+    difficulty: 3,
+    examples: [
+      { input: "bookings = [[1,2,10],[2,3,20],[2,5,25]], n = 5", output: "[10,55,45,25,25]", explanation: "Flight 2 receives seats from all three bookings: 10 + 20 + 25 = 55, while flights 4 and 5 receive only the last booking." },
+      { input: "bookings = [[1,1,5]], n = 1", output: "[5]", explanation: "The only booking covers the only flight, so that flight has 5 seats booked." }
+    ],
+    functionName: "flightBookingTotals",
+    id: "external-corporate-flight-bookings",
+    prompt: "Return the total booked seats for each flight after applying inclusive range bookings.",
+    rating: 1570,
+    source: { dislikes: 168, likes: 1881, slug: "corporate-flight-bookings" },
+    solver: (args) => flightBookingTotals(args[0] as Array<[number, number, number]>, args[1] as number),
+    starterArgs: "bookings, n",
+    title: "Flight Booking Totals",
+    topics: ["Arrays", "Prefix Sum"]
+  },
+  {
+    cases: makeCases([[[2, 1, 6, 4]], [[1, 1, 1]], [[1, 2, 3]], [[0, 0, 0]], [[5, 5, 2, 5, 8]], [[1, 3, 5, 7]], [[10, 4, 6, 2]], [[3, 2, 1, 6, 4]], [[4, 1, 1, 1, 4]], [[7, 3, 2, 1, 9, 4]]], "counts fair removals"),
+    constraints: ["Remove exactly one element.", "After removal, compare the sum at even indexes with the sum at odd indexes.", "Return how many removal indexes make the array fair."],
+    difficulty: 3,
+    examples: [
+      { input: "nums = [2,1,6,4]", output: "1", explanation: "Removing index 1 leaves [2,6,4]; even-index sum 2 + 4 equals odd-index sum 6." },
+      { input: "nums = [1,1,1]", output: "3", explanation: "Removing any one value leaves [1,1], whose even and odd sums are both 1." }
+    ],
+    functionName: "countFairRemovalWays",
+    id: "external-ways-to-make-fair-array",
+    prompt: "Return how many indexes can be removed so the remaining array has equal even-index and odd-index sums.",
+    rating: 1590,
+    source: { dislikes: 50, likes: 1410, slug: "ways-to-make-a-fair-array" },
+    solver: (args) => countFairRemovalWays(args[0] as number[]),
+    starterArgs: "nums",
+    title: "Fair Array Removals",
+    topics: ["Arrays", "Prefix Sum"]
+  },
+  {
+    cases: makeCases([[[12, 6, 1, 2, 7]], [[1, 10, 3, 4, 19]], [[1, 2, 3]], [[5, 4, 3, 2, 1]], [[9, 1, 8, 2, 7]], [[2, 3, 1, 6, 4, 5]], [[10, 5, 4, 3, 9]], [[4, 8, 2, 6, 1]], [[100, 1, 50, 2, 60]], [[3, 3, 3, 3]]], "maximizes ordered triplet value"),
+    constraints: ["Choose indexes i < j < k.", "The value is (nums[i] - nums[j]) * nums[k].", "Return 0 if every valid triplet has a negative value."],
+    difficulty: 3,
+    examples: [
+      { input: "nums = [12,6,1,2,7]", output: "77", explanation: "Choose i = 0, j = 2, k = 4: (12 - 1) * 7 = 77, which is the largest valid value." },
+      { input: "nums = [1,2,3]", output: "0", explanation: "Every earlier value is smaller than the middle value, so the best triplet value is negative and the rule returns 0." }
+    ],
+    functionName: "maximumOrderedTripletValue",
+    id: "external-maximum-ordered-triplet-value",
+    prompt: "Return the largest non-negative value of (nums[i] - nums[j]) * nums[k] over ordered triplets i < j < k.",
+    rating: 1583,
+    source: { dislikes: 20, likes: 828, slug: "maximum-value-of-an-ordered-triplet-ii" },
+    solver: (args) => maximumOrderedTripletValue(args[0] as number[]),
+    starterArgs: "nums",
+    title: "Maximum Ordered Triplet Value",
+    topics: ["Arrays", "Linear Scan"]
+  },
+  {
+    cases: makeCases([[[4, 1, 3, 3]], [[1, 2, 3, 4, 5]], [[1, 1, 1, 1]], [[3, 2, 1]], [[8, 4, 2, 1]], [[0, 1, 2]], [[5, 5, 6, 7]], [[10, 9, 8, 7, 6]], [[2, 4, 6, 8]], [[6, 1, 7, 3, 9]]], "counts bad index pairs"),
+    constraints: ["A pair (i, j) has i < j.", "A good pair satisfies j - i == nums[j] - nums[i].", "Return the number of pairs that are not good."],
+    difficulty: 3,
+    examples: [
+      { input: "nums = [4,1,3,3]", output: "5", explanation: "Only pair (1,2) is good because 2 - 1 equals 3 - 1, so the other five pairs are bad." },
+      { input: "nums = [1,2,3,4,5]", output: "0", explanation: "Every pair keeps the same index difference and value difference, so no pair is bad." }
+    ],
+    functionName: "countBadIndexPairs",
+    id: "external-count-number-of-bad-pairs",
+    prompt: "Return how many index pairs fail the good-pair difference rule.",
+    rating: 1622,
+    source: { dislikes: 62, likes: 1799, slug: "count-number-of-bad-pairs" },
+    solver: (args) => countBadIndexPairs(args[0] as number[]),
+    starterArgs: "nums",
+    title: "Count Bad Pairs",
+    topics: ["Hash Map", "Arrays", "Counting"]
+  },
+  {
+    cases: makeCases([[["amazon", "apple", "facebook", "google", "leetcode"], ["e", "o"]], [["amazon", "apple", "facebook", "google", "leetcode"], ["l", "e"]], [["acaac", "cccbb", "aacbb", "caacc", "bcbbb"], ["c", "cc", "b"]], [["abc", "def"], ["a"]], [["abc", "ab", "bc"], ["ab"]], [["hello", "yellow", "hero"], ["e", "lo"]], [["aaaa", "aaab", "baaa"], ["aaa"]], [["cat", "dog", "bird"], ["z"]], [["mississippi", "mission", "sipping"], ["is", "pp"]], [["x", "xx", "xxx"], ["x", "xx"]]], "filters universal words"),
+    constraints: ["A word is universal when it contains every required letter count from words2.", "Return universal words from words1 in original order.", "Inputs contain lowercase letters."],
+    difficulty: 3,
+    examples: [
+      { input: 'words1 = ["amazon","apple","facebook","google","leetcode"], words2 = ["e","o"]', output: '["facebook","google","leetcode"]', explanation: "The required counts are one e and one o; only those three words contain both." },
+      { input: 'words1 = ["abc","def"], words2 = ["a"]', output: '["abc"]', explanation: '"abc" contains the required a, while "def" does not.' }
+    ],
+    functionName: "universalWordSubsets",
+    id: "external-word-subsets",
+    prompt: "Return the words from words1 that contain all letter requirements imposed by words2.",
+    rating: 1625,
+    source: { dislikes: 317, likes: 3542, slug: "word-subsets" },
+    solver: (args) => universalWordSubsets(args[0] as string[], args[1] as string[]),
+    starterArgs: "words1, words2",
+    title: "Universal Word Subsets",
+    topics: ["Hash Map", "Strings", "Arrays"]
+  },
+  {
+    cases: makeCases([[[[0, 1], [0, 2]]], [[[0, 1], [1, 2], [2, 3], [1, 4]]], [[[0, 1]]], [[]], [[[0, 1], [2, 3], [3, 4], [4, 5]]], [[[0, 1], [1, 2], [1, 3], [3, 4], [4, 5]]], [[[1, 2], [2, 3], [3, 4]]], [[[0, 1], [0, 2], [0, 3], [0, 4]]], [[[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6]]], [[[2, 0], [2, 1], [2, 3], [3, 4]]]], "measures tree diameter"),
+    constraints: ["Edges describe an undirected tree.", "The diameter is the largest number of edges on any path.", "Return 0 when the tree has fewer than two nodes."],
+    difficulty: 4,
+    examples: [
+      { input: "edges = [[0,1],[0,2]]", output: "2", explanation: "The longest path is 1 -> 0 -> 2, which uses two edges." },
+      { input: "edges = [[0,1]]", output: "1", explanation: "The only path connects the two nodes with one edge." }
+    ],
+    functionName: "treeDiameterLength",
+    id: "external-tree-diameter",
+    prompt: "Return the diameter length of an undirected tree.",
+    rating: 1792,
+    source: { dislikes: 26, likes: 904, slug: "tree-diameter" },
+    solver: (args) => treeDiameterLength(args[0] as Array<[number, number]>),
+    starterArgs: "edges",
+    title: "Tree Diameter Length",
+    topics: ["Trees", "DFS", "Graphs"]
+  },
+  {
+    cases: makeCases([[[1, 2, 4, 5, 3, 6, 7], [4, 5, 2, 6, 7, 3, 1]], [[1], [1]], [[1, 2], [2, 1]], [[1, 2, 3], [3, 2, 1]], [[1, 2, 3], [2, 3, 1]], [[1, 2, 4, 3], [4, 2, 3, 1]], [[1, 2, 4, 5, 3], [4, 5, 2, 3, 1]], [[5, 3, 2, 4, 8], [2, 4, 3, 8, 5]], [[10, 20, 40, 50, 30, 60], [40, 50, 20, 60, 30, 10]], [[7, 3, 1, 5, 9], [1, 5, 3, 9, 7]]], "rebuilds tree level order"),
+    constraints: ["Values are unique.", "The traversals come from a full binary tree shape when reconstruction is ambiguous.", "Return the rebuilt tree as compact level-order values."],
+    difficulty: 4,
+    examples: [
+      { input: "preorder = [1,2,4,5,3,6,7], postorder = [4,5,2,6,7,3,1]", output: "[1,2,3,4,5,6,7]", explanation: "Preorder gives each subtree root first, and postorder marks where each subtree ends; rebuilding gives the complete tree level order." },
+      { input: "preorder = [1,2], postorder = [2,1]", output: "[1,2]", explanation: "The only child is reconstructed under root 1, so the compact level order is [1,2]." }
+    ],
+    functionName: "buildTreeLevelOrderFromPrePost",
+    id: "external-construct-tree-pre-post",
+    prompt: "Rebuild a binary tree from preorder and postorder traversals and return its compact level-order values.",
+    rating: 1732,
+    source: { dislikes: 161, likes: 3400, slug: "construct-binary-tree-from-preorder-and-postorder-traversal" },
+    solver: (args) => buildTreeLevelOrderFromPrePost(args[0] as number[], args[1] as number[]),
+    starterArgs: "preorder, postorder",
+    title: "Tree Level Order From Pre/Post",
+    topics: ["Trees", "Divide and Conquer", "Arrays"]
+  },
+  {
+    cases: makeCases([[6, [[0, 1], [0, 2], [1, 2], [3, 4]]], [6, [[0, 1], [0, 2], [1, 2], [3, 4], [3, 5]]], [3, [[0, 1], [1, 2], [0, 2]]], [4, []], [4, [[0, 1], [2, 3]]], [5, [[0, 1], [1, 2], [0, 2], [3, 4]]], [5, [[0, 1], [1, 2], [2, 3], [3, 4]]], [7, [[0, 1], [0, 2], [1, 2], [3, 4], [4, 5], [3, 5]]], [1, []], [8, [[0, 1], [1, 2], [0, 2], [3, 4], [5, 6], [6, 7], [5, 7]]]], "counts complete components"),
+    constraints: ["The graph is undirected.", "A component is complete when every pair of nodes inside it has an edge.", "Isolated nodes count as complete components."],
+    difficulty: 4,
+    examples: [
+      { input: "n = 6, edges = [[0,1],[0,2],[1,2],[3,4]]", output: "3", explanation: "Nodes [0,1,2] form a triangle, [3,4] form a complete pair, and node 5 is isolated." },
+      { input: "n = 5, edges = [[0,1],[1,2],[2,3],[3,4]]", output: "0", explanation: "The single component is a path, not a clique, so it is not complete." }
+    ],
+    functionName: "countCompleteGraphComponents",
+    id: "external-complete-components-count",
+    prompt: "Return how many connected components in an undirected graph are complete.",
+    rating: 1769,
+    source: { dislikes: 32, likes: 1287, slug: "count-the-number-of-complete-components" },
+    solver: (args) => countCompleteGraphComponents(args[0] as number, args[1] as Array<[number, number]>),
+    starterArgs: "n, edges",
+    title: "Count Complete Components",
+    topics: ["Graphs", "DFS"]
+  },
+  {
+    cases: makeCases([[["0201", "0101", "0102", "1212", "2002"], "0202"], [["8888"], "0009"], [["8887", "8889", "8878", "8898", "8788", "8988", "7888", "9888"], "8888"], [[], "0000"], [["0001"], "0001"], [["0001"], "0002"], [["9999"], "9999"], [["0009", "0010"], "0011"], [["5555", "5556"], "5557"], [["1000", "9000", "0100", "0900"], "0009"]], "opens combination lock"),
+    constraints: ["The lock starts at 0000.", "Each move rotates one wheel forward or backward by one digit.", "Return -1 if a deadend blocks the target."],
+    difficulty: 4,
+    examples: [
+      { input: 'deadends = ["0201","0101","0102","1212","2002"], target = "0202"', output: "6", explanation: "A shortest safe route changes one wheel at a time and reaches 0202 in six moves while avoiding deadends." },
+      { input: 'deadends = ["8888"], target = "0009"', output: "1", explanation: "Rotating the last wheel backward from 0 to 9 reaches the target in one move." }
+    ],
+    functionName: "openLockMoves",
+    id: "external-open-the-lock",
+    prompt: "Return the fewest wheel rotations needed to reach the target lock combination without entering a deadend.",
+    rating: 1878,
+    source: { dislikes: 239, likes: 5148, slug: "open-the-lock" },
+    solver: (args) => openLockMoves(args[0] as string[], args[1] as string),
+    starterArgs: "deadends, target",
+    title: "Open The Lock",
+    topics: ["Graphs", "BFS", "Hash Set"]
+  },
+  {
+    cases: makeCases([["001101"], ["11100"], ["0000"], ["10101"], ["010101"], ["110011"], ["01"], ["1001"], ["1010101"], ["0110"]], "counts valid building selections"),
+    constraints: ["The string contains only 0 and 1.", "Choose three buildings in increasing index order.", "Valid choices alternate as 010 or 101."],
+    difficulty: 3,
+    examples: [
+      { input: 's = "001101"', output: "6", explanation: "Valid selections must look like 010 or 101; counting all such ordered triples gives 6." },
+      { input: 's = "11100"', output: "0", explanation: "There is no building of type 0 before and after a type 1, and no type 1 after the zeroes, so no alternating triple exists." }
+    ],
+    functionName: "countAlternatingBuildingWays",
+    id: "external-select-buildings",
+    prompt: "Return how many ways to choose three buildings whose types alternate.",
+    rating: 1657,
+    source: { dislikes: 54, likes: 1062, slug: "number-of-ways-to-select-buildings" },
+    solver: (args) => countAlternatingBuildingWays(args[0] as string),
+    starterArgs: "s",
+    title: "Ways To Select Buildings",
+    topics: ["Dynamic Programming", "Strings", "Prefix Sum"]
+  },
+  {
+    cases: makeCases([["TTFF", 2], ["TFFT", 1], ["TTFTTFTT", 1], ["FFFF", 2], ["T", 0], ["FTFTFT", 2], ["TTTFFFT", 3], ["TFTTT", 1], ["FFFTTFT", 2], ["TFTFTFTF", 3]], "maximizes exam answer run"),
+    constraints: ["answerKey contains only T and F.", "You may change at most k answers.", "Return the longest run of equal answers after changes."],
+    difficulty: 3,
+    examples: [
+      { input: 'answerKey = "TTFF", k = 2', output: "4", explanation: "Change both F answers to T, producing a run of four T answers." },
+      { input: 'answerKey = "TFFT", k = 1', output: "3", explanation: "Changing either the first T or the last T creates a run of three F answers." }
+    ],
+    functionName: "maxExamConfusionRun",
+    id: "external-maximize-exam-confusion",
+    prompt: "Return the longest same-answer streak obtainable by changing at most k exam answers.",
+    rating: 1643,
+    source: { dislikes: 56, likes: 3103, slug: "maximize-the-confusion-of-an-exam" },
+    solver: (args) => maxExamConfusionRun(args[0] as string, args[1] as number),
+    starterArgs: "answerKey, k",
+    title: "Maximize Exam Confusion",
+    topics: ["Sliding Window", "Strings"]
+  },
+  {
+    cases: makeCases([[[5, 8, 6], 3], [[2, 5], 11], [[4, 7, 5], 4], [[1, 2, 3], 6], [[10], 3], [[9, 9, 9], 9], [[6, 6, 6], 4], [[100, 1], 10], [[3, 3, 3], 2], [[7, 11, 13], 5]], "maximizes equal candy share"),
+    constraints: ["Each child receives candies from exactly one pile.", "You may split piles but cannot merge pieces from different piles for one child.", "Return 0 if every child cannot receive at least one candy."],
+    difficulty: 3,
+    examples: [
+      { input: "candies = [5,8,6], k = 3", output: "5", explanation: "A share size of 5 gives pieces from piles 5, 8, and 6, while size 6 gives only two pieces." },
+      { input: "candies = [2,5], k = 11", output: "0", explanation: "There are only 7 candies total, so 11 children cannot each receive one." }
+    ],
+    functionName: "maximumCandiesPerChild",
+    id: "external-maximum-candies-children",
+    prompt: "Return the largest equal candy amount that can be given to each of k children.",
+    rating: 1646,
+    source: { dislikes: 86, likes: 1843, slug: "maximum-candies-allocated-to-k-children" },
+    solver: (args) => maximumCandiesPerChild(args[0] as number[], args[1] as number),
+    starterArgs: "candies, k",
+    title: "Maximum Candies Per Child",
+    topics: ["Binary Search", "Arrays"]
+  },
+  {
+    cases: makeCases([[[1, 2, 3], 5], [[2], 1], [[5, 10, 10], 9], [[3, 3, 3], 10], [[7], 3], [[1, 1, 1], 100], [[4, 6], 8], [[9, 2, 5], 11], [[10, 10], 2], [[6, 8, 12], 20]], "finds minimum trip time"),
+    constraints: ["time[i] is how long one bus needs for one trip.", "Each bus can make repeated trips.", "Return the earliest time when totalTrips trips can be completed."],
+    difficulty: 3,
+    examples: [
+      { input: "time = [1,2,3], totalTrips = 5", output: "3", explanation: "By time 3, the buses complete 3 + 1 + 1 = 5 trips, and earlier times complete fewer." },
+      { input: "time = [2], totalTrips = 1", output: "2", explanation: "The only bus finishes its first trip at time 2." }
+    ],
+    functionName: "minimumTripCompletionTime",
+    id: "external-minimum-time-trips",
+    prompt: "Return the minimum time needed for buses with fixed trip times to complete totalTrips trips.",
+    rating: 1641,
+    source: { dislikes: 195, likes: 3101, slug: "minimum-time-to-complete-trips" },
+    solver: (args) => minimumTripCompletionTime(args[0] as number[], args[1] as number),
+    starterArgs: "time, totalTrips",
+    title: "Minimum Trip Completion Time",
+    topics: ["Binary Search", "Arrays"]
+  },
+  {
+    cases: makeCases([[[[1, 2], [2, 4], [3, 2], [4, 1]]], [[[7, 10], [7, 12], [7, 5], [7, 4], [7, 2]]], [[[0, 3], [1, 9], [2, 6]]], [[[5, 2]]], [[[2, 3], [2, 1], [2, 2]]], [[[3, 5], [1, 2], [2, 4], [3, 1]]], [[[10, 1], [0, 2], [1, 1]]], [[[1, 10], [1, 5], [2, 1], [3, 2]]], [[[0, 10], [5, 1], [5, 2], [6, 1]]], [[[4, 3], [0, 10], [1, 2], [2, 1], [10, 2]]]], "orders single threaded cpu tasks"),
+    constraints: ["Each task is [enqueueTime, processingTime].", "When several tasks are available, run the shortest processing time, then the smallest original index.", "Return the order of original task indexes."],
+    difficulty: 4,
+    examples: [
+      { input: "tasks = [[1,2],[2,4],[3,2],[4,1]]", output: "[0,2,3,1]", explanation: "Task 0 runs first; then task 2 is shorter than task 1, task 3 is shortest next, and task 1 runs last." },
+      { input: "tasks = [[5,2]]", output: "[0]", explanation: "The CPU waits until time 5 and then runs the only task." }
+    ],
+    functionName: "singleThreadedCpuOrder",
+    id: "external-single-threaded-cpu",
+    prompt: "Return the task execution order for a single-threaded CPU using shortest-available-task priority.",
+    rating: 1798,
+    source: { dislikes: 292, likes: 3510, slug: "single-threaded-cpu" },
+    solver: (args) => singleThreadedCpuOrder(args[0] as Array<[number, number]>),
+    starterArgs: "tasks",
+    title: "Single-Threaded CPU Order",
+    topics: ["Heap", "Sorting", "Arrays"]
+  },
+  {
+    cases: makeCases([[[5, 3, 4, 4]], [[1, 2, 3]], [[3, 2, 1]], [[6, 1, 2, 3]], [[4, 1, 5, 2, 6]], [[10, -5, 2]], [[2, 2, 1, 3]], [[8, 1, 1, 10]], [[7, 6, 5, 4, 3]], [[1, 5, 2, 6, 3, 7]]], "merges adjacent pairs until sorted"),
+    constraints: ["While the array is not nondecreasing, merge the adjacent pair with the smallest sum.", "If sums tie, choose the leftmost pair.", "Return how many merge operations are needed."],
+    difficulty: 5,
+    examples: [
+      { input: "nums = [5,3,4,4]", output: "2", explanation: "First merge 3 + 4 into 7 to get [5,7,4]; then merge 7 + 4 into 11, leaving [5,11], which is nondecreasing." },
+      { input: "nums = [1,2,3]", output: "0", explanation: "The array already satisfies nondecreasing order, so no pair removals are needed." }
+    ],
+    functionName: "minimumPairMergesToSort",
+    id: "external-minimum-pair-removal-sort-array",
+    prompt: "Return how many minimum-sum adjacent-pair merges are needed until the array becomes nondecreasing.",
+    rating: 2608,
+    source: { dislikes: 39, likes: 412, slug: "minimum-pair-removal-to-sort-array-ii" },
+    solver: (args) => minimumPairMergesToSort(args[0] as number[]),
+    starterArgs: "nums",
+    title: "Minimum Pair Merges To Sort",
+    topics: ["Linked Lists", "Heap", "Arrays"]
+  },
+  {
+    cases: makeCases([[[3, 6, 9, 12]], [[9, 4, 7, 2, 10]], [[20, 1, 15, 3, 10, 5, 8]], [[1, 1, 1, 1]], [[1, 3, 5, 7, 9]], [[1]], [[1, 5, 9, 13, 4, 8, 12]], [[5, 10, 15, 20, 25, 30]], [[8, 3, 4, 5, 6, 7]], [[1, 7, 10, 13, 14, 19]]], "finds arithmetic chain"),
+    constraints: ["Pick a subsequence without reordering nums.", "A valid chain uses one fixed difference between adjacent chosen values.", "Return the maximum possible length."],
+    difficulty: 4,
+    examples: [
+      { input: "nums = [3,6,9,12]", output: "4", explanation: "All four values form one subsequence with difference 3: 3, 6, 9, 12." },
+      { input: "nums = [9,4,7,2,10]", output: "3", explanation: "The best chain is 4, 7, 10 with difference 3; no four values keep a single difference in order." }
+    ],
+    functionName: "longestArithmeticSubsequenceLength",
+    id: "external-longest-arithmetic-subsequence",
+    prompt: "Return the length of the longest subsequence whose adjacent values all share the same difference.",
+    rating: 1759,
+    source: { dislikes: 220, likes: 4921, slug: "longest-arithmetic-subsequence" },
+    solver: (args) => longestArithmeticSubsequenceLength(args[0] as number[]),
+    starterArgs: "nums",
+    title: "Longest Arithmetic Subsequence",
+    topics: ["Dynamic Programming", "Hash Map", "Arrays"]
+  },
+  {
+    cases: makeCases([["acfgbd", 2], ["abcd", 3], ["eduktdb", 15], ["aaaa", 0], ["azaza", 25], ["abcxyz", 2], ["leetcode", 4], ["pvjcci", 4], ["dyyonfv", 7], ["zabcdefghijkl", 1]], "finds ideal subsequence"),
+    constraints: ["s contains lowercase English letters.", "A kept character may follow the previous kept character only when their alphabet distance is at most k.", "Return the maximum kept length."],
+    difficulty: 4,
+    examples: [
+      { input: 's = "acfgbd", k = 2', output: "4", explanation: "One best subsequence is a, c, b, d; every neighboring pair differs by at most 2 letters." },
+      { input: 's = "abcd", k = 3', output: "4", explanation: "The whole string works because each adjacent alphabet distance is 1, which is within k." }
+    ],
+    functionName: "longestIdealSubsequenceLength",
+    id: "external-longest-ideal-subsequence",
+    prompt: "Return the longest subsequence length where each neighboring pair of kept letters is within k alphabet steps.",
+    rating: 1835,
+    source: { dislikes: 83, likes: 1536, slug: "longest-ideal-subsequence" },
+    solver: (args) => longestIdealSubsequenceLength(args[0] as string, args[1] as number),
+    starterArgs: "s, k",
+    title: "Longest Ideal Subsequence",
+    topics: ["Dynamic Programming", "Strings", "Hash Map"]
+  },
+  {
+    cases: makeCases([[1], [2], [3], [4], [5], [7], [10], [15], [20], [25]], "counts vowel strings"),
+    constraints: ["Use only the vowels a, e, i, o, and u.", "Each vowel has a fixed set of vowels that may follow it.", "Return the count modulo 1,000,000,007."],
+    difficulty: 4,
+    examples: [
+      { input: "n = 1", output: "5", explanation: "A one-letter string can be any one of the five vowels." },
+      { input: "n = 2", output: "10", explanation: "Apply the follow rules from each first vowel; the allowed two-letter strings total 10." }
+    ],
+    functionName: "countVowelPermutationStrings",
+    id: "external-count-vowels-permutation",
+    prompt: "Count length-n vowel strings that obey the allowed next-vowel transition rules.",
+    rating: 1730,
+    source: { dislikes: 220, likes: 3302, slug: "count-vowels-permutation" },
+    solver: (args) => countVowelPermutationStrings(args[0] as number),
+    starterArgs: "n",
+    title: "Count Vowel Permutations",
+    topics: ["Dynamic Programming", "Strings"]
+  },
+  {
+    cases: makeCases([[["a", "b", "ba", "bca", "bda", "bdca"]], [["xbc", "pcxbcf", "xb", "cxbc", "pcxbc"]], [["abcd", "dbqca"]], [["a"]], [["a", "ab", "abc", "abcd"]], [["x", "xy", "xz", "xyz", "xyza"]], [["ksqvsyq", "ks", "kss", "czvh", "zczpzvdhx", "zczpzvh", "zczpzvhx"]], [["a", "ba", "bca", "bdca", "bdeca"]], [["q", "w", "qw", "qwe", "aqwe"]], [["abc", "ab", "ac", "a", "abcd", "abcde"]]], "finds word chain"),
+    constraints: ["Words can be used in any order.", "A word can follow another when it is made by inserting exactly one character.", "Return the largest chain length."],
+    difficulty: 4,
+    examples: [
+      { input: 'words = ["a","b","ba","bca","bda","bdca"]', output: "4", explanation: "The chain a -> ba -> bda -> bdca grows by exactly one inserted letter at each step." },
+      { input: 'words = ["xbc","pcxbcf","xb","cxbc","pcxbc"]', output: "5", explanation: "xb -> xbc -> cxbc -> pcxbc -> pcxbcf uses every word in a valid growth chain." }
+    ],
+    functionName: "longestStringChainLength",
+    id: "external-longest-string-chain",
+    prompt: "Return the maximum number of words in a chain where each next word adds one letter to the previous word.",
+    rating: 1599,
+    source: { dislikes: 272, likes: 7826, slug: "longest-string-chain" },
+    solver: (args) => longestStringChainLength(args[0] as string[]),
+    starterArgs: "words",
+    title: "Longest String Chain",
+    topics: ["Dynamic Programming", "Hash Map", "Strings"]
+  },
+  {
+    cases: makeCases([[[[1, 2], [2, 3], [5], [0], [5], [], []]], [[[1, 2], [2, 3], [5], [0], [5], [], [4]]], [[[]]], [[[1], [2], [3], []]], [[[1], [2], [0]]], [[[1, 2], [2], [], [0]]], [[[1], [], [1], [2]]], [[[1, 2, 3], [2], [3], []]], [[[1], [2], [3], [1]]], [[[1, 2], [3], [3], []]]], "finds safe graph nodes"),
+    constraints: ["graph[i] lists all directed edges from node i.", "A node is safe when every possible path from it eventually stops.", "Return safe node indexes in ascending order."],
+    difficulty: 4,
+    examples: [
+      { input: "graph = [[1,2],[2,3],[5],[0],[5],[],[]]", output: "[2,4,5,6]", explanation: "Nodes 2, 4, 5, and 6 cannot reach the cycle 0 -> 1 -> 3 -> 0, so they are safe." },
+      { input: "graph = [[1],[2],[3],[]]", output: "[0,1,2,3]", explanation: "Every path moves toward terminal node 3, so every node is safe." }
+    ],
+    functionName: "eventualSafeGraphNodes",
+    id: "external-find-eventual-safe-states",
+    prompt: "Return all directed graph nodes that cannot reach any cycle.",
+    rating: 1962,
+    source: { dislikes: 529, likes: 7053, slug: "find-eventual-safe-states" },
+    solver: (args) => eventualSafeGraphNodes(args[0] as number[][]),
+    starterArgs: "graph",
+    title: "Find Eventual Safe States",
+    topics: ["Graphs", "Topological Sort", "DFS"]
+  },
+  {
+    cases: makeCases([[[1, 10, 3, 10, 2], 3, 1], [[1, 10, 3, 10, 2], 3, 2], [[7, 7, 7, 7, 12, 7, 7], 2, 3], [[1000000000, 1000000000], 1, 1], [[1, 2, 4, 9, 3, 4, 1], 2, 2], [[5, 5, 5, 5], 4, 1], [[1, 2, 3, 4, 5], 1, 5], [[1, 10, 2, 9, 3, 8, 4], 2, 2], [[3, 3, 3], 2, 2], [[2, 2, 4, 4, 4, 6], 2, 2]], "finds bouquet day"),
+    constraints: ["Each bouquet needs k adjacent flowers that have bloomed.", "A flower blooms on bloomDay[i].", "Return the minimum day, or -1 when m bouquets cannot be made."],
+    difficulty: 4,
+    examples: [
+      { input: "bloomDay = [1,10,3,10,2], m = 3, k = 1", output: "3", explanation: "By day 3, flowers at days 1, 2, and 3 have bloomed, enough for three single-flower bouquets." },
+      { input: "bloomDay = [1,10,3,10,2], m = 3, k = 2", output: "-1", explanation: "Three bouquets of size 2 would require 6 flowers, but the garden has only 5." }
+    ],
+    functionName: "minDaysForBouquets",
+    id: "external-min-days-bouquets",
+    prompt: "Return the earliest day when m bouquets can be made from adjacent bloomed flowers.",
+    rating: 1945,
+    source: { dislikes: 326, likes: 5772, slug: "minimum-number-of-days-to-make-m-bouquets" },
+    solver: (args) => minDaysForBouquets(args[0] as number[], args[1] as number, args[2] as number),
+    starterArgs: "bloomDay, m, k",
+    title: "Minimum Days For Bouquets",
+    topics: ["Binary Search", "Arrays"]
+  },
+  {
+    cases: makeCases([[[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 5], [[3, 2, 2, 4, 1, 4], 3], [[1, 2, 3, 1, 1], 4], [[10], 1], [[5, 5, 5, 5], 2], [[7, 2, 5, 10, 8], 2], [[9, 8, 7, 6], 4], [[2, 2, 2, 2, 2], 3], [[1, 10, 1, 10], 2], [[4, 3, 2, 1, 4], 3]], "finds ship capacity"),
+    constraints: ["Ship packages in their existing order.", "Each day can carry packages until the capacity would be exceeded.", "Return the smallest capacity that finishes within days."],
+    difficulty: 4,
+    examples: [
+      { input: "weights = [1,2,3,4,5,6,7,8,9,10], days = 5", output: "15", explanation: "Capacity 15 can split the packages into five valid days; capacity 14 cannot keep the same order in five days." },
+      { input: "weights = [3,2,2,4,1,4], days = 3", output: "6", explanation: "Capacity 6 allows daily loads [3,2], [2,4], and [1,4]." }
+    ],
+    functionName: "shipWithinDaysCapacity",
+    id: "external-ship-packages-days",
+    prompt: "Return the minimum ship capacity needed to deliver all packages within the given number of days.",
+    rating: 1725,
+    source: { dislikes: 291, likes: 11056, slug: "capacity-to-ship-packages-within-d-days" },
+    solver: (args) => shipWithinDaysCapacity(args[0] as number[], args[1] as number),
+    starterArgs: "weights, days",
+    title: "Ship Packages Within Days",
+    topics: ["Binary Search", "Arrays"]
+  },
+  {
+    cases: makeCases([[[1], 1], [[1, 2], 4], [[2, -1, 2], 3], [[84, -37, 32, 40, 95], 167], [[17, 85, 93, -45, -21], 150], [[1, -1, 5, -2, 3], 3], [[-1, -2, -3], 1], [[5, -10, 20], 15], [[3, -2, 5, -1], 6], [[10, -5, 2, 7], 9]], "finds shortest qualifying subarray"),
+    constraints: ["nums may contain negative values.", "A subarray must be contiguous.", "Return -1 when no subarray has sum at least k."],
+    difficulty: 5,
+    examples: [
+      { input: "nums = [1], k = 1", output: "1", explanation: "The only subarray has sum 1, which reaches k." },
+      { input: "nums = [2,-1,2], k = 3", output: "3", explanation: "The whole array sums to 3; neither shorter subarray reaches the target." }
+    ],
+    functionName: "shortestSubarrayAtLeastK",
+    id: "external-shortest-subarray-at-least-k",
+    prompt: "Return the length of the shortest contiguous subarray whose sum is at least k.",
+    rating: 2307,
+    source: { dislikes: 145, likes: 5204, slug: "shortest-subarray-with-sum-at-least-k" },
+    solver: (args) => shortestSubarrayAtLeastK(args[0] as number[], args[1] as number),
+    starterArgs: "nums, k",
+    title: "Shortest Subarray With Sum At Least K",
+    topics: ["Sliding Window", "Queues", "Prefix Sum"]
+  },
+  {
+    cases: makeCases([[[100, 80, 60, 70, 60, 75, 85]], [[10, 4, 5, 20]], [[31, 41, 48, 59, 79]], [[5, 4, 3, 2, 1]], [[5, 5, 5]], [[30]], [[10, 20, 10, 30]], [[7, 6, 8, 9, 5, 10]], [[3, 1, 2, 4, 2]], [[90, 100, 80, 120, 110]]], "computes stock spans"),
+    constraints: ["For each price, look backward while previous prices are less than or equal to it.", "The span includes the current day.", "Return one span value per input price."],
+    difficulty: 4,
+    examples: [
+      { input: "prices = [100,80,60,70,60,75,85]", output: "[1,1,1,2,1,4,6]", explanation: "For price 85, the previous five prices 80, 60, 70, 60, and 75 are all at most 85, so its span is 6 including today." },
+      { input: "prices = [10,4,5,20]", output: "[1,1,2,4]", explanation: "The final price 20 is at least every earlier price, so its span covers all four days." }
+    ],
+    functionName: "dailyStockSpans",
+    id: "external-online-stock-span",
+    prompt: "Return the stock span for each day in the price list.",
+    rating: 1709,
+    source: { dislikes: 505, likes: 7286, slug: "online-stock-span" },
+    solver: (args) => dailyStockSpans(args[0] as number[]),
+    starterArgs: "prices",
+    title: "Daily Stock Spans",
+    topics: ["Stacks", "Monotonic Stack", "Arrays"]
+  },
+  {
+    cases: makeCases([[[6, 0, 8, 2, 1, 5]], [[9, 8, 1, 0, 1, 9, 4, 0, 4, 1]], [[1, 2, 3, 4]], [[4, 3, 2, 1]], [[5, 5, 5]], [[2, 0, 1]], [[7, 1, 5, 0, 6]], [[10, 3, 8, 9, 4, 6]], [[1]], [[8, 7, 6, 5, 9]]], "finds widest ramp"),
+    constraints: ["A ramp is a pair i < j with nums[i] <= nums[j].", "The width is j - i.", "Return the maximum width, or 0 when no wider pair exists."],
+    difficulty: 4,
+    examples: [
+      { input: "nums = [6,0,8,2,1,5]", output: "4", explanation: "The widest valid ramp is from index 1 value 0 to index 5 value 5, giving width 4." },
+      { input: "nums = [9,8,1,0,1,9,4,0,4,1]", output: "7", explanation: "Index 2 value 1 can pair with index 9 value 1, so the width is 7." }
+    ],
+    functionName: "maxWidthRamp",
+    id: "external-maximum-width-ramp",
+    prompt: "Return the largest distance between two indexes i < j where nums[i] is at most nums[j].",
+    rating: 1608,
+    source: { dislikes: 98, likes: 2863, slug: "maximum-width-ramp" },
+    solver: (args) => maxWidthRamp(args[0] as number[]),
+    starterArgs: "nums",
+    title: "Maximum Width Ramp",
+    topics: ["Stacks", "Arrays", "Two Pointers"]
+  },
+  {
+    cases: makeCases([["abcde", ["a", "bb", "acd", "ace"]], ["dsahjpjauf", ["ahjpjau", "ja", "ahbwzgqnuk", "tnmlanowax"]], ["aaaaa", ["a", "aa", "aaa", "aaaa", "aaaaa", "aaaaaa"]], ["abc", ["abc", "ac", "bc", "d"]], ["leetcode", ["let", "code", "leet", "toe", "eet"]], ["", ["", "a"]], ["banana", ["ban", "ana", "bna", "baa", "banana"]], ["subsequence", ["sue", "sqs", "sub", "sequence", "sun"]], ["xyz", ["x", "y", "z", "xy", "xz", "yz", "xyz"]], ["mississippi", ["msp", "sip", "miss", "ppi", "ssss"]]], "counts matching subsequences"),
+    constraints: ["A word matches when all its letters can be found in s from left to right.", "Words may repeat and each copy counts.", "Return the number of matching words."],
+    difficulty: 4,
+    examples: [
+      { input: 's = "abcde", words = ["a","bb","acd","ace"]', output: "3", explanation: "a, acd, and ace appear in order inside s; bb does not." },
+      { input: 's = "dsahjpjauf", words = ["ahjpjau","ja","ahbwzgqnuk","tnmlanowax"]', output: "2", explanation: "ahjpjau and ja can be traced through s from left to right, while the other two cannot." }
+    ],
+    functionName: "countMatchingSubsequences",
+    id: "external-number-of-matching-subsequences",
+    prompt: "Return how many words are subsequences of the main string.",
+    rating: 1695,
+    source: { dislikes: 249, likes: 5823, slug: "number-of-matching-subsequences" },
+    solver: (args) => countMatchingSubsequences(args[0] as string, args[1] as string[]),
+    starterArgs: "s, words",
+    title: "Number Of Matching Subsequences",
+    topics: ["Hash Map", "Binary Search", "Strings"]
+  },
+  {
+    cases: makeCases([["eleetminicoworoep"], ["leetcodeisgreat"], ["bcbcbc"], [""], ["aeiou"], ["aaaa"], ["id"], ["amntyyaw"], ["abcdeiouxyz"], ["uoieaqqaeiou"]], "finds even-vowel substring"),
+    constraints: ["Only vowel parity matters; consonants do not change the parity state.", "A valid substring has even counts for a, e, i, o, and u.", "Return the longest valid substring length."],
+    difficulty: 5,
+    examples: [
+      { input: 's = "eleetminicoworoep"', output: "13", explanation: "The substring leetminicowor has each vowel appearing an even number of times, and no longer substring works." },
+      { input: 's = "leetcodeisgreat"', output: "5", explanation: "The substring leetc has even counts for all vowels, giving length 5." }
+    ],
+    functionName: "longestEvenVowelSubstring",
+    id: "external-longest-even-vowel-substring",
+    prompt: "Return the longest substring length where every vowel appears an even number of times.",
+    rating: 2040,
+    source: { dislikes: 142, likes: 2570, slug: "find-the-longest-substring-containing-vowels-in-even-counts" },
+    solver: (args) => longestEvenVowelSubstring(args[0] as string),
+    starterArgs: "s",
+    title: "Longest Even-Vowel Substring",
+    topics: ["Hash Map", "Bit Manipulation", "Prefix Sum"]
+  },
+  {
+    cases: makeCases([[[2, 1, 4, 3], 2, 3], [[2, 9, 2, 5, 6], 2, 8], [[1, 1, 1], 1, 1], [[1, 2, 3], 4, 5], [[4, 5, 6], 2, 3], [[2, 2, 2], 2, 2], [[1, 3, 5, 2, 7, 5], 2, 5], [[10], 1, 9], [[3, 4, 1, 2], 2, 4], [[5, 1, 2, 3, 6], 3, 5]], "counts bounded subarrays"),
+    constraints: ["Count contiguous subarrays.", "The maximum value in the subarray must be at least left and at most right.", "Return the total count."],
+    difficulty: 4,
+    examples: [
+      { input: "nums = [2,1,4,3], left = 2, right = 3", output: "3", explanation: "The valid subarrays are [2], [2,1], and [3]; subarrays containing 4 exceed the bound." },
+      { input: "nums = [2,9,2,5,6], left = 2, right = 8", output: "7", explanation: "The value 9 splits the array; all valid bounded subarrays come from the [2,5,6] side plus the first [2]." }
+    ],
+    functionName: "countBoundedMaxSubarrays",
+    id: "external-bounded-maximum-subarrays",
+    prompt: "Count subarrays whose maximum value lies between left and right inclusive.",
+    rating: 1817,
+    source: { dislikes: 136, likes: 2458, slug: "number-of-subarrays-with-bounded-maximum" },
+    solver: (args) => countBoundedMaxSubarrays(args[0] as number[], args[1] as number, args[2] as number),
+    starterArgs: "nums, left, right",
+    title: "Subarrays With Bounded Maximum",
+    topics: ["Two Pointers", "Arrays"]
+  },
+  {
+    cases: makeCases([[1, 1, [[10, 10]]], [100, 1, [[10, 60], [20, 30], [30, 30], [60, 40]]], [100, 10, [[10, 60], [20, 30], [30, 30], [60, 40]]], [100, 50, [[25, 25], [50, 50]]], [1000, 299, [[13, 21], [26, 115], [100, 47], [225, 99], [299, 141], [444, 198], [608, 190], [636, 157], [647, 255], [841, 123]]], [10, 3, [[3, 3], [6, 4]]], [50, 10, [[10, 10], [20, 10], [30, 10], [40, 10]]], [25, 25, []], [30, 5, [[10, 10], [20, 5]]], [200, 50, [[25, 25], [50, 25], [100, 100]]]], "finds minimum refuels"),
+    constraints: ["Start with startFuel units of fuel.", "Each station is [position, fuel].", "Return the fewest refuels needed to reach target, or -1 if impossible."],
+    difficulty: 5,
+    examples: [
+      { input: "target = 1, startFuel = 1, stations = [[10,10]]", output: "0", explanation: "The car already has enough fuel to reach target before any station matters." },
+      { input: "target = 100, startFuel = 10, stations = [[10,60],[20,30],[30,30],[60,40]]", output: "2", explanation: "Refuel at position 10, then later use the largest available station fuel to finish with two total stops." }
+    ],
+    functionName: "minRefuelStops",
+    id: "external-minimum-refueling-stops",
+    prompt: "Return the minimum number of refueling stops needed to reach the target distance.",
+    rating: 2074,
+    source: { dislikes: 94, likes: 4885, slug: "minimum-number-of-refueling-stops" },
+    solver: (args) => minRefuelStops(args[0] as number, args[1] as number, args[2] as Array<[number, number]>),
+    starterArgs: "target, startFuel, stations",
+    title: "Minimum Refueling Stops",
+    topics: ["Heap", "Greedy", "Dynamic Programming"]
+  },
+  {
+    cases: makeCases([[[1, -2, 3, -2]], [[5, -3, 5]], [[-3, -2, -3]], [[1, 2, 3]], [[3, -1, 2, -1]], [[8, -1, 3, 4]], [[-1]], [[0, 0, 0]], [[10, -12, 11]], [[2, -2, 2, 7, 8, 0]]], "finds circular subarray sum"),
+    constraints: ["Choose a non-empty subarray.", "The subarray may wrap from the end of nums back to the start.", "Return the largest possible sum."],
+    difficulty: 4,
+    examples: [
+      { input: "nums = [1,-2,3,-2]", output: "3", explanation: "The best non-wrapping subarray is [3], and wrapping does not improve it." },
+      { input: "nums = [5,-3,5]", output: "10", explanation: "Wrapping lets the subarray take the last 5 and first 5 while skipping -3." }
+    ],
+    functionName: "maxCircularSubarraySum",
+    id: "external-maximum-sum-circular-subarray",
+    prompt: "Return the maximum subarray sum when the chosen subarray is allowed to wrap around the array end.",
+    rating: 1777,
+    source: { dislikes: 349, likes: 7356, slug: "maximum-sum-circular-subarray" },
+    solver: (args) => maxCircularSubarraySum(args[0] as number[]),
+    starterArgs: "nums",
+    title: "Maximum Circular Subarray Sum",
+    topics: ["Arrays", "Dynamic Programming"]
   }
 ];
 
@@ -4375,8 +5185,897 @@ function visiblePeopleToRight(heights: number[]) {
   return result;
 }
 
+function longestArithmeticSubsequenceLength(nums: number[]) {
+  const dp = nums.map(() => new Map<number, number>());
+  let best = nums.length ? 1 : 0;
+  for (let right = 0; right < nums.length; right += 1) {
+    for (let left = 0; left < right; left += 1) {
+      const diff = nums[right] - nums[left];
+      const length = (dp[left].get(diff) || 1) + 1;
+      dp[right].set(diff, Math.max(dp[right].get(diff) || 0, length));
+      best = Math.max(best, length);
+    }
+  }
+  return best;
+}
+
+function longestIdealSubsequenceLength(s: string, k: number) {
+  const dp = Array(26).fill(0);
+  for (const char of s) {
+    const code = char.charCodeAt(0) - 97;
+    let best = 0;
+    for (let next = Math.max(0, code - k); next <= Math.min(25, code + k); next += 1) {
+      best = Math.max(best, dp[next]);
+    }
+    dp[code] = Math.max(dp[code], best + 1);
+  }
+  return Math.max(0, ...dp);
+}
+
+function countVowelPermutationStrings(n: number) {
+  const MOD = 1000000007;
+  let a = 1;
+  let e = 1;
+  let i = 1;
+  let o = 1;
+  let u = 1;
+  for (let length = 2; length <= n; length += 1) {
+    [a, e, i, o, u] = [(e + i + u) % MOD, (a + i) % MOD, (e + o) % MOD, i % MOD, (i + o) % MOD];
+  }
+  return (a + e + i + o + u) % MOD;
+}
+
+function longestStringChainLength(words: string[]) {
+  const sorted = [...words].sort((left, right) => left.length - right.length);
+  const dp = new Map<string, number>();
+  let best = 0;
+  for (const word of sorted) {
+    let length = 1;
+    for (let index = 0; index < word.length; index += 1) {
+      const previous = word.slice(0, index) + word.slice(index + 1);
+      length = Math.max(length, (dp.get(previous) || 0) + 1);
+    }
+    dp.set(word, length);
+    best = Math.max(best, length);
+  }
+  return best;
+}
+
+function eventualSafeGraphNodes(graph: number[][]) {
+  const reverse = Array.from({ length: graph.length }, () => [] as number[]);
+  const outdegree = graph.map((neighbors) => neighbors.length);
+  for (let node = 0; node < graph.length; node += 1) {
+    for (const next of graph[node]) {
+      reverse[next].push(node);
+    }
+  }
+  const queue = outdegree.map((degree, node) => degree === 0 ? node : -1).filter((node) => node >= 0);
+  const safe = Array(graph.length).fill(false);
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const node = queue[cursor];
+    safe[node] = true;
+    for (const previous of reverse[node]) {
+      outdegree[previous] -= 1;
+      if (outdegree[previous] === 0) {
+        queue.push(previous);
+      }
+    }
+  }
+  return safe.map((isSafe, node) => isSafe ? node : -1).filter((node) => node >= 0);
+}
+
+function minDaysForBouquets(bloomDay: number[], m: number, k: number) {
+  if (m * k > bloomDay.length) {
+    return -1;
+  }
+  let left = Math.min(...bloomDay);
+  let right = Math.max(...bloomDay);
+  while (left < right) {
+    const middle = Math.floor((left + right) / 2);
+    if (canMakeBouquets(bloomDay, m, k, middle)) {
+      right = middle;
+    } else {
+      left = middle + 1;
+    }
+  }
+  return left;
+}
+
+function canMakeBouquets(bloomDay: number[], m: number, k: number, day: number) {
+  let bouquets = 0;
+  let run = 0;
+  for (const bloom of bloomDay) {
+    run = bloom <= day ? run + 1 : 0;
+    if (run === k) {
+      bouquets += 1;
+      run = 0;
+    }
+  }
+  return bouquets >= m;
+}
+
+function shipWithinDaysCapacity(weights: number[], days: number) {
+  let left = Math.max(...weights);
+  let right = weights.reduce((sum, value) => sum + value, 0);
+  while (left < right) {
+    const middle = Math.floor((left + right) / 2);
+    if (countShipDays(weights, middle) <= days) {
+      right = middle;
+    } else {
+      left = middle + 1;
+    }
+  }
+  return left;
+}
+
+function countShipDays(weights: number[], capacity: number) {
+  let days = 1;
+  let load = 0;
+  for (const weight of weights) {
+    if (load + weight > capacity) {
+      days += 1;
+      load = 0;
+    }
+    load += weight;
+  }
+  return days;
+}
+
+function shortestSubarrayAtLeastK(nums: number[], k: number) {
+  const prefix = [0];
+  for (const num of nums) {
+    prefix.push(prefix[prefix.length - 1] + num);
+  }
+  const deque: number[] = [];
+  let best = Infinity;
+  for (let index = 0; index < prefix.length; index += 1) {
+    while (deque.length && prefix[index] - prefix[deque[0]] >= k) {
+      best = Math.min(best, index - (deque.shift() as number));
+    }
+    while (deque.length && prefix[index] <= prefix[deque[deque.length - 1]]) {
+      deque.pop();
+    }
+    deque.push(index);
+  }
+  return Number.isFinite(best) ? best : -1;
+}
+
+function dailyStockSpans(prices: number[]) {
+  const stack: Array<[number, number]> = [];
+  return prices.map((price) => {
+    let span = 1;
+    while (stack.length && stack[stack.length - 1][0] <= price) {
+      span += (stack.pop() as [number, number])[1];
+    }
+    stack.push([price, span]);
+    return span;
+  });
+}
+
+function maxWidthRamp(nums: number[]) {
+  const stack: number[] = [];
+  for (let index = 0; index < nums.length; index += 1) {
+    if (!stack.length || nums[index] < nums[stack[stack.length - 1]]) {
+      stack.push(index);
+    }
+  }
+  let best = 0;
+  for (let right = nums.length - 1; right >= 0; right -= 1) {
+    while (stack.length && nums[stack[stack.length - 1]] <= nums[right]) {
+      best = Math.max(best, right - (stack.pop() as number));
+    }
+  }
+  return best;
+}
+
+function countMatchingSubsequences(s: string, words: string[]) {
+  const positions = new Map<string, number[]>();
+  for (let index = 0; index < s.length; index += 1) {
+    const char = s[index];
+    positions.set(char, [...(positions.get(char) || []), index]);
+  }
+  return words.filter((word) => isSubsequenceByPositions(word, positions)).length;
+}
+
+function isSubsequenceByPositions(word: string, positions: Map<string, number[]>) {
+  let current = -1;
+  for (const char of word) {
+    const indexes = positions.get(char) || [];
+    const next = firstGreaterThan(indexes, current);
+    if (next === -1) {
+      return false;
+    }
+    current = next;
+  }
+  return true;
+}
+
+function firstGreaterThan(values: number[], target: number) {
+  let left = 0;
+  let right = values.length;
+  while (left < right) {
+    const middle = Math.floor((left + right) / 2);
+    if (values[middle] > target) {
+      right = middle;
+    } else {
+      left = middle + 1;
+    }
+  }
+  return left < values.length ? values[left] : -1;
+}
+
+function longestEvenVowelSubstring(s: string) {
+  const seen = new Map([[0, -1]]);
+  const bitByVowel = new Map([["a", 1], ["e", 2], ["i", 4], ["o", 8], ["u", 16]]);
+  let mask = 0;
+  let best = 0;
+  for (let index = 0; index < s.length; index += 1) {
+    mask ^= bitByVowel.get(s[index]) || 0;
+    if (!seen.has(mask)) {
+      seen.set(mask, index);
+    }
+    best = Math.max(best, index - (seen.get(mask) as number));
+  }
+  return best;
+}
+
+function countBoundedMaxSubarrays(nums: number[], left: number, right: number) {
+  return countSubarraysWithMaxAtMost(nums, right) - countSubarraysWithMaxAtMost(nums, left - 1);
+}
+
+function countSubarraysWithMaxAtMost(nums: number[], limit: number) {
+  let run = 0;
+  let total = 0;
+  for (const num of nums) {
+    run = num <= limit ? run + 1 : 0;
+    total += run;
+  }
+  return total;
+}
+
+function minRefuelStops(target: number, startFuel: number, stations: Array<[number, number]>) {
+  const fuels: number[] = [];
+  let fuel = startFuel;
+  let stops = 0;
+  let index = 0;
+  while (fuel < target) {
+    while (index < stations.length && stations[index][0] <= fuel) {
+      fuels.push(stations[index][1]);
+      fuels.sort((left, right) => right - left);
+      index += 1;
+    }
+    if (!fuels.length) {
+      return -1;
+    }
+    fuel += fuels.shift() as number;
+    stops += 1;
+  }
+  return stops;
+}
+
+function maxCircularSubarraySum(nums: number[]) {
+  let total = 0;
+  let maxEnding = 0;
+  let minEnding = 0;
+  let bestMax = -Infinity;
+  let bestMin = Infinity;
+  for (const num of nums) {
+    maxEnding = Math.max(num, maxEnding + num);
+    bestMax = Math.max(bestMax, maxEnding);
+    minEnding = Math.min(num, minEnding + num);
+    bestMin = Math.min(bestMin, minEnding);
+    total += num;
+  }
+  return bestMax < 0 ? bestMax : Math.max(bestMax, total - bestMin);
+}
+
 function makeCases(argsList: unknown[][], label: string): TestInput[] {
   return argsList.map((args, index) => ({ args, name: `${label} ${index + 1}` }));
+}
+
+function isSpecialParityArray(nums: number[], queries: Array<[number, number]>) {
+  const sameParityPrefix = Array(nums.length).fill(0);
+  for (let index = 1; index < nums.length; index += 1) {
+    sameParityPrefix[index] = sameParityPrefix[index - 1] + (Math.abs(nums[index] % 2) === Math.abs(nums[index - 1] % 2) ? 1 : 0);
+  }
+  return queries.map(([left, right]) => sameParityPrefix[right] === sameParityPrefix[left]);
+}
+
+function removeIntervalPieces(intervals: Array<[number, number]>, remove: [number, number]) {
+  const [removeStart, removeEnd] = remove;
+  const result: number[][] = [];
+  for (const [start, end] of intervals) {
+    if (end <= removeStart || start >= removeEnd) {
+      result.push([start, end]);
+      continue;
+    }
+    if (start < removeStart) {
+      result.push([start, removeStart]);
+    }
+    if (end > removeEnd) {
+      result.push([removeEnd, end]);
+    }
+  }
+  return result;
+}
+
+function largestPolygonPerimeter(nums: number[]) {
+  const sides = [...nums].sort((left, right) => left - right);
+  let sum = sides.reduce((total, value) => total + value, 0);
+  for (let index = sides.length - 1; index >= 2; index -= 1) {
+    if (sum - sides[index] > sides[index]) {
+      return sum;
+    }
+    sum -= sides[index];
+  }
+  return -1;
+}
+
+function doesPathCross(path: string) {
+  let row = 0;
+  let column = 0;
+  const seen = new Set(["0,0"]);
+  const moves: Record<string, [number, number]> = { E: [0, 1], N: [-1, 0], S: [1, 0], W: [0, -1] };
+  for (const step of path) {
+    const [dr, dc] = moves[step] || [0, 0];
+    row += dr;
+    column += dc;
+    const key = `${row},${column}`;
+    if (seen.has(key)) {
+      return true;
+    }
+    seen.add(key);
+  }
+  return false;
+}
+
+function canBuildKPalindromes(s: string, k: number) {
+  if (k > s.length) {
+    return false;
+  }
+  const counts = new Map<string, number>();
+  for (const char of s) {
+    counts.set(char, (counts.get(char) || 0) + 1);
+  }
+  return [...counts.values()].filter((count) => count % 2 === 1).length <= k;
+}
+
+function longestTwoLetterPalindrome(words: string[]) {
+  const counts = new Map<string, number>();
+  for (const word of words) {
+    counts.set(word, (counts.get(word) || 0) + 1);
+  }
+  let length = 0;
+  let hasCenter = false;
+  for (const [word, count] of counts) {
+    const reversed = `${word[1]}${word[0]}`;
+    if (word[0] === word[1]) {
+      length += Math.floor(count / 2) * 4;
+      hasCenter ||= count % 2 === 1;
+    } else if (word < reversed) {
+      length += Math.min(count, counts.get(reversed) || 0) * 4;
+    }
+  }
+  return length + (hasCenter ? 2 : 0);
+}
+
+function forestRootValuesAfterDeleting(levelOrder: Array<number | null>, toDelete: number[]) {
+  const deleteSet = new Set(toDelete);
+  const roots: number[] = [];
+  const walk = (node: TreeNode | null | undefined, isRoot: boolean): TreeNode | null => {
+    if (!node) {
+      return null;
+    }
+    const deleted = deleteSet.has(node.val);
+    if (isRoot && !deleted) {
+      roots.push(node.val);
+    }
+    node.left = walk(node.left, deleted);
+    node.right = walk(node.right, deleted);
+    return deleted ? null : node;
+  };
+  walk(buildTreeFromLevelOrder(levelOrder), true);
+  return roots.sort((left, right) => left - right);
+}
+
+function minutesToInformEmployees(n: number, headID: number, manager: number[], informTime: number[]) {
+  const reports = Array.from({ length: n }, () => [] as number[]);
+  for (let employee = 0; employee < n; employee += 1) {
+    if (manager[employee] >= 0) {
+      reports[manager[employee]].push(employee);
+    }
+  }
+  const dfs = (employee: number): number => reports[employee].reduce((best, report) => Math.max(best, informTime[employee] + dfs(report)), 0);
+  return dfs(headID);
+}
+
+function countGoodLeafPairs(levelOrder: Array<number | null>, distance: number) {
+  let pairs = 0;
+  const walk = (node: TreeNode | null | undefined): number[] => {
+    if (!node) {
+      return [];
+    }
+    if (!node.left && !node.right) {
+      return [1];
+    }
+    const left = walk(node.left);
+    const right = walk(node.right);
+    for (const leftDistance of left) {
+      for (const rightDistance of right) {
+        if (leftDistance + rightDistance <= distance) {
+          pairs += 1;
+        }
+      }
+    }
+    return [...left, ...right].map((value) => value + 1).filter((value) => value <= distance);
+  };
+  walk(buildTreeFromLevelOrder(levelOrder));
+  return pairs;
+}
+
+function buildTreeFromLevelOrder(values: Array<number | null>) {
+  if (!values.length || values[0] === null) {
+    return null;
+  }
+  const root: TreeNode = { val: values[0], left: null, right: null };
+  const queue: TreeNode[] = [root];
+  let index = 1;
+  while (queue.length && index < values.length) {
+    const node = queue.shift() as TreeNode;
+    const left = values[index++];
+    if (left !== undefined && left !== null) {
+      node.left = { val: left, left: null, right: null };
+      queue.push(node.left);
+    }
+    const right = values[index++];
+    if (right !== undefined && right !== null) {
+      node.right = { val: right, left: null, right: null };
+      queue.push(node.right);
+    }
+  }
+  return root;
+}
+
+function smallestSourceVertices(n: number, edges: Array<[number, number]>) {
+  const hasIncoming = Array(n).fill(false);
+  for (const [, to] of edges) {
+    hasIncoming[to] = true;
+  }
+  return hasIncoming.flatMap((incoming, node) => incoming ? [] : [node]);
+}
+
+function nearestMazeExit(maze: string[][], entrance: [number, number]) {
+  const rows = maze.length;
+  const columns = maze[0]?.length || 0;
+  const queue: Array<[number, number, number]> = [[entrance[0], entrance[1], 0]];
+  const seen = Array.from({ length: rows }, () => Array(columns).fill(false));
+  seen[entrance[0]][entrance[1]] = true;
+  const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const [row, column, distance] = queue[cursor];
+    if (distance > 0 && (row === 0 || column === 0 || row === rows - 1 || column === columns - 1)) {
+      return distance;
+    }
+    for (const [dr, dc] of directions) {
+      const nextRow = row + dr;
+      const nextColumn = column + dc;
+      if (nextRow < 0 || nextColumn < 0 || nextRow >= rows || nextColumn >= columns || seen[nextRow][nextColumn] || maze[nextRow][nextColumn] !== ".") {
+        continue;
+      }
+      seen[nextRow][nextColumn] = true;
+      queue.push([nextRow, nextColumn, distance + 1]);
+    }
+  }
+  return -1;
+}
+
+function countEnclaveLand(grid: number[][]) {
+  const rows = grid.length;
+  const columns = grid[0]?.length || 0;
+  const seen = Array.from({ length: rows }, () => Array(columns).fill(false));
+  const stack: Array<[number, number]> = [];
+  const push = (row: number, column: number) => {
+    if (row >= 0 && column >= 0 && row < rows && column < columns && !seen[row][column] && grid[row][column] === 1) {
+      seen[row][column] = true;
+      stack.push([row, column]);
+    }
+  };
+  for (let row = 0; row < rows; row += 1) {
+    push(row, 0);
+    push(row, columns - 1);
+  }
+  for (let column = 0; column < columns; column += 1) {
+    push(0, column);
+    push(rows - 1, column);
+  }
+  while (stack.length) {
+    const [row, column] = stack.pop() as [number, number];
+    push(row + 1, column);
+    push(row - 1, column);
+    push(row, column + 1);
+    push(row, column - 1);
+  }
+  let enclaves = 0;
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      if (grid[row][column] === 1 && !seen[row][column]) {
+        enclaves += 1;
+      }
+    }
+  }
+  return enclaves;
+}
+
+function countSquareSubmatrices(matrix: number[][]) {
+  const dp = matrix.map((row) => row.map(() => 0));
+  let total = 0;
+  for (let row = 0; row < matrix.length; row += 1) {
+    for (let column = 0; column < (matrix[0]?.length || 0); column += 1) {
+      if (matrix[row][column] === 1) {
+        dp[row][column] = row === 0 || column === 0 ? 1 : 1 + Math.min(dp[row - 1][column], dp[row][column - 1], dp[row - 1][column - 1]);
+        total += dp[row][column];
+      }
+    }
+  }
+  return total;
+}
+
+function diceRollTargetWays(n: number, k: number, target: number) {
+  const mod = 1_000_000_007;
+  let previous = Array(target + 1).fill(0);
+  previous[0] = 1;
+  for (let dice = 0; dice < n; dice += 1) {
+    const next = Array(target + 1).fill(0);
+    for (let sum = 0; sum <= target; sum += 1) {
+      if (!previous[sum]) {
+        continue;
+      }
+      for (let face = 1; face <= k && sum + face <= target; face += 1) {
+        next[sum + face] = (next[sum + face] + previous[sum]) % mod;
+      }
+    }
+    previous = next;
+  }
+  return previous[target];
+}
+
+function longestOnesAfterFlips(nums: number[], k: number) {
+  let left = 0;
+  let zeroes = 0;
+  let best = 0;
+  for (let right = 0; right < nums.length; right += 1) {
+    zeroes += nums[right] === 0 ? 1 : 0;
+    while (zeroes > k) {
+      zeroes -= nums[left] === 0 ? 1 : 0;
+      left += 1;
+    }
+    best = Math.max(best, right - left + 1);
+  }
+  return best;
+}
+
+function flightBookingTotals(bookings: Array<[number, number, number]>, n: number) {
+  const diff = Array(n + 1).fill(0);
+  for (const [first, last, seats] of bookings) {
+    diff[first - 1] += seats;
+    diff[last] -= seats;
+  }
+  const result: number[] = [];
+  let running = 0;
+  for (let index = 0; index < n; index += 1) {
+    running += diff[index];
+    result.push(running);
+  }
+  return result;
+}
+
+function countFairRemovalWays(nums: number[]) {
+  const total = nums.reduce((sums, value, index) => {
+    sums[index % 2] += value;
+    return sums;
+  }, [0, 0]);
+  const left = [0, 0];
+  let ways = 0;
+  for (let index = 0; index < nums.length; index += 1) {
+    total[index % 2] -= nums[index];
+    if (left[0] + total[1] === left[1] + total[0]) {
+      ways += 1;
+    }
+    left[index % 2] += nums[index];
+  }
+  return ways;
+}
+
+function maximumOrderedTripletValue(nums: number[]) {
+  let best = 0;
+  let bestPrefix = nums[0] ?? 0;
+  let bestDifference = -Infinity;
+  for (let index = 1; index < nums.length; index += 1) {
+    best = Math.max(best, bestDifference * nums[index]);
+    bestDifference = Math.max(bestDifference, bestPrefix - nums[index]);
+    bestPrefix = Math.max(bestPrefix, nums[index]);
+  }
+  return best;
+}
+
+function countBadIndexPairs(nums: number[]) {
+  const counts = new Map<number, number>();
+  let goodPairs = 0;
+  for (let index = 0; index < nums.length; index += 1) {
+    const key = nums[index] - index;
+    goodPairs += counts.get(key) || 0;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return nums.length * (nums.length - 1) / 2 - goodPairs;
+}
+
+function universalWordSubsets(words1: string[], words2: string[]) {
+  const required = Array(26).fill(0);
+  for (const word of words2) {
+    const counts = countLowercaseLetters(word);
+    for (let index = 0; index < 26; index += 1) {
+      required[index] = Math.max(required[index], counts[index]);
+    }
+  }
+  return words1.filter((word) => {
+    const counts = countLowercaseLetters(word);
+    return required.every((count, index) => counts[index] >= count);
+  });
+}
+
+function countLowercaseLetters(word: string) {
+  const counts = Array(26).fill(0);
+  for (const char of word) {
+    counts[char.charCodeAt(0) - 97] += 1;
+  }
+  return counts;
+}
+
+function treeDiameterLength(edges: Array<[number, number]>) {
+  if (!edges.length) {
+    return 0;
+  }
+  const graph = new Map<number, number[]>();
+  for (const [left, right] of edges) {
+    graph.set(left, [...(graph.get(left) || []), right]);
+    graph.set(right, [...(graph.get(right) || []), left]);
+  }
+  const first = farthestTreeNode(edges[0][0], graph).node;
+  return farthestTreeNode(first, graph).distance;
+}
+
+function farthestTreeNode(start: number, graph: Map<number, number[]>) {
+  const queue: Array<[number, number]> = [[start, 0]];
+  const seen = new Set([start]);
+  let best = { distance: 0, node: start };
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const [node, distance] = queue[cursor];
+    if (distance > best.distance) {
+      best = { distance, node };
+    }
+    for (const next of graph.get(node) || []) {
+      if (!seen.has(next)) {
+        seen.add(next);
+        queue.push([next, distance + 1]);
+      }
+    }
+  }
+  return best;
+}
+
+function buildTreeLevelOrderFromPrePost(preorder: number[], postorder: number[]) {
+  const postIndex = new Map(postorder.map((value, index) => [value, index]));
+  const build = (preLeft: number, preRight: number, postLeft: number, postRight: number): TreeNode | null => {
+    if (preLeft > preRight || postLeft > postRight) {
+      return null;
+    }
+    const root: TreeNode = { val: preorder[preLeft], left: null, right: null };
+    if (preLeft === preRight) {
+      return root;
+    }
+    const leftRoot = preorder[preLeft + 1];
+    const leftPostIndex = postIndex.get(leftRoot) ?? postLeft;
+    const leftSize = leftPostIndex - postLeft + 1;
+    root.left = build(preLeft + 1, preLeft + leftSize, postLeft, leftPostIndex);
+    root.right = build(preLeft + leftSize + 1, preRight, leftPostIndex + 1, postRight - 1);
+    return root;
+  };
+  return compactTreeLevelOrder(build(0, preorder.length - 1, 0, postorder.length - 1));
+}
+
+function compactTreeLevelOrder(root: TreeNode | null) {
+  if (!root) {
+    return [];
+  }
+  const result: Array<number | null> = [];
+  const queue: Array<TreeNode | null> = [root];
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const node = queue[cursor];
+    if (!node) {
+      result.push(null);
+      continue;
+    }
+    result.push(node.val);
+    if (node.left || node.right) {
+      queue.push(node.left || null, node.right || null);
+    }
+  }
+  while (result[result.length - 1] === null) {
+    result.pop();
+  }
+  return result;
+}
+
+function countCompleteGraphComponents(n: number, edges: Array<[number, number]>) {
+  const graph = Array.from({ length: n }, () => new Set<number>());
+  for (const [left, right] of edges) {
+    graph[left].add(right);
+    graph[right].add(left);
+  }
+  const seen = Array(n).fill(false);
+  let complete = 0;
+  for (let start = 0; start < n; start += 1) {
+    if (seen[start]) {
+      continue;
+    }
+    const stack = [start];
+    const nodes: number[] = [];
+    seen[start] = true;
+    while (stack.length) {
+      const node = stack.pop() as number;
+      nodes.push(node);
+      for (const next of graph[node]) {
+        if (!seen[next]) {
+          seen[next] = true;
+          stack.push(next);
+        }
+      }
+    }
+    const degreeSum = nodes.reduce((sum, node) => sum + graph[node].size, 0);
+    if (degreeSum === nodes.length * (nodes.length - 1)) {
+      complete += 1;
+    }
+  }
+  return complete;
+}
+
+function openLockMoves(deadends: string[], target: string) {
+  const blocked = new Set(deadends);
+  if (blocked.has("0000")) {
+    return -1;
+  }
+  const queue: Array<[string, number]> = [["0000", 0]];
+  const seen = new Set(["0000"]);
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const [code, distance] = queue[cursor];
+    if (code === target) {
+      return distance;
+    }
+    for (let wheel = 0; wheel < 4; wheel += 1) {
+      const digit = Number(code[wheel]);
+      for (const delta of [-1, 1]) {
+        const nextDigit = (digit + delta + 10) % 10;
+        const next = `${code.slice(0, wheel)}${nextDigit}${code.slice(wheel + 1)}`;
+        if (!blocked.has(next) && !seen.has(next)) {
+          seen.add(next);
+          queue.push([next, distance + 1]);
+        }
+      }
+    }
+  }
+  return -1;
+}
+
+function countAlternatingBuildingWays(s: string) {
+  let zeroesLeft = 0;
+  let onesLeft = 0;
+  let zeroesRight = [...s].filter((char) => char === "0").length;
+  let onesRight = s.length - zeroesRight;
+  let ways = 0;
+  for (const char of s) {
+    if (char === "0") {
+      zeroesRight -= 1;
+      ways += onesLeft * onesRight;
+      zeroesLeft += 1;
+    } else {
+      onesRight -= 1;
+      ways += zeroesLeft * zeroesRight;
+      onesLeft += 1;
+    }
+  }
+  return ways;
+}
+
+function maxExamConfusionRun(answerKey: string, k: number) {
+  const longestFor = (target: string) => {
+    let left = 0;
+    let changes = 0;
+    let best = 0;
+    for (let right = 0; right < answerKey.length; right += 1) {
+      changes += answerKey[right] === target ? 0 : 1;
+      while (changes > k) {
+        changes -= answerKey[left] === target ? 0 : 1;
+        left += 1;
+      }
+      best = Math.max(best, right - left + 1);
+    }
+    return best;
+  };
+  return Math.max(longestFor("T"), longestFor("F"));
+}
+
+function maximumCandiesPerChild(candies: number[], k: number) {
+  let left = 0;
+  let right = Math.max(...candies);
+  while (left < right) {
+    const middle = Math.ceil((left + right) / 2);
+    const pieces = candies.reduce((total, pile) => total + Math.floor(pile / middle), 0);
+    if (pieces >= k) {
+      left = middle;
+    } else {
+      right = middle - 1;
+    }
+  }
+  return left;
+}
+
+function minimumTripCompletionTime(time: number[], totalTrips: number) {
+  let left = 1;
+  let right = Math.min(...time) * totalTrips;
+  while (left < right) {
+    const middle = Math.floor((left + right) / 2);
+    const trips = time.reduce((total, value) => total + Math.floor(middle / value), 0);
+    if (trips >= totalTrips) {
+      right = middle;
+    } else {
+      left = middle + 1;
+    }
+  }
+  return left;
+}
+
+function singleThreadedCpuOrder(tasks: Array<[number, number]>) {
+  const indexed = tasks.map(([start, duration], index) => ({ duration, index, start })).sort((left, right) => left.start - right.start);
+  const heap: typeof indexed = [];
+  const result: number[] = [];
+  let time = 0;
+  let index = 0;
+  while (index < indexed.length || heap.length) {
+    if (!heap.length && time < indexed[index].start) {
+      time = indexed[index].start;
+    }
+    while (index < indexed.length && indexed[index].start <= time) {
+      heap.push(indexed[index]);
+      index += 1;
+    }
+    heap.sort((left, right) => left.duration - right.duration || left.index - right.index);
+    const task = heap.shift();
+    if (task) {
+      time += task.duration;
+      result.push(task.index);
+    }
+  }
+  return result;
+}
+
+function minimumPairMergesToSort(nums: number[]) {
+  const values = [...nums];
+  let operations = 0;
+  const isSorted = () => values.every((value, index) => index === 0 || values[index - 1] <= value);
+  while (!isSorted()) {
+    let bestIndex = 0;
+    let bestSum = values[0] + values[1];
+    for (let index = 1; index < values.length - 1; index += 1) {
+      const sum = values[index] + values[index + 1];
+      if (sum < bestSum) {
+        bestSum = sum;
+        bestIndex = index;
+      }
+    }
+    values.splice(bestIndex, 2, bestSum);
+    operations += 1;
+  }
+  return operations;
 }
 
 function partitionDisjointIndex(nums: number[]) {

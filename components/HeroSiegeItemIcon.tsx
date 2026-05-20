@@ -128,7 +128,7 @@ import triforceRelicArt from "../assets/hero_siege_relics/triforce.png";
 import vadjraRelicArt from "../assets/hero_siege_relics/vadjra.png";
 import wizardsHatRelicArt from "../assets/hero_siege_relics/wizards-hat.png";
 import zombiesFaceRelicArt from "../assets/hero_siege_relics/zombies-face.png";
-import { getHeroSiegeQualityColor, getItemQuality, getRelicQualityLabel, ITEM_RARITY_TO_QUALITY } from "../lib/heroSiegeQuality";
+import { getHeroSiegeQualityColor, getItemQuality, getRelicRarityColor, ITEM_RARITY_TO_QUALITY } from "../lib/heroSiegeQuality";
 import { RELIC_DEFINITIONS } from "../lib/relicCore";
 import type { EquipmentSlot, InventoryItem, ItemRarity, Relic, ShopItem } from "../types/study";
 
@@ -312,21 +312,21 @@ function getPotionAsset(type: Extract<ShopItem, { kind: "consumable" }>["type"])
   if (type === "health") {
     return healthPotionArt;
   }
-  return manaPotionArt;
+  return healthPotionArt;
 }
 
 function getPotionBorderColor(type: Extract<ShopItem, { kind: "consumable" }>["type"]) {
   if (type === "health") {
     return "#e03131";
   }
-  return type === "mana" ? "#228be6" : "#f59f00";
+  return "#f59f00";
 }
 
 export function HeroSiegeRelicIcon(props: { relic: Relic; size?: number; unframed?: boolean }) {
   return (
     <FramedItemAsset
       asset={props.relic.wikiImagePath || getRelicAsset(props.relic)}
-      borderColor={getHeroSiegeQualityColor(getRelicQualityLabel(props.relic.rarity, props.relic.wikiRarityLabel))}
+      borderColor={getRelicRarityColor(props.relic.rarity)}
       filter={props.relic.wikiImageFilter}
       size={props.size || DEFAULT_RELIC_ICON_SIZE}
       unframed={props.unframed}

@@ -18,20 +18,17 @@ import {
   Tooltip,
   Title
 } from "@mantine/core";
-import { IconBackpack, IconBook, IconChartBar, IconSettings, IconSparkles, IconSword, IconTrophy, IconUser } from "@tabler/icons-react";
+import { IconBook, IconSettings, IconSparkles, IconTrophy, IconUser } from "@tabler/icons-react";
 
 import { AchievementsPanel } from "./AchievementsPanel";
 import { CoinAmount } from "./CoinIcon";
 import { HeroSiegeButton } from "./HeroSiegeUi";
-import { InventoryPanel } from "./InventoryPanel";
 import { MONSTER_WIKI_ENTRIES } from "./MonsterEncounter";
 import { RelicIcon } from "./RelicIcon";
-import { WarriorSkillTree } from "./WarriorSkillTree";
-import { getHeroSiegeQualityColor, getRelicQualityLabel } from "../lib/heroSiegeQuality";
+import { ROGUELIKE_RELIC_RARITY_ORDER, compareRelicRarity, getHeroSiegeQualityColor, getRelicRarityColor, getRelicRarityLabel } from "../lib/heroSiegeQuality";
 import armorArt from "../assets/hero_siege_items/armor.png";
 import healthPotionArt from "../assets/hero_siege_items/health-potion.png";
 import helmetArt from "../assets/hero_siege_items/helmet.png";
-import manaPotionArt from "../assets/hero_siege_items/mana-potion.png";
 import swordArt from "../assets/hero_siege_items/weapon-sword.png";
 import devilSkullArt from "../assets/hero_siege_relics/devil-skull.png";
 import fireIceArt from "../assets/hero_siege_relics/fire-ice.png";
@@ -63,21 +60,23 @@ import {
 } from "../lib/heroSiegeWikiCatalog";
 import { RELIC_DEFINITIONS } from "../lib/relicCore";
 import {
+  META_UPGRADE_DEFINITIONS,
+  canPurchaseMetaUpgrade,
   defaultState,
   getAttackDamage,
   getCriticalChance,
   getEffectiveCharacterStats,
   getElementalResistances,
   getHealthLoss,
-  getLevelProgress,
   getMaxHealth,
-  getMaxMana,
+  getMetaUpgradeCost,
   getRunModifierTotals,
   getWarriorSkillBonusTotals,
+  purchaseMetaUpgrade,
   spendStatPoint
 } from "../lib/studyCore";
 import { getMonsterAttackType, getMonsterMaxHealth, getMonsterResistances, getUniqueMonsterBonuses } from "../lib/monsterCore";
-import type { CharacterStatKey, Difficulty, ItemModifierKey, Question, Relic, StudyState } from "../types/study";
+import type { CharacterStatKey, Difficulty, ItemModifierKey, Question, Relic, RelicRarity, StudyState } from "../types/study";
 
 const ICON_SIZE = 16;
 const MENU_WIDTH = 180;
@@ -131,16 +130,13 @@ const STAT_ROWS: Array<{ key: CharacterStatKey; label: string }> = [
 ];
 const STAT_DESCRIPTIONS: Record<CharacterStatKey, string> = {
   constitution: "Increases max health and defense, reducing health lost from failed submissions.",
-  intelligence: "Increases experience gains and mana rewards from completed questions.",
+  intelligence: "Legacy attribute retained for old saves. Run power now comes from relics and route choices.",
   perception: "Improves gold rewards and item-drop quality from completed questions.",
   strength: "Increases damage against monsters and raises critical strike chance."
 };
 
 export const USER_MENU_ITEMS = [
   { id: "profile", icon: IconUser, label: "Profile", shortcut: "P" },
-  { id: "inventory", icon: IconBackpack, label: "Inventory", shortcut: "I" },
-  { id: "skills", icon: IconSword, label: "Skills", shortcut: "K" },
-  { id: "stats", icon: IconChartBar, label: "Stats", shortcut: "S" },
   { id: "achievements", icon: IconTrophy, label: "Achievements", shortcut: "A" },
   { id: "wiki", icon: IconBook, label: "Wiki", shortcut: "W" },
   { id: "settings", icon: IconSettings, label: "Settings", shortcut: "O" }
@@ -200,9 +196,6 @@ function getModalSize(section: UserMenuSection | null) {
   if (section === "achievements") {
     return ACHIEVEMENTS_MODAL_SIZE;
   }
-  if (section === "skills") {
-    return SKILLS_MODAL_SIZE;
-  }
   if (section === "wiki") {
     return WIKI_MODAL_SIZE;
   }
@@ -210,15 +203,6 @@ function getModalSize(section: UserMenuSection | null) {
 }
 
 function UserModalContent(props: { section: UserMenuSection | null; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
-  if (props.section === "stats") {
-    return <StatsPanel state={props.state} setState={props.setState} />;
-  }
-  if (props.section === "inventory") {
-    return <InventoryPanel state={props.state} setState={props.setState} />;
-  }
-  if (props.section === "skills") {
-    return <WarriorSkillTree state={props.state} setState={props.setState} />;
-  }
   if (props.section === "achievements") {
     return <AchievementsPanel state={props.state} />;
   }
@@ -232,10 +216,7 @@ function UserModalContent(props: { section: UserMenuSection | null; state: Study
 }
 
 function ProfilePanel(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
-  const levelProgress = useMemo(() => getLevelProgress(props.state), [props.state]);
-  const stats = useMemo(() => getEffectiveCharacterStats(props.state), [props.state]);
   const maxHealth = useMemo(() => getMaxHealth(props.state), [props.state]);
-  const maxMana = useMemo(() => getMaxMana(props.state), [props.state]);
   return (
     <Stack gap="md">
       <Group align="center" gap="md">
@@ -244,38 +225,70 @@ function ProfilePanel(props: { state: StudyState; setState: React.Dispatch<React
         </ThemeIcon>
         <Box>
           <Title order={4}>Dat Do</Title>
-          <Text size="sm" c="dimmed">Level {levelProgress.level} Warrior</Text>
+          <Text size="sm" c="dimmed">Roguelike Run</Text>
         </Box>
       </Group>
       <Stack gap="xs">
         <ProgressRow label="Health" value={props.state.profile.health} max={maxHealth} color="red" />
-        <ProgressRow label="Experience" value={levelProgress.currentExperience} max={levelProgress.nextLevelExperience} color="yellow" />
-        <ProgressRow label="Mana" value={props.state.profile.mana} max={maxMana} color="blue" />
       </Stack>
       <SimpleGrid cols={{ base: 2, sm: 3 }}>
         <StatTile label="Coins" value={<CoinAmount value={props.state.profile.coins} />} />
-        <StatTile label="Level XP" value={`${levelProgress.currentExperience}/${levelProgress.nextLevelExperience}`} />
+        <StatTile label="Insight" value={props.state.profile.metaProgress.currency} />
+        <StatTile label="Relics" value={props.state.profile.relics.length} />
         <StatTile label="Hints" value={props.state.profile.hintsBought} />
+        <StatTile label="Total Insight" value={props.state.profile.metaProgress.totalEarned} />
       </SimpleGrid>
-      <SimpleGrid cols={{ base: 2, sm: 4 }}>
-        {STAT_ROWS.map((stat) => (
-          <StatTile
-            key={stat.key}
-            label={stat.label}
-            value={stats[stat.key]}
-            action={<HeroSiegeButton height={24} minWidth={54} disabled={props.state.profile.statPoints <= 0} onClick={() => props.setState((previous) => spendStatPoint(previous, stat.key))}>Add</HeroSiegeButton>}
-          />
-        ))}
-      </SimpleGrid>
-      <Text size="sm" c={props.state.profile.statPoints > 0 ? "yellow.4" : "dimmed"} fw={700}>
-        Unspent stat points: {props.state.profile.statPoints}
+      <Text size="sm" c="dimmed" fw={700}>
+        Run power now comes from relics, route choices, gold, potions, and temporary effects.
       </Text>
+      <MetaUpgradePanel state={props.state} setState={props.setState} />
+    </Stack>
+  );
+}
+
+function MetaUpgradePanel(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
+  return (
+    <Stack gap="xs">
+      <Group justify="space-between" align="flex-end">
+        <Box>
+          <Text size="sm" fw={900} c="yellow.3">Meta Upgrades</Text>
+          <Text size="xs" c="dimmed">Spend insight for permanent bonuses that apply after a run reset.</Text>
+        </Box>
+        <Badge variant="light" color="yellow">{props.state.profile.metaProgress.currency} insight</Badge>
+      </Group>
+      <SimpleGrid cols={{ base: 1, sm: 3 }}>
+        {META_UPGRADE_DEFINITIONS.map((upgrade) => {
+          const rank = props.state.profile.metaProgress.upgrades[upgrade.id] || 0;
+          const maxed = rank >= upgrade.maxRank;
+          const cost = getMetaUpgradeCost(props.state, upgrade.id);
+          const canBuy = canPurchaseMetaUpgrade(props.state, upgrade.id);
+          return (
+            <Box key={upgrade.id} p="sm" style={{ background: "rgba(0, 0, 0, 0.2)", border: "1px solid var(--mantine-color-dark-4)", borderRadius: 6 }}>
+              <Stack gap={8}>
+                <Group justify="space-between" gap="xs" wrap="nowrap">
+                  <Text size="sm" fw={900}>{upgrade.label}</Text>
+                  <Badge size="xs" variant={maxed ? "filled" : "outline"} color={maxed ? "green" : "yellow"}>{rank}/{upgrade.maxRank}</Badge>
+                </Group>
+                <Text size="xs" c="dimmed" style={{ minHeight: 34 }}>{upgrade.description}</Text>
+                <HeroSiegeButton
+                  disabled={!canBuy}
+                  fullWidth
+                  height={28}
+                  minWidth={84}
+                  onClick={() => props.setState((previous) => purchaseMetaUpgrade(previous, upgrade.id))}
+                >
+                  {maxed ? "Max" : `${cost} Insight`}
+                </HeroSiegeButton>
+              </Stack>
+            </Box>
+          );
+        })}
+      </SimpleGrid>
     </Stack>
   );
 }
 
 function StatsPanel(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
-  const levelProgress = useMemo(() => getLevelProgress(props.state), [props.state]);
   const stats = useMemo(() => getEffectiveCharacterStats(props.state), [props.state]);
   const sampleQuestion = questions.find((question) => question.id === props.state.currentId) || questions[0];
   const criticalChance = Math.round(getCriticalChance(props.state) * PROGRESS_MAX);
@@ -283,7 +296,6 @@ function StatsPanel(props: { state: StudyState; setState: React.Dispatch<React.S
   const skillBonuses = getWarriorSkillBonusTotals(props.state);
   const resistances = getElementalResistances(props.state);
   const maxHealth = getMaxHealth(props.state);
-  const maxMana = getMaxMana(props.state);
   const primaryStats = [
     { description: STAT_DESCRIPTIONS.strength, icon: axeMasteryArt, key: "strength" as const, label: "Strength", value: stats.strength },
     { description: STAT_DESCRIPTIONS.constitution, icon: naturalResistanceArt, key: "constitution" as const, label: "Constitution", value: stats.constitution },
@@ -296,22 +308,21 @@ function StatsPanel(props: { state: StudyState; setState: React.Dispatch<React.S
     { icon: devilSkullArt, label: "Fail Damage", value: getHealthLoss(props.state) },
     { icon: armorArt, label: "Defense", value: modifiers.damageReduction + skillBonuses.damageReduction },
     { icon: healthPotionArt, label: "Life", value: `${props.state.profile.health} / ${maxHealth}` },
-    { icon: manaPotionArt, label: "Mana", value: `${props.state.profile.mana} / ${maxMana}` },
     { icon: fireIceArt, label: "Fire Resist", value: `${resistances.fire}%` },
     { icon: orbOfIceArt, label: "Cold Resist", value: `${resistances.cold}%` },
     { icon: lightningGlobeArt, label: "Lightning Resist", value: `${resistances.lightning}%` },
     { icon: orbOfPoisonArt, label: "Poison Resist", value: `${resistances.poison}%` },
     { icon: holyGrailArt, label: "Magic Find", value: `${modifiers.magicFindPercent + skillBonuses.magicFindPercent}%` },
     { icon: midasHandArt, label: "Gold Find", value: `${modifiers.goldFindPercent + skillBonuses.goldFindPercent}%` },
-    { icon: tokenLuckArt, label: "Bonus XP", value: `${modifiers.bonusXpPercent + skillBonuses.bonusXpPercent}%` }
+    { icon: tokenLuckArt, label: "Relic Rerolls", value: modifiers.relicRerollBonus }
   ];
   return (
     <Box p="md" style={{ background: STAT_SHEET_BG, border: STAT_SHEET_BORDER, boxShadow: STAT_FRAME_SHADOW, position: "relative" }}>
       <Box style={{ border: STAT_PANEL_INNER_BORDER, boxShadow: "inset 0 0 0 2px rgba(6, 2, 3, 0.88)", padding: 14 }}>
         <Box mb="md" style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr 1fr" }}>
-          <StatFrame icon={helmetArt} label="Dat Do" value={`Level ${levelProgress.level}`} />
-          <StatFrame icon={swordArt} label="Warrior" value={`Experience ${levelProgress.currentExperience}`} />
-          <StatFrame icon={tokenLuckArt} label="Next Level" value={levelProgress.nextLevelExperience} />
+          <StatFrame icon={helmetArt} label="Dat Do" value="Roguelike Run" />
+          <StatFrame icon={swordArt} label="Insight" value={props.state.profile.metaProgress.currency} />
+          <StatFrame icon={tokenLuckArt} label="Relics" value={props.state.profile.relics.length} />
         </Box>
         <Box style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0, 0.95fr) minmax(0, 1.2fr)" }}>
           <Stack gap="sm">
@@ -403,7 +414,6 @@ function WikiPanel() {
       <Tabs.List grow mb="md">
         <Tabs.Tab value="monsters">Monsters</Tabs.Tab>
         <Tabs.Tab value="relics">Relics</Tabs.Tab>
-        <Tabs.Tab value="items">Items</Tabs.Tab>
         <Tabs.Tab value="questions">LeetCode Bank</Tabs.Tab>
       </Tabs.List>
       <Tabs.Panel value="monsters">
@@ -411,9 +421,6 @@ function WikiPanel() {
       </Tabs.Panel>
       <Tabs.Panel value="relics">
         <RelicWiki />
-      </Tabs.Panel>
-      <Tabs.Panel value="items">
-        <ItemWiki />
       </Tabs.Panel>
       <Tabs.Panel value="questions">
         <QuestionBankWiki />
@@ -643,17 +650,34 @@ function getResistanceColor(label: string) {
 
 function RelicWiki() {
   const [page, setPage] = useState(0);
-  const pageCount = getPageCount(WIKI_RELICS.length, WIKI_RELIC_PAGE_SIZE);
+  const [selectedRarity, setSelectedRarity] = useState<RelicRarityFilter>("all");
+  const selectedRelics = useMemo(() => (selectedRarity === "all" ? WIKI_RELICS : WIKI_RELICS.filter((relic) => relic.rarity === selectedRarity)), [selectedRarity]);
+  const pageCount = getPageCount(selectedRelics.length, WIKI_RELIC_PAGE_SIZE);
   const safePage = clampPage(page, pageCount);
-  const visibleRelics = getPageItems(WIKI_RELICS, safePage, WIKI_RELIC_PAGE_SIZE);
+  const visibleRelics = getPageItems(selectedRelics, safePage, WIKI_RELIC_PAGE_SIZE);
+  const rarityLabel = selectedRarity === "all" ? "all rarities" : getRelicRarityLabel(selectedRarity);
   return (
     <Stack gap="md">
-      <Group justify="space-between">
+      <Group justify="space-between" align="flex-start">
         <Box>
           <Title order={4}>Relic Catalog</Title>
-          <Text size="sm" c="dimmed">{WIKI_RELICS.length} relics across all rarities.</Text>
+          <Text size="sm" c="dimmed">{selectedRelics.length} relics in {rarityLabel}.</Text>
+          <Group gap={6} mt={8}>
+            {WIKI_RELIC_RARITY_FILTERS.map((filter) => (
+              <RelicRarityFilterButton
+                key={filter}
+                active={selectedRarity === filter}
+                count={filter === "all" ? WIKI_RELICS.length : WIKI_RELIC_RARITY_COUNTS[filter] || 0}
+                rarity={filter}
+                onClick={() => {
+                  setSelectedRarity(filter);
+                  setPage(0);
+                }}
+              />
+            ))}
+          </Group>
         </Box>
-        <WikiPagination page={safePage} pageCount={pageCount} onPageChange={setPage} total={WIKI_RELICS.length} />
+        <WikiPagination page={safePage} pageCount={pageCount} onPageChange={setPage} total={selectedRelics.length} />
       </Group>
       <SimpleGrid cols={{ base: 1, sm: 2 }}>
         {visibleRelics.map((relic) => (
@@ -664,20 +688,54 @@ function RelicWiki() {
   );
 }
 
-function RelicWikiCard(props: { relic: Relic }) {
-  const quality = getRelicQualityLabel(props.relic.rarity, props.relic.wikiRarityLabel);
-  const qualityColor = getHeroSiegeQualityColor(quality);
+function RelicRarityFilterButton(props: { active: boolean; count: number; onClick: () => void; rarity: RelicRarityFilter }) {
+  const color = props.rarity === "all" ? "#f1dfad" : getRelicRarityColor(props.rarity);
+  const label = props.rarity === "all" ? "All" : getRelicRarityLabel(props.rarity);
   return (
-    <Box p="sm" style={{ background: "var(--mantine-color-dark-7)", border: "1px solid var(--mantine-color-dark-4)", borderRadius: 6 }}>
+    <button
+      type="button"
+      onClick={props.onClick}
+      style={{
+        background: props.active ? `${color}22` : "rgba(0, 0, 0, 0.35)",
+        border: `1px solid ${props.active ? color : "rgba(255, 255, 255, 0.18)"}`,
+        borderRadius: 4,
+        color,
+        cursor: "pointer",
+        fontSize: 11,
+        fontWeight: 900,
+        letterSpacing: 0,
+        lineHeight: 1,
+        padding: "6px 8px",
+        textTransform: "uppercase"
+      }}
+    >
+      {label} {props.count}
+    </button>
+  );
+}
+
+function RelicWikiCard(props: { relic: Relic }) {
+  const rarityColor = getRelicRarityColor(props.relic.rarity);
+  const rarityLabel = getRelicRarityLabel(props.relic.rarity);
+  return (
+    <Box p="sm" style={{ background: "var(--mantine-color-dark-7)", border: `1px solid ${rarityColor}66`, borderRadius: 6 }}>
       <Group gap="sm" align="flex-start" wrap="nowrap">
         <RelicIcon relic={props.relic} size={WIKI_RELIC_ICON_SIZE} />
         <Box>
           <Group gap="xs" mb={2}>
-            <Text size="sm" fw={800} c={qualityColor}>{props.relic.name}</Text>
+            <Text size="sm" fw={800} c={rarityColor}>{props.relic.name}</Text>
+            <Badge size="xs" variant="outline" style={{ borderColor: rarityColor, color: rarityColor }}>{rarityLabel}</Badge>
             {props.relic.source !== "any" && <Badge size="xs" color="red" variant="outline">{props.relic.source}</Badge>}
           </Group>
           <Text size="xs" c="dimmed">{props.relic.description}</Text>
-          <Text size="xs" mt={4} c="yellow.3">{formatRelicModifiers(props.relic)}</Text>
+          {props.relic.wikiStats?.length ? (
+            <Stack gap={1} mt={4}>
+              {props.relic.wikiStats.map((stat) => (
+                <Text key={stat} size="10px" c="gray.4">{stat}</Text>
+              ))}
+            </Stack>
+          ) : null}
+          <Text size="xs" mt={4} c="yellow.3">Current hooks: {formatRelicModifiers(props.relic)}</Text>
         </Box>
       </Group>
     </Box>
@@ -685,12 +743,21 @@ function RelicWikiCard(props: { relic: Relic }) {
 }
 
 type WikiItemCategory = HeroSiegeWikiCategory;
+type RelicRarityFilter = "all" | RelicRarity;
 
 const WIKI_ITEM_CATEGORIES = HERO_SIEGE_WIKI_CATEGORIES;
 const WIKI_ITEMS = [...HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT, ...HERO_SIEGE_WIKI_ITEMS];
 const WIKI_QUALITY_SORT_ORDER = ["Unique", "Set", "Rare", "Magic", "Normal"];
-const WIKI_RELICS = [...RELIC_DEFINITIONS].sort((left, right) => compareWikiQuality(getRelicQualityLabel(left.rarity, left.wikiRarityLabel), getRelicQualityLabel(right.rarity, right.wikiRarityLabel))
+const WIKI_RELICS = [...RELIC_DEFINITIONS].sort((left, right) => compareRelicRarity(left.rarity, right.rarity)
   || left.name.localeCompare(right.name));
+const WIKI_RELIC_RARITY_COUNTS = WIKI_RELICS.reduce<Partial<Record<RelicRarity, number>>>((counts, relic) => {
+  counts[relic.rarity] = (counts[relic.rarity] || 0) + 1;
+  return counts;
+}, {});
+const WIKI_RELIC_RARITY_FILTERS: RelicRarityFilter[] = [
+  "all",
+  ...ROGUELIKE_RELIC_RARITY_ORDER.filter((rarity) => (WIKI_RELIC_RARITY_COUNTS[rarity] || 0) > 0)
+];
 
 function ItemWiki() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<WikiItemCategory["id"]>(WIKI_ITEM_CATEGORIES[0].id);
@@ -925,7 +992,7 @@ function SettingsPanel(props: { setState: React.Dispatch<React.SetStateAction<St
         checked={props.state.profile.godMode}
         color="yellow"
         label="God mode"
-        description="Testing mode: no health or mana loss from failures, and completed questions always drop an item."
+        description="Testing mode: no health loss from failures, and completed questions always drop an item."
         onChange={(event) => props.setState((previous) => ({ ...previous, profile: { ...previous.profile, godMode: event.currentTarget.checked } }))}
       />
       <NumberInput
@@ -952,7 +1019,7 @@ function SettingsPanel(props: { setState: React.Dispatch<React.SetStateAction<St
       <Group justify="flex-end">
         <HeroSiegeButton
           onClick={() => {
-            if (window.confirm("Reset all progress, inventory, relics, skills, map, and settings for this game state?")) {
+            if (window.confirm("Reset all run progress, relics, skills, map, and settings for this game state?")) {
               props.setState(defaultState());
             }
           }}

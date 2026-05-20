@@ -621,7 +621,7 @@ function getWikiModifier(line: string, divisor: number): ItemModifier | null {
     return { key: "maxLife", value: scaleWikiValue(line, divisor) };
   }
   if (normalized.includes(" to mana") || normalized.includes("mana increased")) {
-    return { key: "maxMana", value: scaleWikiValue(line, divisor) };
+    return { key: "maxLife", value: scaleWikiValue(line, divisor) };
   }
   if (normalized.includes("physical damage taken reduced") || normalized.includes("magic damage taken reduced")) {
     return { key: "damageReduction", value: scaleWikiValue(line, divisor) };
@@ -657,7 +657,7 @@ function getWikiModifier(line: string, divisor: number): ItemModifier | null {
     return { key: "poisonDamage", value: scaleWikiValue(line, divisor) };
   }
   if (normalized.includes("increased experience")) {
-    return { key: "bonusXpPercent", value: scaleWikiPercent(line, divisor) };
+    return { key: "goldFindPercent", value: scaleWikiPercent(line, divisor) };
   }
   return null;
 }

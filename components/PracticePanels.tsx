@@ -21,7 +21,7 @@ import MonacoEditor, { type OnMount } from "@monaco-editor/react";
 import { HeroSiegeButton } from "./HeroSiegeUi";
 import { HighlightedCode } from "./HighlightedCode";
 import { MonsterEncounter, type MonsterDamagePop } from "./MonsterEncounter";
-import { difficultyLabels } from "../lib/studyCore";
+import { difficultyLabels, getVisibleQuestionTopics } from "../lib/studyCore";
 import type { ActiveWarriorSkillId, ConsoleRunResult, Question, RunResult, StudyState } from "../types/study";
 
 const ICON_XS = 12;
@@ -142,7 +142,7 @@ function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; c
   return (
     <Card withBorder>
       <Group justify="space-between" align="flex-start">
-        {props.sessionStarted ? <ProblemHeader currentQuestion={props.currentQuestion} /> : <LockedProblemHeader />}
+        {props.sessionStarted ? <ProblemHeader currentQuestion={props.currentQuestion} state={props.state} /> : <LockedProblemHeader />}
         <Tooltip label={props.canMoveNext ? "Move to the next question" : "Pass all tests before moving on"} withArrow>
           <Box component="span">
             <HeroSiegeButton aria-label="Next question" disabled={!props.canMoveNext} height={35} minWidth={44} onClick={() => props.chooseQuestion(true)} style={{ padding: 0, width: 44 }}>
@@ -156,7 +156,9 @@ function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; c
   );
 }
 
-function ProblemHeader(props: { currentQuestion: Question }) {
+function ProblemHeader(props: { currentQuestion: Question; state: StudyState }) {
+  const visibleTopics = getVisibleQuestionTopics(props.state, props.currentQuestion);
+  const hiddenTopicCount = Math.max(0, props.currentQuestion.topics.length - visibleTopics.length);
   return (
     <Box>
       <Group gap={6}>
@@ -165,7 +167,8 @@ function ProblemHeader(props: { currentQuestion: Question }) {
       </Group>
       <Title order={3} mt="xs">{props.currentQuestion.title}</Title>
       <Group gap={6} mt="xs">
-        {props.currentQuestion.topics.map((topic) => <Badge key={topic} size="sm" variant="outline">{topic}</Badge>)}
+        {visibleTopics.map((topic) => <Badge key={topic} size="sm" variant="outline">{topic}</Badge>)}
+        {hiddenTopicCount > 0 && <Badge size="sm" color="gray" variant="outline">+{hiddenTopicCount} hidden</Badge>}
       </Group>
     </Box>
   );
@@ -304,9 +307,9 @@ function SetupToolbarActions(props: Parameters<typeof EditorCard>[0]) {
       <Tooltip label="Format JavaScript code (Ctrl+S)" withArrow>
         <HeroSiegeButton leftSection={<IconWand size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.beautifyCurrentCode()}>Beautify</HeroSiegeButton>
       </Tooltip>
-      <Tooltip label={`Buy one next-step hint for ${props.hintCost} gold`} withArrow>
+      <Tooltip label={props.hintCost > 0 ? `Buy one next-step hint for ${props.hintCost} gold` : "Use your free room hint"} withArrow>
         <Box component="span">
-          <HeroSiegeButton leftSection={<IconBulb size={ICON_SM} />} disabled={!props.sessionStarted || !props.canBuyHint} onClick={props.actions.buyHint}>Hint {props.hintCost}</HeroSiegeButton>
+          <HeroSiegeButton leftSection={<IconBulb size={ICON_SM} />} disabled={!props.sessionStarted || !props.canBuyHint} onClick={props.actions.buyHint}>{props.hintCost > 0 ? `Hint ${props.hintCost}` : "Hint Free"}</HeroSiegeButton>
         </Box>
       </Tooltip>
     </>

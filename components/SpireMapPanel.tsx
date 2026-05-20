@@ -1,15 +1,16 @@
-import { Box, Group, Paper, Stack, Text } from "@mantine/core";
+import { Badge, Box, Group, Paper, Stack, Text } from "@mantine/core";
 type StaticImageData = string;
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { HeroSiegeButton, getHeroSiegeMenuButtonAsset } from "./HeroSiegeUi";
 import { CoinIcon } from "./CoinIcon";
-import { HeroSiegeEquipmentIcon } from "./HeroSiegeItemIcon";
 import { ShopPanel } from "./ShopPanel";
 import { RelicIcon } from "./RelicIcon";
 import { getSpireCampaignLabel, getSpireDifficultyModifiers } from "../lib/campaignCore";
-import { canUpgradeSpireInventoryItem, claimCurrentSpireRoomReward, digCurrentSpireRoomRelic, enterSpireNode, getCurrentSpireNode, getRestSpecialAction, isCombatNode, leaveSpireRoom, MERCHANT_UPGRADE_COST, selectSpireNode, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
-import type { SpireAct, SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
+import { choosePendingRelicReward, claimCurrentSpireRoomReward, digCurrentSpireRoomRelic, enterSpireNode, getCurrentSpireNode, getRestSpecialAction, isCombatNode, leaveSpireRoom, rerollPendingRelicReward, selectSpireNode, skipPendingRelicReward } from "../lib/spireMapCore";
+import { formatModifier } from "../lib/modifierFormat";
+import { getRelicRarityColor, getRelicRarityLabel } from "../lib/heroSiegeQuality";
+import type { Relic, SpireAct, SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
 import campfireArt from "../assets/hero_siege_map/campfire.png";
 import chestArt from "../assets/hero_siege_map/chest.png";
 import deadTreeArt from "../assets/hero_siege_map/dead-tree.png";
@@ -136,6 +137,7 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
   const target = props.state.profile.spireRun.roundQuestionIds.length;
   const mapOpen = props.state.profile.spireRun.mapOpen;
   const selectedNodeIsReachable = mapOpen && Boolean(node && isReachableMapNode(props.state, node.id));
+  const pendingRelicReward = props.state.profile.spireRun.pendingRelicReward;
   const mapBg = getActMapBackground(props.state.profile.spireRun.act);
   return (
     <Paper withBorder p="sm" style={{ background: "var(--mantine-color-dark-7)", ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
@@ -178,7 +180,7 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
             </Box>
             <Legend highlightedKind={highlightedKind} onHighlight={setDebouncedHighlightedKind} />
             <HeroSiegeButton
-              disabled={!selectedNodeIsReachable}
+              disabled={!selectedNodeIsReachable || Boolean(pendingRelicReward)}
               onClick={() => props.setState((previous) => enterSpireNode(previous))}
               minWidth={134}
               style={{
@@ -190,6 +192,7 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
             >
               {getMapButtonLabel(node)}
             </HeroSiegeButton>
+            {pendingRelicReward && <PendingRelicRewardPanel floating state={props.state} setState={props.setState} />}
           </Box>
         ) : (
           <RoomPanel node={node} setState={props.setState} solved={solved} state={props.state} target={target} />
@@ -273,6 +276,31 @@ function isInteractiveMapTarget(target: EventTarget) {
 }
 
 function RoomPanel(props: { node: SpireMapNode | undefined; setState: React.Dispatch<React.SetStateAction<StudyState>>; solved: number; state: StudyState; target: number }) {
+  if (props.state.profile.spireRun.pendingRelicReward) {
+    return (
+      <Stack gap="sm" style={{ minHeight: ROOM_PANEL_MIN_HEIGHT }}>
+        <CompactRoomPanel node={props.node} solved={props.solved} state={props.state} target={props.target} />
+        <PendingRelicRewardPanel state={props.state} setState={props.setState} />
+        <Group justify="flex-end">
+          <HeroSiegeButton disabled={Boolean(props.state.profile.spireRun.pendingRelicReward)} onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
+        </Group>
+      </Stack>
+    );
+  }
+  if (isCombatNode(props.node) && props.node && props.state.profile.spireRun.completedNodeIds.includes(props.node.id)) {
+    return (
+      <Stack gap="sm" style={{ minHeight: ROOM_PANEL_MIN_HEIGHT }}>
+        <CompactRoomPanel node={props.node} solved={props.solved} state={props.state} target={props.target} />
+        <Group justify="space-between" wrap="nowrap" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "14px 16px" }}>
+          <Box>
+            <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>Room Cleared</Text>
+            <Text size="xs" c="dimmed">Relic reward resolved. Continue to choose the next route.</Text>
+          </Box>
+          <HeroSiegeButton onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
+        </Group>
+      </Stack>
+    );
+  }
   if (isCombatNode(props.node)) {
     return <CompactRoomPanel node={props.node} solved={props.solved} state={props.state} target={props.target} />;
   }
@@ -307,33 +335,15 @@ function CompactRoomPanel(props: { node: SpireMapNode | undefined; solved: numbe
 }
 
 function MerchantRoomPanel(props: { setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
-  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
-  const currentNode = getCurrentSpireNode(props.state);
-  const upgraded = Boolean(currentNode && props.state.profile.spireRun.completedNodeIds.includes(currentNode.id));
-  const canUpgrade = !upgraded && canUpgradeSpireInventoryItem(props.state) && props.state.profile.coins >= MERCHANT_UPGRADE_COST;
-  const upgradeItem = () => {
-    props.setState((previous) => {
-      const beforeItems = previous.profile.inventory;
-      const next = upgradeCurrentSpireRoomItem(previous);
-      const changed = next.profile.inventory.find((item) => {
-        const before = beforeItems.find((row) => row.id === item.id);
-        return before && (before.rarity !== item.rarity || JSON.stringify(before.stats) !== JSON.stringify(item.stats));
-      });
-      setUpgradeMessage(changed ? `${changed.name} upgraded to ${changed.rarity}.` : "No eligible item was upgraded.");
-      return next;
-    });
-  };
   return (
     <Stack gap="sm">
       <ShopPanel state={props.state} setState={props.setState} />
       <Group justify="space-between" wrap="nowrap" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "10px 14px" }}>
         <Box>
-          <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>Merchant Services</Text>
-          <Text size="xs" c="dimmed">{upgraded ? "Merchant upgrade used. You can still shop, then continue." : `Upgrade one random item up to Rare for ${MERCHANT_UPGRADE_COST} gold.`}</Text>
-          {upgradeMessage && <Text size="xs" c="yellow.3" fw={800}>{upgradeMessage}</Text>}
+          <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>Merchant Room</Text>
+          <Text size="xs" c="dimmed">Buy what you need, then continue to the next route.</Text>
         </Box>
         <Group gap={8} wrap="nowrap">
-          <HeroSiegeButton disabled={!canUpgrade} onClick={upgradeItem} minWidth={132}>Upgrade Item</HeroSiegeButton>
           <HeroSiegeButton onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
         </Group>
       </Group>
@@ -350,7 +360,7 @@ function TreasureRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch
         <NodeIcon kind="treasure" size={46} />
         <Box>
           <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>{opened ? "Treasure Opened" : "Treasure Chest"}</Text>
-          <Text size="xs" c="dimmed">{opened ? "Continue to choose the next route." : "Open the chest to claim gold and a random relic or equipment reward."}</Text>
+          <Text size="xs" c="dimmed">{opened ? "Continue to choose the next route." : "Open the chest to claim gold and choose a relic, or skip it for meta currency."}</Text>
           {rewardClaim && <TreasureRewardIcons claim={rewardClaim} state={props.state} />}
         </Box>
       </Group>
@@ -364,7 +374,6 @@ function TreasureRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch
 
 function TreasureRewardIcons(props: { claim: StudyState["profile"]["spireRun"]["roomRewardClaims"][string]; state: StudyState }) {
   const relics = (props.claim.relicIds || []).map((id) => props.state.profile.relics.find((relic) => relic.id === id)).filter(Boolean);
-  const items = (props.claim.itemIds || []).map((id) => props.state.profile.inventory.find((item) => item.id === id)).filter(Boolean);
   return (
     <Group gap={8} mt={6} wrap="nowrap">
       {props.claim.gold ? (
@@ -379,36 +388,114 @@ function TreasureRewardIcons(props: { claim: StudyState["profile"]["spireRun"]["
           <Text size="xs" fw={900} c="cyan.3">{relic.name}</Text>
         </Group>
       ))}
-      {items.map((item) => item && (
-        <Group key={item.id} gap={4} wrap="nowrap">
-          <HeroSiegeEquipmentIcon item={item} size={28} unframed />
-          <Text size="xs" fw={900} c="#f1dfad">{item.name}</Text>
-        </Group>
-      ))}
+      {props.claim.metaCurrency ? <Text size="xs" fw={900} c="violet.2">+{props.claim.metaCurrency} insight</Text> : null}
     </Group>
+  );
+}
+
+function PendingRelicRewardPanel(props: { floating?: boolean; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
+  const pending = props.state.profile.spireRun.pendingRelicReward;
+  if (!pending) {
+    return null;
+  }
+  return (
+    <Box
+      style={{
+        background: ACT_LABEL_BG,
+        border: ACT_LABEL_BORDER,
+        boxShadow: "0 14px 34px rgba(0, 0, 0, 0.46), inset 0 0 0 1px rgba(0, 0, 0, 0.72)",
+        left: props.floating ? "50%" : undefined,
+        maxWidth: props.floating ? 880 : undefined,
+        padding: "14px 16px",
+        position: props.floating ? "absolute" : "relative",
+        top: props.floating ? 18 : undefined,
+        transform: props.floating ? "translateX(-50%)" : undefined,
+        width: props.floating ? "min(880px, calc(100% - 32px))" : undefined,
+        zIndex: props.floating ? 5 : undefined
+      }}
+    >
+      <Group justify="space-between" align="flex-start" mb="sm" wrap="nowrap">
+        <Box>
+          <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>Choose a Relic</Text>
+          <Text size="xs" c="dimmed">Pick one run relic, reroll the offering, or skip it for {pending.skipMetaCurrency} insight.</Text>
+        </Box>
+        <Group gap={8} wrap="nowrap">
+          <Badge color="violet" variant="light">Insight {props.state.profile.metaProgress.currency}</Badge>
+          <HeroSiegeButton disabled={pending.rerollsRemaining <= 0} onClick={() => props.setState((previous) => rerollPendingRelicReward(previous))} minWidth={98}>
+            Reroll {pending.rerollsRemaining}
+          </HeroSiegeButton>
+          <HeroSiegeButton onClick={() => props.setState((previous) => skipPendingRelicReward(previous))} minWidth={116}>Skip +{pending.skipMetaCurrency}</HeroSiegeButton>
+        </Group>
+      </Group>
+      <Box style={{ display: "grid", gap: 10, gridTemplateColumns: `repeat(${Math.min(4, pending.choices.length)}, minmax(0, 1fr))` }}>
+        {pending.choices.map((relic) => (
+          <RelicChoiceCard key={relic.id} relic={relic} onChoose={() => props.setState((previous) => choosePendingRelicReward(previous, relic.id))} />
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
+function RelicChoiceCard(props: { onChoose: () => void; relic: Relic }) {
+  const rarityLabel = getRelicRarityLabel(props.relic.rarity);
+  const rarityColor = getRelicRarityColor(props.relic.rarity);
+  const effects = (props.relic.modifiers || []).map((modifier) => formatModifier(modifier.key, modifier.value)).filter(Boolean);
+  return (
+    <Box
+      role="button"
+      tabIndex={0}
+      onClick={props.onChoose}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          props.onChoose();
+        }
+      }}
+      style={{
+        background: "linear-gradient(180deg, rgba(15, 13, 11, 0.96), rgba(5, 4, 4, 0.98))",
+        border: `1px solid ${rarityColor}`,
+        boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.86)",
+        cursor: "pointer",
+        minHeight: 180,
+        padding: 10
+      }}
+    >
+      <Group gap="sm" align="flex-start" wrap="nowrap">
+        <RelicIcon relic={props.relic} size={46} />
+        <Box style={{ minWidth: 0 }}>
+          <Text size="sm" fw={900} lineClamp={1} style={{ color: rarityColor }}>{props.relic.name}</Text>
+          <Text size="10px" fw={900} tt="uppercase" c="dimmed">{rarityLabel} Relic</Text>
+        </Box>
+      </Group>
+      <Stack gap={4} mt={8}>
+        {effects.slice(0, 4).map((effect) => (
+          <Text key={effect} size="11px" c="yellow.3" lineClamp={1}>{effect}</Text>
+        ))}
+        <Text size="11px" c="gray.3" lineClamp={3}>{props.relic.description}</Text>
+      </Stack>
+    </Box>
   );
 }
 
 function RestRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
   const used = props.state.profile.spireRun.completedNodeIds.includes(props.node.id);
   const specialAction = getRestSpecialAction(props.state);
-  const specialText = specialAction === "smith" ? "Smith upgrades one random item up to Rare." : "Dig finds one random relic.";
+  const hasDigAction = specialAction === "dig";
+  const specialText = hasDigAction ? " Dig can find one random relic." : "";
   return (
     <Group justify="space-between" wrap="nowrap" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "14px 16px" }}>
       <Group gap="sm" wrap="nowrap">
         <NodeIcon kind="rest" size={46} />
         <Box>
           <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>{used ? "Rest Site Used" : "Rest Site"}</Text>
-          <Text size="xs" c="dimmed">{used ? "Continue to choose the next route." : `Rest heals 50% health. ${specialText}`}</Text>
+          <Text size="xs" c="dimmed">{used ? "Continue to choose the next route." : `Rest heals 50% health.${specialText}`}</Text>
         </Box>
       </Group>
       <Group gap={8} wrap="nowrap">
         <HeroSiegeButton disabled={used} onClick={() => props.setState((previous) => claimCurrentSpireRoomReward(previous))} minWidth={104}>Rest</HeroSiegeButton>
-        {specialAction === "smith" ? (
-          <HeroSiegeButton disabled={used || !canUpgradeSpireInventoryItem(props.state)} onClick={() => props.setState((previous) => upgradeCurrentSpireRoomItem(previous))} minWidth={104}>Smith</HeroSiegeButton>
-        ) : (
+        {hasDigAction ? (
           <HeroSiegeButton disabled={used} onClick={() => props.setState((previous) => digCurrentSpireRoomRelic(previous))} minWidth={104}>Dig</HeroSiegeButton>
-        )}
+        ) : null}
         <HeroSiegeButton disabled={!used} onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
       </Group>
     </Group>

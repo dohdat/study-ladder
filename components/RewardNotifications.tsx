@@ -1,5 +1,5 @@
 import { Box, Group, Paper, Stack, Text } from "@mantine/core";
-import { IconBolt, IconHeart, IconSparkles, IconTrophy } from "@tabler/icons-react";
+import { IconHeart, IconSparkles, IconTrophy } from "@tabler/icons-react";
 
 import { CoinIcon } from "./CoinIcon";
 import { HeroSiegeRewardItemIcon } from "./HeroSiegeItemIcon";
@@ -21,7 +21,7 @@ export type RewardNotification = {
   achievementTitle?: string;
   id: string;
   itemName?: string;
-  kind: "achievement" | "experience" | "gold" | "health" | "item" | "mana";
+  kind: "achievement" | "gold" | "health" | "item";
 };
 
 export function RewardNotifications(props: { items: RewardNotification[] }) {
@@ -89,13 +89,10 @@ function getNotificationLabel(kind: RewardNotification["kind"]) {
   if (kind === "health") {
     return "Health";
   }
-  if (kind === "mana") {
-    return "Mana";
-  }
   if (kind === "item") {
     return "Item";
   }
-  return "Experience";
+  return "Gold";
 }
 
 function RewardIcon(props: { kind: RewardNotification["kind"] }) {
@@ -106,13 +103,6 @@ function RewardIcon(props: { kind: RewardNotification["kind"] }) {
     return (
       <Box c="red.1" style={{ alignItems: "center", display: "flex" }}>
         <IconHeart size={TOAST_ICON_SIZE} />
-      </Box>
-    );
-  }
-  if (props.kind === "mana") {
-    return (
-      <Box c="blue.2" style={{ alignItems: "center", display: "flex" }}>
-        <IconBolt size={TOAST_ICON_SIZE} />
       </Box>
     );
   }

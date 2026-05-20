@@ -26,10 +26,10 @@ export function DeathResetModal(props: { opened: boolean; onReset: () => void })
       <Stack gap="md">
         <Title order={TITLE_ORDER}>Your health reached zero.</Title>
         <Text size="sm" c="dimmed">
-          Reset your character to continue. This clears your gold, experience, streak, mastered cards, and saved items.
+          Reset your run to continue. This clears your gold, streak, mastered cards, and saved items.
         </Text>
         <HeroSiegeButton fullWidth onClick={props.onReset}>
-          Reset to Level 1
+          Start New Run
         </HeroSiegeButton>
       </Stack>
     </Modal>

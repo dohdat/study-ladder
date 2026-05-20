@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from "react";
 
 import type { RewardNotification } from "../components/RewardNotifications";
 import { getAchievements } from "../lib/achievementCore";
-import { getCoinReward, getExperienceReward, getManaReward, getQuestionDrop, HEALTH_LOSS_PER_FAIL } from "../lib/studyCore";
+import { getCoinReward, getQuestionDrop, HEALTH_LOSS_PER_FAIL } from "../lib/studyCore";
 import type { Question, StudyState } from "../types/study";
 
 const REWARD_TOAST_TIMEOUT_MS = 2400;
@@ -37,9 +37,7 @@ export function useStudyNotifications(state: StudyState, hydrated: boolean, setR
   const showRewards = useCallback((question: Question, state: StudyState, createdAt = Date.now()) => {
     const drop = getQuestionDrop(question, state, createdAt);
     const items: RewardNotification[] = [
-      { amount: getCoinReward(question, state), id: `${question.id}-gold-${createdAt}`, kind: "gold" },
-      { amount: getExperienceReward(question, state), id: `${question.id}-experience-${createdAt}`, kind: "experience" },
-      { amount: getManaReward(question, state), id: `${question.id}-mana-${createdAt}`, kind: "mana" }
+      { amount: getCoinReward(question, state), id: `${question.id}-gold-${createdAt}`, kind: "gold" }
     ];
     if (drop) {
       items.push({ id: `${question.id}-item-${createdAt}`, itemName: drop.name, kind: "item" });

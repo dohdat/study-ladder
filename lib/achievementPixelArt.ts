@@ -47,18 +47,6 @@ const BASE_SPRITES: Record<Achievement["metric"], string[]> = {
     "..OOOOOO..",
     ".........."
   ],
-  completeSet: [
-    "..........",
-    "..OOOOOO..",
-    ".OLLLLLLO.",
-    ".OMOOOOMO.",
-    ".OMOAAOMO.",
-    ".OMOOOOMO.",
-    ".OLLLLLLO.",
-    "..OOMMOO..",
-    "...OOOO...",
-    ".........."
-  ],
   defeats: [
     "..........",
     "......OO..",
@@ -71,30 +59,6 @@ const BASE_SPRITES: Record<Achievement["metric"], string[]> = {
     "..........",
     ".........."
   ],
-  equipped: [
-    "..........",
-    "...OOOO...",
-    "..OLLLLO..",
-    "..OMAMO...",
-    ".OOMMMOO..",
-    ".OMMMMMO..",
-    ".OMMMMMO..",
-    "..OOOOO...",
-    "..........",
-    ".........."
-  ],
-  fullEquipment: [
-    "..........",
-    "...OOOO...",
-    "..OLLLLO..",
-    ".OOMAMOO..",
-    ".OMMMMMO..",
-    ".OMMMMMO..",
-    "..OMMMO...",
-    "..OO.OO...",
-    "..........",
-    ".........."
-  ],
   hints: [
     "..........",
     "....AA....",
@@ -104,18 +68,6 @@ const BASE_SPRITES: Record<Achievement["metric"], string[]> = {
     "...OMMO...",
     "....OO....",
     "....AA....",
-    "..........",
-    ".........."
-  ],
-  inventory: [
-    "..........",
-    "..OOOOOO..",
-    ".OMMMMMO..",
-    ".OMLLLMO..",
-    ".OMLAMMO..",
-    ".OMMMMMO..",
-    ".OMMMMMO..",
-    "..OOOOOO..",
     "..........",
     ".........."
   ],
@@ -143,7 +95,7 @@ const BASE_SPRITES: Record<Achievement["metric"], string[]> = {
     "..........",
     ".........."
   ],
-  rarityOwned: [
+  metaCurrency: [
     "..........",
     "....OO....",
     "...OLLO...",
@@ -152,6 +104,30 @@ const BASE_SPRITES: Record<Achievement["metric"], string[]> = {
     "..OMMMMO..",
     "...OMMO...",
     "....OO....",
+    "..........",
+    ".........."
+  ],
+  metaTotalEarned: [
+    "..........",
+    "..OOOOOO..",
+    ".OLLLLLLO.",
+    ".OMOOOOMO.",
+    ".OMOAAOMO.",
+    ".OMOOOOMO.",
+    ".OLLLLLLO.",
+    "..OOMMOO..",
+    "...OOOO...",
+    ".........."
+  ],
+  metaUpgrades: [
+    "..........",
+    "...OOOO...",
+    "..OLLLLO..",
+    ".OOMAMOO..",
+    ".OMMMMMO..",
+    ".OMMMMMO..",
+    "..OMMMO...",
+    "..OO.OO...",
     "..........",
     ".........."
   ],
@@ -167,7 +143,7 @@ const BASE_SPRITES: Record<Achievement["metric"], string[]> = {
     "..........",
     ".........."
   ],
-  setBonus: [
+  relics: [
     "..........",
     "...OOOO...",
     "..OLLLLO..",

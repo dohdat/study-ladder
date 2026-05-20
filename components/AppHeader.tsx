@@ -25,15 +25,10 @@ const TODAY_PROGRESS_FILL = "linear-gradient(180deg, #53b8ff 0%, #167bdd 55%, #0
 
 export function AppHeader(props: {
   coins: number;
-  currentExperience: number;
   health: number;
   hidePlayerStatus?: boolean;
-  level: number;
-  mana: number;
   maxHealth: number;
-  maxMana: number;
   modeValue: string;
-  nextLevelExperience: number;
   playerImpact?: CombatImpactVisual | null;
   rating: number;
   state: StudyState;
@@ -63,14 +58,9 @@ export function AppHeader(props: {
         {!props.hidePlayerStatus && (
           <PlayerStatus
             coins={props.coins}
-            currentExperience={props.currentExperience}
             health={props.health}
-            level={props.level}
-            mana={props.mana}
             maxHealth={props.maxHealth}
-            maxMana={props.maxMana}
-            nextLevelExperience={props.nextLevelExperience}
-            onOpenStats={() => setActiveSection("stats")}
+            onOpenStats={() => setActiveSection("profile")}
             playerImpact={props.playerImpact}
             rating={props.rating}
             state={props.state}

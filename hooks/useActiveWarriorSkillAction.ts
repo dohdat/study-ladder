@@ -20,11 +20,6 @@ export function useActiveWarriorSkillAction(params: {
       params.setStatus(`${getActiveWarriorSkill(params.state.profile.activeSkill)?.name || "A skill"} is already readied.`);
       return;
     }
-    if (params.state.profile.mana < skill.cost) {
-      params.setTone("fail");
-      params.setStatus(`${skill.name} needs ${skill.cost} mana.`);
-      return;
-    }
     if (skill.healthCost && params.state.profile.health <= skill.healthCost) {
       params.setTone("fail");
       params.setStatus(`${skill.name} needs more health.`);

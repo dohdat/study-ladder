@@ -7,6 +7,7 @@ import { IconCoins } from "@tabler/icons-react";
 import { HeroSiegeButton } from "./HeroSiegeUi";
 import { HERO_ITEM_RARITY_COLORS, HeroSiegeEquipmentIcon } from "./HeroSiegeItemIcon";
 import { getHeroSiegeQualityColor, getItemQuality } from "../lib/heroSiegeQuality";
+import { getModifierRollRange } from "../lib/modifierAffixes";
 import { MODIFIER_FORMATTERS } from "../lib/modifierFormat";
 import { bulkSellItems, canEquipItem, EQUIPMENT_SLOT_LABELS, equipItem, equipItemToSlot, getActiveSetBonuses, getItemSellValue, moveInventoryItem, sellItem, unequipItem } from "../lib/studyCore";
 import { ITEM_BASE_NAMES } from "../lib/itemNames";
@@ -122,47 +123,51 @@ const STAT_DISPLAY_NAMES: Record<keyof typeof STAT_LABELS, string> = {
   strength: "Strength"
 };
 
+const modifierDetail = (key: ItemModifierKey, color: string) => {
+  const range = getModifierRollRange(key);
+  return { color, label: (value: number) => MODIFIER_FORMATTERS[key]?.(value) || "", range: [range.min, range.max] as [number, number] };
+};
+
 const MODIFIER_DETAILS: Partial<Record<ItemModifierKey, { color: string; label: (value: number) => string; range: [number, number] }>> = {
-  accuracyPercent: { color: "#6f6ff6", label: (value) => `+${value}% Accuracy`, range: [2, 10] },
-  armor: { color: "#73c7ff", label: (value) => `+${value} Armor`, range: [1, 8] },
-  armorPenetrationPercent: { color: "#6f6ff6", label: (value) => `+${value}% Armor Penetration`, range: [3, 20] },
-  blockChancePercent: { color: "#73c7ff", label: (value) => `+${value}% Block Chance`, range: [2, 8] },
-  bonusDamageVsElitesPercent: { color: "#6f6ff6", label: (value) => `+${value}% Damage vs Elites`, range: [5, 25] },
-  bonusDamageWhileFullHealthPercent: { color: "#6f6ff6", label: (value) => `+${value}% Damage While Full Health`, range: [5, 20] },
-  bonusDamageWhileLowHealthPercent: { color: "#6f6ff6", label: (value) => `+${value}% Damage While Low Health`, range: [5, 25] },
-  bonusXpPercent: { color: "#6f6ff6", label: (value) => `+${value}% Increased Experience`, range: [5, 20] },
-  coldResistPercent: { color: "#73c7ff", label: (value) => `+${value}% Cold Resistance`, range: [5, 30] },
-  coldDamage: { color: "#73c7ff", label: (value) => `+${value} Cold Damage`, range: [1, 10] },
-  criticalChancePercent: { color: "#6f6ff6", label: (value) => `+${value}% Increased Critical Strike Chance`, range: [2, 8] },
-  criticalDamagePercent: { color: "#6f6ff6", label: (value) => `+${value}% Critical Strike Damage`, range: [10, 40] },
-  damageReduction: { color: "#6f6ff6", label: (value) => `-${value} Damage Taken`, range: [1, 4] },
-  dodgeChancePercent: { color: "#73c7ff", label: (value) => `+${value}% Dodge Chance`, range: [2, 8] },
-  eliteDropBonusPercent: { color: "#d6a94b", label: (value) => `+${value}% Elite Drop Bonus`, range: [5, 20] },
-  enhancedDamagePercent: { color: "#6f6ff6", label: (value) => `+${value}% Enhanced Damage`, range: [8, 30] },
-  executeChancePercent: { color: "#6f6ff6", label: (value) => `+${value}% Execute Chance`, range: [2, 8] },
-  extraAttackChancePercent: { color: "#6f6ff6", label: (value) => `+${value}% Extra Attack Chance`, range: [2, 8] },
-  fireResistPercent: { color: "#ff8a3d", label: (value) => `+${value}% Fire Resistance`, range: [5, 30] },
-  fireDamage: { color: "#ff8a3d", label: (value) => `+${value} Fire Damage`, range: [1, 10] },
-  goldFindPercent: { color: "#d6a94b", label: (value) => `+${value}% Gold Find`, range: [8, 35] },
-  healthRegen: { color: "#7cff7c", label: (value) => `+${value} Health Regeneration`, range: [1, 5] },
-  increasedHealingReceivedPercent: { color: "#7cff7c", label: (value) => `+${value}% Increased Healing Received`, range: [5, 25] },
-  increasedLootDropChancePercent: { color: "#d6a94b", label: (value) => `+${value}% Loot Drop Chance`, range: [5, 25] },
-  increasedRareDropChancePercent: { color: "#d6a94b", label: (value) => `+${value}% Rare Drop Chance`, range: [3, 12] },
-  lifeOnKill: { color: "#7cff7c", label: (value) => `+${value} Life on Complete`, range: [2, 8] },
-  lifeStealPercent: { color: "#7cff7c", label: (value) => `+${value}% Life Steal`, range: [1, 6] },
-  lightningResistPercent: { color: "#f0df5f", label: (value) => `+${value}% Lightning Resistance`, range: [5, 30] },
-  lightningDamage: { color: "#f0df5f", label: (value) => `+${value} Lightning Damage`, range: [1, 10] },
-  magicFindPercent: { color: "#d6a94b", label: (value) => `+${value}% Magic Find`, range: [5, 25] },
-  maxLife: { color: "#7cff7c", label: (value) => `+${value} Maximum Life`, range: [5, 20] },
-  maxMana: { color: "#73a7ff", label: (value) => `+${value} Maximum Mana`, range: [5, 20] },
-  parryChancePercent: { color: "#73c7ff", label: (value) => `+${value}% Parry Chance`, range: [2, 8] },
-  physicalDamage: { color: "#6f6ff6", label: (value) => `+${value} Physical Damage`, range: [1, 12] },
-  physicalResistPercent: { color: "#73c7ff", label: (value) => `+${value}% Physical Resistance`, range: [3, 20] },
-  poisonDamage: { color: "#7cff7c", label: (value) => `+${value} Poison Damage`, range: [1, 10] },
-  poisonResistPercent: { color: "#7cff7c", label: (value) => `+${value}% Poison Resistance`, range: [5, 30] },
-  reducedEnemyArmorPercent: { color: "#6f6ff6", label: (value) => `-${value}% Enemy Armor`, range: [3, 20] },
-  reducedEnemyDamagePercent: { color: "#73c7ff", label: (value) => `-${value}% Enemy Damage`, range: [3, 15] },
-  resistancePenetrationPercent: { color: "#6f6ff6", label: (value) => `+${value}% Resistance Penetration`, range: [3, 20] }
+  accuracyPercent: modifierDetail("accuracyPercent", "#6f6ff6"),
+  armor: modifierDetail("armor", "#73c7ff"),
+  armorPenetrationPercent: modifierDetail("armorPenetrationPercent", "#6f6ff6"),
+  blockChancePercent: modifierDetail("blockChancePercent", "#73c7ff"),
+  bonusDamageVsElitesPercent: modifierDetail("bonusDamageVsElitesPercent", "#6f6ff6"),
+  bonusDamageWhileFullHealthPercent: modifierDetail("bonusDamageWhileFullHealthPercent", "#6f6ff6"),
+  bonusDamageWhileLowHealthPercent: modifierDetail("bonusDamageWhileLowHealthPercent", "#6f6ff6"),
+  bonusXpPercent: modifierDetail("bonusXpPercent", "#6f6ff6"),
+  coldDamage: modifierDetail("coldDamage", "#73c7ff"),
+  coldResistPercent: modifierDetail("coldResistPercent", "#73c7ff"),
+  criticalChancePercent: modifierDetail("criticalChancePercent", "#6f6ff6"),
+  criticalDamagePercent: modifierDetail("criticalDamagePercent", "#6f6ff6"),
+  damageReduction: modifierDetail("damageReduction", "#6f6ff6"),
+  dodgeChancePercent: modifierDetail("dodgeChancePercent", "#73c7ff"),
+  eliteDropBonusPercent: modifierDetail("eliteDropBonusPercent", "#d6a94b"),
+  enhancedDamagePercent: modifierDetail("enhancedDamagePercent", "#6f6ff6"),
+  executeChancePercent: modifierDetail("executeChancePercent", "#6f6ff6"),
+  extraAttackChancePercent: modifierDetail("extraAttackChancePercent", "#6f6ff6"),
+  fireDamage: modifierDetail("fireDamage", "#ff8a3d"),
+  fireResistPercent: modifierDetail("fireResistPercent", "#ff8a3d"),
+  goldFindPercent: modifierDetail("goldFindPercent", "#d6a94b"),
+  healthRegen: modifierDetail("healthRegen", "#7cff7c"),
+  increasedHealingReceivedPercent: modifierDetail("increasedHealingReceivedPercent", "#7cff7c"),
+  increasedLootDropChancePercent: modifierDetail("increasedLootDropChancePercent", "#d6a94b"),
+  increasedRareDropChancePercent: modifierDetail("increasedRareDropChancePercent", "#d6a94b"),
+  lifeOnKill: modifierDetail("lifeOnKill", "#7cff7c"),
+  lifeStealPercent: modifierDetail("lifeStealPercent", "#7cff7c"),
+  lightningDamage: modifierDetail("lightningDamage", "#f0df5f"),
+  lightningResistPercent: modifierDetail("lightningResistPercent", "#f0df5f"),
+  magicFindPercent: modifierDetail("magicFindPercent", "#d6a94b"),
+  maxLife: modifierDetail("maxLife", "#7cff7c"),
+  parryChancePercent: modifierDetail("parryChancePercent", "#73c7ff"),
+  physicalDamage: modifierDetail("physicalDamage", "#6f6ff6"),
+  physicalResistPercent: modifierDetail("physicalResistPercent", "#73c7ff"),
+  poisonDamage: modifierDetail("poisonDamage", "#7cff7c"),
+  poisonResistPercent: modifierDetail("poisonResistPercent", "#7cff7c"),
+  reducedEnemyArmorPercent: modifierDetail("reducedEnemyArmorPercent", "#6f6ff6"),
+  reducedEnemyDamagePercent: modifierDetail("reducedEnemyDamagePercent", "#73c7ff"),
+  resistancePenetrationPercent: modifierDetail("resistancePenetrationPercent", "#6f6ff6")
 };
 
 type EquipmentSpriteLayout = { asset: StaticImageData; height: number; iconSize: number; label: string; left: number; top: number; width: number };
