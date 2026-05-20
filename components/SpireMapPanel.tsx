@@ -98,12 +98,6 @@ const NODE_LABELS: Record<SpireNodeKind, string> = {
   treasure: "Treasure",
   unknown: "Unknown"
 };
-const COMPLETED_ROOM_RING_PATHS = [
-  "M325,18C228.7-8.3,118.5,8.3,78,21C22.4,38.4,4.6,54.6,5.6,77.6c1.4,32.4,52.2,54,142.6,63.7 c66.2,7.1,212.2,7.5,273.5-8.3c64.4-16.6,104.3-57.6,33.8-98.2C386.7-4.9,179.4-1.4,126.3,20.7",
-  "M346,17C250,-3,132,4,73,23C21,40,1,61,12,86c14,32,74,48,166,54c80,5,218,-2,276,-25c52,-21,61,-56,4,-82C394,4,188,-5,112,25",
-  "M302,19C216,-7,101,6,59,29C13,54,10,83,42,105c37,25,116,34,214,31c95,-3,201,-18,230,-50c22,-25,2,-52,-47,-67C365,-3,181,-2,106,23",
-  "M331,16C238,-10,128,8,82,18C28,29,0,51,8,79c11,39,75,59,171,64c86,4,211,1,276,-21c60,-20,72,-58,13,-88C397,-3,197,4,119,18"
-];
 
 const NODE_ICON_ASSETS: Record<SpireNodeKind, StaticImageData> = {
   boss: demonKingArt,
@@ -170,6 +164,7 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
                       highlighted={highlightedKind === mapNode.kind}
                       highlightMode={Boolean(highlightedKind)}
                       act={props.state.profile.spireRun.act}
+                      id={mapNode.id}
                       kind={mapNode.kind}
                       onSelect={() => props.setState((previous) => selectSpireNode(previous, mapNode.id))}
                       selectable={isReachableMapNode(props.state, mapNode.id)}
@@ -627,7 +622,7 @@ function getStableRoll(value: string) {
   return (hash >>> 0) / HASH_DIVISOR;
 }
 
-function MapNode(props: { act: SpireAct; active: boolean; completed: boolean; highlighted: boolean; highlightMode: boolean; kind: SpireNodeKind; onSelect: () => void; selectable: boolean; x: number; y: number }) {
+function MapNode(props: { act: SpireAct; active: boolean; completed: boolean; highlighted: boolean; highlightMode: boolean; id: string; kind: SpireNodeKind; onSelect: () => void; selectable: boolean; x: number; y: number }) {
   const [hovered, setHovered] = useState(false);
   const opacity = getNodeOpacity(props);
   const dimensions = getNodeDimensions(props.kind);
@@ -650,7 +645,7 @@ function MapNode(props: { act: SpireAct; active: boolean; completed: boolean; hi
       style={{ alignItems: "center", background: "transparent", border: 0, borderRadius: 0, boxShadow: "none", cursor: props.selectable ? "pointer" : "default", display: "flex", height: size, justifyContent: "center", left: `${props.x}%`, opacity, padding: 0, position: "absolute", top: `${props.y}%`, transform: "translate(-50%, -50%)", transition: NODE_HIGHLIGHT_TRANSITION, width: size, zIndex }}
       type="button"
     >
-      {props.completed && <CompletedRoomRing kind={props.kind} seed={`${props.kind}:${props.x}:${props.y}`} size={size} />}
+      {props.completed && <CompletedRoomRing kind={props.kind} seed={props.id} size={size} />}
       <NodeIcon act={props.act} kind={props.kind} highlightTone={highlightTone} shadow size={iconSize} />
     </Box>
   );
@@ -658,56 +653,89 @@ function MapNode(props: { act: SpireAct; active: boolean; completed: boolean; hi
 
 function CompletedRoomRing(props: { kind: SpireNodeKind; seed: string; size: number }) {
   const variant = getCompletedRoomRingVariant(props.seed);
-  const ringSize = getCompletedRoomRingSize(props.kind, props.size, variant.size);
+  const ringDimensions = getCompletedRoomRingDimensions(props.kind, props.size, variant.size);
   const strokeWidth = getCompletedRoomRingStroke(props.kind, variant.stroke);
-  const secondaryStrokeWidth = Math.max(4, strokeWidth * 0.54);
-  const path = getCompletedRoomRingPath(variant.path);
+  const accentStrokeWidth = strokeWidth * (0.9 + variant.inkWeight * 0.18);
+  const path = getCompletedRoomRingPath(props.seed, variant);
   return (
     <svg
       aria-hidden="true"
       preserveAspectRatio="none"
-      viewBox="0 0 500 150"
+      viewBox="-1 -1 2 2"
       style={{
         filter: COMPLETED_ROOM_RING_SHADOW,
-        height: ringSize,
+        height: ringDimensions.height,
         overflow: "visible",
         pointerEvents: "none",
         position: "absolute",
         transform: `translate(${variant.offsetX}px, ${variant.offsetY}px) rotate(${getCompletedRoomRingRotation(props.kind, variant.rotation)}deg)`,
-        width: ringSize,
+        width: ringDimensions.width,
         zIndex: 0
       }}
     >
-      <path d={path} fill="none" opacity={0.3} stroke="rgba(228, 218, 190, 0.52)" strokeLinecap="round" strokeLinejoin="round" strokeWidth={secondaryStrokeWidth} />
-      <path d={path} fill="none" stroke={COMPLETED_ROOM_RING_COLOR} strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth} />
+      <path d={path} fill="none" stroke={COMPLETED_ROOM_RING_COLOR} strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
+      <path d={path} fill="none" opacity={0.42} pathLength={100} stroke={COMPLETED_ROOM_RING_COLOR} strokeDasharray={`${variant.inkLength} ${100 - variant.inkLength}`} strokeDashoffset={variant.inkOffset} strokeLinecap="round" strokeLinejoin="round" strokeWidth={accentStrokeWidth} vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
 
 function getCompletedRoomRingVariant(seed: string) {
   return {
-    offsetX: Math.round((getStableRoll(`${seed}:ring-x`) - RANDOM_CENTER) * 6),
-    offsetY: Math.round((getStableRoll(`${seed}:ring-y`) - RANDOM_CENTER) * 5),
-    path: Math.floor(getStableRoll(`${seed}:ring-path`) * COMPLETED_ROOM_RING_PATHS.length),
+    offsetX: Math.round((getStableRoll(`${seed}:ring-x`) - RANDOM_CENTER) * 3),
+    offsetY: Math.round((getStableRoll(`${seed}:ring-y`) - RANDOM_CENTER) * 3),
     rotation: Math.round((getStableRoll(`${seed}:ring-rotation`) - RANDOM_CENTER) * 22),
     size: 0.9 + getStableRoll(`${seed}:ring-size`) * 0.28,
-    stroke: 0.85 + getStableRoll(`${seed}:ring-stroke`) * 0.35
+    inkLength: 9 + Math.round(getStableRoll(`${seed}:ring-ink-length`) * 7),
+    inkOffset: Math.round(getStableRoll(`${seed}:ring-ink-offset`) * 100),
+    inkWeight: getStableRoll(`${seed}:ring-ink-weight`),
+    stroke: 0.72 + getStableRoll(`${seed}:ring-stroke`) * 0.34,
+    wobble: 0.42 + getStableRoll(`${seed}:ring-wobble`) * 0.32
   };
 }
 
-function getCompletedRoomRingPath(index: number) {
-  return COMPLETED_ROOM_RING_PATHS[index] || COMPLETED_ROOM_RING_PATHS[0];
+function getCompletedRoomRingPath(seed: string, variant: ReturnType<typeof getCompletedRoomRingVariant>) {
+  const bezierCircle = 0.551915024494;
+  const controlAngle = Math.atan(bezierCircle);
+  const controlDistance = Math.sqrt(bezierCircle * bezierCircle + 1);
+  const radiusMin = -0.07 * variant.wobble;
+  const radiusMax = 0.025 * variant.wobble;
+  const angleMin = 0.025;
+  const angleMax = 0.13 + getStableRoll(`${seed}:angle-max`) * 0.05;
+  let radius = 0.9 + (getStableRoll(`${seed}:radius-start`) - RANDOM_CENTER) * 0.035;
+  let theta = ((145 + getStableRoll(`${seed}:theta`) * 60) * Math.PI) / 180;
+  let path = `M ${roundSvgPoint(radius * Math.sin(theta))} ${roundSvgPoint(radius * Math.cos(theta))}`;
+  path += ` C ${roundSvgPoint(controlDistance * radius * Math.sin(theta + controlAngle))} ${roundSvgPoint(controlDistance * radius * Math.cos(theta + controlAngle))}`;
+
+  for (let index = 0; index < 4; index += 1) {
+    theta += (Math.PI / 2) * (1 + angleMin + getStableRoll(`${seed}:angle:${index}`) * (angleMax - angleMin));
+    radius *= 1 + radiusMin + getStableRoll(`${seed}:radius:${index}`) * (radiusMax - radiusMin);
+    const controlX = roundSvgPoint(controlDistance * radius * Math.sin(theta - controlAngle));
+    const controlY = roundSvgPoint(controlDistance * radius * Math.cos(theta - controlAngle));
+    const pointX = roundSvgPoint(radius * Math.sin(theta));
+    const pointY = roundSvgPoint(radius * Math.cos(theta));
+    path += index ? ` S ${controlX} ${controlY} ${pointX} ${pointY}` : ` ${controlX} ${controlY} ${pointX} ${pointY}`;
+  }
+
+  return path;
 }
 
-function getCompletedRoomRingSize(kind: SpireNodeKind, size: number, scale: number) {
+function roundSvgPoint(value: number) { return Math.round(value * 1000) / 1000; }
+
+function getCompletedRoomRingDimensions(kind: SpireNodeKind, size: number, scale: number) {
   if (kind === "boss") {
-    return Math.round(size * 0.92 * scale);
+    return {
+      height: Math.round(size * 0.78 * scale),
+      width: Math.round(size * 1.26 * scale)
+    };
   }
-  return Math.round(size * 1.72 * scale);
+  return {
+    height: Math.round(size * 1.34 * scale),
+    width: Math.round(size * 2.16 * scale)
+  };
 }
 
 function getCompletedRoomRingStroke(kind: SpireNodeKind, scale: number) {
-  return Math.round((kind === "boss" ? 9 : 8) * scale);
+  return Math.max(1.45, (kind === "boss" ? 2.8 : 2.15) * scale);
 }
 
 function getCompletedRoomRingRotation(kind: SpireNodeKind, rotation: number) {
