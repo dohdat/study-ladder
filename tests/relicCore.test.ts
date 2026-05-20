@@ -33,7 +33,7 @@ describe("relicCore", () => {
   it("uses the curated roguelike relic catalog instead of generated legacy relics", () => {
     const counts = RELIC_DEFINITIONS.reduce<Record<string, number>>((total, relic) => ({ ...total, [relic.rarity]: (total[relic.rarity] || 0) + 1 }), {});
 
-    expect(RELIC_DEFINITIONS).toHaveLength(91);
+    expect(RELIC_DEFINITIONS).toHaveLength(117);
     expect(counts).toMatchObject(ROGUELIKE_RELIC_RARITY_COUNTS);
     expect(RELIC_DEFINITIONS.some((relic) => relic.id === "burning-blood")).toBe(false);
     expect(RELIC_DEFINITIONS.some((relic) => relic.id === "no-run-blade")).toBe(true);

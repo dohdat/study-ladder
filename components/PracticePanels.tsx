@@ -91,9 +91,11 @@ type EditorProps = {
   statusColor: string;
   canBuyHint: boolean;
   hintCost: number;
+  hintDisabled: boolean;
   hintError: string;
   hintStreaming: boolean;
   hintText: string;
+  runCodeDisabled: boolean;
   timeRemainingMs: number;
   timerColor: string;
   timerLabel: string;
@@ -307,11 +309,13 @@ function SetupToolbarActions(props: Parameters<typeof EditorCard>[0]) {
       <Tooltip label="Format JavaScript code (Ctrl+S)" withArrow>
         <HeroSiegeButton leftSection={<IconWand size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.beautifyCurrentCode()}>Beautify</HeroSiegeButton>
       </Tooltip>
-      <Tooltip label={props.hintCost > 0 ? `Buy one next-step hint for ${props.hintCost} gold` : "Use your free room hint"} withArrow>
-        <Box component="span">
-          <HeroSiegeButton leftSection={<IconBulb size={ICON_SM} />} disabled={!props.sessionStarted || !props.canBuyHint} onClick={props.actions.buyHint}>{props.hintCost > 0 ? `Hint ${props.hintCost}` : "Hint Free"}</HeroSiegeButton>
-        </Box>
-      </Tooltip>
+      {!props.hintDisabled ? (
+        <Tooltip label={props.hintCost > 0 ? `Buy one next-step hint for ${props.hintCost} gold` : "Use your free room hint"} withArrow>
+          <Box component="span">
+            <HeroSiegeButton leftSection={<IconBulb size={ICON_SM} />} disabled={!props.sessionStarted || !props.canBuyHint} onClick={props.actions.buyHint}>{props.hintCost > 0 ? `Hint ${props.hintCost}` : "Hint Free"}</HeroSiegeButton>
+          </Box>
+        </Tooltip>
+      ) : null}
     </>
   );
 }
@@ -320,11 +324,13 @@ function RunToolbarActions(props: Parameters<typeof EditorCard>[0]) {
   const disabled = !props.runnerReady || props.questionFinished || !props.sessionStarted || props.timeRemainingMs <= 0;
   return (
     <>
-      <Tooltip label="Run code and show console.log output (Ctrl+')" withArrow>
-        <Box component="span">
-          <HeroSiegeButton leftSection={<IconTerminal2 size={ICON_SM} />} loading={props.running} disabled={disabled} onClick={props.actions.runCode}>Run</HeroSiegeButton>
-        </Box>
-      </Tooltip>
+      {!props.runCodeDisabled ? (
+        <Tooltip label="Run code and show console.log output (Ctrl+')" withArrow>
+          <Box component="span">
+            <HeroSiegeButton leftSection={<IconTerminal2 size={ICON_SM} />} loading={props.running} disabled={disabled} onClick={props.actions.runCode}>Run</HeroSiegeButton>
+          </Box>
+        </Tooltip>
+      ) : null}
       <Tooltip label="Submit code against hidden tests (Ctrl+Enter)" withArrow>
         <Box component="span">
           <HeroSiegeButton leftSection={<IconCheck size={ICON_SM} />} loading={props.running} disabled={disabled} onClick={props.actions.submitCode}>Submit</HeroSiegeButton>

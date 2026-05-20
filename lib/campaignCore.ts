@@ -32,7 +32,9 @@ export const HEAT_CONDITION_DEFINITIONS: HeatConditionDefinition[] = [
   { description: "Relic rewards show fewer choices.", heatPerRank: 2, id: "routineInspection", label: "Routine Inspection", maxRank: 4 },
   { description: "Monster health rises and big hits are less reliable.", heatPerRank: 1, id: "damageControl", label: "Damage Control", maxRank: 2 },
   { description: "Relic rerolls are reduced.", heatPerRank: 2, id: "approvalProcess", label: "Approval Process", maxRank: 2 },
-  { description: "Question timers are shorter.", heatPerRank: 3, id: "tightDeadline", label: "Tight Deadline", maxRank: 5 }
+  { description: "Question timers are shorter.", heatPerRank: 3, id: "tightDeadline", label: "Tight Deadline", maxRank: 5 },
+  { description: "Hints are disabled for the run.", heatPerRank: 3, id: "noHints", label: "Silent Oath", maxRank: 1 },
+  { description: "Run Code is disabled for the run.", heatPerRank: 4, id: "noRunCode", label: "Blind Trial", maxRank: 1 }
 ];
 
 export const HEAT_CONDITION_IDS = HEAT_CONDITION_DEFINITIONS.map((condition) => condition.id);
@@ -150,6 +152,14 @@ export function getHeatBossMultiplier(run: Pick<SpireRun, "heatConditions">) {
 
 export function getHeatEliteMultiplier(run: Pick<SpireRun, "heatConditions">) {
   return 1 + getHeatRank(run, "middleManagement") * 0.25;
+}
+
+export function areHintsDisabledByHeat(run: Pick<SpireRun, "heatConditions">) {
+  return getHeatRank(run, "noHints") > 0;
+}
+
+export function isRunCodeDisabledByHeat(run: Pick<SpireRun, "heatConditions">) {
+  return getHeatRank(run, "noRunCode") > 0;
 }
 
 export function getNextSpireCampaignStage(run: Pick<SpireRun, "act" | "difficulty">): { act: SpireAct; difficulty: SpireDifficulty } | null {

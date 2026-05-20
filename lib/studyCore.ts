@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { questions } from "../data/questions";
-import { getHeatHealingMultiplier, getHeatTimerPenaltyPercent, getSpireDifficultyModifiers } from "./campaignCore";
+import { areHintsDisabledByHeat, getHeatHealingMultiplier, getHeatTimerPenaltyPercent, getSpireDifficultyModifiers, isRunCodeDisabledByHeat } from "./campaignCore";
 import { createDropItem, EQUIPMENT_SLOTS, getActiveSetBonusesForItems, SLOT_LABELS } from "./itemCore";
 import { applyEloResult, DEFAULT_PLAYER_RATING, getEstimatedRating } from "./ratingCore";
 import { getRelicModifierTotals, normalizeRelics } from "./relicCore";
@@ -358,7 +358,7 @@ export const getElementalResistances = (state: StudyState) => applyDifficultyRes
 export const getWarriorSkillBonusTotals = (state: StudyState) => getWarriorSkillBonuses(state.profile.skillRanks);
 
 export const markQuestionRunCode = (state: StudyState, questionId: string): StudyState => {
-  if (!questionId || state.profile.spireRun.runCodeQuestionIds.includes(questionId)) {
+  if (!questionId || isRunCodeDisabledByHeat(state.profile.spireRun) || state.profile.spireRun.runCodeQuestionIds.includes(questionId)) {
     return state;
   }
   return {
@@ -889,6 +889,9 @@ function applyIncomingDamageToState(next: StudyState, sourceState: StudyState, a
 }
 
 export const getHintCost = (state: StudyState, questionId?: string) => {
+  if (areHintsDisabledByHeat(state.profile.spireRun)) {
+    return HINT_MAX_COST;
+  }
   const cardHintsBought = questionId ? getCard(state, questionId).hintsBought : 0;
   const freeHints = Math.max(0, Math.floor(getRunModifierTotals(state).freeHintPerRoom || 0));
   if (questionId && cardHintsBought < freeHints) {
@@ -897,7 +900,7 @@ export const getHintCost = (state: StudyState, questionId?: string) => {
   return Math.min(HINT_MAX_COST, HINT_COST + cardHintsBought * HINT_COST_INCREMENT);
 };
 
-export const canBuyHint = (state: StudyState, questionId?: string) => state.profile.coins >= getHintCost(state, questionId);
+export const canBuyHint = (state: StudyState, questionId?: string) => !areHintsDisabledByHeat(state.profile.spireRun) && state.profile.coins >= getHintCost(state, questionId);
 
 export const buyHint = (state: StudyState, questionId?: string) => {
   if (!canBuyHint(state, questionId)) {

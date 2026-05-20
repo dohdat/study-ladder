@@ -18,6 +18,7 @@ import { useMonacoAssets } from "../hooks/useMonacoAssets";
 import { useStudyTimeTracker } from "../hooks/useStudyBlocker";
 import { usePersistAchievements } from "../hooks/usePersistAchievements";
 import { useStudyNotifications } from "../hooks/useStudyNotifications";
+import { areHintsDisabledByHeat, isRunCodeDisabledByHeat } from "../lib/campaignCore";
 import { beautifyCode } from "../lib/codeFormat";
 import { applyPassedCombatResult, getElapsedPressureRatio, getTimedMonsterAttack } from "../lib/combatCore";
 import { getTimerDisplay } from "../lib/timerDisplay";
@@ -482,6 +483,11 @@ function useChooseQuestion(params: Parameters<typeof usePracticeActions>[0], upd
 function useBuyHint(params: Parameters<typeof usePracticeActions>[0]) {
   return useCallback(() => {
     const question = params.currentQuestion;
+    if (areHintsDisabledByHeat(params.state.profile.spireRun)) {
+      params.setTone("fail");
+      params.setStatus("Silent Oath is active. Hints are disabled for this run.");
+      return;
+    }
     if (!question || !canBuyHint(params.state, question.id)) {
       params.setTone("fail");
       params.setStatus(`You need ${question ? getHintCost(params.state, question.id) : HINT_COST} gold to buy a hint.`);
@@ -530,6 +536,11 @@ function useSubmitCode(params: Parameters<typeof usePracticeActions>[0] & {
     if (!params.runnerReady) {
       params.setTone("fail");
       params.setStatus("Runner is still loading. Try again in a second.");
+      return;
+    }
+    if (isRunCodeDisabledByHeat(params.state.profile.spireRun)) {
+      params.setTone("fail");
+      params.setStatus("Blind Trial is active. Run Code is disabled for this run.");
       return;
     }
     const runId = `${Date.now()}-${Math.random().toString(NUMBER_BASE_HEX).slice(TIMER_PAD)}`;
@@ -839,7 +850,7 @@ export default function Home() {
             useActiveSkill={actions.useActiveSkill}
           />
           <SpireMapPanel fillAvailableHeight={mapOpen} state={state} setState={setState} />
-          {showPractice && <PracticeArea actions={actions} currentQuestion={currentQuestion} damagePop={monsterDamagePop} editorProps={{ canBuyHint: currentQuestion ? canBuyHint(state, currentQuestion.id) : false, code, consoleRunResult, hintCost: currentQuestion ? getHintCost(state, currentQuestion.id) : HINT_COST, hintError: hints.hintError, hintStreaming: hints.hintStreaming, hintText: hints.hintText, questionFinished: timer.questionFinished, results, runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} state={state} />}
+          {showPractice && <PracticeArea actions={actions} currentQuestion={currentQuestion} damagePop={monsterDamagePop} editorProps={{ canBuyHint: currentQuestion ? canBuyHint(state, currentQuestion.id) : false, code, consoleRunResult, hintCost: currentQuestion ? getHintCost(state, currentQuestion.id) : HINT_COST, hintDisabled: areHintsDisabledByHeat(state.profile.spireRun), hintError: hints.hintError, hintStreaming: hints.hintStreaming, hintText: hints.hintText, questionFinished: timer.questionFinished, results, runCodeDisabled: isRunCodeDisabledByHeat(state.profile.spireRun), runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} state={state} />}
         </Stack>
       </Container>
       {runnerFrameElement}

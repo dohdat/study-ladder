@@ -214,6 +214,8 @@ export type HeatConditionId =
   | "jurySummons"
   | "lastingConsequences"
   | "middleManagement"
+  | "noHints"
+  | "noRunCode"
   | "routineInspection"
   | "tightDeadline"
   | "underworldCustoms";

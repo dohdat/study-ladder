@@ -61,6 +61,7 @@ import {
   getWarriorSkillBonusTotals,
   isQuestionInRecommendedRange,
   isMasteredCard,
+  markQuestionRunCode,
   normalizeStudyState,
   pickQuestion,
   purchaseMetaUpgrade,
@@ -959,6 +960,17 @@ describe("studyCore", () => {
 
     expect(canBuyHint(state, questions[0].id)).toBe(false);
     expect(buyHint(state, questions[0].id)).toBe(state);
+  });
+
+  it("uses pact conditions to disable hints and run code", () => {
+    const state = defaultState();
+    state.profile.coins = 500;
+    state.profile.spireRun.heatConditions.noHints = 1;
+    state.profile.spireRun.heatConditions.noRunCode = 1;
+
+    expect(canBuyHint(state, questions[0].id)).toBe(false);
+    expect(buyHint(state, questions[0].id)).toBe(state);
+    expect(markQuestionRunCode(state, questions[0].id)).toBe(state);
   });
 
   it("blocks the first incoming hit in a room", () => {

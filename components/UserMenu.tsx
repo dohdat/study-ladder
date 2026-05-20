@@ -51,9 +51,11 @@ import dislocatedEyeArt from "../assets/hero_siege_relics/dislocated-eye.png";
 import fortuneCardArt from "../assets/hero_siege_relics/fortune-card.png";
 import guardianAngelArt from "../assets/hero_siege_relics/guardian-angel.png";
 import kingsCrownArt from "../assets/hero_siege_relics/kings-crown.png";
+import lanternArt from "../assets/hero_siege_relics/lantern.png";
 import oddBookArt from "../assets/hero_siege_relics/odd-book.png";
 import razorwireArt from "../assets/hero_siege_relics/razorwire.png";
 import steamSaleArt from "../assets/hero_siege_relics/steam-sale.png";
+import stormDaggerArt from "../assets/hero_siege_relics/storm-dagger.png";
 import battleTranceArt from "../assets/hero_siege_skills/battle-trance.png";
 import findItemArt from "../assets/hero_siege_skills/find-item.png";
 import ironSkinArt from "../assets/hero_siege_skills/iron-skin.png";
@@ -925,6 +927,8 @@ const PACT_CONDITION_ICONS: Record<string, string> = {
   jurySummons: oddBookArt,
   lastingConsequences: healthPotionArt,
   middleManagement: dislocatedEyeArt,
+  noHints: lanternArt,
+  noRunCode: stormDaggerArt,
   routineInspection: tokenLuckArt,
   tightDeadline: battleTranceArt,
   underworldCustoms: guardianAngelArt
@@ -1235,6 +1239,10 @@ function getPactConditionEffectLines(condition: (typeof HEAT_CONDITION_DEFINITIO
       return ["Healing received is reduced by -25% per rank.", "At max rank, healing is clamped to a minimum 5% effectiveness."];
     case "middleManagement":
       return ["Elite rooms gain +25% health and damage.", "Elite question rating also rises by about +100."];
+    case "noHints":
+      return ["Hint purchases and free hint charges are removed for the run.", "The Hint button is hidden during combat."];
+    case "noRunCode":
+      return ["Run Code is removed for the run.", "You can still submit, but cannot preview console output or sample test results first."];
     case "routineInspection":
       return ["Relic rewards show 1 fewer choice per rank.", "Choice count cannot fall below 1."];
     case "tightDeadline":

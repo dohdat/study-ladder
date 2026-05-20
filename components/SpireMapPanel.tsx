@@ -1,6 +1,6 @@
 import { Badge, Box, Group, Paper, SimpleGrid, Stack, Text } from "@mantine/core";
 type StaticImageData = string;
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { HeroSiegeButton, getHeroSiegeMenuButtonAsset } from "./HeroSiegeUi";
 import { CoinIcon } from "./CoinIcon";
@@ -78,6 +78,7 @@ const COMPLETED_ROOM_RING_COLOR = "rgba(13, 22, 27, 0.96)";
 const COMPLETED_ROOM_RING_SHADOW = "drop-shadow(0 2px 0 rgba(255, 255, 220, 0.18)) drop-shadow(0 1px 0 rgba(0, 0, 0, 0.34))";
 const NODE_HIGHLIGHT_TRANSITION = "opacity 70ms ease-out";
 const LEGEND_ROW_TRANSITION = "background-color 70ms ease-out";
+const MAP_SCROLL_PERFORMANCE_DEBOUNCE_MS = 140;
 const NODE_Z_INDEX = 2;
 const HIGHLIGHTED_NODE_Z_INDEX = 3;
 const SELECTED_NODE_Z_INDEX = 4;
@@ -156,6 +157,8 @@ const NODE_DIMENSIONS: Record<SpireNodeKind, { icon: number; size: number }> = {
   unknown: { icon: 22, size: 34 }
 };
 
+type VisualSpireMapNode = SpireMapNode & { position: { x: number; y: number } };
+
 // eslint-disable-next-line complexity
 export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
   const [highlightedKind, setHighlightedKind] = useState<SpireNodeKind | null>(null);
@@ -168,6 +171,9 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
   const selectedNodeIsReachable = mapOpen && Boolean(node && isReachableMapNode(props.state, node.id));
   const pendingRelicReward = props.state.profile.spireRun.pendingRelicReward;
   const mapBg = getActMapBackground(props.state.profile.spireRun.act);
+  const reachableNodeIds = useMemo(() => new Set(props.state.profile.spireRun.availableNodeIds), [props.state.profile.spireRun.availableNodeIds]);
+  const completedNodeIds = useMemo(() => new Set(props.state.profile.spireRun.completedNodeIds), [props.state.profile.spireRun.completedNodeIds]);
+  const visualNodes = useMemo(() => props.state.profile.spireRun.nodes.map((mapNode) => ({ ...mapNode, position: getVisualNodePosition(mapNode) })), [props.state.profile.spireRun.nodes]);
   return (
     <Paper withBorder p="sm" style={{ background: "var(--mantine-color-dark-7)", ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
       <Box style={{ minWidth: 0, ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
@@ -182,28 +188,29 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
               onPointerDown={mapDrag.startDrag}
               onPointerMove={mapDrag.moveDrag}
               onPointerUp={mapDrag.endDrag}
-              style={{ cursor: mapDrag.dragging ? "grabbing" : "grab", inset: 0, msOverflowStyle: "none", overflow: "auto", overscrollBehavior: "contain", position: "absolute", scrollbarWidth: "none", touchAction: "none", userSelect: mapDrag.dragging ? "none" : undefined }}
+              onScroll={mapDrag.onScroll}
+              style={{ contain: "layout paint style", cursor: mapDrag.dragging ? "grabbing" : "grab", inset: 0, msOverflowStyle: "none", overflow: "auto", overscrollBehavior: "contain", position: "absolute", scrollbarWidth: "none", touchAction: "none", userSelect: mapDrag.dragging ? "none" : undefined, willChange: "scroll-position" }}
             >
-              <Box style={{ background: mapBg, height: MAP_CONTENT_HEIGHT, minHeight: "100%", minWidth: "100%", position: "relative", width: MAP_CONTENT_WIDTH }}>
+              <Box style={{ background: mapBg, contain: "layout paint style", height: MAP_CONTENT_HEIGHT, minHeight: "100%", minWidth: "100%", position: "relative", transform: "translateZ(0)", width: MAP_CONTENT_WIDTH }}>
                 <MapBackdrop act={props.state.profile.spireRun.act} />
-                <MapPaths state={props.state} />
-                {props.state.profile.spireRun.nodes.map((mapNode) => {
-                  const position = getVisualNodePosition(mapNode);
+                <MapPaths nodes={visualNodes} />
+                {visualNodes.map((mapNode) => {
                   return (
                     <MapNode
                       key={mapNode.id}
                       active={mapNode.id === props.state.profile.spireRun.currentNodeId}
-                      completed={props.state.profile.spireRun.completedNodeIds.includes(mapNode.id)}
+                      completed={completedNodeIds.has(mapNode.id)}
                       highlighted={highlightedKind === mapNode.kind}
                       highlightMode={Boolean(highlightedKind)}
                       act={props.state.profile.spireRun.act}
+                      mapMoving={mapDrag.mapMoving}
                       id={mapNode.id}
                       kind={mapNode.kind}
                       onSelect={() => props.setState((previous) => selectSpireNode(previous, mapNode.id))}
                       rewardKind={mapNode.rewardKind}
-                      selectable={isReachableMapNode(props.state, mapNode.id)}
-                      x={position.x}
-                      y={position.y}
+                      selectable={props.state.profile.godMode || reachableNodeIds.has(mapNode.id)}
+                      x={mapNode.position.x}
+                      y={mapNode.position.y}
                     />
                   );
                 })}
@@ -266,7 +273,15 @@ function useDebouncedLegendHighlight(onHighlight: (kind: SpireNodeKind | null) =
 function useMapDrag() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef({ dragging: false, left: 0, pointerId: 0, top: 0, x: 0, y: 0 });
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [scrolling, setScrolling] = useState(false);
+
+  useEffect(() => () => {
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+  }, []);
 
   function startDrag(event: React.PointerEvent<HTMLDivElement>) {
     if (event.button !== MAP_DRAG_POINTER_BUTTON || isInteractiveMapTarget(event.target)) {
@@ -291,6 +306,19 @@ function useMapDrag() {
     scroller.scrollTop = drag.top - (event.clientY - drag.y);
   }
 
+  function onScroll() {
+    if (!scrolling) {
+      setScrolling(true);
+    }
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    scrollTimeoutRef.current = setTimeout(() => {
+      setScrolling(false);
+      scrollTimeoutRef.current = null;
+    }, MAP_SCROLL_PERFORMANCE_DEBOUNCE_MS);
+  }
+
   function endDrag(event: React.PointerEvent<HTMLDivElement>) {
     const scroller = scrollRef.current;
     if (dragRef.current.dragging && scroller?.hasPointerCapture(event.pointerId)) {
@@ -300,7 +328,7 @@ function useMapDrag() {
     setDragging(false);
   }
 
-  return { dragging, endDrag, moveDrag, scrollRef, startDrag };
+  return { dragging, endDrag, mapMoving: dragging || scrolling, moveDrag, onScroll, scrollRef, startDrag };
 }
 
 function isInteractiveMapTarget(target: EventTarget) {
@@ -1032,21 +1060,31 @@ function getMapButtonLabel(node: SpireMapNode | undefined) {
   return "Continue";
 }
 
-function MapPaths(props: { state: StudyState }) {
+const MapPaths = memo(function MapPaths(props: { nodes: VisualSpireMapNode[] }) {
+  const paths = useMemo(() => {
+    const nodeById = new Map(props.nodes.map((node) => [node.id, node]));
+    return props.nodes.flatMap((node) => node.nextIds.map((id) => {
+      const next = nodeById.get(id);
+      if (!next) {
+        return null;
+      }
+      const line = getTrimmedPathLine(node.position, next.position);
+      const curve = getPathCurve(line, node.id, id);
+      return {
+        d: `M ${line.x1} ${line.y1} Q ${curve.x} ${curve.y} ${line.x2} ${line.y2}`,
+        key: `${node.id}-${id}`
+      };
+    }).filter(Boolean) as Array<{ d: string; key: string }>);
+  }, [props.nodes]);
+
   return (
     <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ inset: 0, position: "absolute", height: "100%", width: "100%", zIndex: 1 }}>
-      {props.state.profile.spireRun.nodes.flatMap((node) => node.nextIds.map((id) => {
-        const next = props.state.profile.spireRun.nodes.find((row) => row.id === id);
-        if (!next) {
-          return null;
-        }
-        const line = getTrimmedPathLine(getVisualNodePosition(node), getVisualNodePosition(next));
-        const curve = getPathCurve(line, node.id, id);
-        return <path key={`${node.id}-${id}`} d={`M ${line.x1} ${line.y1} Q ${curve.x} ${curve.y} ${line.x2} ${line.y2}`} fill="none" stroke={PATH_COLOR} strokeDasharray={PATH_STROKE_DASH} strokeLinecap="round" strokeWidth={PATH_STROKE_WIDTH} />;
-      }))}
+      {paths.map((path) => (
+        <path key={path.key} d={path.d} fill="none" stroke={PATH_COLOR} strokeDasharray={PATH_STROKE_DASH} strokeLinecap="round" strokeWidth={PATH_STROKE_WIDTH} />
+      ))}
     </svg>
   );
-}
+});
 
 function getTrimmedPathLine(from: { x: number; y: number }, to: { x: number; y: number }) {
   const dx = to.x - from.x;
@@ -1096,14 +1134,14 @@ function getStableRoll(value: string) {
   return (hash >>> 0) / HASH_DIVISOR;
 }
 
-function MapNode(props: { act: SpireAct; active: boolean; completed: boolean; highlighted: boolean; highlightMode: boolean; id: string; kind: SpireNodeKind; onSelect: () => void; rewardKind?: SpireCombatRewardKind; selectable: boolean; x: number; y: number }) {
+const MapNode = memo(function MapNode(props: { act: SpireAct; active: boolean; completed: boolean; highlighted: boolean; highlightMode: boolean; id: string; kind: SpireNodeKind; mapMoving: boolean; onSelect: () => void; rewardKind?: SpireCombatRewardKind; selectable: boolean; x: number; y: number }) {
   const [hovered, setHovered] = useState(false);
   const opacity = getNodeOpacity(props);
   const dimensions = getNodeDimensions(props.kind);
   const size = dimensions.size;
   const iconSize = dimensions.icon;
   const zIndex = getNodeZIndex(props.kind, props.highlighted, props.active);
-  const highlightTone = getNodeHighlightTone(props.active, hovered);
+  const highlightTone = props.mapMoving ? undefined : getNodeHighlightTone(props.active, hovered);
   return (
     <Box
       aria-label={NODE_LABELS[props.kind]}
@@ -1119,14 +1157,14 @@ function MapNode(props: { act: SpireAct; active: boolean; completed: boolean; hi
       style={{ alignItems: "center", background: "transparent", border: 0, borderRadius: 0, boxShadow: "none", cursor: props.selectable ? "pointer" : "default", display: "flex", height: size, justifyContent: "center", left: `${props.x}%`, opacity, padding: 0, position: "absolute", top: `${props.y}%`, transform: "translate(-50%, -50%)", transition: NODE_HIGHLIGHT_TRANSITION, width: size, zIndex }}
       type="button"
     >
-      {props.completed && <CompletedRoomRing kind={props.kind} seed={props.id} size={size} />}
-      <NodeIcon act={props.act} kind={props.kind} highlightTone={highlightTone} shadow size={iconSize} />
-      {props.kind === "enemy" && props.rewardKind ? <NodeRewardBadge hovered={hovered} kind={props.rewardKind} /> : null}
+      {props.completed && !props.mapMoving && <CompletedRoomRing kind={props.kind} seed={props.id} size={size} />}
+      <NodeIcon act={props.act} kind={props.kind} highlightTone={highlightTone} shadow={!props.mapMoving} size={iconSize} />
+      {props.kind === "enemy" && props.rewardKind ? <NodeRewardBadge hovered={!props.mapMoving && hovered} kind={props.rewardKind} mapMoving={props.mapMoving} /> : null}
     </Box>
   );
-}
+});
 
-function NodeRewardBadge(props: { hovered: boolean; kind: SpireCombatRewardKind }) {
+function NodeRewardBadge(props: { hovered: boolean; kind: SpireCombatRewardKind; mapMoving?: boolean }) {
   return (
     <Box
       aria-hidden="true"
@@ -1144,15 +1182,15 @@ function NodeRewardBadge(props: { hovered: boolean; kind: SpireCombatRewardKind 
       }}
     >
       {props.kind === "gold" ? (
-        <Box style={{ filter: "drop-shadow(0 2px 0 #000) drop-shadow(0 0 3px rgba(247, 201, 72, 0.42))" }}>
+        <Box style={{ filter: props.mapMoving ? undefined : "drop-shadow(0 2px 0 #000) drop-shadow(0 0 3px rgba(247, 201, 72, 0.42))" }}>
           <CoinIcon size={18} />
         </Box>
       ) : props.kind === "heart" ? (
-        <CentaurHeartIcon />
+        <CentaurHeartIcon mapMoving={props.mapMoving} />
       ) : props.kind === "pom" ? (
-        <PomPowerIcon />
+        <PomPowerIcon mapMoving={props.mapMoving} />
       ) : (
-        <Box alt="" component="img" src={getRewardKindIcon(props.kind)} style={{ display: "block", filter: `drop-shadow(0 2px 0 #000) drop-shadow(0 0 4px ${getRewardKindColor(props.kind)}66)`, height: 22, imageRendering: "pixelated", objectFit: "contain", width: 22 }} />
+        <Box alt="" component="img" src={getRewardKindIcon(props.kind)} style={{ display: "block", filter: props.mapMoving ? undefined : `drop-shadow(0 2px 0 #000) drop-shadow(0 0 4px ${getRewardKindColor(props.kind)}66)`, height: 22, imageRendering: "pixelated", objectFit: "contain", width: 22 }} />
       )}
       {props.hovered ? <NodeRewardTooltip kind={props.kind} /> : null}
     </Box>
@@ -1182,13 +1220,13 @@ function NodeRewardTooltip(props: { kind: SpireCombatRewardKind }) {
   );
 }
 
-function CentaurHeartIcon() {
+function CentaurHeartIcon(props: { mapMoving?: boolean } = {}) {
   return (
     <Box
       aria-hidden="true"
       style={{
         color: "#ff2f3f",
-        filter: "drop-shadow(0 2px 0 #000) drop-shadow(0 0 5px rgba(255, 47, 63, 0.72))",
+        filter: props.mapMoving ? undefined : "drop-shadow(0 2px 0 #000) drop-shadow(0 0 5px rgba(255, 47, 63, 0.72))",
         fontFamily: "Arial, sans-serif",
         fontSize: 24,
         fontWeight: 900,
@@ -1201,7 +1239,7 @@ function CentaurHeartIcon() {
   );
 }
 
-function PomPowerIcon() {
+function PomPowerIcon(props: { mapMoving?: boolean } = {}) {
   return (
     <Box
       aria-hidden="true"
@@ -1210,7 +1248,7 @@ function PomPowerIcon() {
         border: "1px solid #ff6870",
         borderRadius: "50%",
         boxShadow: "inset 0 2px 0 rgba(255, 255, 255, 0.28), inset 0 -3px 0 rgba(0, 0, 0, 0.38)",
-        filter: "drop-shadow(0 2px 0 #000) drop-shadow(0 0 5px rgba(255, 31, 65, 0.72))",
+        filter: props.mapMoving ? undefined : "drop-shadow(0 2px 0 #000) drop-shadow(0 0 5px rgba(255, 31, 65, 0.72))",
         height: 22,
         position: "relative",
         width: 22
