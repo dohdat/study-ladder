@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
 import { buyShopItem } from "../lib/shopCore";
-import { advanceSpireNode, choosePendingRelicReward, claimCurrentSpireRoomReward, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, leaveSpireRoom, normalizeSpireRun, selectSpireNode, skipPendingRelicReward, smithSpireNode, SPIRE_RATINGS, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
+import { advanceSpireNode, canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, isSpireHeatSetupOpen, leaveSpireRoom, normalizeSpireRun, selectPendingRelicReward, selectSpireNode, setSpireHeatConditionRank, skipPendingRelicReward, smithSpireNode, SPIRE_RATINGS, startSpireHeatRun, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
 import { EXPERIENCE_PER_LEVEL, defaultState, getMaxHealth, getMaxMana } from "../lib/studyCore";
 import type { SpireNodeKind } from "../types/study";
 
@@ -70,7 +70,7 @@ describe("spireMapCore", () => {
     expect(normalized.nodes.filter((node) => node.rating === FLOOR_FIFTEEN).every((node) => node.kind === "boss")).toBe(true);
   });
 
-  it("advances the campaign through acts and into nightmare and hell", () => {
+  it("advances through acts and unlocks heat after the first full clear", () => {
     let state = defaultState();
     state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000, 1, "normal") } };
     const actOneBoss = state.profile.spireRun.nodes.find((node) => node.kind === "boss") || state.profile.spireRun.nodes[0];
@@ -94,18 +94,24 @@ describe("spireMapCore", () => {
     state = leaveSpireRoom(state, 4001);
 
     expect(state.profile.spireRun.act).toBe(1);
-    expect(state.profile.spireRun.difficulty).toBe("nightmare");
+    expect(state.profile.spireRun.difficulty).toBe("normal");
+    expect(state.profile.metaProgress.heatUnlocked).toBe(true);
+    expect(isSpireHeatSetupOpen(state)).toBe(true);
+    expect(canEditSpireHeat(state)).toBe(true);
 
-    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(5000, 4, "nightmare") } };
-    const nightmareBoss = state.profile.spireRun.nodes.find((node) => node.kind === "boss") || state.profile.spireRun.nodes[0];
-    state.profile.spireRun.availableNodeIds = [nightmareBoss.id];
-    state = selectSpireNode(state, nightmareBoss.id);
-    state = advanceSpireNode(state, 6000);
-    state = skipPendingRelicReward(state);
-    state = leaveSpireRoom(state, 6001);
+    state = setSpireHeatConditionRank(state, "hardLabor", 5);
+    state = setSpireHeatConditionRank(state, "tightDeadline", 5);
 
-    expect(state.profile.spireRun.act).toBe(1);
-    expect(state.profile.spireRun.difficulty).toBe("hell");
+    expect(state.profile.spireRun.heatConditions.hardLabor).toBe(5);
+    expect(state.profile.spireRun.heatConditions.tightDeadline).toBe(5);
+
+    const beforeStart = state;
+    state = enterSpireNode(state, 5000);
+    expect(state).toBe(beforeStart);
+
+    state = startSpireHeatRun(state);
+    expect(isSpireHeatSetupOpen(state)).toBe(false);
+    expect(canEditSpireHeat(state)).toBe(false);
   });
 
   it("prevents consecutive elite merchant or rest rooms before the pre-boss rest floor", () => {
@@ -278,6 +284,26 @@ describe("spireMapCore", () => {
     const choice = state.profile.spireRun.pendingRelicReward?.choices[0];
     state = choosePendingRelicReward(state, choice?.id || "");
 
+    expect(state.profile.relics).toHaveLength(1);
+  });
+
+  it("highlights a pending relic choice before confirming it", () => {
+    let state = defaultState();
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
+    const treasure = state.profile.spireRun.nodes.find((node) => node.kind === "treasure") || state.profile.spireRun.nodes[0];
+    state.profile.spireRun.availableNodeIds = [treasure.id];
+    state = selectSpireNode(state, treasure.id);
+    state = advanceSpireNode(state, 1000);
+    const choice = state.profile.spireRun.pendingRelicReward?.choices[0];
+
+    state = selectPendingRelicReward(state, choice?.id || "");
+
+    expect(state.profile.spireRun.pendingRelicReward?.selectedRelicId).toBe(choice?.id);
+    expect(state.profile.relics).toHaveLength(0);
+
+    state = choosePendingRelicReward(state, state.profile.spireRun.pendingRelicReward?.selectedRelicId || "");
+
+    expect(state.profile.spireRun.pendingRelicReward).toBeNull();
     expect(state.profile.relics).toHaveLength(1);
   });
 

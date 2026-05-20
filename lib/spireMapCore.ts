@@ -1,11 +1,25 @@
 import { questions } from "../data/questions";
-import { getNextSpireCampaignStage, getSpireCampaignRatingBonus, getSpireDifficultyModifiers } from "./campaignCore";
+import {
+  MAX_HEAT,
+  createDefaultHeatConditions,
+  getHeatBossMultiplier,
+  getHeatEliteMultiplier,
+  getHeatEliteQuestionBonus,
+  getHeatExtraRoomQuestions,
+  getHeatLevel,
+  getHeatRelicChoicePenalty,
+  getHeatRelicRerollPenalty,
+  getNextSpireCampaignStage,
+  getSpireCampaignRatingBonus,
+  getSpireDifficultyModifiers,
+  normalizeHeatConditions
+} from "./campaignCore";
 import { createDropItem, SLOT_STAT_BIAS } from "./itemCore";
 import { getUniqueMonsterBonusCount } from "./monsterCore";
 import { grantRelic, rollRelic } from "./relicCore";
 import { createShopStock } from "./shopCore";
-import { getMaxHealth, getMetaRelicChoiceBonus, getRunModifierTotals } from "./studyCore";
-import type { Difficulty, InventoryItem, ItemRarity, Question, Relic, RelicRarity, SpireAct, SpireDifficulty, SpireMapNode, SpireNodeKind, SpireRun, StudyState, UnknownEncounterKind } from "../types/study";
+import { getMaxHealth, getMetaRelicChoiceBonus, getMetaStartingGoldBonus, getRunModifierTotals } from "./studyCore";
+import type { Difficulty, HeatConditionId, HeatConditionRanks, InventoryItem, ItemRarity, Question, Relic, RelicRarity, SpireAct, SpireDifficulty, SpireMapNode, SpireNodeKind, SpireRun, StudyState, UnknownEncounterKind } from "../types/study";
 
 const RATING_FLOOR_1 = 1500;
 const RATING_FLOOR_2 = 1650;
@@ -159,7 +173,7 @@ type PathEdge = {
 
 type RelicRewardKind = NonNullable<SpireRun["pendingRelicReward"]>["rewardKind"];
 
-export function createSpireRun(seed = Date.now(), act: SpireAct = 1, difficulty: SpireDifficulty = "normal"): SpireRun {
+export function createSpireRun(seed = Date.now(), act: SpireAct = 1, difficulty: SpireDifficulty = "normal", heatConditions: Partial<HeatConditionRanks> = {}, heatSetupOpen = false): SpireRun {
   const nodes = createSpireNodes(seed);
   const availableNodeIds = nodes.filter((node) => node.rating === SPIRE_RATINGS[FIRST_TIER]).map((node) => node.id);
   const currentNodeId = availableNodeIds[DEFAULT_FIRST_SLOT] || nodes[0]?.id || FIRST_NODE_ID;
@@ -168,8 +182,10 @@ export function createSpireRun(seed = Date.now(), act: SpireAct = 1, difficulty:
     availableNodeIds,
     completedNodeIds: [],
     currentNodeId,
-    difficulty,
+    difficulty: "normal",
     failDamageStacks: 0,
+    heatConditions: normalizeHeatConditions(heatConditions),
+    heatSetupOpen,
     mapOpen: true,
     mapSeed: seed,
     nodes,
@@ -187,7 +203,7 @@ export function createSpireRun(seed = Date.now(), act: SpireAct = 1, difficulty:
 export function normalizeSpireRun(run: Partial<SpireRun> | undefined): SpireRun {
   const normalizedNodes = normalizeForcedRoomKinds(run?.nodes || []);
   if (!normalizedNodes.length || !hasRequiredSpireFloors(normalizedNodes)) {
-    return createSpireRun(run?.mapSeed || Date.now(), normalizeSpireAct(run?.act), normalizeSpireDifficulty(run?.difficulty));
+    return createSpireRun(run?.mapSeed || Date.now(), normalizeSpireAct(run?.act), normalizeSpireDifficulty(run?.difficulty), run?.heatConditions, Boolean(run?.heatSetupOpen));
   }
   const sourceRun = run || {};
   const currentNode = normalizedNodes.find((node) => node.id === sourceRun.currentNodeId) || normalizedNodes[0];
@@ -203,6 +219,8 @@ export function normalizeSpireRun(run: Partial<SpireRun> | undefined): SpireRun 
     currentNodeId: currentNode.id,
     difficulty: normalizeSpireDifficulty(sourceRun.difficulty),
     failDamageStacks: Math.max(0, Math.floor(sourceRun.failDamageStacks || 0)),
+    heatConditions: normalizeHeatConditions(sourceRun.heatConditions),
+    heatSetupOpen: typeof sourceRun.heatSetupOpen === "boolean" ? sourceRun.heatSetupOpen : shouldOpenHeatSetupForLegacyRun(sourceRun, roundQuestionIds, roundSolvedIds),
     mapOpen: typeof sourceRun.mapOpen === "boolean" ? sourceRun.mapOpen : true,
     mapSeed: Number.isFinite(sourceRun.mapSeed) ? sourceRun.mapSeed || Date.now() : Date.now(),
     nodes: normalizedNodes,
@@ -216,6 +234,15 @@ export function normalizeSpireRun(run: Partial<SpireRun> | undefined): SpireRun 
   };
 }
 
+function shouldOpenHeatSetupForLegacyRun(run: Partial<SpireRun>, roundQuestionIds: string[], roundSolvedIds: string[]) {
+  return normalizeSpireAct(run.act) === 1
+    && run.mapOpen !== false
+    && !run.pendingRelicReward
+    && !(run.completedNodeIds || []).length
+    && !roundQuestionIds.length
+    && !roundSolvedIds.length;
+}
+
 function hasRequiredSpireFloors(nodes: SpireMapNode[]) {
   return SPIRE_RATINGS.every((rating) => nodes.some((node) => node.rating === rating));
 }
@@ -227,7 +254,7 @@ function normalizeSpireAct(value: SpireRun["act"] | undefined): SpireAct {
 }
 
 function normalizeSpireDifficulty(value: SpireRun["difficulty"] | undefined): SpireDifficulty {
-  return value === "nightmare" || value === "hell" ? value : "normal";
+  return "normal";
 }
 
 function normalizeUnknownEncounterMisses(misses: Partial<Record<UnknownEncounterKind, number>> | undefined) {
@@ -259,6 +286,7 @@ function normalizePendingRelicReward(choice: Partial<SpireRun["pendingRelicRewar
     nodeId: choice.nodeId,
     rerollsRemaining: Math.max(0, Math.floor(choice.rerollsRemaining || 0)),
     rewardKind: choice.rewardKind || "treasure",
+    selectedRelicId: choice.selectedRelicId && choice.choices.some((relic) => relic.id === choice.selectedRelicId) ? choice.selectedRelicId : null,
     seed: choice.seed || `${choice.nodeId}:reward`,
     skipMetaCurrency: Math.max(0, Math.floor(choice.skipMetaCurrency || 0))
   };
@@ -270,6 +298,77 @@ function normalizeForcedRoomKinds(nodes: SpireMapNode[]) {
     const forced = tierIndex >= FIRST_TIER ? getForcedNodeKind(tierIndex) : null;
     return forced && node.kind !== forced ? { ...node, kind: forced } : node;
   });
+}
+
+export function canEditSpireHeat(state: StudyState) {
+  return isSpireHeatSetupOpen(state);
+}
+
+export function isSpireHeatSetupOpen(state: StudyState) {
+  const run = state.profile.spireRun;
+  return state.profile.metaProgress.heatUnlocked
+    && run.heatSetupOpen
+    && run.mapOpen
+    && !run.pendingRelicReward
+    && run.completedNodeIds.length === 0
+    && run.roundQuestionIds.length === 0
+    && run.roundSolvedIds.length === 0;
+}
+
+export function startSpireHeatRun(state: StudyState): StudyState {
+  if (!isSpireHeatSetupOpen(state)) {
+    return state;
+  }
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      spireRun: {
+        ...state.profile.spireRun,
+        heatSetupOpen: false
+      }
+    }
+  };
+}
+
+export function setSpireHeatConditionRank(state: StudyState, conditionId: HeatConditionId, rank: number): StudyState {
+  if (!canEditSpireHeat(state)) {
+    return state;
+  }
+  const current = normalizeHeatConditions(state.profile.spireRun.heatConditions);
+  if (!(conditionId in current)) {
+    return state;
+  }
+  const next = normalizeHeatConditions({ ...current, [conditionId]: rank });
+  if (getHeatLevel(next) > MAX_HEAT) {
+    return state;
+  }
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      spireRun: {
+        ...state.profile.spireRun,
+        heatConditions: next
+      }
+    }
+  };
+}
+
+export function resetSpireHeat(state: StudyState): StudyState {
+  if (!canEditSpireHeat(state)) {
+    return state;
+  }
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      spireRun: {
+        ...state.profile.spireRun,
+        heatConditions: createDefaultHeatConditions()
+      }
+    }
+  };
 }
 
 function isValidBranchingMap(nodes: SpireMapNode[]) {
@@ -779,6 +878,8 @@ function createPendingRelicReward(
   options: { choiceBonus?: number; minRarity?: RelicRarity[]; rerolls?: number; skipMetaCurrency?: number } = {}
 ) {
   const seed = `${node.id}:${now}:${rewardKind}:relic-choice`;
+  const choiceCount = Math.max(1, BASE_RELIC_CHOICE_COUNT + getMetaRelicChoiceBonus(state) + getRunModifierTotals(state).relicChoiceBonus + (options.choiceBonus || 0) - getHeatRelicChoicePenalty(state.profile.spireRun, rewardKind));
+  const rerollsRemaining = Math.max(0, (options.rerolls ?? BASE_RELIC_REROLLS) + Math.max(0, Math.floor(getRunModifierTotals(state).relicRerollBonus || 0)) - getHeatRelicRerollPenalty(state.profile.spireRun));
   return {
     ...state,
     profile: {
@@ -786,10 +887,11 @@ function createPendingRelicReward(
       spireRun: {
         ...state.profile.spireRun,
         pendingRelicReward: {
-          choices: rollRelicChoices(state, seed, BASE_RELIC_CHOICE_COUNT + getMetaRelicChoiceBonus(state) + getRunModifierTotals(state).relicChoiceBonus + (options.choiceBonus || 0), options.minRarity),
+          choices: rollRelicChoices(state, seed, choiceCount, options.minRarity),
           nodeId: node.id,
-          rerollsRemaining: (options.rerolls ?? BASE_RELIC_REROLLS) + Math.max(0, Math.floor(getRunModifierTotals(state).relicRerollBonus || 0)),
+          rerollsRemaining,
           rewardKind,
+          selectedRelicId: null,
           seed,
           skipMetaCurrency: (options.skipMetaCurrency ?? SKIP_META_COMMON) + Math.max(0, Math.floor(getRunModifierTotals(state).skipRelicMetaBonus || 0))
         }
@@ -810,6 +912,26 @@ function rollRelicChoices(state: StudyState, seed: string, count: number, minRar
     nextState = grantRelic(nextState, relic);
   }
   return choices;
+}
+
+export function selectPendingRelicReward(state: StudyState, relicId: string) {
+  const pending = state.profile.spireRun.pendingRelicReward;
+  if (!pending || !pending.choices.some((choice) => choice.id === relicId)) {
+    return state;
+  }
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      spireRun: {
+        ...state.profile.spireRun,
+        pendingRelicReward: {
+          ...pending,
+          selectedRelicId: relicId
+        }
+      }
+    }
+  };
 }
 
 export function choosePendingRelicReward(state: StudyState, relicId: string) {
@@ -854,6 +976,7 @@ export function rerollPendingRelicReward(state: StudyState) {
           ...pending,
           choices: rollRelicChoices(state, seed, pending.choices.length, getRelicChoiceRarities(pending.rewardKind)),
           rerollsRemaining: pending.rerollsRemaining - 1,
+          selectedRelicId: null,
           seed
         }
       }
@@ -897,6 +1020,7 @@ function addMetaCurrency(state: StudyState, amount: number): StudyState {
     profile: {
       ...state.profile,
       metaProgress: {
+        ...state.profile.metaProgress,
         currency: state.profile.metaProgress.currency + earned,
         totalEarned: state.profile.metaProgress.totalEarned + earned,
         upgrades: { ...state.profile.metaProgress.upgrades }
@@ -1051,7 +1175,7 @@ export function smithSpireNode(state: StudyState, now = Date.now()) {
 
 export function selectSpireNode(state: StudyState, nodeId: string) {
   const node = state.profile.spireRun.nodes.find((row) => row.id === nodeId);
-  if (!node || !state.profile.spireRun.mapOpen || state.profile.spireRun.pendingRelicReward || !canUseSpireNode(state, nodeId)) {
+  if (!node || isSpireHeatSetupOpen(state) || !state.profile.spireRun.mapOpen || state.profile.spireRun.pendingRelicReward || !canUseSpireNode(state, nodeId)) {
     return state;
   }
   return {
@@ -1074,7 +1198,7 @@ export function selectSpireNode(state: StudyState, nodeId: string) {
 
 export function enterSpireNode(state: StudyState, now = Date.now()) {
   const node = getCurrentSpireNode(state);
-  if (!node || !state.profile.spireRun.mapOpen || state.profile.spireRun.pendingRelicReward || !canUseSpireNode(state, node.id)) {
+  if (!node || isSpireHeatSetupOpen(state) || !state.profile.spireRun.mapOpen || state.profile.spireRun.pendingRelicReward || !canUseSpireNode(state, node.id)) {
     return state;
   }
   const revealedState = node.kind === "unknown" ? revealUnknownSpireNode(state, node, now) : state;
@@ -1088,7 +1212,7 @@ export function enterSpireNode(state: StudyState, now = Date.now()) {
       spireRun: {
         ...enteredState.profile.spireRun,
         mapOpen: false,
-        roundQuestionIds: isCombatNode(enteredNode) ? pickRoundQuestions(enteredState.profile.spireRun, enteredNode, state.profile.spireRun.mapSeed + now, state.profile.spireRun.roundQuestionIds, getRoundQuestionCount(enteredNode, now)) : [],
+        roundQuestionIds: isCombatNode(enteredNode) ? pickRoundQuestions(enteredState.profile.spireRun, enteredNode, state.profile.spireRun.mapSeed + now, state.profile.spireRun.roundQuestionIds, getRoundQuestionCount(enteredState.profile.spireRun, enteredNode, now)) : [],
         roundSolvedIds: [],
         runCodeQuestionIds: [],
         tierIndex: getTierIndex(enteredNode?.rating || node.rating)
@@ -1174,14 +1298,18 @@ function completeSpireNode(state: StudyState, node: SpireMapNode, now: number, s
       }
     };
   }
-  const nextCampaign = node.kind === "boss" && !node.nextIds.length ? getNextSpireCampaignStage(rewarded.profile.spireRun) : null;
+  const finalBossCleared = node.kind === "boss" && !node.nextIds.length;
+  if (finalBossCleared && rewarded.profile.spireRun.act >= 4) {
+    return completeVictoriousRun(rewarded, now);
+  }
+  const nextCampaign = finalBossCleared ? getNextSpireCampaignStage(rewarded.profile.spireRun) : null;
   if (nextCampaign) {
     return {
       ...rewarded,
       currentId: null,
       profile: {
         ...rewarded.profile,
-        spireRun: createSpireRun(now + rewarded.profile.spireRun.mapSeed, nextCampaign.act, nextCampaign.difficulty)
+        spireRun: createSpireRun(now + rewarded.profile.spireRun.mapSeed, nextCampaign.act, nextCampaign.difficulty, rewarded.profile.spireRun.heatConditions)
       }
     };
   }
@@ -1202,6 +1330,38 @@ function completeSpireNode(state: StudyState, node: SpireMapNode, now: number, s
         runCodeQuestionIds: [],
         tierIndex: Math.min(SPIRE_RATINGS.length - 1, rewarded.profile.spireRun.tierIndex + 1)
       }
+    }
+  };
+}
+
+function completeVictoriousRun(state: StudyState, now: number): StudyState {
+  const completedHeat = getHeatLevel(state.profile.spireRun.heatConditions);
+  const metaProgress = {
+    ...state.profile.metaProgress,
+    heatUnlocked: true,
+    highestHeat: Math.max(state.profile.metaProgress.highestHeat || 0, completedHeat)
+  };
+  const nextRun = createSpireRun(now + state.profile.spireRun.mapSeed, 1, "normal", state.profile.spireRun.heatConditions, true);
+  const nextState = {
+    ...state,
+    currentId: null,
+    profile: {
+      ...state.profile,
+      activePotionEffects: [],
+      inventory: [],
+      inventorySlots: {},
+      metaProgress,
+      relics: [],
+      shopStock: [],
+      spireRun: nextRun
+    }
+  };
+  return {
+    ...nextState,
+    profile: {
+      ...nextState.profile,
+      coins: getMetaStartingGoldBonus(nextState),
+      health: getMaxHealth(nextState)
     }
   };
 }
@@ -1728,11 +1888,20 @@ function getNodeX(seed: number, tierIndex: number, column: number) {
 
 function getTierIndex(rating: number) { return Math.max(FIRST_TIER, SPIRE_RATINGS.findIndex((row) => row === rating)); }
 
-function getRoundQuestionCount(node: SpireMapNode, now: number) { return node.kind === "elite" || node.kind === "boss" ? MAX_ROUND_QUESTION_COUNT : MIN_ROUND_QUESTION_COUNT + Math.floor(getRoll(`${node.id}:${now}:round-count`) * (MAX_ROUND_QUESTION_COUNT - MIN_ROUND_QUESTION_COUNT + 1)); }
+function getRoundQuestionCount(run: SpireRun, node: SpireMapNode, now: number) {
+  const baseCount = node.kind === "elite" || node.kind === "boss"
+    ? MAX_ROUND_QUESTION_COUNT + getHeatEliteQuestionBonus(run)
+    : MIN_ROUND_QUESTION_COUNT + Math.floor(getRoll(`${node.id}:${now}:round-count`) * (MAX_ROUND_QUESTION_COUNT - MIN_ROUND_QUESTION_COUNT + 1)) + getHeatExtraRoomQuestions(run);
+  return Math.max(MIN_ROUND_QUESTION_COUNT, Math.min(MAX_ROUND_QUESTION_COUNT + 2, baseCount));
+}
 
 function pickRoundQuestions(run: SpireRun, node: SpireMapNode, seed: number, previousIds: string[], count: number) {
   const effectiveRating = getEffectiveSpireRating(run, node.rating);
-  const targetRating = node.kind === "elite" || node.kind === "boss" ? effectiveRating + ELITE_RATING_BOOST : effectiveRating;
+  const targetRating = node.kind === "boss"
+    ? effectiveRating + ELITE_RATING_BOOST + Math.round((getHeatBossMultiplier(run) - 1) * 500)
+    : node.kind === "elite"
+      ? effectiveRating + ELITE_RATING_BOOST + Math.round((getHeatEliteMultiplier(run) - 1) * 400)
+      : effectiveRating;
   const ranked = [...questions]
     .filter((question) => !previousIds.includes(question.id))
     .sort((a, b) => getQuestionSortValue(node, b, targetRating, seed) - getQuestionSortValue(node, a, targetRating, seed));
@@ -1741,7 +1910,7 @@ function pickRoundQuestions(run: SpireRun, node: SpireMapNode, seed: number, pre
 
 function getQuestionSortValue(node: SpireMapNode, question: Question, targetRating: number, seed: number) { const ratingFit = RATING_FIT_BASE - Math.abs(question.rating - targetRating); const eliteBonus = node.kind === "elite" || node.kind === "boss" ? getUniqueMonsterBonusCount(question) * ELITE_BONUS_SORT_WEIGHT : 0; return ratingFit + eliteBonus + getRoll(`${seed}:${question.id}`); }
 
-function getEffectiveSpireRating(run: Pick<SpireRun, "act" | "difficulty">, rating: number) {
+function getEffectiveSpireRating(run: Pick<SpireRun, "act" | "difficulty" | "heatConditions">, rating: number) {
   return rating + getSpireCampaignRatingBonus(run);
 }
 

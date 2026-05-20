@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { questions } from "../data/questions";
-import { getSpireDifficultyModifiers } from "./campaignCore";
+import { getHeatHealingMultiplier, getHeatTimerPenaltyPercent, getSpireDifficultyModifiers } from "./campaignCore";
 import { createDropItem, EQUIPMENT_SLOTS, getActiveSetBonusesForItems, SLOT_LABELS } from "./itemCore";
 import { applyEloResult, DEFAULT_PLAYER_RATING, getEstimatedRating } from "./ratingCore";
 import { getRelicModifierTotals, normalizeRelics } from "./relicCore";
@@ -86,7 +86,7 @@ export const getQuestionTimeLimitMs = (question: Question) => {
 export const getModifiedQuestionTimeLimitMs = (state: StudyState, question: Question) => {
   const modifiers = getRunModifierTotals(state);
   const timerPauseSeconds = Math.max(0, Math.floor(modifiers.timerPauseSeconds || 0));
-  const timerPenalty = Math.min(80, Math.max(0, modifiers.timerPenaltyPercent || 0));
+  const timerPenalty = Math.min(80, Math.max(0, (modifiers.timerPenaltyPercent || 0) + getHeatTimerPenaltyPercent(state.profile.spireRun)));
   return Math.max(MS_PER_MINUTE, Math.round(getQuestionTimeLimitMs(question) * (1 - timerPenalty / PERCENT)) + timerPauseSeconds * MS_PER_SECOND);
 };
 
@@ -257,6 +257,8 @@ function normalizeMetaProgress(progress: Partial<StudyState["profile"]["metaProg
   const fallback = createDefaultMetaProgress();
   return {
     currency: Math.max(0, Math.floor(progress?.currency || 0)),
+    heatUnlocked: Boolean(progress?.heatUnlocked),
+    highestHeat: Math.max(0, Math.floor(progress?.highestHeat || 0)),
     totalEarned: Math.max(0, Math.floor(progress?.totalEarned || 0)),
     upgrades: {
       coinPurse: normalizeMetaUpgradeRank(progress?.upgrades?.coinPurse, fallback.upgrades.coinPurse),
@@ -267,7 +269,7 @@ function normalizeMetaProgress(progress: Partial<StudyState["profile"]["metaProg
 }
 
 function createDefaultMetaProgress(): StudyState["profile"]["metaProgress"] {
-  return { currency: 0, totalEarned: 0, upgrades: { coinPurse: 0, relicChoice: 0, toughStart: 0 } };
+  return { currency: 0, heatUnlocked: false, highestHeat: 0, totalEarned: 0, upgrades: { coinPurse: 0, relicChoice: 0, toughStart: 0 } };
 }
 
 function normalizeMetaUpgradeRank(value: number | undefined, fallback: number) {
@@ -572,7 +574,7 @@ export const getCriticalDamageMultiplier = (state: StudyState) => {
 
 export const getHealingMultiplier = (state: StudyState) => {
   const modifiers = getRunModifierTotals(state);
-  return Math.max(0.1, 1 + (modifiers.increasedHealingReceivedPercent || 0) / MODIFIER_PERCENT_BASE);
+  return Math.max(0.05, (1 + (modifiers.increasedHealingReceivedPercent || 0) / MODIFIER_PERCENT_BASE) * getHeatHealingMultiplier(state.profile.spireRun));
 };
 
 export const applyHealingReceived = (state: StudyState, amount: number) => Math.max(0, Math.round(amount * getHealingMultiplier(state)));
@@ -990,7 +992,7 @@ function applyQuestionRewards(next: StudyState, question: Question | undefined) 
   next.profile.statPoints = leveled.profile.statPoints;
   next.profile.statPointsAwardedLevel = leveled.profile.statPointsAwardedLevel;
   const modifiers = getRunModifierTotals(next);
-  next.profile.health = Math.min(getMaxHealth(next), next.profile.health + applyHealingReceived(next, (modifiers.lifeOnKill || 0) + (modifiers.healthRegen || 0) + getWarriorSkillBonusTotals(next).lifeOnKill));
+  next.profile.health = Math.min(getMaxHealth(next), next.profile.health + applyHealingReceived(next, (modifiers.lifeOnKill || 0) + getWarriorSkillBonusTotals(next).lifeOnKill));
 }
 
 function applyQuestionDrop(next: StudyState, question: Question | undefined, state: StudyState, now: number) {

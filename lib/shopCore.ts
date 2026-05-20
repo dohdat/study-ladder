@@ -1,5 +1,6 @@
 import { EQUIPMENT_SLOTS, createDropItem } from "./itemCore";
 import { getRelicCost, getRelicModifierTotals, grantRelic, rollRelic } from "./relicCore";
+import { getHeatShopPriceIncreasePercent } from "./campaignCore";
 import type { ActivePotionEffect, CharacterStats, Difficulty, Question, ShopItem, StudyState } from "../types/study";
 
 const HASH_SEED = 2166136261;
@@ -79,7 +80,7 @@ export function canBuyShopItem(state: StudyState, listing: ShopItem, maxHealth: 
 
 export function getShopItemCost(state: StudyState, listing: ShopItem) {
   const discount = Math.min(MAX_SHOP_DISCOUNT_PERCENT, Math.max(0, getRelicModifierTotals(state).shopDiscountPercent || 0));
-  const priceIncrease = Math.max(0, getRelicModifierTotals(state).shopPriceIncreasePercent || 0);
+  const priceIncrease = Math.max(0, (getRelicModifierTotals(state).shopPriceIncreasePercent || 0) + getHeatShopPriceIncreasePercent(state.profile.spireRun));
   return Math.max(1, Math.ceil(listing.cost * (100 - discount + priceIncrease) / 100));
 }
 

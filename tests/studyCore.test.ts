@@ -15,6 +15,7 @@ import {
   MAX_HEALTH,
   MODIFIER_KEYS,
   applyIncomingDamage,
+  applyHealingReceived,
   applyScheduleResult,
   applyHealthPenalty,
   buyHint,
@@ -220,19 +221,20 @@ describe("studyCore", () => {
     expect(getDueQuestions(state, 1000)).toEqual([]);
   });
 
-  it("applies nightmare and hell campaign reward and resistance modifiers", () => {
+  it("applies heat modifiers to damage healing and timers", () => {
     const question = questions[0];
     const normal = defaultState();
-    const nightmare = defaultState();
-    nightmare.profile.spireRun.difficulty = "nightmare";
-    const hell = defaultState();
-    hell.profile.spireRun.difficulty = "hell";
+    const heated = defaultState();
+    heated.profile.spireRun.heatConditions.hardLabor = 2;
+    heated.profile.spireRun.heatConditions.lastingConsequences = 2;
+    heated.profile.spireRun.heatConditions.tightDeadline = 2;
 
-    expect(getCoinReward(question, nightmare)).toBeGreaterThan(getCoinReward(question, normal));
-    expect(getExperienceReward(question, hell)).toBe(0);
-    expect(getManaReward(question, hell)).toBe(0);
-    expect(getHealthLoss(nightmare, 10, "fire")).toBeGreaterThan(getHealthLoss(normal, 10, "fire"));
-    expect(getHealthLoss(hell, 10, "fire")).toBeGreaterThan(getHealthLoss(nightmare, 10, "fire"));
+    expect(getCoinReward(question, heated)).toBe(getCoinReward(question, normal));
+    expect(getExperienceReward(question, heated)).toBe(0);
+    expect(getManaReward(question, heated)).toBe(0);
+    expect(getHealthLoss(heated, 10, "fire")).toBeGreaterThan(getHealthLoss(normal, 10, "fire"));
+    expect(applyHealingReceived(heated, 20)).toBeLessThan(applyHealingReceived(normal, 20));
+    expect(getModifiedQuestionTimeLimitMs(heated, question)).toBeLessThan(getModifiedQuestionTimeLimitMs(normal, question));
   });
 
   it("picks unseen rating-fit questions and supports next-question navigation", () => {
@@ -621,9 +623,11 @@ describe("studyCore", () => {
   });
 
   it("keeps monster fights in a reasonable correct-submission window", () => {
-    const question = { ...questions.find((row) => row.difficulty === 5)!, id: "paced-hell-monster", rating: 2600 };
+    const question = { ...questions.find((row) => row.difficulty === 5)!, id: "paced-heat-monster", rating: 2600 };
     const state = defaultState();
-    state.profile.spireRun.difficulty = "hell";
+    state.profile.spireRun.heatConditions.calisthenicsProgram = 2;
+    state.profile.spireRun.heatConditions.damageControl = 2;
+    state.profile.spireRun.heatConditions.hardLabor = 2;
     let health = getCampaignMonsterMaxHealth(state, question);
     let hits = 0;
 

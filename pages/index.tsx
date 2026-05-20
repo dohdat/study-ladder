@@ -752,9 +752,15 @@ export default function Home() {
     freshState.totalCorrect = state.totalCorrect;
     freshState.profile.unlockedAchievementIds = state.profile.unlockedAchievementIds;
     freshState.profile.metaProgress = {
+      ...state.profile.metaProgress,
       currency: state.profile.metaProgress.currency + 5,
       totalEarned: state.profile.metaProgress.totalEarned + 5,
       upgrades: { ...state.profile.metaProgress.upgrades }
+    };
+    freshState.profile.spireRun = {
+      ...freshState.profile.spireRun,
+      heatConditions: { ...state.profile.spireRun.heatConditions },
+      heatSetupOpen: Boolean(state.profile.metaProgress.heatUnlocked)
     };
     freshState.profile.coins = getMetaStartingGoldBonus(freshState);
     freshState.profile.health = getMaxHealth(freshState);
@@ -772,7 +778,7 @@ export default function Home() {
     setRunTone("default");
     setRunStatus("Run ended. Preserved question progress and gained 5 insight.");
     hints.clearHint();
-  }, [hints, runTimer, state.cards, state.profile.metaProgress.currency, state.profile.metaProgress.totalEarned, state.profile.unlockedAchievementIds, state.totalCorrect]);
+  }, [hints, runTimer, state.cards, state.profile.metaProgress, state.profile.spireRun.heatConditions, state.profile.unlockedAchievementIds, state.totalCorrect]);
   const pauseQuestionForFocusLoss = useCallback(() => { activeRunId.current = null; clearRunTimer(runTimer); setRunning(false); setResults([]); setConsoleRunResult(null); setSessionStarted(false); hints.clearHint(); }, [hints, runTimer]);
   const isDead = state.profile.health <= 0;
   useStudyTimeTracker(state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished && !isDead);

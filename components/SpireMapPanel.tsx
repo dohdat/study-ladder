@@ -6,10 +6,10 @@ import { HeroSiegeButton, getHeroSiegeMenuButtonAsset } from "./HeroSiegeUi";
 import { CoinIcon } from "./CoinIcon";
 import { ShopPanel } from "./ShopPanel";
 import { RelicIcon } from "./RelicIcon";
-import { getSpireCampaignLabel, getSpireDifficultyModifiers } from "../lib/campaignCore";
-import { choosePendingRelicReward, claimCurrentSpireRoomReward, digCurrentSpireRoomRelic, enterSpireNode, getCurrentSpireNode, getRestSpecialAction, isCombatNode, leaveSpireRoom, rerollPendingRelicReward, selectSpireNode, skipPendingRelicReward } from "../lib/spireMapCore";
+import { HEAT_CONDITION_DEFINITIONS, MAX_HEAT, getHeatLevel, getSpireCampaignLabel, getSpireDifficultyModifiers } from "../lib/campaignCore";
+import { canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, digCurrentSpireRoomRelic, enterSpireNode, getCurrentSpireNode, getRestSpecialAction, isCombatNode, isSpireHeatSetupOpen, leaveSpireRoom, rerollPendingRelicReward, resetSpireHeat, selectPendingRelicReward, selectSpireNode, setSpireHeatConditionRank, skipPendingRelicReward, startSpireHeatRun } from "../lib/spireMapCore";
 import { formatModifier } from "../lib/modifierFormat";
-import { getRelicRarityColor, getRelicRarityLabel } from "../lib/heroSiegeQuality";
+import { getRelicRarityColor } from "../lib/heroSiegeQuality";
 import type { Relic, SpireAct, SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
 import campfireArt from "../assets/hero_siege_map/campfire.png";
 import chestArt from "../assets/hero_siege_map/chest.png";
@@ -89,6 +89,9 @@ const ACT_LABEL_TOP = 16;
 const ACT_LABEL_BORDER = "1px solid rgba(223, 195, 122, 0.72)";
 const ACT_LABEL_BG = "linear-gradient(180deg, rgba(51, 34, 19, 0.96), rgba(15, 12, 8, 0.94))";
 const ACT_LABEL_ASSET = getHeroSiegeMenuButtonAsset();
+const HEAT_PANEL_TOP = 70;
+const HEAT_PANEL_LEFT = 16;
+const HEAT_ROW_ICON_SIZE = 18;
 const NODE_LABELS: Record<SpireNodeKind, string> = {
   boss: "Boss",
   event: "Event",
@@ -142,7 +145,9 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
   return (
     <Paper withBorder p="sm" style={{ background: "var(--mantine-color-dark-7)", ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
       <Box style={{ minWidth: 0, ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
-        {mapOpen ? (
+        {mapOpen && isSpireHeatSetupOpen(props.state) ? (
+          <HeatSetupScreen fillAvailableHeight={props.fillAvailableHeight} setState={props.setState} state={props.state} />
+        ) : mapOpen ? (
           <Box style={{ background: mapBg, border: "1px solid var(--mantine-color-dark-4)", height: props.fillAvailableHeight ? undefined : EXPANDED_MAP_HEIGHT, overflow: "hidden", position: "relative", ...(props.fillAvailableHeight ? FLEX_FILL_STYLE : {}) }}>
             <Box
               className="spire-map-scroll"
@@ -192,7 +197,7 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
             >
               {getMapButtonLabel(node)}
             </HeroSiegeButton>
-            {pendingRelicReward && <PendingRelicRewardPanel floating state={props.state} setState={props.setState} />}
+            {pendingRelicReward && <PendingRelicRewardPanel floating inlineContinue state={props.state} setState={props.setState} />}
           </Box>
         ) : (
           <RoomPanel node={node} setState={props.setState} solved={solved} state={props.state} target={target} />
@@ -276,13 +281,23 @@ function isInteractiveMapTarget(target: EventTarget) {
 }
 
 function RoomPanel(props: { node: SpireMapNode | undefined; setState: React.Dispatch<React.SetStateAction<StudyState>>; solved: number; state: StudyState; target: number }) {
-  if (props.state.profile.spireRun.pendingRelicReward) {
+  const pendingRelicReward = props.state.profile.spireRun.pendingRelicReward;
+  if (pendingRelicReward) {
     return (
       <Stack gap="sm" style={{ minHeight: ROOM_PANEL_MIN_HEIGHT }}>
         <CompactRoomPanel node={props.node} solved={props.solved} state={props.state} target={props.target} />
         <PendingRelicRewardPanel state={props.state} setState={props.setState} />
         <Group justify="flex-end">
-          <HeroSiegeButton disabled={Boolean(props.state.profile.spireRun.pendingRelicReward)} onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
+          <HeroSiegeButton
+            disabled={!pendingRelicReward.selectedRelicId}
+            onClick={() => props.setState((previous) => {
+              const selectedRelicId = previous.profile.spireRun.pendingRelicReward?.selectedRelicId;
+              return selectedRelicId ? choosePendingRelicReward(previous, selectedRelicId) : previous;
+            })}
+            minWidth={104}
+          >
+            Continue
+          </HeroSiegeButton>
         </Group>
       </Stack>
     );
@@ -393,11 +408,15 @@ function TreasureRewardIcons(props: { claim: StudyState["profile"]["spireRun"]["
   );
 }
 
-function PendingRelicRewardPanel(props: { floating?: boolean; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
+function PendingRelicRewardPanel(props: { floating?: boolean; inlineContinue?: boolean; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
   const pending = props.state.profile.spireRun.pendingRelicReward;
   if (!pending) {
     return null;
   }
+  const confirmSelection = () => props.setState((previous) => {
+    const selectedRelicId = previous.profile.spireRun.pendingRelicReward?.selectedRelicId;
+    return selectedRelicId ? choosePendingRelicReward(previous, selectedRelicId) : previous;
+  });
   return (
     <Box
       style={{
@@ -425,19 +444,28 @@ function PendingRelicRewardPanel(props: { floating?: boolean; setState: React.Di
             Reroll {pending.rerollsRemaining}
           </HeroSiegeButton>
           <HeroSiegeButton onClick={() => props.setState((previous) => skipPendingRelicReward(previous))} minWidth={116}>Skip +{pending.skipMetaCurrency}</HeroSiegeButton>
+          {props.inlineContinue ? (
+            <HeroSiegeButton disabled={!pending.selectedRelicId} onClick={confirmSelection} minWidth={116}>
+              Continue
+            </HeroSiegeButton>
+          ) : null}
         </Group>
       </Group>
       <Box style={{ display: "grid", gap: 10, gridTemplateColumns: `repeat(${Math.min(4, pending.choices.length)}, minmax(0, 1fr))` }}>
         {pending.choices.map((relic) => (
-          <RelicChoiceCard key={relic.id} relic={relic} onChoose={() => props.setState((previous) => choosePendingRelicReward(previous, relic.id))} />
+          <RelicChoiceCard
+            key={relic.id}
+            relic={relic}
+            selected={pending.selectedRelicId === relic.id}
+            onChoose={() => props.setState((previous) => selectPendingRelicReward(previous, relic.id))}
+          />
         ))}
       </Box>
     </Box>
   );
 }
 
-function RelicChoiceCard(props: { onChoose: () => void; relic: Relic }) {
-  const rarityLabel = getRelicRarityLabel(props.relic.rarity);
+function RelicChoiceCard(props: { onChoose: () => void; relic: Relic; selected: boolean }) {
   const rarityColor = getRelicRarityColor(props.relic.rarity);
   const effects = (props.relic.modifiers || []).map((modifier) => formatModifier(modifier.key, modifier.value)).filter(Boolean);
   return (
@@ -453,8 +481,10 @@ function RelicChoiceCard(props: { onChoose: () => void; relic: Relic }) {
       }}
       style={{
         background: "linear-gradient(180deg, rgba(15, 13, 11, 0.96), rgba(5, 4, 4, 0.98))",
-        border: `1px solid ${rarityColor}`,
-        boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.86)",
+        border: `1px solid ${props.selected ? "#fff0a8" : rarityColor}`,
+        boxShadow: props.selected
+          ? `inset 0 0 0 1px rgba(0, 0, 0, 0.86), 0 0 0 2px ${rarityColor}, 0 0 18px rgba(255, 225, 94, 0.42)`
+          : "inset 0 0 0 1px rgba(0, 0, 0, 0.86)",
         cursor: "pointer",
         minHeight: 180,
         padding: 10
@@ -464,7 +494,6 @@ function RelicChoiceCard(props: { onChoose: () => void; relic: Relic }) {
         <RelicIcon relic={props.relic} size={46} />
         <Box style={{ minWidth: 0 }}>
           <Text size="sm" fw={900} lineClamp={1} style={{ color: rarityColor }}>{props.relic.name}</Text>
-          <Text size="10px" fw={900} tt="uppercase" c="dimmed">{rarityLabel} Relic</Text>
         </Box>
       </Group>
       <Stack gap={4} mt={8}>
@@ -620,6 +649,140 @@ function ActMapLabel(props: { state: StudyState }) {
         {getSpireCampaignLabel(props.state.profile.spireRun)} {difficulty.resistancePenalty ? `(${difficulty.resistancePenalty}% Resist)` : ""}
       </Text>
     </Box>
+  );
+}
+
+function HeatSetupScreen(props: { fillAvailableHeight?: boolean; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
+  const mapBg = getActMapBackground(props.state.profile.spireRun.act);
+  return (
+    <Box
+      style={{
+        alignItems: "center",
+        background: mapBg,
+        border: "1px solid var(--mantine-color-dark-4)",
+        display: "flex",
+        height: props.fillAvailableHeight ? undefined : EXPANDED_MAP_HEIGHT,
+        justifyContent: "center",
+        overflow: "hidden",
+        padding: 18,
+        position: "relative",
+        ...(props.fillAvailableHeight ? FLEX_FILL_STYLE : {})
+      }}
+    >
+      <MapBackdrop act={props.state.profile.spireRun.act} />
+      <HeatPanel embedded setState={props.setState} showStart state={props.state} />
+    </Box>
+  );
+}
+
+function HeatPanel(props: { embedded?: boolean; setState: React.Dispatch<React.SetStateAction<StudyState>>; showStart?: boolean; state: StudyState }) {
+  const editable = canEditSpireHeat(props.state);
+  const heat = getHeatLevel(props.state.profile.spireRun.heatConditions);
+  return (
+    <Box
+      style={{
+        background: "linear-gradient(180deg, rgba(44, 38, 33, 0.94), rgba(18, 15, 13, 0.96))",
+        border: ACT_LABEL_BORDER,
+        boxShadow: "0 12px 28px rgba(0, 0, 0, 0.42), inset 0 0 0 1px rgba(0, 0, 0, 0.72)",
+        color: "#f1dfad",
+        left: props.embedded ? undefined : HEAT_PANEL_LEFT,
+        maxWidth: props.embedded ? 760 : 360,
+        padding: props.embedded ? "24px 28px" : "10px 12px",
+        position: props.embedded ? "relative" : "absolute",
+        top: props.embedded ? undefined : HEAT_PANEL_TOP,
+        width: props.embedded ? "min(760px, 100%)" : undefined,
+        zIndex: 5
+      }}
+    >
+      <Group justify="space-between" mb={props.embedded ? 12 : 6} wrap="nowrap">
+        <Box>
+          <Text size={props.embedded ? "lg" : "xs"} fw={900} tt="uppercase" style={{ color: "#fff0b8", textShadow: "0 1px 0 #000" }}>Pact of Conditions</Text>
+          <Text size={props.embedded ? "sm" : "10px"} c="gray.4">Set heat, then start Act I.</Text>
+        </Box>
+        <Badge size={props.embedded ? "lg" : "md"} color={heat > 0 ? "red" : "gray"} variant="filled">Heat {heat}/{MAX_HEAT}</Badge>
+      </Group>
+      <Stack gap={props.embedded ? 7 : 4}>
+        {HEAT_CONDITION_DEFINITIONS.map((condition, index) => {
+          const rank = props.state.profile.spireRun.heatConditions[condition.id] || 0;
+          const canAdd = editable && rank < condition.maxRank && heat + condition.heatPerRank <= MAX_HEAT;
+          const canRemove = editable && rank > 0;
+          return (
+            <Group key={condition.id} justify="space-between" gap={props.embedded ? 14 : 8} wrap="nowrap">
+              <Group gap={props.embedded ? 10 : 7} wrap="nowrap" style={{ minWidth: 0 }}>
+                <Box
+                  style={{
+                    alignItems: "center",
+                    background: rank ? "rgba(222, 72, 72, 0.28)" : "rgba(0, 0, 0, 0.26)",
+                    border: "1px solid rgba(255, 225, 120, 0.24)",
+                    color: rank ? "#ff6b5a" : "#9a8b75",
+                    display: "flex",
+                    fontSize: props.embedded ? 12 : 10,
+                    fontWeight: 900,
+                    height: props.embedded ? 24 : HEAT_ROW_ICON_SIZE,
+                    justifyContent: "center",
+                    width: props.embedded ? 24 : HEAT_ROW_ICON_SIZE
+                  }}
+                >
+                  {index + 1}
+                </Box>
+                <Box style={{ minWidth: 0 }}>
+                  <Text size={props.embedded ? "sm" : "11px"} fw={900} c={rank ? "red.4" : "orange.2"} truncate>{condition.label}</Text>
+                  <Text size={props.embedded ? "xs" : "9px"} c="gray.4" truncate={!props.embedded}>{condition.description}</Text>
+                </Box>
+              </Group>
+              <Group gap={props.embedded ? 7 : 4} wrap="nowrap">
+                <Text size={props.embedded ? "sm" : "11px"} fw={900} c={rank ? "red.3" : "gray.4"} style={{ minWidth: props.embedded ? 54 : 44, textAlign: "right" }}>
+                  {rank}/{condition.maxRank}
+                </Text>
+                <HeatStepButton large={props.embedded} disabled={!canRemove} onClick={() => props.setState((previous) => setSpireHeatConditionRank(previous, condition.id, rank - 1))}>-</HeatStepButton>
+                <HeatStepButton large={props.embedded} disabled={!canAdd} onClick={() => props.setState((previous) => setSpireHeatConditionRank(previous, condition.id, rank + 1))}>+</HeatStepButton>
+                <Text size={props.embedded ? "sm" : "10px"} c="orange.3" fw={900} style={{ minWidth: props.embedded ? 22 : 16 }}>{condition.heatPerRank}</Text>
+              </Group>
+            </Group>
+          );
+        })}
+      </Stack>
+      <Group justify="space-between" mt={props.embedded ? 18 : 8} wrap="nowrap">
+        <Text size={props.embedded ? "sm" : "10px"} c="gray.4">Best clear: heat {props.state.profile.metaProgress.highestHeat || 0}</Text>
+        <Group gap={8} wrap="nowrap">
+          <HeroSiegeButton
+            disabled={!editable || heat === 0}
+            height={props.embedded ? 35 : 26}
+            minWidth={props.embedded ? 82 : 64}
+            onClick={() => props.setState((previous) => resetSpireHeat(previous))}
+            style={{ fontSize: props.embedded ? 12 : 10, padding: props.embedded ? "0 14px" : "0 10px" }}
+          >
+            Clear
+          </HeroSiegeButton>
+          {props.showStart ? (
+            <HeroSiegeButton onClick={() => props.setState((previous) => startSpireHeatRun(previous))} minWidth={126}>
+              Start Act I
+            </HeroSiegeButton>
+          ) : null}
+        </Group>
+      </Group>
+    </Box>
+  );
+}
+
+function HeatStepButton(props: { children: React.ReactNode; disabled: boolean; large?: boolean; onClick: () => void }) {
+  const size = props.large ? 30 : 22;
+  return (
+    <HeroSiegeButton
+      disabled={props.disabled}
+      height={size}
+      minWidth={size}
+      onClick={props.onClick}
+      width={size}
+      style={{
+        fontSize: props.large ? 14 : 11,
+        minWidth: size,
+        padding: 0,
+        width: size
+      }}
+    >
+      {props.children}
+    </HeroSiegeButton>
   );
 }
 

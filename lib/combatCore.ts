@@ -290,7 +290,7 @@ function applyPartialRewards(next: StudyState, question: Question | undefined, r
   }
   next.profile.coins += getCoinReward(question, next);
   const modifiers = getRunModifierTotals(next);
-  next.profile.health = Math.min(getMaxHealth(next), next.profile.health + applyHealingReceived(next, (modifiers.lifeOnKill || 0) + (modifiers.healthRegen || 0) + getWarriorSkillBonusTotals(next).lifeOnKill));
+    next.profile.health = Math.min(getMaxHealth(next), next.profile.health + applyHealingReceived(next, (modifiers.lifeOnKill || 0) + getWarriorSkillBonusTotals(next).lifeOnKill));
   const drop = getQuestionDrop(question, rewardState, now);
   if (drop) {
     next.profile.inventory.push(drop);

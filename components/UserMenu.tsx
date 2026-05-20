@@ -59,6 +59,7 @@ import {
   type HeroSiegeWikiItem
 } from "../lib/heroSiegeWikiCatalog";
 import { RELIC_DEFINITIONS } from "../lib/relicCore";
+import { formatModifier } from "../lib/modifierFormat";
 import {
   META_UPGRADE_DEFINITIONS,
   canPurchaseMetaUpgrade,
@@ -76,7 +77,7 @@ import {
   spendStatPoint
 } from "../lib/studyCore";
 import { getMonsterAttackType, getMonsterMaxHealth, getMonsterResistances, getUniqueMonsterBonuses } from "../lib/monsterCore";
-import type { CharacterStatKey, Difficulty, ItemModifierKey, Question, Relic, RelicRarity, StudyState } from "../types/study";
+import type { CharacterStatKey, Difficulty, Question, Relic, RelicRarity, StudyState } from "../types/study";
 
 const ICON_SIZE = 16;
 const MENU_WIDTH = 180;
@@ -716,7 +717,6 @@ function RelicRarityFilterButton(props: { active: boolean; count: number; onClic
 
 function RelicWikiCard(props: { relic: Relic }) {
   const rarityColor = getRelicRarityColor(props.relic.rarity);
-  const rarityLabel = getRelicRarityLabel(props.relic.rarity);
   return (
     <Box p="sm" style={{ background: "var(--mantine-color-dark-7)", border: `1px solid ${rarityColor}66`, borderRadius: 6 }}>
       <Group gap="sm" align="flex-start" wrap="nowrap">
@@ -724,18 +724,10 @@ function RelicWikiCard(props: { relic: Relic }) {
         <Box>
           <Group gap="xs" mb={2}>
             <Text size="sm" fw={800} c={rarityColor}>{props.relic.name}</Text>
-            <Badge size="xs" variant="outline" style={{ borderColor: rarityColor, color: rarityColor }}>{rarityLabel}</Badge>
             {props.relic.source !== "any" && <Badge size="xs" color="red" variant="outline">{props.relic.source}</Badge>}
           </Group>
           <Text size="xs" c="dimmed">{props.relic.description}</Text>
-          {props.relic.wikiStats?.length ? (
-            <Stack gap={1} mt={4}>
-              {props.relic.wikiStats.map((stat) => (
-                <Text key={stat} size="10px" c="gray.4">{stat}</Text>
-              ))}
-            </Stack>
-          ) : null}
-          <Text size="xs" mt={4} c="yellow.3">Current hooks: {formatRelicModifiers(props.relic)}</Text>
+          <Text size="xs" mt={4} c="yellow.3">{formatRelicModifiers(props.relic)}</Text>
         </Box>
       </Group>
     </Box>
@@ -961,17 +953,9 @@ function getPageItems<T>(items: T[], page: number, pageSize: number) {
 function formatRelicModifiers(relic: Relic) {
   const modifiers = relic.modifiers || [];
   if (!modifiers.length) {
-    return "No stat modifiers";
+    return relic.description;
   }
-  return modifiers.map((modifier) => `${formatModifierKey(modifier.key)} ${formatModifierValue(modifier.value)}`).join(", ");
-}
-
-function formatModifierKey(key: ItemModifierKey) {
-  return key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
-}
-
-function formatModifierValue(value: number) {
-  return value > 0 ? `+${value}` : `${value}`;
+  return modifiers.map((modifier) => formatModifier(modifier.key, modifier.value)).filter(Boolean).join(", ") || relic.description;
 }
 
 function SettingsPanel(props: { setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {

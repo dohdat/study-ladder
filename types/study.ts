@@ -199,6 +199,23 @@ export type SpireNodeKind = "unknown" | "merchant" | "treasure" | "rest" | "enem
 export type UnknownEncounterKind = "elite" | "monster" | "shop" | "treasure";
 export type SpireAct = 1 | 2 | 3 | 4;
 export type SpireDifficulty = "normal" | "nightmare" | "hell";
+export type HeatConditionId =
+  | "approvalProcess"
+  | "benefitsPackage"
+  | "calisthenicsProgram"
+  | "convenienceFee"
+  | "damageControl"
+  | "extremeMeasures"
+  | "forcedOvertime"
+  | "hardLabor"
+  | "heightenedSecurity"
+  | "jurySummons"
+  | "lastingConsequences"
+  | "middleManagement"
+  | "routineInspection"
+  | "tightDeadline"
+  | "underworldCustoms";
+export type HeatConditionRanks = Record<HeatConditionId, number>;
 
 export type SpireMapNode = {
   column: number;
@@ -214,6 +231,8 @@ export type SpireRun = {
   act: SpireAct;
   availableNodeIds: string[];
   difficulty: SpireDifficulty;
+  heatConditions: HeatConditionRanks;
+  heatSetupOpen: boolean;
   tierIndex: number;
   currentNodeId: string;
   completedNodeIds: string[];
@@ -239,6 +258,7 @@ export type RelicRewardChoice = {
   nodeId: string;
   rerollsRemaining: number;
   rewardKind: "enemy" | "elite" | "boss" | "treasure" | "event" | "rest";
+  selectedRelicId: string | null;
   seed: string;
   skipMetaCurrency: number;
 };
@@ -312,6 +332,8 @@ export type ShopItem =
 
 export type MetaProgress = {
   currency: number;
+  heatUnlocked: boolean;
+  highestHeat: number;
   totalEarned: number;
   upgrades: {
     coinPurse: number;

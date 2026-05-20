@@ -6,7 +6,7 @@ import type { ActiveWarriorSkillId, StudyState } from "../types/study";
 import { CoinIcon } from "./CoinIcon";
 import { ImpactEffects, type CombatImpactVisual } from "./MonsterEncounter";
 import { RelicIcon } from "./RelicIcon";
-import { getRelicRarityColor, getRelicRarityLabel } from "../lib/heroSiegeQuality";
+import { getRelicRarityColor } from "../lib/heroSiegeQuality";
 import { formatModifier } from "../lib/modifierFormat";
 import type { Relic } from "../types/study";
 
@@ -164,14 +164,10 @@ function RelicStrip(props: { relics: Relic[] }) {
 function RelicMiniTooltip(props: { relic: Relic }) {
   const effects = (props.relic.modifiers || []).map((modifier) => formatModifier(modifier.key, modifier.value)).filter(Boolean);
   const rarityColor = getRelicRarityColor(props.relic.rarity);
-  const rarityLabel = getRelicRarityLabel(props.relic.rarity);
   return (
     <Box maw={296}>
       <Text size="sm" fw={900} tt="uppercase" lh={1.15} c={rarityColor} style={{ textShadow: "0 2px 0 #000" }}>
         {props.relic.name}
-      </Text>
-      <Text size="11px" fw={800} mt={3} c="gray.2" lh={1.2}>
-        {rarityLabel} Relic
       </Text>
       <Text size="12px" mt={7} c="blue.2" lh={1.28} style={{ textShadow: "0 1px 0 #000" }}>
         {effects.join(", ") || props.relic.description}
