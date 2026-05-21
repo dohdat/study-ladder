@@ -61,7 +61,6 @@ type MonsterDefinition = {
 type PortraitStatus = {
   color: string;
   description: string;
-  label: string;
 };
 
 export type MonsterWikiEntry = MonsterDefinition & {
@@ -81,6 +80,7 @@ export type MonsterDamagePop = {
   maxHealth: number;
   questionId: string;
   remainingHealth: number;
+  statusEffects?: string[];
 };
 
 export type CombatImpactVisual = {
@@ -305,10 +305,6 @@ function getMonsterEffectBadgeColor(effect: string) {
   return "dark";
 }
 
-function formatStatusLabel(status: string) {
-  return status.replace(/\s+Enchanted$/i, "").replace("Extra ", "");
-}
-
 function getStatusColor(status: string) {
   if (/fire/i.test(status)) {
     return "#ff8a3d";
@@ -354,21 +350,20 @@ function getEnemyPortraitStatuses(bonuses: string[], attackType: DamageType, enr
   return [
     ...(attackType !== "physical" ? [{
       color: getDamageStatusColor(attackType),
-      description: `Enemy attacks deal ${formatDamageType(attackType)} damage.`,
-      label: formatDamageType(attackType)
+      description: `Enemy attacks deal ${formatDamageType(attackType)} damage.`
     }] : []),
-    ...(enraged ? [{ color: getStatusColor("Enraged"), description: "At half health, this enemy hits harder.", label: "Enraged" }] : []),
+    ...(enraged ? [{ color: getStatusColor("Enraged"), description: "At half health, this enemy hits harder." }] : []),
     ...bonuses.map((bonus) => ({
       color: getStatusColor(bonus),
-      description: getUniqueMonsterBonusDescription(bonus),
-      label: formatStatusLabel(bonus)
+      description: getUniqueMonsterBonusDescription(bonus)
     }))
   ].slice(0, 5);
 }
 
 function MonsterAvatar(props: { damagePop?: MonsterDamagePop | null; monster: MonsterDefinition; statuses: PortraitStatus[] }) {
   const damageTypes = props.damagePop?.damageTypes || [];
-  const portraitStatusColor = props.statuses[0]?.color;
+  const impactStatusColor = getDominantImpactStatusColor(props.damagePop?.statusEffects || []);
+  const portraitStatusColor = impactStatusColor || props.statuses[0]?.color;
   return (
     <Box
       aria-hidden
@@ -394,7 +389,7 @@ function MonsterAvatar(props: { damagePop?: MonsterDamagePop | null; monster: Mo
         src={props.monster.art}
         style={{
           display: "block",
-          filter: props.monster.filter,
+          filter: getAvatarImageFilter(props.monster.filter, portraitStatusColor),
           height: "100%",
           imageRendering: "pixelated",
           objectFit: "contain",
@@ -403,18 +398,22 @@ function MonsterAvatar(props: { damagePop?: MonsterDamagePop | null; monster: Mo
         }}
       />
       {portraitStatusColor && <MonsterPortraitStatusWash color={portraitStatusColor} />}
-      <PortraitStatusMarkers statuses={props.statuses} />
       {props.damagePop && <ImpactEffects key={`${props.damagePop.id}-effects`} damageTypes={damageTypes} />}
       {props.damagePop && <DamagePop key={props.damagePop.id} damage={props.damagePop} />}
     </Box>
   );
 }
 
+function getAvatarImageFilter(baseFilter: string | undefined, statusColor: string | undefined) {
+  const statusFilter = statusColor ? "saturate(1.45) brightness(1.08)" : "";
+  return [baseFilter, statusFilter].filter(Boolean).join(" ") || undefined;
+}
+
 function MonsterPortraitStatusWash(props: { color: string }) {
   return (
     <Box
       style={{
-        background: `radial-gradient(circle at 50% 48%, ${props.color}55, ${props.color}1c 42%, transparent 72%)`,
+        background: `radial-gradient(circle at 50% 48%, ${props.color}82, ${props.color}35 42%, transparent 74%)`,
         height: "100%",
         left: 0,
         mixBlendMode: "screen",
@@ -428,53 +427,6 @@ function MonsterPortraitStatusWash(props: { color: string }) {
   );
 }
 
-function PortraitStatusMarkers(props: { statuses: PortraitStatus[] }) {
-  if (!props.statuses.length) {
-    return null;
-  }
-  return (
-    <Box
-      style={{
-        display: "grid",
-        gap: 3,
-        left: 3,
-        position: "absolute",
-        top: 3,
-        zIndex: 7
-      }}
-    >
-      {props.statuses.map((status) => (
-        <Tooltip key={`${status.label}-${status.description}`} label={status.description} withArrow multiline withinPortal={false}>
-          <Box
-            component="span"
-            tabIndex={0}
-            style={{
-              background: `linear-gradient(180deg, ${status.color}dd, rgba(8, 5, 8, 0.92))`,
-              border: `1px solid ${status.color}`,
-              boxShadow: "0 2px 0 rgba(0, 0, 0, 0.76), inset 0 0 0 1px rgba(0, 0, 0, 0.72)",
-              color: "#fff7d6",
-              cursor: "help",
-              fontSize: 8,
-              fontWeight: 900,
-              lineHeight: "12px",
-              maxWidth: 62,
-              overflow: "hidden",
-              padding: "0 3px",
-              pointerEvents: "auto",
-              textOverflow: "ellipsis",
-              textShadow: "0 1px 0 #000",
-              textTransform: "uppercase",
-              whiteSpace: "nowrap"
-            }}
-          >
-            {status.label}
-          </Box>
-        </Tooltip>
-      ))}
-    </Box>
-  );
-}
-
 export function ImpactEffects(props: { damageTypes: CombatImpactType[] }) {
   const fallbackTypes: CombatImpactType[] = ["physical"];
   const uniqueTypes = Array.from(new Set(props.damageTypes.length ? props.damageTypes : fallbackTypes));
@@ -484,6 +436,10 @@ export function ImpactEffects(props: { damageTypes: CombatImpactType[] }) {
       {uniqueTypes.map((type) => type === "physical" ? null : <ElementalImpact key={type} type={type} />)}
     </>
   );
+}
+
+function getDominantImpactStatusColor(statuses: string[]) {
+  return statuses.length ? getStatusColor(statuses[0]) : null;
 }
 
 function HitSlash() {

@@ -355,7 +355,6 @@ function AvatarIllustration(props: { impact?: CombatImpactVisual | null }) {
         {statusColor && <PlayerPortraitStatusWash color={statusColor} />}
         {props.impact && <ImpactEffects key={`${props.impact.id}-player-impact`} damageTypes={props.impact.damageTypes} />}
         {props.impact && <PlayerDamagePop key={props.impact.id} impact={props.impact} />}
-        {props.impact?.statusEffects?.length ? <PlayerStatusImpact key={`${props.impact.id}-statuses`} statuses={props.impact.statusEffects} /> : null}
       </Box>
     </Box>
   );
@@ -403,55 +402,6 @@ function PlayerDamagePop(props: { impact: CombatImpactVisual }) {
   );
 }
 
-function PlayerStatusImpact(props: { statuses: string[] }) {
-  return (
-    <Box
-      style={{
-        bottom: 6,
-        display: "grid",
-        gap: 3,
-        left: 6,
-        maxWidth: 104,
-        pointerEvents: "auto",
-        position: "absolute",
-        zIndex: 9
-      }}
-    >
-      {props.statuses.map((status) => (
-        <Tooltip key={status} label={getStatusImpactDescription(status)} withArrow multiline zIndex={3000}>
-          <Box
-            component="span"
-            tabIndex={0}
-            style={{
-              background: getStatusImpactBackground(status),
-              border: `1px solid ${getStatusImpactColor(status)}`,
-              boxShadow: "0 2px 0 rgba(0, 0, 0, 0.72), inset 0 0 0 1px rgba(0, 0, 0, 0.7)",
-              color: "#fff7d6",
-              cursor: "help",
-              fontSize: 9,
-              fontWeight: 900,
-              lineHeight: "13px",
-              overflow: "hidden",
-              padding: "0 4px",
-              pointerEvents: "auto",
-              textOverflow: "ellipsis",
-              textShadow: "0 1px 0 #000",
-              textTransform: "uppercase",
-              whiteSpace: "nowrap"
-            }}
-          >
-            {formatStatusImpact(status)}
-          </Box>
-        </Tooltip>
-      ))}
-    </Box>
-  );
-}
-
-function formatStatusImpact(status: string) {
-  return status.replace(/\s+Enchanted$/i, "");
-}
-
 function getStatusImpactColor(status: string) {
   if (/fire/i.test(status)) {
     return "#ff8a3d";
@@ -479,45 +429,6 @@ function getDominantStatusImpactColor(statuses: string[]) {
     return null;
   }
   return getStatusImpactColor(statuses[0]);
-}
-
-function getStatusImpactBackground(status: string) {
-  const color = getStatusImpactColor(status);
-  return `linear-gradient(180deg, ${color}55, rgba(10, 5, 8, 0.92))`;
-}
-
-function getStatusImpactDescription(status: string) {
-  if (/poison/i.test(status)) {
-    return "You were hit by poison damage.";
-  }
-  if (/fire/i.test(status)) {
-    return "You were hit by fire damage.";
-  }
-  if (/cold/i.test(status)) {
-    return "You were hit by cold damage.";
-  }
-  if (/lightning/i.test(status)) {
-    return "You were hit by lightning damage.";
-  }
-  if (/cursed/i.test(status)) {
-    return "Cursed enemy hit: failed submissions are more punishing.";
-  }
-  if (/enraged/i.test(status)) {
-    return "Enraged enemy hit: this enemy deals more damage below half health.";
-  }
-  if (/extra fast/i.test(status)) {
-    return "Extra Fast enemy hit: this enemy attacks more quickly.";
-  }
-  if (/extra strong/i.test(status)) {
-    return "Extra Strong enemy hit: this enemy deals extra damage.";
-  }
-  if (/multi-shot/i.test(status)) {
-    return "Multi-Shot enemy hit: this enemy can hit multiple times.";
-  }
-  if (/spectral/i.test(status)) {
-    return "Spectral Hit: this enemy attack carries mixed elemental power.";
-  }
-  return `${status} affected this hit.`;
 }
 
 function StackedResourceBars(props: { children: ReactNode }) {

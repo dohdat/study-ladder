@@ -207,11 +207,12 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
     },
     cards: normalizeCards(stored.cards)
   };
+  const scrubbed = scrubAccidentalDeathInsight(normalized);
   const bounded = {
-    ...normalized,
+    ...scrubbed,
     profile: {
-      ...normalized.profile,
-      health: Math.min(getMaxHealth(normalized), Math.max(0, profile.health ?? fallback.profile.health)),
+      ...scrubbed.profile,
+      health: Math.min(getMaxHealth(scrubbed), Math.max(0, profile.health ?? fallback.profile.health)),
       mana: 0
     }
   };
@@ -224,6 +225,33 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
   };
   return stocked;
 };
+
+function scrubAccidentalDeathInsight(state: StudyState): StudyState {
+  const meta = state.profile.metaProgress;
+  if (
+    meta.currency <= 0
+    || meta.currency !== meta.totalEarned
+    || state.totalCorrect > 0
+    || state.profile.relics.length > 0
+    || Object.values(state.cards).some((card) => card.correct > 0)
+    || state.profile.spireRun.completedNodeIds.length > 0
+    || Object.keys(state.profile.spireRun.roomRewardClaims).length > 0
+  ) {
+    return state;
+  }
+
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      metaProgress: {
+        ...meta,
+        currency: 0,
+        totalEarned: 0
+      }
+    }
+  };
+}
 
 function createStarterShopStock() {
   return createShopStock(questions[0], DEFAULT_CHARACTER_STATS, STARTER_SHOP_REFRESH_AT, { maxItemLevel: FIRST_STAT_LEVEL });
@@ -509,34 +537,35 @@ export type MetaUpgradeDefinition = {
   label: string;
   maxRank: number;
   modifiers?: Array<{ key: ItemModifierKey; valuePerRank: number }>;
+  unlockAchievementCount: number;
 };
 
 export const META_UPGRADE_DEFINITIONS: MetaUpgradeDefinition[] = [
-  { baseCost: 8, costStep: 6, description: `Start each run with +${META_TOUGH_START_HEALTH} max health per rank.`, id: "toughStart", label: "Thick Skin", maxRank: 10 },
-  { baseCost: 6, costStep: 5, description: `Start each run with +${META_COIN_PURSE_GOLD} gold per rank.`, id: "coinPurse", label: "Deep Pockets", maxRank: 8 },
-  { baseCost: 26, costStep: 18, description: `Start each run with ${META_STARTER_RELICS_PER_RANK} random relic per rank.`, id: "starterRelics", label: "Heirloom Cache", maxRank: 3 },
-  { baseCost: 12, costStep: 8, description: "+5% damage per rank. A simple permanent power path.", id: "shadowTraining", label: "Shadow Training", maxRank: 6, modifiers: [{ key: "enhancedDamagePercent", valuePerRank: 5 }] },
-  { baseCost: 18, costStep: 10, description: "+3% critical chance per rank.", id: "lethalPrecision", label: "Lethal Precision", maxRank: 5, modifiers: [{ key: "criticalChancePercent", valuePerRank: 3 }] },
-  { baseCost: 18, costStep: 10, description: "+12% critical damage per rank.", id: "crushingInsight", label: "Crushing Insight", maxRank: 4, modifiers: [{ key: "criticalDamagePercent", valuePerRank: 12 }] },
-  { baseCost: 16, costStep: 10, description: "+4% damage per rank while above 80% health.", id: "highConfidence", label: "High Confidence", maxRank: 5, modifiers: [{ key: "bonusDamageWhileFullHealthPercent", valuePerRank: 4 }] },
-  { baseCost: 18, costStep: 11, description: "+10% no-run submit damage per rank.", id: "cleanExecution", label: "Clean Execution", maxRank: 4, modifiers: [{ key: "noRunDamagePercent", valuePerRank: 10 }] },
-  { baseCost: 16, costStep: 9, description: "Wrong answers add +4% comeback damage per stack.", id: "mistakeAlchemy", label: "Mistake Alchemy", maxRank: 4, modifiers: [{ key: "submitFailDamageStackPercent", valuePerRank: 4 }] },
-  { baseCost: 20, costStep: 10, description: "+8% damage against elites and bosses per rank.", id: "eliteHunter", label: "Elite Hunter", maxRank: 5, modifiers: [{ key: "bonusDamageVsElitesPercent", valuePerRank: 8 }] },
-  { baseCost: 18, costStep: 9, description: "+4% reduced incoming enemy damage per rank.", id: "ironResolve", label: "Iron Resolve", maxRank: 5, modifiers: [{ key: "reducedEnemyDamagePercent", valuePerRank: 4 }] },
-  { baseCost: 22, costStep: 0, description: "Block the first hit in each combat room.", id: "silverGuard", label: "Silver Guard", maxRank: 1, modifiers: [{ key: "blockFirstHit", valuePerRank: 1 }] },
-  { baseCost: 18, costStep: 10, description: "+8% gold found per rank from room rewards.", id: "goldenTouch", label: "Golden Touch", maxRank: 5, modifiers: [{ key: "goldFindPercent", valuePerRank: 8 }] },
-  { baseCost: 16, costStep: 8, description: "+5% shop discount per rank.", id: "underworldBroker", label: "Underworld Broker", maxRank: 4, modifiers: [{ key: "shopDiscountPercent", valuePerRank: 5 }] },
-  { baseCost: 32, costStep: 0, description: "Shops stock one extra relic.", id: "shopkeeperFavor", label: "Shopkeeper Favor", maxRank: 1, modifiers: [{ key: "shopRelicStock", valuePerRank: 1 }] },
-  { baseCost: 22, costStep: 12, description: "+4% rare relic chance per rank.", id: "olympianFavor", label: "Olympian Favor", maxRank: 6, modifiers: [{ key: "increasedRareDropChancePercent", valuePerRank: 4 }] },
-  { baseCost: 34, costStep: 18, description: `+${META_RELIC_LUCK_PERCENT}% chance for rarer relic rolls per rank.`, id: "relicLuck", label: "Fortune Glass", maxRank: 5, modifiers: [{ key: "increasedRareDropChancePercent", valuePerRank: META_RELIC_LUCK_PERCENT }] },
-  { baseCost: 24, costStep: 14, description: "Reveal one extra question topic per rank.", id: "topicMemory", label: "Topic Memory", maxRank: 2, modifiers: [{ key: "revealTopicCount", valuePerRank: 1 }] },
-  { baseCost: 18, costStep: 14, description: `Reveal ${META_REVEAL_SUBMIT_TESTS_PER_RANK} failed submit test case per rank.`, id: "revealSubmitTests", label: "Trial Lantern", maxRank: 3, modifiers: [{ key: "revealSubmitTestCount", valuePerRank: META_REVEAL_SUBMIT_TESTS_PER_RANK }] },
-  { baseCost: 26, costStep: 14, description: "Relic rewards show one extra choice per rank.", id: "relicChoice", label: "Dark Foresight", maxRank: META_RELIC_CHOICE_BONUS_CAP },
-  { baseCost: 30, costStep: 18, description: "+1 relic reward reroll per rank.", id: "fatedPersuasion", label: "Fated Persuasion", maxRank: 3, modifiers: [{ key: "relicRerollBonus", valuePerRank: 1 }] },
-  { baseCost: 20, costStep: 10, description: "+2 insight when skipping relic rewards per rank.", id: "fatedTreasury", label: "Fated Treasury", maxRank: 5, modifiers: [{ key: "skipRelicMetaBonus", valuePerRank: 2 }] },
-  { baseCost: 28, costStep: 18, description: "Each room starts with one free hint charge.", id: "oracleFavor", label: "Oracle Favor", maxRank: 1, modifiers: [{ key: "freeHintPerRoom", valuePerRank: 1 }] },
-  { baseCost: 24, costStep: 10, description: "+15 seconds of timer grace per rank.", id: "swiftReflex", label: "Swift Reflex", maxRank: 4, modifiers: [{ key: "timerPauseSeconds", valuePerRank: 15 }] },
-  { baseCost: 40, costStep: 0, description: "Gain 1 revive each run.", id: "deathDefiance", label: "Death Defiance", maxRank: 1, modifiers: [{ key: "revivePercent", valuePerRank: 45 }] }
+  { baseCost: 8, costStep: 6, description: `Start each run with +${META_TOUGH_START_HEALTH} max health per rank.`, id: "toughStart", label: "Thick Skin", maxRank: 10, unlockAchievementCount: 0 },
+  { baseCost: 6, costStep: 5, description: `Start each run with +${META_COIN_PURSE_GOLD} gold per rank.`, id: "coinPurse", label: "Deep Pockets", maxRank: 8, unlockAchievementCount: 0 },
+  { baseCost: 12, costStep: 8, description: "+5% damage per rank. A simple permanent power path.", id: "shadowTraining", label: "Shadow Training", maxRank: 6, modifiers: [{ key: "enhancedDamagePercent", valuePerRank: 5 }], unlockAchievementCount: 0 },
+  { baseCost: 18, costStep: 10, description: "+3% critical chance per rank.", id: "lethalPrecision", label: "Lethal Precision", maxRank: 5, modifiers: [{ key: "criticalChancePercent", valuePerRank: 3 }], unlockAchievementCount: 1 },
+  { baseCost: 18, costStep: 9, description: "+4% reduced incoming enemy damage per rank.", id: "ironResolve", label: "Iron Resolve", maxRank: 5, modifiers: [{ key: "reducedEnemyDamagePercent", valuePerRank: 4 }], unlockAchievementCount: 2 },
+  { baseCost: 16, costStep: 10, description: "+4% damage per rank while above 80% health.", id: "highConfidence", label: "High Confidence", maxRank: 5, modifiers: [{ key: "bonusDamageWhileFullHealthPercent", valuePerRank: 4 }], unlockAchievementCount: 3 },
+  { baseCost: 18, costStep: 10, description: "+12% critical damage per rank.", id: "crushingInsight", label: "Crushing Insight", maxRank: 4, modifiers: [{ key: "criticalDamagePercent", valuePerRank: 12 }], unlockAchievementCount: 4 },
+  { baseCost: 18, costStep: 10, description: "+8% gold found per rank from room rewards.", id: "goldenTouch", label: "Golden Touch", maxRank: 5, modifiers: [{ key: "goldFindPercent", valuePerRank: 8 }], unlockAchievementCount: 5 },
+  { baseCost: 16, costStep: 9, description: "Wrong answers add +4% comeback damage per stack.", id: "mistakeAlchemy", label: "Mistake Alchemy", maxRank: 4, modifiers: [{ key: "submitFailDamageStackPercent", valuePerRank: 4 }], unlockAchievementCount: 6 },
+  { baseCost: 18, costStep: 11, description: "+10% no-run submit damage per rank.", id: "cleanExecution", label: "Clean Execution", maxRank: 4, modifiers: [{ key: "noRunDamagePercent", valuePerRank: 10 }], unlockAchievementCount: 7 },
+  { baseCost: 24, costStep: 10, description: "+15 seconds of timer grace per rank.", id: "swiftReflex", label: "Swift Reflex", maxRank: 4, modifiers: [{ key: "timerPauseSeconds", valuePerRank: 15 }], unlockAchievementCount: 8 },
+  { baseCost: 22, costStep: 0, description: "Block the first hit in each combat room.", id: "silverGuard", label: "Silver Guard", maxRank: 1, modifiers: [{ key: "blockFirstHit", valuePerRank: 1 }], unlockAchievementCount: 10 },
+  { baseCost: 24, costStep: 14, description: "Pierce enemy guard so late solves still hit hard.", id: "topicMemory", label: "Wardbreaker", maxRank: 2, modifiers: [{ key: "armorPenetrationPercent", valuePerRank: 10 }], unlockAchievementCount: 12 },
+  { baseCost: 20, costStep: 10, description: "+8% damage against elites and bosses per rank.", id: "eliteHunter", label: "Elite Hunter", maxRank: 5, modifiers: [{ key: "bonusDamageVsElitesPercent", valuePerRank: 8 }], unlockAchievementCount: 14 },
+  { baseCost: 18, costStep: 14, description: `Reveal ${META_REVEAL_SUBMIT_TESTS_PER_RANK} failed submit test case per rank.`, id: "revealSubmitTests", label: "Trial Lantern", maxRank: 3, modifiers: [{ key: "revealSubmitTestCount", valuePerRank: META_REVEAL_SUBMIT_TESTS_PER_RANK }], unlockAchievementCount: 16 },
+  { baseCost: 26, costStep: 18, description: `Start each run with ${META_STARTER_RELICS_PER_RANK} random relic per rank.`, id: "starterRelics", label: "Heirloom Cache", maxRank: 3, unlockAchievementCount: 18 },
+  { baseCost: 16, costStep: 8, description: "+5% shop discount per rank.", id: "underworldBroker", label: "Underworld Broker", maxRank: 4, modifiers: [{ key: "shopDiscountPercent", valuePerRank: 5 }], unlockAchievementCount: 20 },
+  { baseCost: 32, costStep: 0, description: "Shops stock one extra relic.", id: "shopkeeperFavor", label: "Shopkeeper Favor", maxRank: 1, modifiers: [{ key: "shopRelicStock", valuePerRank: 1 }], unlockAchievementCount: 22 },
+  { baseCost: 22, costStep: 12, description: "+4% rare relic chance per rank.", id: "olympianFavor", label: "Olympian Favor", maxRank: 6, modifiers: [{ key: "increasedRareDropChancePercent", valuePerRank: 4 }], unlockAchievementCount: 24 },
+  { baseCost: 26, costStep: 14, description: "Relic rewards show one extra choice per rank.", id: "relicChoice", label: "Dark Foresight", maxRank: META_RELIC_CHOICE_BONUS_CAP, unlockAchievementCount: 26 },
+  { baseCost: 30, costStep: 18, description: "+1 relic reward reroll per rank.", id: "fatedPersuasion", label: "Fated Persuasion", maxRank: 3, modifiers: [{ key: "relicRerollBonus", valuePerRank: 1 }], unlockAchievementCount: 28 },
+  { baseCost: 20, costStep: 10, description: "+2 insight when skipping relic rewards per rank.", id: "fatedTreasury", label: "Fated Treasury", maxRank: 5, modifiers: [{ key: "skipRelicMetaBonus", valuePerRank: 2 }], unlockAchievementCount: 30 },
+  { baseCost: 28, costStep: 18, description: "Each room starts with one free hint charge.", id: "oracleFavor", label: "Oracle Favor", maxRank: 1, modifiers: [{ key: "freeHintPerRoom", valuePerRank: 1 }], unlockAchievementCount: 32 },
+  { baseCost: 34, costStep: 18, description: `+${META_RELIC_LUCK_PERCENT}% chance for rarer relic rolls per rank.`, id: "relicLuck", label: "Fortune Glass", maxRank: 5, modifiers: [{ key: "increasedRareDropChancePercent", valuePerRank: META_RELIC_LUCK_PERCENT }], unlockAchievementCount: 35 },
+  { baseCost: 40, costStep: 0, description: "Gain 1 revive each run.", id: "deathDefiance", label: "Death Defiance", maxRank: 1, modifiers: [{ key: "revivePercent", valuePerRank: 45 }], unlockAchievementCount: 38 }
 ];
 
 export function getMetaUpgradeDefinition(id: MetaUpgradeId) {
@@ -547,6 +576,27 @@ export function getMetaUpgradeCost(state: StudyState, id: MetaUpgradeId) {
   const rank = state.profile.metaProgress.upgrades[id] || 0;
   const definition = getMetaUpgradeDefinition(id);
   return definition.baseCost + rank * definition.costStep;
+}
+
+export function getUnlockedAchievementCount(state: StudyState) {
+  return new Set(state.profile.unlockedAchievementIds).size;
+}
+
+export function isMetaUpgradeUnlocked(state: StudyState, id: MetaUpgradeId) {
+  return getUnlockedAchievementCount(state) >= getMetaUpgradeDefinition(id).unlockAchievementCount;
+}
+
+export function isMetaUpgradeVisible(state: StudyState, id: MetaUpgradeId) {
+  return isMetaUpgradeUnlocked(state, id) || (state.profile.metaProgress.upgrades[id] || 0) > 0;
+}
+
+export function getVisibleMetaUpgradeDefinitions(state: StudyState) {
+  return META_UPGRADE_DEFINITIONS.filter((definition) => isMetaUpgradeVisible(state, definition.id));
+}
+
+export function getNextLockedMetaUpgradeDefinition(state: StudyState) {
+  const unlockedAchievementCount = getUnlockedAchievementCount(state);
+  return META_UPGRADE_DEFINITIONS.find((definition) => definition.unlockAchievementCount > unlockedAchievementCount) || null;
 }
 
 export function getMetaModifierTotals(state: StudyState) {
@@ -562,7 +612,7 @@ export function getMetaModifierTotals(state: StudyState) {
 
 export function canPurchaseMetaUpgrade(state: StudyState, id: MetaUpgradeId) {
   const definition = getMetaUpgradeDefinition(id);
-  return (state.profile.metaProgress.upgrades[id] || 0) < definition.maxRank && state.profile.metaProgress.currency >= getMetaUpgradeCost(state, id);
+  return isMetaUpgradeUnlocked(state, id) && (state.profile.metaProgress.upgrades[id] || 0) < definition.maxRank && state.profile.metaProgress.currency >= getMetaUpgradeCost(state, id);
 }
 
 export function purchaseMetaUpgrade(state: StudyState, id: MetaUpgradeId): StudyState {

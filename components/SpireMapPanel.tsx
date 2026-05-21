@@ -8,7 +8,7 @@ import { ShopPanel } from "./ShopPanel";
 import { RelicIcon } from "./RelicIcon";
 import { HEAT_CONDITION_DEFINITIONS, MAX_HEAT, getHeatLevel, getSpireCampaignLabel, getSpireDifficultyModifiers } from "../lib/campaignCore";
 import { attuneRestSiteRelic, canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, enterSpireNode, getCurrentSpireNode, getRestAttunableRelics, isCombatNode, isSpireRunSetupOpen, leaveSpireRoom, rerollPendingRelicReward, resetSpireHeat, selectPendingRelicReward, selectSpireNode, setSpireHeatConditionRank, skipPendingRelicReward, startSpireHeatRun } from "../lib/spireMapCore";
-import { META_UPGRADE_DEFINITIONS, canPurchaseMetaUpgrade, getMetaUpgradeCost, purchaseMetaUpgrade } from "../lib/studyCore";
+import { canPurchaseMetaUpgrade, getMetaUpgradeCost, getNextLockedMetaUpgradeDefinition, getUnlockedAchievementCount, getVisibleMetaUpgradeDefinitions, purchaseMetaUpgrade } from "../lib/studyCore";
 import { formatModifier } from "../lib/modifierFormat";
 import { getRelicRarityColor } from "../lib/heroSiegeQuality";
 import type { Relic, SpireAct, SpireCombatRewardKind, SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
@@ -40,6 +40,7 @@ import guardianAngelArt from "../assets/hero_siege_relics/guardian-angel.png";
 import heatOrbArt from "../assets/hero_siege_relics/orb-of-fire.png";
 import holyGrailArt from "../assets/hero_siege_relics/holy-grail.png";
 import kingsCrownArt from "../assets/hero_siege_relics/kings-crown.png";
+import lanternArt from "../assets/hero_siege_relics/lantern.png";
 import midasHandArt from "../assets/hero_siege_relics/midas-hand.png";
 import oddBookArt from "../assets/hero_siege_relics/odd-book.png";
 import razorwireArt from "../assets/hero_siege_relics/razorwire.png";
@@ -117,6 +118,7 @@ const USER_MENU_OPEN_EVENT = "study-ladder-user-menu-open";
 const HEAT_PANEL_TOP = 70;
 const HEAT_PANEL_LEFT = 16;
 const HEAT_ROW_ICON_SIZE = 18;
+const RUN_SETUP_START_BAR_BG = "linear-gradient(180deg, rgba(24, 19, 15, 0.18), rgba(10, 8, 6, 0.94) 42%, rgba(10, 8, 6, 0.98))";
 const NODE_LABELS: Record<SpireNodeKind, string> = {
   blight: "Blight",
   boss: "Boss",
@@ -836,20 +838,44 @@ function RunSetupScreen(props: { fillAvailableHeight?: boolean; setState: React.
       }}
     >
       <MapBackdrop act={props.state.profile.spireRun.act} />
-      <Stack gap={18} align="center" style={{ maxHeight: "100%", overflow: "auto", width: "min(1320px, 100%)", zIndex: 2 }}>
+      <Stack gap={18} align="center" style={{ maxHeight: "100%", overflow: "auto", paddingBottom: 92, width: "min(1320px, 100%)", zIndex: 2 }}>
         <SimpleGrid cols={{ base: 1, lg: showPact ? 2 : 1 }} spacing={18} style={{ alignItems: "start", width: "100%" }}>
           <MirrorUpgradePanel setState={props.setState} state={props.state} />
           {showPact ? <HeatPanel embedded setState={props.setState} state={props.state} /> : null}
         </SimpleGrid>
-        <HeroSiegeButton onClick={() => props.setState((previous) => startSpireHeatRun(previous))} minWidth={150}>
+      </Stack>
+      <Box
+        style={{
+          alignItems: "center",
+          background: RUN_SETUP_START_BAR_BG,
+          bottom: 18,
+          display: "flex",
+          justifyContent: "center",
+          left: 18,
+          padding: "22px 0 0",
+          pointerEvents: "none",
+          position: "absolute",
+          right: 18,
+          zIndex: 4
+        }}
+      >
+        <HeroSiegeButton
+          height={52}
+          minWidth={230}
+          onClick={() => props.setState((previous) => startSpireHeatRun(previous))}
+          style={{ fontSize: 15, pointerEvents: "auto", padding: "0 34px" }}
+        >
           Start Act I
         </HeroSiegeButton>
-      </Stack>
+      </Box>
     </Box>
   );
 }
 
 function MirrorUpgradePanel(props: { setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
+  const achievementCount = getUnlockedAchievementCount(props.state);
+  const visibleUpgrades = getVisibleMetaUpgradeDefinitions(props.state);
+  const nextLocked = getNextLockedMetaUpgradeDefinition(props.state);
   return (
     <Box
       style={{
@@ -864,12 +890,15 @@ function MirrorUpgradePanel(props: { setState: React.Dispatch<React.SetStateActi
       <Group justify="space-between" mb={12} wrap="nowrap">
         <Box>
           <Text size="lg" fw={900} tt="uppercase" style={{ color: "#fff0b8", textShadow: "0 1px 0 #000" }}>Mirror Upgrades</Text>
-          <Text size="sm" c="gray.4">Spend insight between runs before starting Act I.</Text>
+          <Text size="sm" c="gray.4">Spend insight between runs. Achievements reveal deeper mirror powers.</Text>
         </Box>
-        <Badge size="lg" color="yellow" variant="filled">Insight {props.state.profile.metaProgress.currency}</Badge>
+        <Group gap={8} wrap="nowrap">
+          <Badge size="lg" color="blue" variant="light">Achievements {achievementCount}</Badge>
+          <Badge size="lg" color="yellow" variant="filled">Insight {props.state.profile.metaProgress.currency}</Badge>
+        </Group>
       </Group>
       <Stack gap={7}>
-        {META_UPGRADE_DEFINITIONS.map((upgrade, index) => {
+        {visibleUpgrades.map((upgrade, index) => {
           const rank = props.state.profile.metaProgress.upgrades[upgrade.id] || 0;
           const maxed = rank >= upgrade.maxRank;
           const cost = getMetaUpgradeCost(props.state, upgrade.id);
@@ -912,8 +941,40 @@ function MirrorUpgradePanel(props: { setState: React.Dispatch<React.SetStateActi
             </Group>
           );
         })}
+        {nextLocked ? <NextMirrorUnlock upgrade={nextLocked} achievementCount={achievementCount} /> : null}
       </Stack>
     </Box>
+  );
+}
+
+function NextMirrorUnlock(props: { achievementCount: number; upgrade: ReturnType<typeof getNextLockedMetaUpgradeDefinition> }) {
+  if (!props.upgrade) {
+    return null;
+  }
+  const remaining = Math.max(0, props.upgrade.unlockAchievementCount - props.achievementCount);
+  return (
+    <Group justify="space-between" gap={14} wrap="nowrap" mt={6} p={8} style={{ background: "rgba(0, 0, 0, 0.28)", border: "1px dashed rgba(255, 225, 120, 0.24)", opacity: 0.82 }}>
+      <Group gap={10} wrap="nowrap" style={{ minWidth: 0 }}>
+        <Box
+          style={{
+            alignItems: "center",
+            background: "rgba(0, 0, 0, 0.38)",
+            border: "1px solid rgba(255, 225, 120, 0.18)",
+            display: "flex",
+            height: 34,
+            justifyContent: "center",
+            width: 34
+          }}
+        >
+          <Box alt="" component="img" src={getMirrorUpgradeIcon(props.upgrade.id)} style={{ filter: "grayscale(0.85) brightness(0.58) drop-shadow(0 2px 0 #000)", height: 28, imageRendering: "pixelated", objectFit: "contain", width: 28 }} />
+        </Box>
+        <Box style={{ minWidth: 0 }}>
+          <Text size="sm" fw={900} c="gray.4" truncate>Next Mirror: {props.upgrade.label}</Text>
+          <Text size="xs" c="gray.5" truncate>{props.upgrade.description}</Text>
+        </Box>
+      </Group>
+      <Badge color="gray" variant="outline">{remaining} achievements</Badge>
+    </Group>
   );
 }
 
@@ -934,13 +995,13 @@ const MIRROR_UPGRADE_ICONS: Record<string, StaticImageData> = {
   oracleFavor: dislocatedEyeArt,
   relicLuck: fortuneCardArt,
   relicChoice: findItemArt,
-  revealSubmitTests: dislocatedEyeArt,
+  revealSubmitTests: lanternArt,
   shadowTraining: bookOfBelialArt,
   shopkeeperFavor: steamSaleArt,
   silverGuard: shieldMasteryArt,
   starterRelics: holyGrailArt,
   swiftReflex: heatOrbArt,
-  topicMemory: oddBookArt,
+  topicMemory: swordMasteryArt,
   toughStart: deathsScytheArt,
   underworldBroker: treasureSenseArt
 };

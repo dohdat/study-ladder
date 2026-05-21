@@ -772,6 +772,7 @@ function MirrorWikiCard(props: { index: number; upgrade: (typeof META_UPGRADE_DE
             <Group gap="xs" mb={2} wrap="nowrap">
               <Text size="sm" fw={900} c="yellow.3" truncate>{upgrade.label}</Text>
               <Badge size="xs" variant="outline">{upgrade.maxRank} ranks</Badge>
+              <Badge size="xs" color={upgrade.unlockAchievementCount ? "blue" : "green"} variant="light">{upgrade.unlockAchievementCount ? `${upgrade.unlockAchievementCount} achievements` : "starter"}</Badge>
             </Group>
             <Text size="xs" c="dimmed" lineClamp={2}>{upgrade.description}</Text>
             <Text size="xs" mt={4} c="yellow.3" lineClamp={2}>{effectText}</Text>
@@ -799,13 +800,13 @@ const MIRROR_UPGRADE_ICONS: Record<string, string> = {
   oracleFavor: dislocatedEyeArt,
   relicLuck: fortuneCardArt,
   relicChoice: findItemArt,
-  revealSubmitTests: dislocatedEyeArt,
+  revealSubmitTests: lanternArt,
   shadowTraining: bookOfBelialArt,
   shopkeeperFavor: steamSaleArt,
   silverGuard: shieldMasteryArt,
   starterRelics: holyGrailArt,
   swiftReflex: fireIceArt,
-  topicMemory: oddBookArt,
+  topicMemory: swordMasteryArt,
   toughStart: deathsScytheArt,
   underworldBroker: treasureSenseArt
 };
@@ -823,6 +824,9 @@ function MirrorWikiDetails(props: { totalCost: number; upgrade: (typeof META_UPG
         <Text size="lg" fw={900} tt="uppercase" style={{ color: "#f1dfad", lineHeight: 1.15, textShadow: "0 2px 0 #000" }}>{upgrade.label}</Text>
         <Text size="sm" fw={800} c="gray.2">Max rank {upgrade.maxRank} - Total cost {props.totalCost} insight</Text>
       </Box>
+      <Badge color={upgrade.unlockAchievementCount ? "blue" : "green"} variant="light" style={{ alignSelf: "flex-start" }}>
+        {upgrade.unlockAchievementCount ? `Unlocks at ${upgrade.unlockAchievementCount} achievements` : "Available at start"}
+      </Badge>
       <Text size="xs" c="gray.3">{upgrade.description}</Text>
       <Stack gap={2}>
         {effects.map((effect) => (

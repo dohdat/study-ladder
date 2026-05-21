@@ -285,7 +285,8 @@ function completePassedSubmit(params: Parameters<typeof useRunnerMessages>[0], q
       id: `${question.id}-${now}-${combat.hit.damage}`,
       maxHealth: combat.hit.maxHealth,
       questionId: question.id,
-      remainingHealth: combat.hit.remainingHealth
+      remainingHealth: combat.hit.remainingHealth,
+      statusEffects: getHitStatusEffects(combat.hit)
     });
   }
   const timed = applyElapsedCombatDamage(combat.state, question, params.timeRemainingMs, now);
@@ -753,6 +754,13 @@ function getAttackStatusEffects(attack: ReturnType<typeof getTimedMonsterAttack>
   ])).slice(0, 4);
 }
 
+function getHitStatusEffects(hit: NonNullable<ReturnType<typeof applyPassedCombatResult>["hit"]>) {
+  return Array.from(new Set([
+    ...hit.damageTypes.filter((type) => type !== "physical").map(formatDamageStatus),
+    ...hit.effects
+  ])).slice(0, 4);
+}
+
 function formatDamageStatus(element: string) {
   return `${element[0].toUpperCase()}${element.slice(1)}`;
 }
@@ -808,8 +816,6 @@ export default function Home() {
     freshState.profile.unlockedAchievementIds = state.profile.unlockedAchievementIds;
     freshState.profile.metaProgress = {
       ...state.profile.metaProgress,
-      currency: state.profile.metaProgress.currency + 5,
-      totalEarned: state.profile.metaProgress.totalEarned + 5,
       upgrades: { ...state.profile.metaProgress.upgrades }
     };
     freshState.profile.spireRun = {
@@ -832,7 +838,7 @@ export default function Home() {
     setCurrentQuestion(picked);
     setCode(picked.starter);
     setRunTone("default");
-    setRunStatus("Run ended. Preserved question progress and gained 5 insight.");
+    setRunStatus("Run ended. Preserved question progress and prepared the next attempt.");
     hints.clearHint();
   }, [hints, runTimer, state.cards, state.profile.metaProgress, state.profile.spireMinRating, state.profile.spireRun.heatConditions, state.profile.unlockedAchievementIds, state.totalCorrect]);
   const pauseQuestionForFocusLoss = useCallback(() => { activeRunId.current = null; clearRunTimer(runTimer); setRunning(false); setResults([]); setConsoleRunResult(null); setSessionStarted(false); hints.clearHint(); }, [hints, runTimer]);
