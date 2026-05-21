@@ -77,7 +77,6 @@ export function PlayerStatus(props: {
         <Group justify="space-between" gap="xs" wrap="nowrap" mb={5}>
           <Box>
             <Text size="lg" fw={900} lh={1} style={{ color: NAME_COLOR, textShadow: "0 2px 0 #000" }}>Dat Do</Text>
-            <Text size="xs" fw={800} mt={1} style={{ color: HERO_GOLD, textShadow: "0 1px 0 #000" }}>Roguelike Run</Text>
           </Box>
           <Box ta="right">
             <Group gap={5} wrap="nowrap" justify="flex-end">

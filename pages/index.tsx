@@ -841,10 +841,18 @@ export default function Home() {
     setRunStatus("Run ended. Preserved question progress and prepared the next attempt.");
     hints.clearHint();
   }, [hints, runTimer, state.cards, state.profile.metaProgress, state.profile.spireMinRating, state.profile.spireRun.heatConditions, state.profile.unlockedAchievementIds, state.totalCorrect]);
-  const pauseQuestionForFocusLoss = useCallback(() => { activeRunId.current = null; clearRunTimer(runTimer); setRunning(false); setResults([]); setConsoleRunResult(null); setSessionStarted(false); hints.clearHint(); }, [hints, runTimer]);
+  const failQuestionForFocusLoss = useCallback(() => {
+    activeRunId.current = null;
+    clearRunTimer(runTimer);
+    setRunning(false);
+    setResults([]);
+    setConsoleRunResult(null);
+    hints.clearHint();
+    failAndAdvance("Focus lost for 10 seconds.", code, timer.timeRemainingMs);
+  }, [code, failAndAdvance, hints, runTimer, timer.timeRemainingMs]);
   const isDead = state.profile.health <= 0;
   useStudyTimeTracker(state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished && !isDead);
-  useFullscreenGuard({ active: state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished && !isDead, pauseQuestion: pauseQuestionForFocusLoss, setStatus: setRunStatus, setTone: setRunTone });
+  useFullscreenGuard({ active: state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished && !isDead, failQuestion: failQuestionForFocusLoss, setStatus: setRunStatus, setTone: setRunTone });
   const headerStats = useHeaderStats(state);
   const timerDisplay = getTimerDisplay(currentQuestion, timer.timeRemainingMs, questionTimeLimitMs);
   const currentSpireNode = getCurrentSpireNode(state);

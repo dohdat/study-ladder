@@ -21,12 +21,17 @@ import { createShopStock } from "./shopCore";
 import { getMaxHealth, getMetaRelicChoiceBonus, getMetaStartingGoldBonus, getMetaStartingRelicCount, getRunModifierTotals } from "./studyCore";
 import type { Difficulty, HeatConditionId, HeatConditionRanks, InventoryItem, ItemModifier, ItemRarity, Question, Relic, RelicRarity, SpireAct, SpireCombatRewardKind, SpireDifficulty, SpireMapNode, SpireNodeKind, SpireRun, StudyState, UnknownEncounterKind } from "../types/study";
 
-export const DEFAULT_SPIRE_MIN_RATING = 1500;
-export const SPIRE_MIN_RATING_MIN = 900;
-export const SPIRE_MIN_RATING_MAX = 3200;
-const ACT_RATING_SPAN = 500;
+const SPIRE_ACT_COUNT = 4;
+const MIN_SPIRE_TOTAL_RATING_RANGE = 200;
+const BASE_ACT_RATING_SPAN = 500;
 const SPIRE_RATING_OFFSETS = [0, 40, 75, 115, 150, 190, 225, 265, 300, 340, 375, 415, 450, 475, 500] as const;
-export const SPIRE_RATINGS = SPIRE_RATING_OFFSETS.map((offset) => DEFAULT_SPIRE_MIN_RATING + offset);
+const QUESTION_BANK_RATINGS = questions.map((question) => question.rating).filter(Number.isFinite);
+export const QUESTION_BANK_MIN_RATING = Math.min(...QUESTION_BANK_RATINGS);
+export const QUESTION_BANK_MAX_RATING = Math.max(...QUESTION_BANK_RATINGS);
+export const DEFAULT_SPIRE_MIN_RATING = Math.min(QUESTION_BANK_MAX_RATING, Math.max(QUESTION_BANK_MIN_RATING, 1500));
+export const SPIRE_MIN_RATING_MIN = QUESTION_BANK_MIN_RATING;
+export const SPIRE_MIN_RATING_MAX = Math.max(SPIRE_MIN_RATING_MIN, QUESTION_BANK_MAX_RATING - MIN_SPIRE_TOTAL_RATING_RANGE);
+export const SPIRE_RATINGS = getSpireRatings(1, DEFAULT_SPIRE_MIN_RATING);
 
 const FIRST_TIER = 0;
 const FIRST_NODE_ID = "tier-0-start";
@@ -168,12 +173,27 @@ export function normalizeSpireMinRating(value: number | undefined) {
 }
 
 export function getSpireActBaseRating(act: SpireAct, minRating = DEFAULT_SPIRE_MIN_RATING) {
-  return normalizeSpireMinRating(minRating) + (act - 1) * ACT_RATING_SPAN;
+  const safeAct = normalizeSpireAct(act);
+  const spireMinRating = normalizeSpireMinRating(minRating);
+  const totalRange = Math.max(SPIRE_ACT_COUNT, QUESTION_BANK_MAX_RATING - spireMinRating);
+  return Math.min(QUESTION_BANK_MAX_RATING, spireMinRating + Math.floor((totalRange * (safeAct - 1)) / SPIRE_ACT_COUNT));
+}
+
+export function getSpireActEndRating(act: SpireAct, minRating = DEFAULT_SPIRE_MIN_RATING) {
+  const safeAct = normalizeSpireAct(act);
+  const spireMinRating = normalizeSpireMinRating(minRating);
+  const totalRange = Math.max(SPIRE_ACT_COUNT, QUESTION_BANK_MAX_RATING - spireMinRating);
+  if (safeAct >= SPIRE_ACT_COUNT) {
+    return QUESTION_BANK_MAX_RATING;
+  }
+  return Math.min(QUESTION_BANK_MAX_RATING, spireMinRating + Math.floor((totalRange * safeAct) / SPIRE_ACT_COUNT));
 }
 
 export function getSpireRatings(act: SpireAct = 1, minRating = DEFAULT_SPIRE_MIN_RATING) {
   const baseRating = getSpireActBaseRating(act, minRating);
-  return SPIRE_RATING_OFFSETS.map((offset) => baseRating + offset);
+  const endRating = getSpireActEndRating(act, minRating);
+  const actSpan = Math.max(1, endRating - baseRating);
+  return SPIRE_RATING_OFFSETS.map((offset) => baseRating + Math.round((actSpan * offset) / BASE_ACT_RATING_SPAN));
 }
 
 export function createSpireRun(seed = Date.now(), act: SpireAct = 1, difficulty: SpireDifficulty = "normal", heatConditions: Partial<HeatConditionRanks> = {}, heatSetupOpen = false, minRating = DEFAULT_SPIRE_MIN_RATING): SpireRun {

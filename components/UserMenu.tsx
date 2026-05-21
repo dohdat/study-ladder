@@ -79,7 +79,7 @@ import {
 import { HEAT_CONDITION_DEFINITIONS, MAX_HEAT } from "../lib/campaignCore";
 import { RELIC_DEFINITIONS } from "../lib/relicCore";
 import { formatModifier } from "../lib/modifierFormat";
-import { SPIRE_MIN_RATING_MAX, SPIRE_MIN_RATING_MIN, getSpireActBaseRating, normalizeSpireMinRating } from "../lib/spireMapCore";
+import { SPIRE_MIN_RATING_MAX, SPIRE_MIN_RATING_MIN, getSpireActBaseRating, getSpireActEndRating, normalizeSpireMinRating } from "../lib/spireMapCore";
 import {
   META_UPGRADE_DEFINITIONS,
   defaultState,
@@ -1322,7 +1322,8 @@ function getSpireRatingRangeSummary(minRating: number) {
   return ([1, 2, 3, 4] as SpireAct[])
     .map((act) => {
       const start = getSpireActBaseRating(act, minRating);
-      return `Act ${act}: ${start}-${start + 500}`;
+      const end = getSpireActEndRating(act, minRating);
+      return `Act ${act}: ${start}-${end}`;
     })
     .join(" | ");
 }

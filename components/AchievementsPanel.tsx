@@ -96,7 +96,7 @@ const ACHIEVEMENT_ICON_BY_ID: Partial<Record<Achievement["id"], StaticImageData>
   "oracle-debt": oddBookArt,
   "maxed-mirror": armorArt,
   "paragon-path": battleTranceArt,
-  "perfect-memory": bookOfBelialArt,
+  "perfect-memory": frenzyArt,
   "relic-collector": chestArt,
   "relic-storm": holyGrailArt,
   "stone-constitution": shieldMasteryArt,
