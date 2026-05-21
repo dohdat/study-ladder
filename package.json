@@ -13,6 +13,7 @@
     "import:hero-siege-yytex": "python scripts/import_hero_siege_yytex_atlases.py",
     "build": "npm run prepare:monaco && vite build",
     "build:fast": "vite build",
+    "export:extension": "npm run build && node scripts/export-extension.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage",

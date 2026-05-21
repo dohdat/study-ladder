@@ -1,6 +1,7 @@
 node_modules/
 .next/
 out/
+dist-unpacked/
 .vite-dev.log
 .vite-dev.err.log
 coverage/

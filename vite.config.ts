@@ -1,8 +1,36 @@
 import { resolve } from "node:path";
 import { spawn } from "node:child_process";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+
+function syncExtensionPagesPlugin(): Plugin {
+  const syncHtml = (fileName: string) => {
+    const builtPath = resolve(__dirname, "out", fileName);
+    const pagesPath = resolve(__dirname, "pages", fileName);
+    const html = readFileSync(builtPath, "utf8").replace(/(["'])\.\/assets\//g, "$1../out/assets/");
+    writeFileSync(pagesPath, html);
+  };
+
+  return {
+    name: "study-ladder-sync-extension-pages",
+    apply: "build",
+    closeBundle() {
+      const pagesDir = resolve(__dirname, "pages");
+      if (!existsSync(pagesDir)) {
+        mkdirSync(pagesDir, { recursive: true });
+      }
+
+      syncHtml("index.html");
+      syncHtml("profile.html");
+      copyFileSync(resolve(__dirname, "public", "sandbox.html"), resolve(pagesDir, "sandbox.html"));
+      copyFileSync(resolve(__dirname, "public", "sandbox.js"), resolve(pagesDir, "sandbox.js"));
+      copyFileSync(resolve(__dirname, "reload.html"), resolve(pagesDir, "reload.html"));
+      copyFileSync(resolve(__dirname, "reload.js"), resolve(pagesDir, "reload.js"));
+    }
+  };
+}
 
 function extensionAutoReloadPlugin(): Plugin {
   let reloadInFlight = false;
@@ -81,7 +109,7 @@ export default defineConfig({
       }
     }
   },
-  plugins: [react(), extensionAutoReloadPlugin()],
+  plugins: [react(), syncExtensionPagesPlugin(), extensionAutoReloadPlugin()],
   server: {
     host: "127.0.0.1",
     port: 3000

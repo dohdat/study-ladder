@@ -11,6 +11,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+$BlockedLegacyExtensionIds = @("mckniaaigcphmilhcpcpanfipcaoainb")
 
 function Get-ExtensionIdFromUrl {
   param([string]$Url)
@@ -48,7 +49,7 @@ function Test-ExtensionPageUrl {
 function Test-ReloadPageUrl {
   param([string]$Url)
 
-  return $Url -match "^chrome-extension://[a-p]{32}/reload\.html(?:[?#].*)?$"
+  return $Url -match "^chrome-extension://[a-p]{32}/pages/reload\.html(?:[?#].*)?$"
 }
 
 function Get-ObjectPropertyValue {
@@ -139,12 +140,12 @@ function Find-UnpackedExtensionId {
     }
   }
 
-  foreach ($extension in $pathMatches) {
+  foreach ($extension in ($pathMatches | Where-Object { $BlockedLegacyExtensionIds -notcontains $_.Name })) {
     if (Test-ExtensionSettingsEnabled -Settings $extension.Value) {
       return $extension.Name
     }
   }
-  if ($pathMatches.Count -gt 0) {
+  if ($pathMatches.Count -gt 0 -and $ExtensionId) {
     return $pathMatches[0].Name
   }
 
@@ -157,43 +158,105 @@ function Find-UnpackedExtensionId {
     }
   }
 
-  foreach ($extension in $nameMatches) {
+  foreach ($extension in ($nameMatches | Where-Object { $BlockedLegacyExtensionIds -notcontains $_.Name })) {
     if (Test-ExtensionSettingsEnabled -Settings $extension.Value) {
       return $extension.Name
     }
   }
-  if ($nameMatches.Count -gt 0) {
+  if ($nameMatches.Count -gt 0 -and $ExtensionId) {
     return $nameMatches[0].Name
   }
 
   return ""
 }
 
+function Get-InstalledExtensionInfo {
+  param(
+    [string[]]$PreferencesPaths,
+    [string]$ExpectedExtensionId
+  )
+
+  foreach ($preferencesPath in $PreferencesPaths) {
+    if (-not (Test-Path -LiteralPath $preferencesPath)) {
+      continue
+    }
+
+    $preferences = Get-Content -LiteralPath $preferencesPath -Raw | ConvertFrom-Json
+    $extensions = Get-ObjectPropertyValue -Object $preferences -Name "extensions"
+    $settings = Get-ObjectPropertyValue -Object $extensions -Name "settings"
+    if (-not $settings) {
+      continue
+    }
+
+    $extension = $settings.PSObject.Properties[$ExpectedExtensionId]
+    if ($extension) {
+      return [pscustomobject]@{
+        PreferencesPath = $preferencesPath
+        Settings = $extension.Value
+      }
+    }
+  }
+
+  return $null
+}
+
 if (-not $ExtensionId -and $ExtensionUrl) {
   $ExtensionId = Get-ExtensionIdFromUrl $ExtensionUrl
 }
 
-$extensionRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")
+$repoRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")
+$extensionRoots = @($repoRoot)
+$defaultExportRoot = Join-Path $repoRoot.Path "dist-unpacked"
+if (Test-Path -LiteralPath $defaultExportRoot) {
+  $extensionRoots += Resolve-Path -LiteralPath $defaultExportRoot
+}
 $profilePath = Join-Path $ProfileDir $ProfileName
+$preferencesPaths = @(
+  (Join-Path $profilePath "Preferences"),
+  (Join-Path $profilePath "Secure Preferences")
+)
 
 if (-not $ExtensionId) {
-  $preferencesPath = Join-Path $profilePath "Preferences"
-  $ExtensionId = Find-UnpackedExtensionId -PreferencesPath $preferencesPath -ExpectedExtensionPath $extensionRoot.Path
+  foreach ($candidateRoot in $extensionRoots) {
+    $ExtensionId = Find-UnpackedExtensionId -PreferencesPath $preferencesPaths[0] -ExpectedExtensionPath $candidateRoot.Path
+    if ($ExtensionId) {
+      break
+    }
+  }
 }
 
 if (-not $ExtensionId) {
-  $securePreferencesPath = Join-Path $profilePath "Secure Preferences"
-  $ExtensionId = Find-UnpackedExtensionId -PreferencesPath $securePreferencesPath -ExpectedExtensionPath $extensionRoot.Path
+  foreach ($candidateRoot in $extensionRoots) {
+    $ExtensionId = Find-UnpackedExtensionId -PreferencesPath $preferencesPaths[1] -ExpectedExtensionPath $candidateRoot.Path
+    if ($ExtensionId) {
+      break
+    }
+  }
 }
 
 if (-not $ExtensionId) {
   throw "Could not determine the Study Ladder extension ID. Pass -ExtensionUrl, pass -ExtensionId, or set STUDY_LADDER_EXTENSION_ID."
 }
 
+$installedExtension = Get-InstalledExtensionInfo -PreferencesPaths $preferencesPaths -ExpectedExtensionId $ExtensionId
+if (-not $installedExtension) {
+  throw "Chrome profile '$ProfileName' does not have Study Ladder saved under extension ID '$ExtensionId'. Open chrome://extensions, enable Developer mode, choose Load unpacked, and select '$($repoRoot.Path)' or '$defaultExportRoot'."
+}
+
+$installedPath = Get-NormalizedPath (Get-ObjectPropertyValue -Object $installedExtension.Settings -Name "path")
+$expectedRootPaths = @($extensionRoots | ForEach-Object { Get-NormalizedPath $_.Path })
+$generatedOutPaths = @($extensionRoots | ForEach-Object { Get-NormalizedPath (Join-Path $_.Path "out") })
+if ($installedPath -and ($generatedOutPaths -contains $installedPath)) {
+  throw "Study Ladder is loaded from '$installedPath'. Load '$($repoRoot.Path)' or '$defaultExportRoot' instead; generated out folders are recreated during builds and can disappear from Chrome after restart."
+}
+if ($installedPath -and ($expectedRootPaths -notcontains $installedPath)) {
+  throw "Study Ladder extension ID '$ExtensionId' is saved from '$installedPath', but this repo expects '$($expectedRootPaths -join "' or '")'. Re-load the unpacked extension from the repo/export root or pass the matching -ProfileName/-ProfileDir."
+}
+
 $ChromePath = Resolve-ChromePath -Path $ChromePath
 
-$reloadUrl = "chrome-extension://$ExtensionId/reload.html"
-$defaultOpenUrl = "chrome-extension://$ExtensionId/out/index.html"
+$reloadUrl = "chrome-extension://$ExtensionId/pages/reload.html"
+$defaultOpenUrl = "chrome-extension://$ExtensionId/pages/index.html"
 if (-not $OpenUrl -and $ExtensionUrl -and (Test-ExtensionPageUrl -Url $ExtensionUrl -ExpectedExtensionId $ExtensionId) -and -not (Test-ReloadPageUrl -Url $ExtensionUrl)) {
   $OpenUrl = $ExtensionUrl
 }

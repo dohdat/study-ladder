@@ -6,23 +6,23 @@ A Chrome extension built with Vite, React, Mantine, and Monaco Editor for JavaSc
 
 ```powershell
 npm.cmd install
-scripts\dev-extension.cmd -ExtensionId mckniaaigcphmilhcpcpanfipcaoainb
+scripts\dev-extension.cmd
 ```
 
 For Chrome extension UI iteration, build and reload the real unpacked extension:
 
 ```powershell
-scripts\dev-extension.cmd -ExtensionId mckniaaigcphmilhcpcpanfipcaoainb
+scripts\dev-extension.cmd
 ```
 
-This uses a quick Vite build to rebuild `out/` and then reloads `chrome-extension://.../out/index.html`.
+This uses a quick Vite build to rebuild `out/`, refresh the stable extension pages under `pages/`, and then reloads `chrome-extension://.../pages/index.html`.
 The page stays inside the extension; it does not open a localhost app.
 The quick loop skips the full Monaco asset check after `public/monaco/vs` already exists.
 
 For repeated small visual tweaks, keep a warm build watcher running:
 
 ```powershell
-scripts\watch-extension.cmd -ExtensionId mckniaaigcphmilhcpcpanfipcaoainb
+scripts\watch-extension.cmd
 ```
 
 It rebuilds `out/` on file changes and reloads the unpacked extension after each rebuild.
@@ -41,10 +41,25 @@ Then load the exported extension:
 1. Open `chrome://extensions`.
 2. Enable Developer mode.
 3. Choose **Load unpacked**.
-4. Select `D:\Leetcode + System Design extension\out`.
+4. Select `D:\Leetcode + System Design extension\dist-unpacked`.
 
-`install:native-host` registers the local Codex hint helper for Chrome under the stable extension id
-`mckniaaigcphmilhcpcpanfipcaoainb`. Run it once after cloning or moving the repo.
+Do not select the generated `out` folder. Vite deletes and recreates `out` during builds, so loading that folder can make Chrome drop the unpacked extension after restart. Load `dist-unpacked`, which is a stable exported extension folder with the same root-manifest/pages shape as the Skedpal extension.
+
+To refresh the exported folder after code changes:
+
+```powershell
+npm.cmd run export:extension
+```
+
+If managed Chrome still hides the unpacked extension after restart, close every Chrome window and start it through:
+
+```powershell
+scripts\open-extension.cmd
+```
+
+That launches Chrome with `--load-extension="D:\Leetcode + System Design extension"` and opens the Study Ladder page. If Chrome is already running, the script can only open the URL; Chrome applies `--load-extension` during startup.
+
+`install:native-host` registers the local Codex hint helper for the currently loaded extension id. Run it once after cloning, moving the repo, or reloading the extension under a new id.
 
 ## Test Coverage
 

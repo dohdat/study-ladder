@@ -3,7 +3,6 @@
   "name": "Study Ladder",
   "description": "Spaced repetition practice for JavaScript LeetCode-style questions.",
   "version": "0.2.0",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2BITGgzdGYyU1LHwcV9hvCcFUmzoL/JcNtblazypwvKYUp51BJchL0qkEwJHawvkeosgfcleLnpOe4saX1/JYd6a1NPGomizuNeJ7yH29CcGi6asrtjJRdxrVYUzSYJQYRGvkSTdPNGt1g4DAizJHA25V9tXiXA/N6r1gvuzLIDEnQl0ri3pjkPXWg97oq+eI7Vy4MfijfG6UWGZa4Br58KtB5iEUhhuvlzrDSeHz6MYt6d8SWbsrqjf2/yUyOaERjOKteLT2/r2b+vtQoLhD1f+cZAo1W4HO1tJt8ViMAAivYJF2hzXuuGRhQDmcmJfLWxToLVko0MF6AttsjJW+QIDAQAB",
   "permissions": ["clipboardWrite", "nativeMessaging", "storage", "tabs"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "action": {
