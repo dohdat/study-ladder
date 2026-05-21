@@ -19,7 +19,7 @@ import { getUniqueMonsterBonusCount } from "./monsterCore";
 import { getPomEligibleRelics, grantRelic, rollRelic, upgradeRelicRarity } from "./relicCore";
 import { createShopStock } from "./shopCore";
 import { getMaxHealth, getMetaRelicChoiceBonus, getMetaStartingGoldBonus, getMetaStartingRelicCount, getRunModifierTotals } from "./studyCore";
-import type { Difficulty, HeatConditionId, HeatConditionRanks, InventoryItem, ItemRarity, Question, Relic, RelicRarity, SpireAct, SpireCombatRewardKind, SpireDifficulty, SpireMapNode, SpireNodeKind, SpireRun, StudyState, UnknownEncounterKind } from "../types/study";
+import type { Difficulty, HeatConditionId, HeatConditionRanks, InventoryItem, ItemModifier, ItemRarity, Question, Relic, RelicRarity, SpireAct, SpireCombatRewardKind, SpireDifficulty, SpireMapNode, SpireNodeKind, SpireRun, StudyState, UnknownEncounterKind } from "../types/study";
 
 export const DEFAULT_SPIRE_MIN_RATING = 1500;
 export const SPIRE_MIN_RATING_MIN = 900;
@@ -62,6 +62,10 @@ const SKIP_META_COMMON = 3;
 const SKIP_META_ELITE = 6;
 const SKIP_META_BOSS = 10;
 const EVENT_META_REWARD = 8;
+const REST_ATTUNEMENT_ROOMS = 3;
+const REST_ATTUNEMENT_MODIFIER_RATIO = 0.5;
+const REST_ATTUNEMENT_MAX_MODIFIERS = 2;
+const REST_ATTUNEMENT_FALLBACK_LIFE = 8;
 const POTION_HEALTH_RATIO = 0.25;
 const UNKNOWN_BLIGHT_WEIGHT = 1;
 const UNKNOWN_MONSTER_WEIGHT = 1;
@@ -147,7 +151,7 @@ const ROOM_REWARD_ITEM_RARITY: Record<"enemy" | "elite" | "boss" | "treasure", {
 };
 const ITEM_RARITY_ORDER: ItemRarity[] = ["common", "uncommon", "rare", "epic", "legendary"];
 const MAX_MERCHANT_UPGRADE_RARITY: ItemRarity = "rare";
-export type RestSpecialAction = "smith" | "sellRelic";
+export type RestSpecialAction = "smith" | "attuneRelic";
 const CONSECUTIVE_BLOCKED_KINDS: SpireNodeKind[] = ["elite", "merchant", "rest"];
 const GUARANTEED_TREASURE_FLOORS = new Set([GUARANTEED_TREASURE_MIN_FLOOR_INDEX, GUARANTEED_TREASURE_MIN_FLOOR_INDEX + 1, GUARANTEED_TREASURE_MAX_FLOOR_INDEX]);
 
@@ -860,34 +864,15 @@ function applyBlightRoomReward(state: StudyState, node: SpireMapNode, now: numbe
 export function getRestSpecialAction(state: StudyState): RestSpecialAction {
   const currentNode = getCurrentSpireNode(state);
   const seed = `${state.profile.spireRun.mapSeed}:${currentNode?.id || "rest"}:rest-special`;
-  return getRoll(seed) < 0.5 ? "smith" : "sellRelic";
-}
-
-export function getRestRelicSellValue(relic: Relic) {
-  switch (relic.rarity) {
-    case "boss":
-      return 16;
-    case "unique":
-      return 14;
-    case "event":
-      return 12;
-    case "rare":
-      return 10;
-    case "shop":
-      return 8;
-    case "uncommon":
-      return 7;
-    case "common":
-      return 5;
-    case "starter":
-      return 3;
-    default:
-      return 6;
-  }
+  return getRoll(seed) < 0.5 ? "smith" : "attuneRelic";
 }
 
 export function canUpgradeSpireInventoryItem(state: StudyState) {
   return state.profile.inventory.some(canUpgradeItemRarity);
+}
+
+export function getRestAttunableRelics(state: StudyState) {
+  return getPomEligibleRelics(state);
 }
 
 function upgradeRandomEligibleItem(state: StudyState): StudyState {
@@ -1300,21 +1285,49 @@ export function upgradeCurrentSpireRoomItem(state: StudyState) {
   return markSpireRoomRewardClaimed(upgraded, currentNode.id);
 }
 
-export function sellRestSiteRelic(state: StudyState, relicId: string) {
+export function attuneRestSiteRelic(state: StudyState, relicId: string) {
   const currentNode = getCurrentSpireNode(state);
-  const relic = state.profile.relics.find((item) => item.id === relicId);
+  const relic = getRestAttunableRelics(state).find((item) => item.id === relicId);
   if (!currentNode || currentNode.kind !== "rest" || state.profile.spireRun.mapOpen || isSpireRoomRewardClaimed(state, currentNode.id) || !relic) {
     return state;
   }
-  const metaCurrency = getRestRelicSellValue(relic);
-  const sold = {
+  const attuned = {
     ...state,
     profile: {
       ...state.profile,
-      relics: state.profile.relics.filter((item) => item.id !== relic.id)
+      activePotionEffects: [
+        ...(state.profile.activePotionEffects || []).filter((effect) => effect.id !== getRestAttunementEffectId(currentNode.id, relic.id)),
+        createRestAttunementEffect(relic, currentNode.id)
+      ]
     }
   };
-  return markSpireRoomRewardClaimed(recordRoomRewardClaim(addMetaCurrency(sold, metaCurrency), currentNode.id, { metaCurrency }), currentNode.id);
+  return markSpireRoomRewardClaimed(recordRoomRewardClaim(attuned, currentNode.id, { relicIds: [relic.id] }), currentNode.id);
+}
+
+function createRestAttunementEffect(relic: Relic, sourceNodeId: string) {
+  return {
+    id: getRestAttunementEffectId(sourceNodeId, relic.id),
+    modifiers: getRestAttunementModifiers(relic),
+    name: `${relic.name} Attunement`,
+    roomsRemaining: REST_ATTUNEMENT_ROOMS,
+    sourceNodeId,
+    stats: {}
+  };
+}
+
+function getRestAttunementEffectId(sourceNodeId: string, relicId: string) {
+  return `rest-attunement-${sourceNodeId}-${relicId}`;
+}
+
+function getRestAttunementModifiers(relic: Relic): ItemModifier[] {
+  const modifiers = (relic.modifiers || [])
+    .filter((modifier) => modifier.value > 0)
+    .slice(0, REST_ATTUNEMENT_MAX_MODIFIERS)
+    .map((modifier) => ({
+      key: modifier.key,
+      value: Math.max(1, Math.ceil(modifier.value * REST_ATTUNEMENT_MODIFIER_RATIO))
+    }));
+  return modifiers.length ? modifiers : [{ key: "maxLife", value: REST_ATTUNEMENT_FALLBACK_LIFE }];
 }
 
 export function smithSpireNode(state: StudyState, now = Date.now()) {

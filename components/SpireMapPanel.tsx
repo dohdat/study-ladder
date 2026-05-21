@@ -7,7 +7,7 @@ import { CoinIcon } from "./CoinIcon";
 import { ShopPanel } from "./ShopPanel";
 import { RelicIcon } from "./RelicIcon";
 import { HEAT_CONDITION_DEFINITIONS, MAX_HEAT, getHeatLevel, getSpireCampaignLabel, getSpireDifficultyModifiers } from "../lib/campaignCore";
-import { canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, enterSpireNode, getCurrentSpireNode, getRestRelicSellValue, isCombatNode, isSpireRunSetupOpen, leaveSpireRoom, rerollPendingRelicReward, resetSpireHeat, selectPendingRelicReward, selectSpireNode, sellRestSiteRelic, setSpireHeatConditionRank, skipPendingRelicReward, startSpireHeatRun } from "../lib/spireMapCore";
+import { attuneRestSiteRelic, canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, enterSpireNode, getCurrentSpireNode, getRestAttunableRelics, isCombatNode, isSpireRunSetupOpen, leaveSpireRoom, rerollPendingRelicReward, resetSpireHeat, selectPendingRelicReward, selectSpireNode, setSpireHeatConditionRank, skipPendingRelicReward, startSpireHeatRun } from "../lib/spireMapCore";
 import { META_UPGRADE_DEFINITIONS, canPurchaseMetaUpgrade, getMetaUpgradeCost, purchaseMetaUpgrade } from "../lib/studyCore";
 import { formatModifier } from "../lib/modifierFormat";
 import { getRelicRarityColor } from "../lib/heroSiegeQuality";
@@ -592,20 +592,20 @@ function RelicChoiceCard(props: { footer?: React.ReactNode; onChoose: () => void
 
 function RestRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
   const used = props.state.profile.spireRun.completedNodeIds.includes(props.node.id);
-  const sellableRelics = props.state.profile.relics;
-  const [selectedRelicId, setSelectedRelicId] = useState(sellableRelics[0]?.id || "");
-  const [sellPickerOpen, setSellPickerOpen] = useState(false);
-  const selectedRelic = sellableRelics.find((relic) => relic.id === selectedRelicId) || sellableRelics[0] || null;
-  const specialText = sellableRelics.length ? " You can sell one relic for insight." : "";
+  const attunableRelics = getRestAttunableRelics(props.state);
+  const [selectedRelicId, setSelectedRelicId] = useState(attunableRelics[0]?.id || "");
+  const [attunePickerOpen, setAttunePickerOpen] = useState(false);
+  const selectedRelic = attunableRelics.find((relic) => relic.id === selectedRelicId) || attunableRelics[0] || null;
+  const specialText = attunableRelics.length ? " Attune channels one relic for the next 3 rooms." : "";
   useEffect(() => {
     if (used) {
-      setSellPickerOpen(false);
+      setAttunePickerOpen(false);
       return;
     }
-    if (sellableRelics.length && !sellableRelics.some((relic) => relic.id === selectedRelicId)) {
-      setSelectedRelicId(sellableRelics[0].id);
+    if (attunableRelics.length && !attunableRelics.some((relic) => relic.id === selectedRelicId)) {
+      setSelectedRelicId(attunableRelics[0].id);
     }
-  }, [selectedRelicId, sellableRelics, used]);
+  }, [selectedRelicId, attunableRelics, used]);
   return (
     <Stack gap="sm">
       <Group justify="space-between" wrap="nowrap" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "14px 16px" }}>
@@ -618,35 +618,35 @@ function RestRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch<Rea
         </Group>
         <Group gap={8} wrap="nowrap">
           <HeroSiegeButton disabled={used} onClick={() => props.setState((previous) => claimCurrentSpireRoomReward(previous))} minWidth={104}>Rest</HeroSiegeButton>
-          {sellableRelics.length ? (
-            <HeroSiegeButton disabled={used} onClick={() => setSellPickerOpen((open) => !open)} minWidth={126}>{sellPickerOpen ? "Cancel Sell" : "Sell Relic"}</HeroSiegeButton>
+          {attunableRelics.length ? (
+            <HeroSiegeButton disabled={used} onClick={() => setAttunePickerOpen((open) => !open)} minWidth={126}>{attunePickerOpen ? "Cancel Attune" : "Attune Relic"}</HeroSiegeButton>
           ) : null}
           <HeroSiegeButton disabled={!used} onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
         </Group>
       </Group>
-      {!used && sellPickerOpen ? (
+      {!used && attunePickerOpen ? (
         <Box style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "14px 16px" }}>
           <Group justify="space-between" mb={10} wrap="nowrap">
             <Box>
-              <Text size="sm" fw={900} style={{ color: "#fff0b8", textShadow: "0 1px 0 #000" }}>Sell a Relic</Text>
-              <Text size="xs" c="dimmed">Choose one relic to convert into insight. This uses the rest site.</Text>
+              <Text size="sm" fw={900} style={{ color: "#fff0b8", textShadow: "0 1px 0 #000" }}>Attune a Relic</Text>
+              <Text size="xs" c="dimmed">Choose one relic to channel for the next 3 rooms. This uses the rest site.</Text>
             </Box>
             <HeroSiegeButton
               disabled={!selectedRelic}
-              onClick={() => selectedRelic && props.setState((previous) => sellRestSiteRelic(previous, selectedRelic.id))}
+              onClick={() => selectedRelic && props.setState((previous) => attuneRestSiteRelic(previous, selectedRelic.id))}
               minWidth={132}
             >
-              {selectedRelic ? `Sell +${getRestRelicSellValue(selectedRelic)}` : "Sell"}
+              Attune
             </HeroSiegeButton>
           </Group>
           <Box style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
-            {sellableRelics.map((relic) => (
+            {attunableRelics.map((relic) => (
               <RelicChoiceCard
                 key={relic.id}
                 relic={relic}
                 selected={selectedRelicId === relic.id}
                 onChoose={() => setSelectedRelicId(relic.id)}
-                footer={<Text size="11px" fw={900} c="violet.2">Sell value: +{getRestRelicSellValue(relic)} insight</Text>}
+                footer={<Text size="11px" fw={900} c="violet.2">Attune: temporary 3-room focus effect</Text>}
               />
             ))}
           </Box>

@@ -59,7 +59,7 @@ export const MODIFIER_FORMATTERS: Partial<Record<ItemModifierKey, (value: number
   timerDamagePercent: (value) => value > 0 ? `${plus(value)}% Submit Damage from remaining time` : "",
   timerPenaltyPercent: (value) => value > 0 ? `${value}% Shorter Question Timer` : "",
   timerPauseSeconds: (value) => value > 0 ? `Timer starts with ${value}s grace` : "",
-  resistancePenetrationPercent: (value) => `${plus(value)}% Resistance Penetration`
+  resistancePenetrationPercent: (value) => `${plus(value)}% Guard Penetration`
 };
 
 export function formatModifier(key: ItemModifierKey, value: number) {

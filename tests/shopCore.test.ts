@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
-import { buyShopItem, createShopStock, getShopItemCost } from "../lib/shopCore";
+import { createSpireRun } from "../lib/spireMapCore";
+import { buyShopItem, createShopStock, getShopItemCost, getShopRelicSellValue, getShopSellableRelics, sellShopRelic } from "../lib/shopCore";
 import { applyScheduleResult, defaultState, getEffectiveCharacterStats, getMaxHealth, MAX_HEALTH } from "../lib/studyCore";
 
 describe("shopCore", () => {
@@ -104,5 +105,39 @@ describe("shopCore", () => {
 
     expect(discountedCost).toBeLessThan(listing?.cost || 0);
     expect(purchased.profile.coins).toBe(0);
+  });
+
+  it("sells owned relics for gold only while a merchant shop is open", () => {
+    let state = defaultState();
+    const relic = {
+      description: "Test sell relic",
+      id: "shop-sale-relic",
+      modifiers: [],
+      name: "Shop Sale Relic",
+      rarity: "rare" as const,
+      source: "any" as const
+    };
+    const blight = {
+      description: "Test blight",
+      id: "shop-sale-blight",
+      modifiers: [],
+      name: "Shop Sale Blight",
+      rarity: "blight" as const,
+      source: "any" as const
+    };
+    state.profile.relics = [relic, blight];
+    state.profile.coins = 10;
+
+    expect(sellShopRelic(state, relic.id)).toBe(state);
+
+    const run = createSpireRun(3500);
+    const merchant = run.nodes.find((node) => node.kind === "merchant") || run.nodes[0];
+    state = { ...state, profile: { ...state.profile, spireRun: { ...run, currentNodeId: merchant.id, mapOpen: false } } };
+
+    expect(getShopSellableRelics(state).map((item) => item.id)).toEqual([relic.id]);
+    state = sellShopRelic(state, relic.id);
+
+    expect(state.profile.relics.map((item) => item.id)).toEqual([blight.id]);
+    expect(state.profile.coins).toBe(10 + getShopRelicSellValue(relic));
   });
 });

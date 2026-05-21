@@ -94,7 +94,7 @@ import {
   setSpireMinimumRating,
   spendStatPoint
 } from "../lib/studyCore";
-import { getMonsterAttackType, getMonsterMaxHealth, getMonsterResistances, getUniqueMonsterBonuses } from "../lib/monsterCore";
+import { getMonsterAttackType, getMonsterMaxHealth, getUniqueMonsterBonuses } from "../lib/monsterCore";
 import type { CharacterStatKey, Difficulty, Question, Relic, RelicRarity, SpireAct, StudyState } from "../types/study";
 
 const ICON_SIZE = 16;
@@ -551,7 +551,6 @@ function MonsterWikiDetails(props: { monster: (typeof MONSTER_WIKI_ENTRIES)[numb
   const bonuses = getUniqueMonsterBonuses(question);
   const health = getMonsterHealthRange(question);
   const attackType = getMonsterAttackType(question, bonuses);
-  const resistances = getMonsterResistanceRows(question);
   return (
     <Stack gap={8} style={{ textAlign: "center", width: TOOLTIP_SHEET_WIDTH }}>
       <Box>
@@ -560,11 +559,6 @@ function MonsterWikiDetails(props: { monster: (typeof MONSTER_WIKI_ENTRIES)[numb
       </Box>
       <TooltipPowerRow label="Health" value={`${health.min}-${health.max}`} range={health} />
       <Text size="sm" fw={900} style={{ color: getResistanceColor(attackType), lineHeight: 1.18, textShadow: "0 1px 0 #000" }}>Attack Type {formatDamageType(attackType)}</Text>
-      <Stack gap={2}>
-        {resistances.map((row) => (
-          <TooltipAffixLine key={row.label} color={row.color} text={`${row.label} Resistance ${row.value}%`} range={{ min: row.value, max: row.value }} />
-        ))}
-      </Stack>
       {bonuses.length ? (
         <Text size="xs" fw={900} c="#ff8a3d">{bonuses.join(", ")}</Text>
       ) : (
@@ -581,14 +575,6 @@ function TooltipPowerRow(props: { label: string; range: { max: number; min: numb
       <Text size="sm" fw={900} c="#6f6ff6">{props.value}</Text>
       <Text size="sm" fw={900} c="#20e020">[{props.range.min}-{props.range.max}]</Text>
     </Group>
-  );
-}
-
-function TooltipAffixLine(props: { color: string; range: { max: number; min: number }; text: string }) {
-  return (
-    <Text size="sm" fw={900} style={{ color: props.color, lineHeight: 1.18, textShadow: "0 1px 0 #000" }}>
-      {props.text} <Box component="span" c="#20e020">[{props.range.min}-{props.range.max}]</Box>
-    </Text>
   );
 }
 
@@ -615,12 +601,6 @@ function getMonsterHealthRange(question: Question) {
     max: Math.ceil(health * (1 + MONSTER_HEALTH_RANGE_RATIO)),
     min: Math.max(1, Math.floor(health * (1 - MONSTER_HEALTH_RANGE_RATIO)))
   };
-}
-
-function getMonsterResistanceRows(question: Question) {
-  return Object.entries(getMonsterResistances(question))
-    .filter(([, value]) => value > 0)
-    .map(([label, value]) => ({ color: getResistanceColor(label), label: formatDamageType(label), value }));
 }
 
 function formatDamageType(type: string) {

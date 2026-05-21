@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getMonsterAttackProfile, getMonsterMaxHealth, getMonsterPlayerDamage, getMonsterResistances, getUniqueMonsterBonusCount, getUniqueMonsterBonuses, getUniqueMonsterName, UNIQUE_MONSTER_BONUSES } from "../lib/monsterCore";
+import { getMonsterAttackProfile, getMonsterMaxHealth, getMonsterPlayerDamage, getUniqueMonsterBonusCount, getUniqueMonsterBonuses, getUniqueMonsterName, UNIQUE_MONSTER_BONUSES } from "../lib/monsterCore";
 import { DAMAGE_TYPES, ELEMENTAL_DAMAGE_TYPES } from "../lib/resistanceCore";
 import type { Difficulty, Question } from "../types/study";
 
@@ -38,26 +38,21 @@ describe("monsterCore", () => {
   it("applies every unique bonus to combat math", () => {
     const extraFast = findQuestion((bonuses) => bonuses.includes("Extra Fast") && !bonuses.includes("Multi-Shot"));
     const stoneSkin = findQuestion((bonuses) => bonuses.includes("Stone Skin"));
-    const plainHealth = findQuestion((bonuses) => !bonuses.includes("Stone Skin") && !bonuses.includes("Magic Resistant"));
+    const plainHealth = findQuestion((bonuses) => !bonuses.includes("Stone Skin") && !bonuses.includes("Arcane Shield"));
 
     expect(getMonsterAttackProfile(extraFast, 5, 1000).hitCount).toBe(2);
     expect(UNIQUE_MONSTER_BONUSES).not.toContain("Mana Burn");
     expect(getMonsterMaxHealth(stoneSkin)).toBeGreaterThan(getMonsterMaxHealth(plainHealth));
-    expect(getMonsterPlayerDamage(stoneSkin, 40)).toBeLessThan(40);
+    expect(getMonsterAttackProfile(stoneSkin, 5, 1000).damage).toBeGreaterThan(0);
   });
 
-  it("gives monsters real damage-type resistances", () => {
-    const stoneSkin = findQuestion((bonuses) => bonuses.includes("Stone Skin"));
-    const magicResistant = findQuestion((bonuses) => bonuses.includes("Magic Resistant"));
+  it("keeps enemy traits from countering player damage types", () => {
+    const arcaneShield = findQuestion((bonuses) => bonuses.includes("Arcane Shield"));
     const fireEnchanted = findQuestion((bonuses) => bonuses.includes("Fire Enchanted"));
 
-    expect(getMonsterResistances(stoneSkin).physical).toBeGreaterThan(0);
-    expect(getMonsterResistances(magicResistant).cold).toBeGreaterThan(0);
-    expect(getMonsterResistances(magicResistant).poison).toBeGreaterThan(0);
-    expect(getMonsterResistances(fireEnchanted).fire).toBeGreaterThan(getMonsterResistances(fireEnchanted).cold);
-    expect(getMonsterPlayerDamage(fireEnchanted, 40, "fire")).toBeLessThan(getMonsterPlayerDamage(fireEnchanted, 40, "physical"));
-    expect(getMonsterPlayerDamage(fireEnchanted, 40, "fire", 100)).toBe(getMonsterPlayerDamage(fireEnchanted, 40, "physical"));
-    expect(getMonsterPlayerDamage(fireEnchanted, 40, "physical", 0, 30)).toBeLessThan(getMonsterPlayerDamage(fireEnchanted, 40, "physical"));
+    expect(getMonsterMaxHealth(arcaneShield)).toBeGreaterThan(getMonsterMaxHealth(findQuestion((bonuses) => !bonuses.includes("Arcane Shield") && !bonuses.includes("Stone Skin"))));
+    expect(getMonsterPlayerDamage(fireEnchanted, 40, "fire")).toBe(getMonsterPlayerDamage(fireEnchanted, 40, "physical"));
+    expect(getMonsterPlayerDamage(fireEnchanted, 40, "poison")).toBe(getMonsterPlayerDamage(fireEnchanted, 40, "physical"));
     expect(getMonsterPlayerDamage(fireEnchanted, 0, "fire")).toBe(0);
   });
 

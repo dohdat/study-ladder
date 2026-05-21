@@ -607,7 +607,7 @@ describe("studyCore", () => {
     const slowHit = getMonsterHit(state, question, 1000, { timePressureRatio: 1 });
 
     expect(slowHit.damage).toBeLessThan(fastHit.damage);
-    expect(slowHit.effects).toContain("Time armor");
+    expect(slowHit.effects).toContain("Guarded");
   });
 
   it("applies no-run and timer relic damage bonuses only when their conditions are met", () => {
@@ -710,6 +710,15 @@ describe("studyCore", () => {
     expect(slowRetaliation.damage).toBeGreaterThan(fastRetaliation.damage);
     expect(earlyPressure.damage).toBe(0);
     expect(latePressure.damage).toBeGreaterThan(fastRetaliation.damage);
+  });
+
+  it("enrages low-health monsters for harder attacks", () => {
+    const question = questions[0];
+    const normal = getTimedMonsterAttack(question, getQuestionTimeLimitMs(question), 1000, "retaliation");
+    const enraged = getTimedMonsterAttack(question, getQuestionTimeLimitMs(question), 1000, "retaliation", { enraged: true });
+
+    expect(enraged.damage).toBeGreaterThan(normal.damage);
+    expect(enraged.effects).toContain("Enraged");
   });
 
   it("does not drop equipment from solved questions in roguelike mode", () => {

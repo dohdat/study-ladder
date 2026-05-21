@@ -1,7 +1,7 @@
 import { EQUIPMENT_SLOTS, createDropItem } from "./itemCore";
 import { getRelicCost, getRelicModifierTotals, grantRelic, rollRelic } from "./relicCore";
 import { getHeatShopPriceIncreasePercent } from "./campaignCore";
-import type { ActivePotionEffect, CharacterStats, Difficulty, Question, ShopItem, StudyState } from "../types/study";
+import type { ActivePotionEffect, CharacterStats, Difficulty, Question, Relic, ShopItem, StudyState } from "../types/study";
 
 const HASH_SEED = 2166136261;
 const HASH_MULTIPLIER = 16777619;
@@ -26,6 +26,7 @@ const ITEM_STAT_COST_MULTIPLIER = 6;
 const COMMON_RARITY_COST = 8;
 const MAX_SHOP_DISCOUNT_PERCENT = 70;
 const MERCHANT_RELIC_RARITIES = ["common", "uncommon", "rare", "shop"] as const;
+const RELIC_SELL_VALUE_DIVISOR = 4;
 type ShopStockOptions = { extraRelicStock?: number; maxItemLevel?: number; relicRollState?: StudyState };
 
 const RARITY_COSTS = {
@@ -65,6 +66,28 @@ export function buyShopItem(state: StudyState, shopItemId: string, maxHealth: nu
   return next;
 }
 
+export function sellShopRelic(state: StudyState, relicId: string): StudyState {
+  const relic = getShopSellableRelics(state).find((item) => item.id === relicId);
+  if (!relic || !isMerchantShopOpen(state)) {
+    return state;
+  }
+  const next = cloneShopState(state);
+  next.profile.coins += getShopRelicSellValue(relic);
+  next.profile.relics = next.profile.relics.filter((item) => item.id !== relic.id);
+  return next;
+}
+
+export function getShopSellableRelics(state: StudyState) {
+  return state.profile.relics.filter((relic) => relic.rarity !== "blight");
+}
+
+export function getShopRelicSellValue(relic: Relic) {
+  if (relic.rarity === "blight") {
+    return 0;
+  }
+  return Math.max(1, Math.floor(getRelicCost(relic) / RELIC_SELL_VALUE_DIVISOR));
+}
+
 export function canBuyShopItem(state: StudyState, listing: ShopItem, _maxHealth: number, _maxMana = 0) {
   if (state.profile.coins < getShopItemCost(state, listing)) {
     return false;
@@ -73,6 +96,11 @@ export function canBuyShopItem(state: StudyState, listing: ShopItem, _maxHealth:
     return true;
   }
   return true;
+}
+
+function isMerchantShopOpen(state: StudyState) {
+  const currentNode = state.profile.spireRun.nodes.find((node) => node.id === state.profile.spireRun.currentNodeId);
+  return Boolean(currentNode?.kind === "merchant" && !state.profile.spireRun.mapOpen);
 }
 
 export function getShopItemCost(state: StudyState, listing: ShopItem) {

@@ -20,7 +20,7 @@ import { usePersistAchievements } from "../hooks/usePersistAchievements";
 import { useStudyNotifications } from "../hooks/useStudyNotifications";
 import { areHintsDisabledByHeat, isRunCodeDisabledByHeat } from "../lib/campaignCore";
 import { beautifyCode } from "../lib/codeFormat";
-import { applyPassedCombatResult, getElapsedPressureRatio, getTimedMonsterAttack } from "../lib/combatCore";
+import { applyPassedCombatResult, getElapsedPressureRatio, getTimedMonsterAttack, isMonsterEnraged } from "../lib/combatCore";
 import { getTimerDisplay } from "../lib/timerDisplay";
 import { chooseNextSpireQuestion, completeSpireQuestion, getCurrentRoundQuestion, getCurrentSpireNode, isCombatNode as isSpireCombatNode } from "../lib/spireMapCore";
 import {
@@ -237,7 +237,7 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
   }
   if (!message.ok) {
     const now = Date.now();
-    const attack = getTimedMonsterAttack(question, params.timeRemainingMs, now, "retaliation");
+    const attack = getTimedMonsterAttack(question, params.timeRemainingMs, now, "retaliation", { enraged: isMonsterEnraged(params.state, question) });
     const healthLoss = getIncomingDamageEffect(params.state, attack.damage, attack.manaDamage, question.id, attack.element).healthLoss;
     if (healthLoss > 0) {
       params.showPlayerImpact(createPlayerImpact(question, attack, healthLoss, now));
@@ -330,13 +330,13 @@ function finishPassedSubmit(params: Parameters<typeof useRunnerMessages>[0], que
 }
 
 function applyElapsedCombatDamage(state: StudyState, question: Question, timeRemainingMs: number, now: number) {
-  const attack = getElapsedMonsterAttack(question, timeRemainingMs, now);
+  const attack = getElapsedMonsterAttack(state, question, timeRemainingMs, now);
   const result = applyIncomingDamage(state, attack.damage, attack.manaDamage, question.id, attack.element);
   return { attack, healthLoss: result.healthLoss, state: result.state };
 }
 
-function getElapsedMonsterAttack(question: Question, timeRemainingMs: number, now: number) {
-  return getTimedMonsterAttack(question, timeRemainingMs, now, "elapsed");
+function getElapsedMonsterAttack(state: StudyState, question: Question, timeRemainingMs: number, now: number) {
+  return getTimedMonsterAttack(question, timeRemainingMs, now, "elapsed", { enraged: isMonsterEnraged(state, question) });
 }
 
 function getTimeDamageStatus(result: ReturnType<typeof applyElapsedCombatDamage>) {
@@ -365,7 +365,8 @@ function formatHitStatus(hit: NonNullable<ReturnType<typeof applyPassedCombatRes
 function getFailStatus(attack: ReturnType<typeof getTimedMonsterAttack>) {
   const prefix = attack.hitCount > 1 ? `Multi-Shot hit ${attack.hitCount} times` : "Monster hit";
   const element = attack.element ? ` ${attack.element[0].toUpperCase()}${attack.element.slice(1)}` : "";
-  return `${prefix} for ${attack.damage}${element} damage. Wrong Answer`;
+  const effects = attack.effects?.length ? ` ${attack.effects.join(", ")}.` : "";
+  return `${prefix} for ${attack.damage}${element} damage.${effects} Wrong Answer`;
 }
 
 function clearRunTimer(runTimer: React.MutableRefObject<number | null>) {
@@ -659,7 +660,7 @@ function useFailAndAdvance(params: {
       return;
     }
     const now = Date.now();
-    const attack = getTimedMonsterAttack(currentQuestion, timeRemainingMs ?? getModifiedQuestionTimeLimitMs(state, currentQuestion), now, "retaliation");
+    const attack = getTimedMonsterAttack(currentQuestion, timeRemainingMs ?? getModifiedQuestionTimeLimitMs(state, currentQuestion), now, "retaliation", { enraged: isMonsterEnraged(state, currentQuestion) });
     const healthLoss = getIncomingDamageEffect(state, attack.damage, attack.manaDamage, currentQuestion.id, attack.element).healthLoss;
     const scheduled = applyScheduleResult(state, currentQuestion.id, false, draft, now, attack.damage, attack.manaDamage, attack.element);
     const picked = chooseNextSpireQuestion(scheduled, currentQuestion);

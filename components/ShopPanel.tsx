@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Badge, Box, Group, SimpleGrid, Stack, Text, Tooltip } from "@mantine/core";
 
 import { CoinAmount } from "./CoinIcon";
@@ -6,7 +7,7 @@ import { HeroSiegePotionIcon } from "./HeroSiegeItemIcon";
 import { RelicIcon } from "./RelicIcon";
 import { getRelicRarityColor, getRelicRarityLabel } from "../lib/heroSiegeQuality";
 import { formatModifier } from "../lib/modifierFormat";
-import { buyShopItem, canBuyShopItem, getRandomPotionEffect, getShopItemCost } from "../lib/shopCore";
+import { buyShopItem, canBuyShopItem, getRandomPotionEffect, getShopItemCost, getShopRelicSellValue, getShopSellableRelics, sellShopRelic } from "../lib/shopCore";
 import { getMaxHealth } from "../lib/studyCore";
 import type { CharacterStatKey, Relic, ShopItem, StudyState } from "../types/study";
 
@@ -29,10 +30,94 @@ export function ShopPanel(props: { state: StudyState; setState: React.Dispatch<R
           <Text size="sm" fw={800} c="#c8a96a" style={{ letterSpacing: 2 }}>SHOP</Text>
           <CoinAmount value={props.state.profile.coins} />
         </Group>
-        <Text size="xs" c="dimmed" mb="sm">Buy potions and relics from the current merchant stock.</Text>
+        <Text size="xs" c="dimmed" mb="sm">Buy potions and relics from the current merchant stock, or sell owned relics for gold.</Text>
         {props.state.profile.shopStock.length ? <ShopGrid state={props.state} setState={props.setState} /> : <EmptyShop />}
+        <ShopSellPanel state={props.state} setState={props.setState} />
       </Box>
     </Stack>
+  );
+}
+
+function ShopSellPanel(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
+  const sellableRelics = getShopSellableRelics(props.state);
+  const [selectedRelicId, setSelectedRelicId] = useState(sellableRelics[0]?.id || "");
+  const selectedRelic = sellableRelics.find((relic) => relic.id === selectedRelicId) || sellableRelics[0] || null;
+
+  useEffect(() => {
+    if (!sellableRelics.length) {
+      setSelectedRelicId("");
+      return;
+    }
+    if (!sellableRelics.some((relic) => relic.id === selectedRelicId)) {
+      setSelectedRelicId(sellableRelics[0].id);
+    }
+  }, [selectedRelicId, sellableRelics]);
+
+  if (!sellableRelics.length) {
+    return null;
+  }
+  return (
+    <Box mt="sm" p="sm" style={{ background: "rgba(8, 8, 7, 0.68)", border: SHOP_CARD_BORDER, boxShadow: SHOP_CARD_SHADOW }}>
+      <Group justify="space-between" mb={10} wrap="nowrap">
+        <Box>
+          <Text size="sm" fw={900} c="#c8a96a">Sell Relic</Text>
+          <Text size="xs" c="dimmed">Convert one owned relic into merchant gold.</Text>
+        </Box>
+        <HeroSiegeButton
+          disabled={!selectedRelic}
+          height={28}
+          minWidth={104}
+          onClick={() => selectedRelic && props.setState((previous) => sellShopRelic(previous, selectedRelic.id))}
+          style={{ fontSize: 10, padding: "0 12px" }}
+        >
+          {selectedRelic ? `Sell +${getShopRelicSellValue(selectedRelic)}` : "Sell"}
+        </HeroSiegeButton>
+      </Group>
+      <SimpleGrid cols={SHOP_COLUMNS}>
+        {sellableRelics.map((relic) => (
+          <ShopSellRelicCard key={relic.id} relic={relic} selected={selectedRelic?.id === relic.id} onChoose={() => setSelectedRelicId(relic.id)} />
+        ))}
+      </SimpleGrid>
+    </Box>
+  );
+}
+
+function ShopSellRelicCard(props: { onChoose: () => void; relic: Relic; selected: boolean }) {
+  const rarityColor = getRelicRarityColor(props.relic.rarity);
+  return (
+    <Tooltip
+      label={<RelicTooltip relic={props.relic} />}
+      multiline
+      withArrow
+      color="dark"
+      offset={12}
+      position="right-start"
+      styles={{ tooltip: { background: SHOP_TOOLTIP_BG, border: SHOP_TOOLTIP_BORDER, borderRadius: 2, boxShadow: SHOP_TOOLTIP_SHADOW, color: "#f1dfad", padding: 12 } }}
+    >
+      <Box
+        component="button"
+        type="button"
+        onClick={props.onChoose}
+        style={{
+          background: props.selected ? "linear-gradient(145deg, #24150a, #3a2b16)" : SHOP_CARD_BG,
+          border: props.selected ? "1px solid #d7b56d" : SHOP_CARD_BORDER,
+          boxShadow: props.selected ? "inset 0 0 0 1px #050505, 0 0 0 1px rgba(215, 181, 109, 0.35)" : SHOP_CARD_SHADOW,
+          color: "inherit",
+          cursor: "pointer",
+          padding: 10,
+          textAlign: "left",
+          width: "100%"
+        }}
+      >
+        <Group align="center" gap="xs" wrap="nowrap">
+          <RelicIcon relic={props.relic} size={44} unframed />
+          <Box style={{ minWidth: 0 }}>
+            <Text size="sm" fw={800} c={rarityColor} lineClamp={1}>{props.relic.name}</Text>
+            <Text size="12px" c="yellow.3">Sell value: +{getShopRelicSellValue(props.relic)} gold</Text>
+          </Box>
+        </Group>
+      </Box>
+    </Tooltip>
   );
 }
 

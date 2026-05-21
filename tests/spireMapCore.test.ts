@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
 import { buyShopItem } from "../lib/shopCore";
-import { advanceSpireNode, canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, getRestRelicSellValue, isSpireHeatSetupOpen, isSpireRunSetupOpen, leaveSpireRoom, normalizeSpireRun, selectPendingRelicReward, selectSpireNode, sellRestSiteRelic, setSpireHeatConditionRank, skipPendingRelicReward, smithSpireNode, SPIRE_RATINGS, startSpireHeatRun, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
+import { advanceSpireNode, attuneRestSiteRelic, canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, isSpireHeatSetupOpen, isSpireRunSetupOpen, leaveSpireRoom, normalizeSpireRun, selectPendingRelicReward, selectSpireNode, setSpireHeatConditionRank, skipPendingRelicReward, smithSpireNode, SPIRE_RATINGS, startSpireHeatRun, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
 import { EXPERIENCE_PER_LEVEL, defaultState, getMaxHealth, getMaxMana } from "../lib/studyCore";
 import type { SpireCombatRewardKind, SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
 
@@ -470,14 +470,14 @@ describe("spireMapCore", () => {
     expect(state.profile.inventory).toHaveLength(0);
   });
 
-  it("rests for 50 percent of max health rounded down", () => {
+  it("rests for 30 percent of max health rounded down", () => {
     let state = defaultState();
     state.profile.health = 10;
     state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(3500) } };
     const rest = state.profile.spireRun.nodes.find((node) => node.kind === "rest") || state.profile.spireRun.nodes[0];
     state.profile.spireRun.availableNodeIds = [rest.id];
     state = selectSpireNode(state, rest.id);
-    const expectedHealth = state.profile.health + Math.floor(getMaxHealth(state) * 0.5);
+    const expectedHealth = state.profile.health + Math.floor(getMaxHealth(state) * 0.3);
 
     state = advanceSpireNode(state, 3000);
 
@@ -508,14 +508,14 @@ describe("spireMapCore", () => {
     expect(state.profile.spireRun.completedNodeIds).toContain(rest.id);
   });
 
-  it("sells a relic for insight at rest sites instead of digging for relics", () => {
+  it("attunes a relic at rest sites for a temporary focus effect", () => {
     let state = defaultState();
     const relic = {
       description: "Test relic",
-      id: "rest-sale-relic",
-      modifiers: [],
-      name: "Rest Sale Relic",
-      rarity: "rare" as const,
+      id: "rest-attune-relic",
+      modifiers: [{ key: "enhancedDamagePercent" as const, value: 10 }],
+      name: "Rest Attune Relic",
+      rarity: "common" as const,
       source: "any" as const
     };
     state.profile.relics = [relic];
@@ -526,10 +526,18 @@ describe("spireMapCore", () => {
     state = enterSpireNode(state, 3600);
     const insightBefore = state.profile.metaProgress.currency;
 
-    state = sellRestSiteRelic(state, relic.id);
+    state = attuneRestSiteRelic(state, relic.id);
 
-    expect(state.profile.relics).toHaveLength(0);
-    expect(state.profile.metaProgress.currency).toBe(insightBefore + getRestRelicSellValue(relic));
+    expect(state.profile.relics).toHaveLength(1);
+    expect(state.profile.relics[0].rarity).toBe("common");
+    expect(state.profile.activePotionEffects).toHaveLength(1);
+    expect(state.profile.activePotionEffects[0]).toMatchObject({
+      modifiers: [{ key: "enhancedDamagePercent", value: 5 }],
+      name: "Rest Attune Relic Attunement",
+      roomsRemaining: 3,
+      sourceNodeId: rest.id
+    });
+    expect(state.profile.metaProgress.currency).toBe(insightBefore);
     expect(state.profile.spireRun.completedNodeIds).toContain(rest.id);
     expect(state.profile.spireRun.pendingRelicReward).toBeNull();
   });

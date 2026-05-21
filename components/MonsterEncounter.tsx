@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge, Box, Group, Paper, Progress, Text, Tooltip } from "@mantine/core";
 type StaticImageData = string;
 
-import { getCampaignMonsterMaxHealth, getMonsterCurrentHealth } from "../lib/combatCore";
-import { getMonsterAttackType, getMonsterResistances, getUniqueMonsterBonusDescription, getUniqueMonsterBonuses, getUniqueMonsterName } from "../lib/monsterCore";
+import { getCampaignMonsterMaxHealth, getMonsterCurrentHealth, isMonsterEnraged } from "../lib/combatCore";
+import { getMonsterAttackType, getUniqueMonsterBonusDescription, getUniqueMonsterBonuses, getUniqueMonsterName } from "../lib/monsterCore";
 import { getCurrentSpireNode } from "../lib/spireMapCore";
 import type { DamageType, Difficulty, Question, SpireAct, StudyState } from "../types/study";
 import batArt from "../assets/hero_siege_monsters/bat.png";
@@ -184,7 +184,7 @@ export function MonsterEncounter(props: { damagePop?: MonsterDamagePop | null; q
   const uniqueName = getUniqueMonsterName(props.question);
   const bonuses = getUniqueMonsterBonuses(props.question);
   const attackType = getMonsterAttackType(props.question, bonuses);
-  const resistances = getMonsterResistances(props.question);
+  const enraged = isMonsterEnraged(props.state, props.question);
   return (
     <Paper withBorder p="xs" mt="md" bg="dark.7" style={{ overflow: "visible" }}>
       <Group gap="sm" wrap="nowrap" align="center" style={{ overflow: "visible" }}>
@@ -198,9 +198,7 @@ export function MonsterEncounter(props: { damagePop?: MonsterDamagePop | null; q
           </Group>
           <Group gap={4} mb={6}>
             <Badge size="xs" variant="filled" color={getDamageTypeBadgeColor(attackType)}>Attack: {formatDamageType(attackType)}</Badge>
-            {Object.entries(resistances).filter(([, value]) => value > 0).map(([type, value]) => (
-              <Badge key={type} size="xs" variant="outline" color={getDamageTypeBadgeColor(type)}>{formatDamageType(type)} Res {value}%</Badge>
-            ))}
+            {enraged && <Badge size="xs" variant="filled" color="red">Enraged</Badge>}
           </Group>
           <UniqueBonusBadges bonuses={bonuses} color={getRatingColor(props.question.rating)} />
           <Group justify="space-between" gap="xs" mb={4}>

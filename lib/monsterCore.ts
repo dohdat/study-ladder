@@ -1,4 +1,4 @@
-import { DAMAGE_TYPES, ELEMENTAL_DAMAGE_TYPES } from "./resistanceCore";
+import { ELEMENTAL_DAMAGE_TYPES } from "./resistanceCore";
 import type { DamageType, ElementalDamageType, Question } from "../types/study";
 
 const HASH_OFFSET = 2166136261;
@@ -28,13 +28,7 @@ const SPECTRAL_HIT_DAMAGE_SPREAD = 4;
 const MULTI_SHOT_HIT_COUNT = 3;
 const DEFAULT_HIT_COUNT = 1;
 const EXTRA_FAST_HIT_COUNT_BONUS = 1;
-const MANA_BURN_DAMAGE_RATIO = 0.5;
 const TELEPORTING_DAMAGE_REDUCTION = 0.25;
-const MONSTER_ENCHANTED_RESISTANCE = 35;
-const MONSTER_MAGIC_RESISTANT_ELEMENTAL_RESISTANCE = 25;
-const MONSTER_SPECTRAL_RESISTANCE = 15;
-const MONSTER_STONE_SKIN_PHYSICAL_RESISTANCE = 25;
-const PERCENT = 100;
 const MAX_ELEMENTAL_ATTACK_CHANCE = 0.74;
 const ELEMENTAL_RATING_CHANCE_STEP = 0.04;
 const ELEMENTAL_RATING_CHANCE_DIVISOR = 400;
@@ -61,7 +55,7 @@ export const UNIQUE_MONSTER_BONUSES = [
   "Extra Strong",
   "Fire Enchanted",
   "Lightning Enchanted",
-  "Magic Resistant",
+  "Arcane Shield",
   "Multi-Shot",
   "Spectral Hit",
   "Stone Skin",
@@ -76,7 +70,7 @@ const UNIQUE_MONSTER_BONUS_DESCRIPTIONS: Record<(typeof UNIQUE_MONSTER_BONUSES)[
   "Extra Strong": "The monster hits harder when a submission fails.",
   "Fire Enchanted": "Fire attacks add burst damage on failed submissions.",
   "Lightning Enchanted": "Lightning attacks can spike damage on mistakes.",
-  "Magic Resistant": "The monster resists easy progress and has sturdier health.",
+  "Arcane Shield": "The monster starts with extra shield health, but it does not counter any damage type.",
   "Multi-Shot": "The monster can punish several weak attempts in one encounter.",
   "Spectral Hit": "The monster's hit carries mixed elemental power, making its damage less predictable.",
   "Stone Skin": "The monster has tougher defenses and is harder to bring down.",
@@ -201,7 +195,7 @@ export function getUniqueMonsterBonusDescription(bonus: string) {
 
 export function getMonsterMaxHealth(question: Question) {
   const bonuses = getUniqueMonsterBonuses(question);
-  const bonusHealth = bonuses.includes("Stone Skin") || bonuses.includes("Magic Resistant") ? HEALTH_PER_DIFFICULTY : 0;
+  const bonusHealth = bonuses.includes("Stone Skin") || bonuses.includes("Arcane Shield") ? HEALTH_PER_DIFFICULTY : 0;
   return BASE_HEALTH + question.difficulty * HEALTH_PER_DIFFICULTY + Math.round((question.rating - RATING_MIN) / HEALTH_RATING_DIVISOR) + bonusHealth;
 }
 
@@ -215,51 +209,20 @@ export function getMonsterAttackProfile(question: Question, baseDamage: number, 
     bonuses,
     damage,
     element,
+    effects: [] as string[],
     hitCount,
     manaDamage: 0,
     perHitDamage
   };
 }
 
-export function getMonsterPlayerDamage(question: Question, damage: number, damageType: DamageType = "physical", penetrationPercent = 0, resistanceBonusPercent = 0) {
+export function getMonsterPlayerDamage(question: Question, damage: number, _damageType: DamageType = "physical") {
   const bonuses = getUniqueMonsterBonuses(question);
   const reduction = bonuses.reduce((total, bonus) => total + getDamageReduction(bonus), 0);
-  const reducedDamage = Math.round(damage * (1 - Math.min(reduction, TELEPORTING_DAMAGE_REDUCTION)));
-  return applyMonsterResistance(reducedDamage, damageType, getMonsterResistances(question), penetrationPercent, resistanceBonusPercent);
-}
-
-export function getMonsterResistances(question: Question): Record<DamageType, number> {
-  const bonuses = getUniqueMonsterBonuses(question);
-  const resistances: Record<DamageType, number> = {
-    cold: 0,
-    fire: 0,
-    lightning: 0,
-    physical: 0,
-    poison: 0
-  };
-  if (bonuses.includes("Stone Skin")) {
-    resistances.physical = MONSTER_STONE_SKIN_PHYSICAL_RESISTANCE;
+  if (damage <= 0) {
+    return 0;
   }
-  if (bonuses.includes("Magic Resistant")) {
-    for (const element of ELEMENTAL_DAMAGE_TYPES) {
-      resistances[element] = Math.max(resistances[element], MONSTER_MAGIC_RESISTANT_ELEMENTAL_RESISTANCE);
-    }
-  }
-  if (bonuses.includes("Fire Enchanted")) {
-    resistances.fire = Math.max(resistances.fire, MONSTER_ENCHANTED_RESISTANCE);
-  }
-  if (bonuses.includes("Cold Enchanted")) {
-    resistances.cold = Math.max(resistances.cold, MONSTER_ENCHANTED_RESISTANCE);
-  }
-  if (bonuses.includes("Lightning Enchanted")) {
-    resistances.lightning = Math.max(resistances.lightning, MONSTER_ENCHANTED_RESISTANCE);
-  }
-  if (bonuses.includes("Spectral Hit")) {
-    for (const element of ELEMENTAL_DAMAGE_TYPES) {
-      resistances[element] = Math.max(resistances[element], MONSTER_SPECTRAL_RESISTANCE);
-    }
-  }
-  return resistances;
+  return Math.max(DEFAULT_HIT_COUNT, Math.round(damage * (1 - Math.min(reduction, TELEPORTING_DAMAGE_REDUCTION))));
 }
 
 function getBonusDamage(bonuses: string[], question: Question, now: number) {
@@ -318,14 +281,6 @@ function getForcedElement(bonuses: string[], question: Question): ElementalDamag
     return pickSeeded(ELEMENTAL_DAMAGE_TYPES, `${getMonsterSeed(question)}:spectral-element`);
   }
   return null;
-}
-
-function applyMonsterResistance(amount: number, type: DamageType, resistances: Record<DamageType, number>, penetrationPercent = 0, resistanceBonusPercent = 0) {
-  if (amount <= 0) {
-    return 0;
-  }
-  const effectiveResistance = Math.max(0, resistances[type] + Math.max(0, resistanceBonusPercent || 0) - Math.max(0, penetrationPercent || 0));
-  return Math.max(DEFAULT_HIT_COUNT, Math.round(amount * (1 - effectiveResistance / PERCENT)));
 }
 
 function getDamageReduction(bonus: string) {
