@@ -189,6 +189,7 @@ describe("studyCore", () => {
     state.profile.metaProgress.upgrades.revealSubmitTests = 2;
 
     expect(getRunModifierTotals(state)).toMatchObject({
+      armorPenetrationPercent: 10,
       bonusDamageVsElitesPercent: 8,
       criticalChancePercent: 6,
       enhancedDamagePercent: 10,
@@ -196,7 +197,6 @@ describe("studyCore", () => {
       increasedRareDropChancePercent: 12,
       relicRerollBonus: 1,
       revealSubmitTestCount: 2,
-      revealTopicCount: 1,
       shopDiscountPercent: 10
     });
   });

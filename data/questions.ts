@@ -379,6 +379,276 @@ const RATING_STEP = 17;
 
 const EXTERNAL_RATED_QUESTION_SEEDS: ExternalRatedQuestionSeed[] = [
   {
+    cases: makeCases([[[3, 3, 3, 3, 5, 5, 5, 2, 2, 7]], [[7, 7, 7, 7, 7, 7]], [[1, 2, 3, 4]], [[1, 1, 2, 2, 3, 3]], [[9, 8, 8, 7, 7, 7, 6, 6, 6, 6]], [[4, 4, 4, 2, 2, 1, 1, 1]], [[10]], [[5, 5, 6, 6, 7, 8, 8, 8]], [[1, 1, 1, 2, 2, 3, 4, 5]], [[2, 2, 2, 3, 3, 4, 4, 4, 4, 5]]], "removes frequent values first"),
+    constraints: ["Remove all copies of each chosen value.", "Return the fewest distinct values needed.", "At least half of the original array length must be removed."],
+    difficulty: 2,
+    examples: [
+      { input: "arr = [3,3,3,3,5,5,5,2,2,7]", output: "2", explanation: "Choosing 3 and 5 removes seven numbers, which is at least half the array." },
+      { input: "arr = [7,7,7,7,7,7]", output: "1", explanation: "One chosen value removes the whole array." }
+    ],
+    functionName: "minValueSetToHalveArray",
+    id: "external-reduce-array-half-v2",
+    prompt: "Choose as few distinct values as possible so removing every occurrence of those values deletes at least half of the array.",
+    rating: 1303,
+    source: { dislikes: 154, likes: 3370, slug: "reduce-array-size-to-the-half" },
+    solver: (args) => minValueSetToHalveArray(args[0] as number[]),
+    starterArgs: "arr",
+    title: "Value Set to Halve Array",
+    topics: ["Arrays", "Hash Map", "Greedy"]
+  },
+  {
+    cases: makeCases([[[2, 3, -1, 8, 4]], [[1, -1, 4]], [[2, 5]], [[0, 0, 0]], [[1, 2, 3, 3]], [[4, 1, -5, 2, 2]], [[10]], [[-1, -1, -1, 0, 1, 2]], [[3, 6, 2, 1, 7]], [[5, -2, 2, 0, 5]]], "checks left and right sums"),
+    constraints: ["Return the smallest valid index.", "Left and right sums do not include the current value.", "Return -1 when no index balances the array."],
+    difficulty: 2,
+    examples: [
+      { input: "nums = [2,3,-1,8,4]", output: "3", explanation: "The values before 8 sum to 4 and the values after it also sum to 4." },
+      { input: "nums = [2,5]", output: "-1", explanation: "Neither index leaves equal sums on both sides." }
+    ],
+    functionName: "middleBalanceIndex",
+    id: "external-middle-index-array",
+    prompt: "Return the first index where the sum on the left equals the sum on the right.",
+    rating: 1303,
+    source: { dislikes: 80, likes: 1579, slug: "find-the-middle-index-in-array" },
+    solver: (args) => middleBalanceIndex(args[0] as number[]),
+    starterArgs: "nums",
+    title: "Middle Balance Index",
+    topics: ["Arrays", "Prefix Sum"]
+  },
+  {
+    cases: makeCases([["011101"], ["00111"], ["1111"], ["00"], ["01001"], ["101010"], ["0001"], ["1100"], ["0101011"], ["1000001"]], "scores each valid binary split"),
+    constraints: ["Split into two non-empty parts.", "Score equals zeros on the left plus ones on the right.", "Return the maximum possible score."],
+    difficulty: 2,
+    examples: [
+      { input: 's = "011101"', output: "5", explanation: "Splitting after the first 0 gives one left zero and four right ones." },
+      { input: 's = "1111"', output: "3", explanation: "The best split leaves three ones on the right." }
+    ],
+    functionName: "maxBinarySplitScore",
+    id: "external-maximum-score-split-string",
+    prompt: "Split a binary string into two non-empty parts and return the best zero-left plus one-right score.",
+    rating: 1306,
+    source: { dislikes: 7, likes: 71, slug: "maximum-score-of-a-split" },
+    solver: (args) => maxBinarySplitScore(args[0] as string),
+    starterArgs: "s",
+    title: "Best Binary Split Score",
+    topics: ["Arrays", "Prefix Sum", "Strings"]
+  },
+  {
+    cases: makeCases([[[[1, 3], [2, 2], [3, 1]], 4], [[[5, 10], [2, 5], [4, 7], [3, 9]], 10], [[[1, 3]], 1], [[[2, 4], [3, 2]], 3], [[[10, 1], [1, 100]], 2], [[[4, 6], [2, 8], [1, 10]], 5], [[[3, 9], [3, 9]], 4], [[[2, 5], [8, 1]], 6], [[[6, 3], [4, 4], [2, 10]], 7], [[[1, 20], [9, 2], [5, 6]], 8]], "loads highest value boxes first"),
+    constraints: ["Each box type is [boxCount, unitsPerBox].", "Take at most truckSize boxes total.", "Return the maximum units loaded."],
+    difficulty: 2,
+    examples: [
+      { input: "boxTypes = [[1,3],[2,2],[3,1]], truckSize = 4", output: "8", explanation: "Load the 3-unit box, both 2-unit boxes, and one 1-unit box." },
+      { input: "boxTypes = [[5,10],[2,5],[4,7],[3,9]], truckSize = 10", output: "91", explanation: "The truck fills from the highest units per box first." }
+    ],
+    functionName: "maximumTruckUnits",
+    id: "external-maximum-units-truck-v2",
+    prompt: "Given box counts and units per box, load the truck to maximize total units without exceeding its box capacity.",
+    rating: 1310,
+    source: { dislikes: 240, likes: 4047, slug: "maximum-units-on-a-truck" },
+    solver: (args) => maximumTruckUnits(args[0] as number[][], args[1] as number),
+    starterArgs: "boxTypes, truckSize",
+    title: "Maximum Truck Units",
+    topics: ["Arrays", "Sorting", "Greedy"]
+  },
+  {
+    cases: makeCases([[[1, 1, 1]], [[1, 5, 2, 4, 1]], [[8]], [[3, 2, 1]], [[1, 2, 3]], [[0, 0, 0, 0]], [[5, 7, 7, 8]], [[2, 2, 3, 3]], [[10, 1, 2]], [[4, 4, 4, 10]]], "increments until strictly increasing"),
+    constraints: ["Only increment values.", "Each +1 costs one operation.", "Return the minimum total operations."],
+    difficulty: 2,
+    examples: [
+      { input: "nums = [1,1,1]", output: "3", explanation: "The cheapest strict sequence is [1,2,3]." },
+      { input: "nums = [1,5,2,4,1]", output: "14", explanation: "Each value after 5 must be raised enough to stay above the previous value." }
+    ],
+    functionName: "minOpsStrictlyIncreasing",
+    id: "external-min-ops-array-increasing",
+    prompt: "Return the fewest increments needed to make the array strictly increasing.",
+    rating: 1315,
+    source: { dislikes: 69, likes: 1325, slug: "minimum-operations-to-make-the-array-increasing" },
+    solver: (args) => minOpsStrictlyIncreasing(args[0] as number[]),
+    starterArgs: "nums",
+    title: "Strictly Increasing Fixes",
+    topics: ["Arrays", "Greedy"]
+  },
+  {
+    cases: makeCases([[[1, 3, 0, 0, 2, 0, 0, 4]], [[0, 0, 0, 2, 0, 0]], [[1, 2, 3]], [[0]], [[0, 1, 0, 0, 0]], [[5, 0, 0, 5, 0]], [[0, 0, 1, 0, 0, 0, 0]], [[2]], [[0, 0, 0, 0]], [[1, 0, 2, 0, 3, 0]]], "counts every all-zero subarray"),
+    constraints: ["Count contiguous subarrays made only of zeroes.", "Return 0 if the array has no zero.", "The answer can be larger than the input length."],
+    difficulty: 2,
+    examples: [
+      { input: "nums = [1,3,0,0,2,0,0,4]", output: "6", explanation: "Each length-2 zero run contributes three all-zero subarrays." },
+      { input: "nums = [0,0,0,2,0,0]", output: "9", explanation: "The runs of length 3 and 2 contribute 6 and 3." }
+    ],
+    functionName: "countZeroFilledSubarrays",
+    id: "external-zero-filled-subarrays-v2",
+    prompt: "Return how many contiguous subarrays contain only zero values.",
+    rating: 1316,
+    source: { dislikes: 95, likes: 2793, slug: "number-of-zero-filled-subarrays" },
+    solver: (args) => countZeroFilledSubarrays(args[0] as number[]),
+    starterArgs: "nums",
+    title: "Zero Filled Subarrays",
+    topics: ["Arrays", "Math"]
+  },
+  {
+    cases: makeCases([[[2, 2, 2, 2, 5, 5, 5, 8], 3, 4], [[11, 13, 17, 23, 29, 31, 7, 5, 2, 3], 3, 5], [[1, 1, 1, 1], 1, 0], [[5, 5, 5], 2, 5], [[1, 2, 3, 4, 5], 2, 4], [[10, 1, 10, 1, 10], 3, 7], [[4, 4, 4, 4], 4, 4], [[0, 0, 10, 10], 2, 5], [[7, 8, 9], 2, 8], [[3, 3, 3, 3, 3], 5, 3]], "checks average threshold windows"),
+    constraints: ["Use windows of exactly k numbers.", "A window passes when its average is at least threshold.", "Return the number of passing windows."],
+    difficulty: 2,
+    examples: [
+      { input: "arr = [2,2,2,2,5,5,5,8], k = 3, threshold = 4", output: "3", explanation: "The final three length-3 windows have average at least 4." },
+      { input: "arr = [1,1,1,1], k = 1, threshold = 0", output: "4", explanation: "Every single-value window reaches the threshold." }
+    ],
+    functionName: "countAverageThresholdWindows",
+    id: "external-average-threshold-subarrays",
+    prompt: "Count fixed-length windows whose average is at least the given threshold.",
+    rating: 1317,
+    source: { dislikes: 112, likes: 1860, slug: "number-of-sub-arrays-of-size-k-and-average-greater-than-or-equal-to-threshold" },
+    solver: (args) => countAverageThresholdWindows(args[0] as number[], args[1] as number, args[2] as number),
+    starterArgs: "arr, k, threshold",
+    title: "Average Threshold Windows",
+    topics: ["Arrays", "Sliding Window"]
+  },
+  {
+    cases: makeCases([[[1, 3, 2, 4], [3, 1, 2, 4]], [[2, 3, 1], [3, 1, 2]], [[1, 2, 3], [1, 2, 3]], [[4, 1, 2, 3], [1, 4, 3, 2]], [[5, 4, 3, 2, 1], [1, 2, 3, 4, 5]], [[1], [1]], [[2, 1, 4, 3], [2, 4, 1, 3]], [[3, 4, 1, 2], [4, 3, 2, 1]], [[6, 2, 5, 1, 3, 4], [2, 6, 1, 5, 4, 3]], [[1, 4, 2, 5, 3], [5, 1, 4, 2, 3]]], "tracks common prefix values"),
+    constraints: ["A and B contain the same distinct values.", "For each prefix length, count values seen in both prefixes.", "Return one count per prefix."],
+    difficulty: 2,
+    examples: [
+      { input: "A = [1,3,2,4], B = [3,1,2,4]", output: "[0,2,3,4]", explanation: "After two positions, values 1 and 3 have appeared in both prefixes." },
+      { input: "A = [2,3,1], B = [3,1,2]", output: "[0,1,3]", explanation: "Only value 3 is common after two positions, then all values are common." }
+    ],
+    functionName: "prefixCommonCounts",
+    id: "external-prefix-common-array",
+    prompt: "Return the count of values that appear in both arrays' prefixes after every position.",
+    rating: 1304,
+    source: { dislikes: 78, likes: 1371, slug: "find-the-prefix-common-array-of-two-arrays" },
+    solver: (args) => prefixCommonCounts(args[0] as number[], args[1] as number[]),
+    starterArgs: "A, B",
+    title: "Prefix Common Counts",
+    topics: ["Arrays", "Hash Set"]
+  },
+  {
+    cases: makeCases([[[10, 5, 15, 3, 7, null, 18], 7, 15], [[10, 5, 15, 3, 7, 13, 18, 1, null, 6], 6, 10], [[1], 1, 1], [[5, 3, 8, 2, 4, 6, 10], 4, 8], [[8, 4, 12, 2, 6, 10, 14], 9, 13], [[6, 2, 8, null, 4, 7, 9], 1, 3], [[6, 2, 8, null, 4, 7, 9], 4, 9], [[20, 10, 30, 5, 15, 25, 35], 12, 28], [[3, 1, 4, null, 2], 2, 3], [[12, 6, 18, 3, 9, 15, 21], 0, 100]], "sums values inside a BST range"),
+    constraints: ["The tree is provided as a level-order array with null for missing children.", "Only values between low and high inclusive count.", "Return 0 for an empty tree."],
+    difficulty: 2,
+    examples: [
+      { input: "root = [10,5,15,3,7,null,18], low = 7, high = 15", output: "32", explanation: "Values 7, 10, and 15 are inside the range." },
+      { input: "root = [1], low = 1, high = 1", output: "1", explanation: "The single root value is inside the range." }
+    ],
+    functionName: "rangeSumBstLevelOrder",
+    id: "external-range-sum-bst-v2",
+    prompt: "Given a binary search tree as level-order values, return the sum of node values inside the inclusive range.",
+    rating: 1335,
+    source: { dislikes: 389, likes: 7268, slug: "range-sum-of-bst" },
+    solver: (args) => rangeSumBstLevelOrder(args[0] as Array<number | null>, args[1] as number, args[2] as number),
+    starterArgs: "root, low, high",
+    title: "Range Sum BST Values",
+    topics: ["Trees", "DFS", "Binary Search Tree"]
+  },
+  {
+    cases: makeCases([[[3, 1, 4, 3, null, 1, 5]], [[3, 3, null, 4, 2]], [[1]], [[2, 1, 3]], [[5, 4, 8, 3, null, 6, 10]], [[1, 2, 3, 4, 5]], [[9, 8, 10, null, null, 7, 11]], [[0, -1, 1]], [[4, 4, 4, 4]], [[7, 3, 9, 1, 5, 8, 10]]], "counts nodes matching path maximum"),
+    constraints: ["The tree is level-order with null gaps.", "A node is good if no ancestor has a greater value.", "Return the number of good nodes."],
+    difficulty: 3,
+    examples: [
+      { input: "root = [3,1,4,3,null,1,5]", output: "4", explanation: "The root, left-left 3, right 4, and right-right 5 are never below a prior path maximum." },
+      { input: "root = [1]", output: "1", explanation: "The root has no ancestors, so it is good." }
+    ],
+    functionName: "countGoodLevelOrderNodes",
+    id: "external-good-nodes-tree",
+    prompt: "Count tree nodes whose value is at least every earlier value on the path from the root.",
+    rating: 1360,
+    source: { dislikes: 214, likes: 6373, slug: "count-good-nodes-in-binary-tree" },
+    solver: (args) => countGoodLevelOrderNodes(args[0] as Array<number | null>),
+    starterArgs: "root",
+    title: "Good Tree Nodes",
+    topics: ["Trees", "DFS"]
+  },
+  {
+    cases: makeCases([[[1, 2, 3, 4, 5, null, 6, 7, null, null, null, null, 8]], [[6, 7, 8, 2, 7, 1, 3, 9, null, 1, 4]], [[1]], [[1, 2, 3]], [[5, 3, 8, 1, 4, 7, 9]], [[2, null, 3, null, 4]], [[2, 3, null, 4]], [[10, 5, 15, null, null, 12, 20]], [[0, -1, 1, -2, null, null, 2]], [[4, 1, 6, 0, 2, 5, 7]]], "sums the deepest level"),
+    constraints: ["The tree is level-order with null for missing children.", "Only nodes on the deepest level contribute.", "Return 0 for an empty tree."],
+    difficulty: 3,
+    examples: [
+      { input: "root = [1,2,3,4,5,null,6,7,null,null,null,null,8]", output: "15", explanation: "The deepest leaves are 7 and 8." },
+      { input: "root = [1]", output: "1", explanation: "The root is also the deepest leaf." }
+    ],
+    functionName: "deepestLeavesTotal",
+    id: "external-deepest-leaves-sum-v2",
+    prompt: "Return the sum of all values on the deepest level of the binary tree.",
+    rating: 1388,
+    source: { dislikes: 127, likes: 4849, slug: "deepest-leaves-sum" },
+    solver: (args) => deepestLeavesTotal(args[0] as Array<number | null>),
+    starterArgs: "root",
+    title: "Deepest Leaves Total",
+    topics: ["Trees", "BFS"]
+  },
+  {
+    cases: makeCases([[[2, 3, 1, 3, 1, null, 1]], [[2, 1, 1, 1, 3, null, null, null, null, null, 1]], [[9]], [[1, 2, 3]], [[1, 1, 1, 1, 1]], [[8, 8, 8, 8, null, null, 8]], [[2, 2, 2, 3, 3]], [[4, 5, 4, 5, null, null, 4]], [[1, 2, 1, null, 2, null, 1]], [[7, 7, 7, 6, null, null, 6]]], "counts root-to-leaf pseudo-palindromes"),
+    constraints: ["Values are single digits.", "A path counts when its values can be rearranged into a palindrome.", "Only root-to-leaf paths count."],
+    difficulty: 3,
+    examples: [
+      { input: "root = [2,3,1,3,1,null,1]", output: "2", explanation: "Two root-to-leaf paths leave at most one value with an odd count." },
+      { input: "root = [9]", output: "1", explanation: "A single value can always form a palindrome." }
+    ],
+    functionName: "countPseudoPalindromePaths",
+    id: "external-pseudo-palindromic-tree-paths",
+    prompt: "Count root-to-leaf paths whose values could be rearranged into a palindrome.",
+    rating: 1405,
+    source: { dislikes: 131, likes: 3346, slug: "pseudo-palindromic-paths-in-a-binary-tree" },
+    solver: (args) => countPseudoPalindromePaths(args[0] as Array<number | null>),
+    starterArgs: "root",
+    title: "Pseudo Palindrome Tree Paths",
+    topics: ["Trees", "DFS", "Bit Manipulation"]
+  },
+  {
+    cases: makeCases([[[[1, 2], [3], [3], []]], [[[4, 3, 1], [3, 2, 4], [3], [4], []]], [[[1], []]], [[[]]], [[[1, 2, 3], [2], [3], []]], [[[1], [2], [3], []]], [[[2], [], [1]]], [[[1, 3], [2], [3], []]], [[[1, 2], [3], [3], [4], []]], [[[1], [2, 3], [3], []]]], "enumerates every source-to-target path"),
+    constraints: ["graph[i] lists directed edges from node i.", "Start at node 0 and end at node n - 1.", "Return paths in DFS order."],
+    difficulty: 3,
+    examples: [
+      { input: "graph = [[1,2],[3],[3],[]]", output: "[[0,1,3],[0,2,3]]", explanation: "There are two directed routes from node 0 to node 3." },
+      { input: "graph = [[1],[]]", output: "[[0,1]]", explanation: "The only edge reaches the target." }
+    ],
+    functionName: "allSourceTargetPaths",
+    id: "external-all-paths-source-target-v2",
+    prompt: "Return every directed path from node 0 to the final node.",
+    rating: 1383,
+    source: { dislikes: 153, likes: 7650, slug: "all-paths-from-source-to-target" },
+    solver: (args) => allSourceTargetPaths(args[0] as number[][]),
+    starterArgs: "graph",
+    title: "All Source Target Paths",
+    topics: ["Graphs", "DFS", "Backtracking"]
+  },
+  {
+    cases: makeCases([[[[1], [2], [3], []]], [[[1, 3], [3, 0, 1], [2], [0]]], [[[]]], [[[1], [], [0, 3], [1]]], [[[1, 2], [2], [3], []]], [[[2], [], [1]]], [[[1], [0, 2], [3], []]], [[[1, 2, 3], [], [], []]], [[[1], [2], [], [0]]], [[[1, 4], [2], [3], [], []]]], "follows keys through rooms"),
+    constraints: ["rooms[i] lists keys found in room i.", "Room 0 starts unlocked.", "Return true only if every room can be visited."],
+    difficulty: 3,
+    examples: [
+      { input: "rooms = [[1],[2],[3],[]]", output: "true", explanation: "Each room gives the key to the next room." },
+      { input: "rooms = [[1,3],[3,0,1],[2],[0]]", output: "false", explanation: "No reachable room gives a key to room 2." }
+    ],
+    functionName: "canVisitEveryRoom",
+    id: "external-keys-and-rooms-v2",
+    prompt: "Starting from room 0, determine whether collected keys can unlock every room.",
+    rating: 1412,
+    source: { dislikes: 303, likes: 6697, slug: "keys-and-rooms" },
+    solver: (args) => canVisitEveryRoom(args[0] as number[][]),
+    starterArgs: "rooms",
+    title: "Keys Reach Every Room",
+    topics: ["Graphs", "DFS"]
+  },
+  {
+    cases: makeCases([[[[2, 1, 1], [1, 1, 0], [0, 1, 1]]], [[[2, 1, 1], [0, 1, 1], [1, 0, 1]]], [[[0, 2]]], [[[2, 1, 1], [1, 1, 1], [0, 1, 2]]], [[[1]]], [[[2]]], [[[2, 0, 1]]], [[[2, 1, 0], [0, 1, 1], [1, 0, 2]]], [[[2, 1], [1, 1]]], [[[0, 0], [0, 0]]]], "spreads rot by minute"),
+    constraints: ["0 is empty, 1 is fresh, and 2 is rotten.", "Each minute rot spreads four-directionally.", "Return -1 if any fresh orange can never rot."],
+    difficulty: 3,
+    examples: [
+      { input: "grid = [[2,1,1],[1,1,0],[0,1,1]]", output: "4", explanation: "The rot reaches the final fresh orange after four minutes." },
+      { input: "grid = [[2,1,1],[0,1,1],[1,0,1]]", output: "-1", explanation: "The isolated fresh orange in the bottom-left cannot be reached." }
+    ],
+    functionName: "minutesToRotAllOranges",
+    id: "external-rotting-oranges-v2",
+    prompt: "Return how many minutes it takes for rot to reach every fresh orange in the grid.",
+    rating: 1433,
+    source: { dislikes: 478, likes: 15220, slug: "rotting-oranges" },
+    solver: (args) => minutesToRotAllOranges(args[0] as number[][]),
+    starterArgs: "grid",
+    title: "Rotting Orange Minutes",
+    topics: ["Grid", "BFS"]
+  },
+  {
     cases: [
       { args: ["00110110", 2], name: "finds all size two codes" },
       { args: ["0110", 1], name: "single bit codes" },
@@ -4874,6 +5144,233 @@ function canPartitionEqual(nums: number[]) {
     }
   }
   return reachable.has(total / 2);
+}
+
+function minValueSetToHalveArray(arr: number[]) {
+  const frequencies = new Map<number, number>();
+  for (const value of arr) {
+    frequencies.set(value, (frequencies.get(value) || 0) + 1);
+  }
+  const counts = [...frequencies.values()].sort((left, right) => right - left);
+  let removed = 0;
+  for (let index = 0; index < counts.length; index += 1) {
+    removed += counts[index];
+    if (removed >= arr.length / 2) {
+      return index + 1;
+    }
+  }
+  return 0;
+}
+
+function middleBalanceIndex(nums: number[]) {
+  const total = nums.reduce((sum, value) => sum + value, 0);
+  let left = 0;
+  for (let index = 0; index < nums.length; index += 1) {
+    if (left === total - left - nums[index]) {
+      return index;
+    }
+    left += nums[index];
+  }
+  return -1;
+}
+
+function maxBinarySplitScore(s: string) {
+  let rightOnes = [...s].filter((char) => char === "1").length;
+  let leftZeroes = 0;
+  let best = 0;
+  for (let index = 0; index < s.length - 1; index += 1) {
+    if (s[index] === "0") {
+      leftZeroes += 1;
+    } else {
+      rightOnes -= 1;
+    }
+    best = Math.max(best, leftZeroes + rightOnes);
+  }
+  return best;
+}
+
+function maximumTruckUnits(boxTypes: number[][], truckSize: number) {
+  let remaining = truckSize;
+  let total = 0;
+  for (const [count, units] of [...boxTypes].sort((left, right) => right[1] - left[1])) {
+    const taken = Math.min(remaining, count);
+    total += taken * units;
+    remaining -= taken;
+    if (remaining === 0) {
+      break;
+    }
+  }
+  return total;
+}
+
+function minOpsStrictlyIncreasing(nums: number[]) {
+  let operations = 0;
+  let previous = -Infinity;
+  for (const value of nums) {
+    const next = Math.max(value, previous + 1);
+    operations += next - value;
+    previous = next;
+  }
+  return operations;
+}
+
+function countZeroFilledSubarrays(nums: number[]) {
+  let run = 0;
+  let total = 0;
+  for (const value of nums) {
+    run = value === 0 ? run + 1 : 0;
+    total += run;
+  }
+  return total;
+}
+
+function countAverageThresholdWindows(arr: number[], k: number, threshold: number) {
+  let sum = 0;
+  let count = 0;
+  const target = k * threshold;
+  for (let index = 0; index < arr.length; index += 1) {
+    sum += arr[index];
+    if (index >= k) {
+      sum -= arr[index - k];
+    }
+    if (index >= k - 1 && sum >= target) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function prefixCommonCounts(a: number[], b: number[]) {
+  const seenA = new Set<number>();
+  const seenB = new Set<number>();
+  let common = 0;
+  return a.map((value, index) => {
+    seenA.add(value);
+    if (seenB.has(value)) {
+      common += 1;
+    }
+    seenB.add(b[index]);
+    if (seenA.has(b[index]) && b[index] !== value) {
+      common += 1;
+    }
+    return common;
+  });
+}
+
+function rangeSumBstLevelOrder(values: Array<number | null>, low: number, high: number) {
+  const root = buildTreeFromLevelOrder(values);
+  const sum = (node: TreeNode | null): number => {
+    if (!node) {
+      return 0;
+    }
+    return (node.val >= low && node.val <= high ? node.val : 0) + sum(node.left || null) + sum(node.right || null);
+  };
+  return sum(root);
+}
+
+function countGoodLevelOrderNodes(values: Array<number | null>) {
+  const root = buildTreeFromLevelOrder(values);
+  const count = (node: TreeNode | null, best: number): number => {
+    if (!node) {
+      return 0;
+    }
+    const good = node.val >= best ? 1 : 0;
+    const nextBest = Math.max(best, node.val);
+    return good + count(node.left || null, nextBest) + count(node.right || null, nextBest);
+  };
+  return count(root, -Infinity);
+}
+
+function deepestLeavesTotal(values: Array<number | null>) {
+  const root = buildTreeFromLevelOrder(values);
+  if (!root) {
+    return 0;
+  }
+  let level = [root];
+  let total = root.val;
+  while (level.length) {
+    total = level.reduce((sum, node) => sum + node.val, 0);
+    level = level.flatMap((node) => [node.left, node.right].filter(Boolean) as TreeNode[]);
+  }
+  return total;
+}
+
+function countPseudoPalindromePaths(values: Array<number | null>) {
+  const root = buildTreeFromLevelOrder(values);
+  const dfs = (node: TreeNode | null, mask: number): number => {
+    if (!node) {
+      return 0;
+    }
+    const nextMask = mask ^ (1 << node.val);
+    if (!node.left && !node.right) {
+      return (nextMask & (nextMask - 1)) === 0 ? 1 : 0;
+    }
+    return dfs(node.left || null, nextMask) + dfs(node.right || null, nextMask);
+  };
+  return dfs(root, 0);
+}
+
+function allSourceTargetPaths(graph: number[][]) {
+  const target = graph.length - 1;
+  const results: number[][] = [];
+  const walk = (node: number, path: number[]) => {
+    if (node === target) {
+      results.push([...path]);
+      return;
+    }
+    for (const next of graph[node] || []) {
+      walk(next, [...path, next]);
+    }
+  };
+  walk(0, [0]);
+  return results;
+}
+
+function canVisitEveryRoom(rooms: number[][]) {
+  const seen = new Set([0]);
+  const stack = [0];
+  while (stack.length) {
+    const room = stack.pop() as number;
+    for (const key of rooms[room] || []) {
+      if (!seen.has(key)) {
+        seen.add(key);
+        stack.push(key);
+      }
+    }
+  }
+  return seen.size === rooms.length;
+}
+
+function minutesToRotAllOranges(grid: number[][]) {
+  const copy = grid.map((row) => [...row]);
+  const queue: Array<[number, number, number]> = [];
+  let fresh = 0;
+  for (let row = 0; row < copy.length; row += 1) {
+    for (let column = 0; column < (copy[row]?.length || 0); column += 1) {
+      if (copy[row][column] === 2) {
+        queue.push([row, column, 0]);
+      } else if (copy[row][column] === 1) {
+        fresh += 1;
+      }
+    }
+  }
+  const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  let minutes = 0;
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const [row, column, minute] = queue[cursor];
+    minutes = Math.max(minutes, minute);
+    for (const [rowStep, columnStep] of directions) {
+      const nextRow = row + rowStep;
+      const nextColumn = column + columnStep;
+      if (copy[nextRow]?.[nextColumn] !== 1) {
+        continue;
+      }
+      copy[nextRow][nextColumn] = 2;
+      fresh -= 1;
+      queue.push([nextRow, nextColumn, minute + 1]);
+    }
+  }
+  return fresh === 0 ? minutes : -1;
 }
 
 function containsEveryBinaryCode(s: string, k: number) {
