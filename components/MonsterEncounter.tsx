@@ -38,12 +38,7 @@ import steveBossArt from "../assets/hero_siege_monsters/steve-boss.png";
 import zombieArt from "../assets/hero_siege_monsters/zombie.png";
 import zombieCrawlerArt from "../assets/hero_siege_monsters/zombie-crawler.png";
 
-const RATING_MAX = 3500;
 const PERCENT_MAX = 100;
-const RED_RATING_MIN = 3000;
-const ORANGE_RATING_MIN = 2400;
-const YELLOW_RATING_MIN = 1800;
-const BLUE_RATING_MIN = 1400;
 const AVATAR_SIZE = 88;
 const AVATAR_BORDER_WIDTH = 2;
 const AVATAR_SHADOW_WIDTH = 2;
@@ -61,6 +56,12 @@ type MonsterDefinition = {
   art: StaticImageData;
   filter?: string;
   name: string;
+};
+
+type PortraitStatus = {
+  color: string;
+  description: string;
+  label: string;
 };
 
 export type MonsterWikiEntry = MonsterDefinition & {
@@ -87,6 +88,7 @@ export type CombatImpactVisual = {
   damageTypes: CombatImpactType[];
   hitCount?: number;
   id: string;
+  statusEffects?: string[];
 };
 
 const MONSTER_VARIANTS = [
@@ -188,7 +190,7 @@ export function MonsterEncounter(props: { damagePop?: MonsterDamagePop | null; q
   return (
     <Paper withBorder p="xs" mt="md" bg="dark.7" style={{ overflow: "visible" }}>
       <Group gap="sm" wrap="nowrap" align="center" style={{ overflow: "visible" }}>
-        <MonsterAvatar damagePop={activeDamage} monster={monster} />
+        <MonsterAvatar damagePop={activeDamage} monster={monster} statuses={getEnemyPortraitStatuses(bonuses, attackType, enraged)} />
         <Box flex={1} style={{ overflow: "visible" }}>
           <Group justify="space-between" gap="xs" mb={4}>
             <Box>
@@ -196,11 +198,11 @@ export function MonsterEncounter(props: { damagePop?: MonsterDamagePop | null; q
               <Text size="xs" c="dimmed">{monster.name}</Text>
             </Box>
           </Group>
-          <Group gap={4} mb={6}>
-            <Badge size="xs" variant="filled" color={getDamageTypeBadgeColor(attackType)}>Attack: {formatDamageType(attackType)}</Badge>
-            {enraged && <Badge size="xs" variant="filled" color="red">Enraged</Badge>}
+          <Group gap={5} mb={6}>
+            <Text size="10px" c="dimmed" fw={900} tt="uppercase">Enemy Attack</Text>
+            <Badge size="xs" variant="filled" color={getDamageTypeBadgeColor(attackType)}>{formatDamageType(attackType)}</Badge>
           </Group>
-          <UniqueBonusBadges bonuses={bonuses} color={getRatingColor(props.question.rating)} />
+          <UniqueBonusBadges bonuses={bonuses} enraged={enraged} />
           <Group justify="space-between" gap="xs" mb={4}>
             <Text size="xs" c="dimmed" fw={700}>Enemy Health</Text>
             <Text size="xs" fw={700}>{Math.round(health)}/{maxHealth}</Text>
@@ -255,40 +257,128 @@ function useAnimatedMonsterHealth(params: { currentHealth: number; damagePop: Mo
   return health;
 }
 
-function UniqueBonusBadges(props: { bonuses: string[]; color: string }) {
-  if (!props.bonuses.length) {
+function UniqueBonusBadges(props: { bonuses: string[]; enraged: boolean }) {
+  if (!props.bonuses.length && !props.enraged) {
     return null;
   }
+  const effects = [...(props.enraged ? ["Enraged"] : []), ...props.bonuses];
   return (
     <Group gap={4} mb={6} style={{ overflow: "visible" }}>
-      {props.bonuses.map((bonus) => (
-        <UniqueBonusBadge key={bonus} bonus={bonus} color={props.color} />
+      <Text size="10px" c="dimmed" fw={900} tt="uppercase">Enemy Effects</Text>
+      {effects.map((bonus) => (
+        <UniqueBonusBadge key={bonus} bonus={bonus} />
       ))}
     </Group>
   );
 }
 
-function UniqueBonusBadge(props: { bonus: string; color: string }) {
-  const description = getUniqueMonsterBonusDescription(props.bonus);
+function UniqueBonusBadge(props: { bonus: string }) {
+  const description = props.bonus === "Enraged" ? "At half health, this enemy hits harder." : getUniqueMonsterBonusDescription(props.bonus);
   return (
     <Tooltip label={description} multiline withArrow withinPortal={false}>
       <Box component="span" style={{ display: "inline-flex" }} tabIndex={0}>
-        <Badge color={props.color} size="xs" variant="outline" style={{ cursor: "help" }}>{props.bonus}</Badge>
+        <Badge color={getMonsterEffectBadgeColor(props.bonus)} size="xs" variant="filled" style={{ cursor: "help" }}>{props.bonus}</Badge>
       </Box>
     </Tooltip>
   );
 }
 
-function MonsterAvatar(props: { damagePop?: MonsterDamagePop | null; monster: MonsterDefinition }) {
+function getMonsterEffectBadgeColor(effect: string) {
+  if (/fire/i.test(effect)) {
+    return "orange";
+  }
+  if (/cold/i.test(effect)) {
+    return "cyan";
+  }
+  if (/lightning/i.test(effect)) {
+    return "yellow";
+  }
+  if (/cursed/i.test(effect)) {
+    return "pink";
+  }
+  if (/enraged|extra strong/i.test(effect)) {
+    return "red";
+  }
+  if (/fast|multi/i.test(effect)) {
+    return "grape";
+  }
+  return "dark";
+}
+
+function formatStatusLabel(status: string) {
+  return status.replace(/\s+Enchanted$/i, "").replace("Extra ", "");
+}
+
+function getStatusColor(status: string) {
+  if (/fire/i.test(status)) {
+    return "#ff8a3d";
+  }
+  if (/cold/i.test(status)) {
+    return "#73c7ff";
+  }
+  if (/lightning/i.test(status)) {
+    return "#f0df5f";
+  }
+  if (/poison/i.test(status)) {
+    return "#7cff7c";
+  }
+  if (/cursed/i.test(status)) {
+    return "#ff4d8d";
+  }
+  if (/enraged|strong/i.test(status)) {
+    return "#ff4d4d";
+  }
+  if (/fast|multi/i.test(status)) {
+    return "#c084fc";
+  }
+  return "#d7b56d";
+}
+
+function getDamageStatusColor(type: DamageType) {
+  if (type === "fire") {
+    return "#ff8a3d";
+  }
+  if (type === "cold") {
+    return "#73c7ff";
+  }
+  if (type === "lightning") {
+    return "#f0df5f";
+  }
+  if (type === "poison") {
+    return "#7cff7c";
+  }
+  return "#d7b56d";
+}
+
+function getEnemyPortraitStatuses(bonuses: string[], attackType: DamageType, enraged: boolean): PortraitStatus[] {
+  return [
+    ...(attackType !== "physical" ? [{
+      color: getDamageStatusColor(attackType),
+      description: `Enemy attacks deal ${formatDamageType(attackType)} damage.`,
+      label: formatDamageType(attackType)
+    }] : []),
+    ...(enraged ? [{ color: getStatusColor("Enraged"), description: "At half health, this enemy hits harder.", label: "Enraged" }] : []),
+    ...bonuses.map((bonus) => ({
+      color: getStatusColor(bonus),
+      description: getUniqueMonsterBonusDescription(bonus),
+      label: formatStatusLabel(bonus)
+    }))
+  ].slice(0, 5);
+}
+
+function MonsterAvatar(props: { damagePop?: MonsterDamagePop | null; monster: MonsterDefinition; statuses: PortraitStatus[] }) {
   const damageTypes = props.damagePop?.damageTypes || [];
+  const portraitStatusColor = props.statuses[0]?.color;
   return (
     <Box
       aria-hidden
       style={{
         alignItems: "center",
         background: AVATAR_BACKGROUND,
-        border: `${AVATAR_BORDER_WIDTH}px solid ${AVATAR_BORDER_COLOR}`,
-        boxShadow: `0 0 0 ${AVATAR_SHADOW_WIDTH}px ${AVATAR_SHADOW_COLOR}`,
+        border: `${AVATAR_BORDER_WIDTH}px solid ${portraitStatusColor || AVATAR_BORDER_COLOR}`,
+        boxShadow: portraitStatusColor
+          ? `0 0 0 ${AVATAR_SHADOW_WIDTH}px ${AVATAR_SHADOW_COLOR}, 0 0 15px ${portraitStatusColor}aa, inset 0 0 20px ${portraitStatusColor}24`
+          : `0 0 0 ${AVATAR_SHADOW_WIDTH}px ${AVATAR_SHADOW_COLOR}`,
         display: "flex",
         flex: `0 0 ${AVATAR_SIZE}px`,
         height: AVATAR_SIZE,
@@ -308,11 +398,79 @@ function MonsterAvatar(props: { damagePop?: MonsterDamagePop | null; monster: Mo
           height: "100%",
           imageRendering: "pixelated",
           objectFit: "contain",
+          position: "relative",
           width: "100%"
         }}
       />
+      {portraitStatusColor && <MonsterPortraitStatusWash color={portraitStatusColor} />}
+      <PortraitStatusMarkers statuses={props.statuses} />
       {props.damagePop && <ImpactEffects key={`${props.damagePop.id}-effects`} damageTypes={damageTypes} />}
       {props.damagePop && <DamagePop key={props.damagePop.id} damage={props.damagePop} />}
+    </Box>
+  );
+}
+
+function MonsterPortraitStatusWash(props: { color: string }) {
+  return (
+    <Box
+      style={{
+        background: `radial-gradient(circle at 50% 48%, ${props.color}55, ${props.color}1c 42%, transparent 72%)`,
+        height: "100%",
+        left: 0,
+        mixBlendMode: "screen",
+        pointerEvents: "none",
+        position: "absolute",
+        top: 0,
+        width: "100%",
+        zIndex: 6
+      }}
+    />
+  );
+}
+
+function PortraitStatusMarkers(props: { statuses: PortraitStatus[] }) {
+  if (!props.statuses.length) {
+    return null;
+  }
+  return (
+    <Box
+      style={{
+        display: "grid",
+        gap: 3,
+        left: 3,
+        position: "absolute",
+        top: 3,
+        zIndex: 7
+      }}
+    >
+      {props.statuses.map((status) => (
+        <Tooltip key={`${status.label}-${status.description}`} label={status.description} withArrow multiline withinPortal={false}>
+          <Box
+            component="span"
+            tabIndex={0}
+            style={{
+              background: `linear-gradient(180deg, ${status.color}dd, rgba(8, 5, 8, 0.92))`,
+              border: `1px solid ${status.color}`,
+              boxShadow: "0 2px 0 rgba(0, 0, 0, 0.76), inset 0 0 0 1px rgba(0, 0, 0, 0.72)",
+              color: "#fff7d6",
+              cursor: "help",
+              fontSize: 8,
+              fontWeight: 900,
+              lineHeight: "12px",
+              maxWidth: 62,
+              overflow: "hidden",
+              padding: "0 3px",
+              pointerEvents: "auto",
+              textOverflow: "ellipsis",
+              textShadow: "0 1px 0 #000",
+              textTransform: "uppercase",
+              whiteSpace: "nowrap"
+            }}
+          >
+            {status.label}
+          </Box>
+        </Tooltip>
+      ))}
     </Box>
   );
 }
@@ -458,23 +616,4 @@ function getVariantMonsterName(prefix: string, name: string) {
 function pickMonsterKind(seed: string, pool: MonsterKind[]) {
   const hash = [...seed].reduce((total, character) => ((total * HASH_MULTIPLIER) + character.charCodeAt(0)) % HASH_MODULUS, HASH_INITIAL);
   return pool[hash % pool.length] || pool[0];
-}
-
-function getRatingColor(rating: number) {
-  if (rating >= RATING_MAX) {
-    return "grape";
-  }
-  if (rating >= RED_RATING_MIN) {
-    return "red";
-  }
-  if (rating >= ORANGE_RATING_MIN) {
-    return "orange";
-  }
-  if (rating >= YELLOW_RATING_MIN) {
-    return "yellow";
-  }
-  if (rating >= BLUE_RATING_MIN) {
-    return "blue";
-  }
-  return "green";
 }

@@ -37,6 +37,7 @@ const RUN_TIMEOUT_MS = 2500, SECOND_MS = 1000;
 const TIMER_PAD = 2, NUMBER_BASE_HEX = 16;
 const VISIBLE_RUN_CASE_COUNT = 3;
 const DAMAGE_POP_TIMEOUT_MS = 840;
+const PLAYER_IMPACT_TIMEOUT_MS = 2200;
 const COMBAT_ADVANCE_DELAY_MS = 680;
 
 type TestRunnerMessage = { type: "run-result"; runId: string; ok: boolean; error?: string; results: RunResult[]; runtimeMs?: number };
@@ -730,7 +731,7 @@ function usePlayerImpact(setPlayerImpact: React.Dispatch<React.SetStateAction<Co
     clearTimer.current = window.setTimeout(() => {
       setPlayerImpact(null);
       clearTimer.current = null;
-    }, DAMAGE_POP_TIMEOUT_MS);
+    }, PLAYER_IMPACT_TIMEOUT_MS);
   }, [setPlayerImpact]);
 }
 
@@ -739,8 +740,35 @@ function createPlayerImpact(question: Question, attack: ReturnType<typeof getTim
     amount,
     damageTypes: [attack.element],
     hitCount: attack.hitCount,
-    id: `${question.id}-${now}-${attack.element}-${amount}-${attack.hitCount}`
+    id: `${question.id}-${now}-${attack.element}-${amount}-${attack.hitCount}`,
+    statusEffects: getAttackStatusEffects(attack)
   };
+}
+
+function getAttackStatusEffects(attack: ReturnType<typeof getTimedMonsterAttack>) {
+  return Array.from(new Set([
+    ...(attack.element && attack.element !== "physical" ? [formatDamageStatus(attack.element)] : []),
+    ...(attack.effects || []),
+    ...(attack.bonuses || []).filter(isVisibleAttackStatus)
+  ])).slice(0, 4);
+}
+
+function formatDamageStatus(element: string) {
+  return `${element[0].toUpperCase()}${element.slice(1)}`;
+}
+
+function isVisibleAttackStatus(status: string) {
+  return [
+    "Aura Enchanted",
+    "Cold Enchanted",
+    "Cursed",
+    "Extra Fast",
+    "Extra Strong",
+    "Fire Enchanted",
+    "Lightning Enchanted",
+    "Multi-Shot",
+    "Spectral Hit"
+  ].includes(status);
 }
 
 // eslint-disable-next-line max-lines-per-function, complexity
