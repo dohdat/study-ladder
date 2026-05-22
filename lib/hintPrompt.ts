@@ -3,6 +3,7 @@ import type { Question } from "../types/study";
 const MAX_CODE_CHARS = 900;
 const OPEN_CODEX_HINT_TYPE = "open-codex-hint";
 const OPEN_CODEX_QUESTION_VARIANT_TYPE = "open-codex-question-variant";
+const OPEN_CODEX_EXAMPLE_EXPLANATION_TYPE = "open-codex-example-explanation";
 const WARM_CODEX_HINT_TYPE = "warm-codex-hint";
 
 export const CODEX_HINT_CHUNK = "codex-hint-chunk";
@@ -11,6 +12,9 @@ export const CODEX_HINT_ERROR = "codex-hint-error";
 export const CODEX_QUESTION_VARIANT_CHUNK = "codex-question-variant-chunk";
 export const CODEX_QUESTION_VARIANT_DONE = "codex-question-variant-done";
 export const CODEX_QUESTION_VARIANT_ERROR = "codex-question-variant-error";
+export const CODEX_EXAMPLE_EXPLANATION_CHUNK = "codex-example-explanation-chunk";
+export const CODEX_EXAMPLE_EXPLANATION_DONE = "codex-example-explanation-done";
+export const CODEX_EXAMPLE_EXPLANATION_ERROR = "codex-example-explanation-error";
 
 type CodexHintResponse = {
   ok: boolean;
@@ -32,6 +36,12 @@ type CodexQuestionVariantRequest = {
   questionId: string;
 };
 
+type CodexExampleExplanationRequest = {
+  type: typeof OPEN_CODEX_EXAMPLE_EXPLANATION_TYPE;
+  exampleKey: string;
+  prompt: string;
+};
+
 type CodexWarmRequest = {
   type: typeof WARM_CODEX_HINT_TYPE;
 };
@@ -42,11 +52,18 @@ export type CodexHintStreamMessage = {
   error?: string;
 };
 
+export type CodexExampleExplanationStreamMessage = {
+  type: typeof CODEX_EXAMPLE_EXPLANATION_CHUNK | typeof CODEX_EXAMPLE_EXPLANATION_DONE | typeof CODEX_EXAMPLE_EXPLANATION_ERROR;
+  exampleKey?: string;
+  text?: string;
+  error?: string;
+};
+
 type ChromeRuntime = {
   lastError?: {
     message?: string;
   };
-  sendMessage?: (message: CodexHintRequest | CodexQuestionVariantRequest | CodexWarmRequest, callback: (response?: CodexMessageResponse) => void) => void;
+  sendMessage?: (message: CodexHintRequest | CodexQuestionVariantRequest | CodexExampleExplanationRequest | CodexWarmRequest, callback: (response?: CodexMessageResponse) => void) => void;
 };
 
 export function createHintPrompt(question: Question, code: string) {
@@ -65,6 +82,22 @@ export function createHintPrompt(question: Question, code: string) {
   ].join("\n");
 }
 
+export function createExampleExplanationPrompt(question: Question, example: Question["examples"][number], exampleNumber: number) {
+  return [
+    "Explain how this example output is calculated.",
+    "Use clear step-by-step bullets. Do not include code or solve the general algorithm.",
+    "Keep it under 120 words. Show arithmetic/counts/tie-breaks when relevant.",
+    "",
+    `Question: ${question.title}`,
+    `Prompt: ${question.prompt}`,
+    `Constraints: ${question.constraints.join(" | ")}`,
+    `Example ${exampleNumber}:`,
+    `Input: ${example.input}`,
+    `Output: ${example.output}`,
+    example.explanation ? `Existing explanation: ${example.explanation}` : ""
+  ].filter(Boolean).join("\n");
+}
+
 function truncateCode(code: string) {
   if (code.length <= MAX_CODE_CHARS) {
     return code;
@@ -81,11 +114,15 @@ export function requestCodexQuestionVariant(questionId: string, prompt: string) 
   return sendCodexHintMessage({ type: OPEN_CODEX_QUESTION_VARIANT_TYPE, prompt, questionId });
 }
 
+export function requestCodexExampleExplanation(exampleKey: string, prompt: string) {
+  return sendCodexHintMessage({ type: OPEN_CODEX_EXAMPLE_EXPLANATION_TYPE, exampleKey, prompt });
+}
+
 export function warmCodexHint() {
   return sendCodexHintMessage({ type: WARM_CODEX_HINT_TYPE });
 }
 
-function sendCodexHintMessage(message: CodexHintRequest | CodexQuestionVariantRequest | CodexWarmRequest): Promise<CodexMessageResponse> {
+function sendCodexHintMessage(message: CodexHintRequest | CodexQuestionVariantRequest | CodexExampleExplanationRequest | CodexWarmRequest): Promise<CodexMessageResponse> {
   const runtime = (globalThis as typeof globalThis & { chrome?: { runtime?: ChromeRuntime } }).chrome?.runtime;
   if (!runtime?.sendMessage) {
     return Promise.resolve({ ok: false, error: "Chrome runtime is not available." });

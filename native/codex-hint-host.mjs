@@ -14,6 +14,7 @@ const READY_ATTEMPTS = 100;
 const READY_DELAY_MS = 150;
 const HINT_TOTAL_TIMEOUT_MS = 12000;
 const QUESTION_VARIANT_TOTAL_TIMEOUT_MS = 60000;
+const EXAMPLE_EXPLANATION_TOTAL_TIMEOUT_MS = 45000;
 const SESSION_REQUEST_TIMEOUT_MS = 20000;
 const TURN_TIMEOUT_MS = 120000;
 const STDERR_LIMIT = 8000;
@@ -29,7 +30,8 @@ const DEVELOPER_INSTRUCTIONS = [
   "Follow each turn's requested output format exactly.",
   "When asked for a hint, give exactly one fast next step: one short sentence and up to 2 lines of partial JavaScript.",
   "Hint code must be incomplete, not a runnable implementation.",
-  "When asked for a question variant, return valid JSON only and preserve the original function contract."
+  "When asked for a question variant, return valid JSON only and preserve the original function contract.",
+  "When asked to explain an example, explain only that example's output calculation without implementation code."
 ].join("\n");
 
 let pendingInput = Buffer.alloc(BUFFER_START);
@@ -95,6 +97,13 @@ function handleNativeMessage(payload) {
     return;
   }
 
+  if (message?.type === "example-explanation" && typeof message.prompt === "string") {
+    codexQueue = codexQueue.then(() => runExampleExplanationRequest(message.requestId, message.prompt)).catch((error) => {
+      sendNativeMessage({ type: "codex-example-explanation-error", requestId: message.requestId, error: getErrorMessage(error) });
+    });
+    return;
+  }
+
   if (message?.type !== "hint" || typeof message.prompt !== "string") {
     sendNativeMessage({ type: "codex-hint-error", error: "Native host received an invalid hint request." });
     return;
@@ -134,6 +143,19 @@ async function runQuestionVariantRequest(requestId, prompt) {
   } catch (error) {
     resetCodexConnection();
     sendNativeMessage({ type: "codex-question-variant-error", requestId, error: getErrorMessage(error) });
+  } finally {
+    requestTimeout.cancel();
+  }
+}
+
+async function runExampleExplanationRequest(requestId, prompt) {
+  const requestTimeout = createTimeout(EXAMPLE_EXPLANATION_TOTAL_TIMEOUT_MS, "Timed out waiting for Codex example explanation.");
+  try {
+    const text = await Promise.race([runCodexTurn(prompt, { requestId, streamType: "example-explanation" }), requestTimeout.promise]);
+    sendNativeMessage({ type: "codex-example-explanation-done", requestId, text });
+  } catch (error) {
+    resetCodexConnection();
+    sendNativeMessage({ type: "codex-example-explanation-error", requestId, error: getErrorMessage(error) });
   } finally {
     requestTimeout.cancel();
   }
@@ -552,6 +574,10 @@ function handleAgentDelta(message, state) {
   }
   if (state.streamType === "question-variant") {
     sendNativeMessage({ type: "codex-question-variant-chunk", requestId: state.requestId, text: delta });
+    return;
+  }
+  if (state.streamType === "example-explanation") {
+    sendNativeMessage({ type: "codex-example-explanation-chunk", requestId: state.requestId, text: delta });
   }
 }
 

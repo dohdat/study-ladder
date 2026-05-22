@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { questions } from "../data/questions";
-import { createHintPrompt, requestCodexHint, requestCodexQuestionVariant, warmCodexHint } from "../lib/hintPrompt";
+import { createExampleExplanationPrompt, createHintPrompt, requestCodexExampleExplanation, requestCodexHint, requestCodexQuestionVariant, warmCodexHint } from "../lib/hintPrompt";
 
 const LONG_CODE_LENGTH = 1900;
 const TRUNCATED_PROMPT_LENGTH = 900;
@@ -36,6 +36,15 @@ describe("hintPrompt", () => {
     expect(prompt).not.toContain("x".repeat(LONG_CODE_LENGTH));
   });
 
+  it("asks Codex to explain one example output without code", () => {
+    const prompt = createExampleExplanationPrompt(questions[0], questions[0].examples[0], 1);
+
+    expect(prompt).toContain("Explain how this example output is calculated.");
+    expect(prompt).toContain("Do not include code");
+    expect(prompt).toContain(questions[0].examples[0].input);
+    expect(prompt).toContain(questions[0].examples[0].output);
+  });
+
   it("reports unavailable Chrome runtime when hint requests run outside the extension", async () => {
     setChromeRuntime();
 
@@ -67,6 +76,14 @@ describe("hintPrompt", () => {
 
     await expect(requestCodexQuestionVariant("question-1", "make variant")).resolves.toEqual({ ok: true, text: "{\"title\":\"Variant\"}" });
     expect(sendMessage).toHaveBeenCalledWith({ prompt: "make variant", questionId: "question-1", type: "open-codex-question-variant" }, expect.any(Function));
+  });
+
+  it("sends example explanation requests through the Chrome runtime", async () => {
+    const sendMessage = vi.fn((_message, callback) => callback({ ok: true, text: "Step by step" }));
+    setChromeRuntime({ sendMessage });
+
+    await expect(requestCodexExampleExplanation("question-1:0", "explain example")).resolves.toEqual({ ok: true, text: "Step by step" });
+    expect(sendMessage).toHaveBeenCalledWith({ exampleKey: "question-1:0", prompt: "explain example", type: "open-codex-example-explanation" }, expect.any(Function));
   });
 
   it("uses Chrome runtime lastError when the background does not respond", async () => {

@@ -1,6 +1,7 @@
 const CODEX_HINT_HOST = "com.study_ladder.codex_hint";
 const HINT_REQUEST_TYPE = "open-codex-hint";
 const QUESTION_VARIANT_REQUEST_TYPE = "open-codex-question-variant";
+const EXAMPLE_EXPLANATION_REQUEST_TYPE = "open-codex-example-explanation";
 const WARM_REQUEST_TYPE = "warm-codex-hint";
 const GET_BLOCKER_STATE_TYPE = "study-blocker-get-state";
 const SAVE_BLOCKER_SETTINGS_TYPE = "study-blocker-save-settings";
@@ -11,6 +12,7 @@ const STUDY_PAGE = "pages/index.html";
 const DEFAULT_BLOCKER_ENABLED = true;
 const MS_PER_MINUTE = 60000;
 const QUESTION_VARIANT_TIMEOUT_MS = 75000;
+const EXAMPLE_EXPLANATION_TIMEOUT_MS = 45000;
 const DEFAULT_DAILY_MINUTES = 30;
 const DEFAULT_DISTRACTING_SITES = [
   "reddit.com",
@@ -26,7 +28,9 @@ const DEFAULT_DISTRACTING_SITES = [
 let hintPort = null;
 let hintRequestActive = false;
 let nextQuestionVariantRequestId = 1;
+let nextExampleExplanationRequestId = 1;
 const questionVariantRequests = new Map();
+const exampleExplanationRequests = new Map();
 
 function getStudyPageUrl() {
   return /^https?:\/\//.test(STUDY_PAGE) ? STUDY_PAGE : chrome.runtime.getURL(STUDY_PAGE);
@@ -51,6 +55,9 @@ function handleMessage(message, _sender, sendResponse) {
   }
   if (message.type === QUESTION_VARIANT_REQUEST_TYPE) {
     return requestQuestionVariant(message, sendResponse);
+  }
+  if (message.type === EXAMPLE_EXPLANATION_REQUEST_TYPE) {
+    return requestExampleExplanation(message, sendResponse);
   }
   if (message.type === GET_BLOCKER_STATE_TYPE) {
     return getBlockerState(sendResponse);
@@ -121,6 +128,33 @@ function requestQuestionVariant(message, sendResponse) {
   return true;
 }
 
+function requestExampleExplanation(message, sendResponse) {
+  if (!message.prompt || !message.exampleKey) {
+    sendResponse({ ok: false, error: "Example explanation prompt is missing." });
+    return false;
+  }
+
+  const port = ensureHintPort();
+  if (!port) {
+    sendResponse({ ok: false, error: "Could not connect to Codex example helper." });
+    return false;
+  }
+
+  const requestId = nextExampleExplanationRequestId;
+  nextExampleExplanationRequestId += 1;
+  const timeout = setTimeout(() => {
+    const request = exampleExplanationRequests.get(requestId);
+    exampleExplanationRequests.delete(requestId);
+    if (request) {
+      relayExampleExplanationMessage({ type: "codex-example-explanation-error", exampleKey: request.exampleKey, error: "Timed out waiting for Codex example explanation." });
+    }
+    sendResponse({ ok: false, error: "Timed out waiting for Codex example explanation." });
+  }, EXAMPLE_EXPLANATION_TIMEOUT_MS);
+  exampleExplanationRequests.set(requestId, { exampleKey: message.exampleKey, sendResponse, timeout });
+  port.postMessage({ type: "example-explanation", prompt: message.prompt, exampleKey: message.exampleKey, requestId });
+  return true;
+}
+
 function ensureHintPort() {
   if (hintPort) {
     return hintPort;
@@ -136,6 +170,14 @@ function ensureHintPort() {
       resolveQuestionVariantRequest(nativeMessage);
       return;
     }
+    if (nativeMessage.type === "codex-example-explanation-chunk") {
+      relayExampleExplanationChunk(nativeMessage);
+      return;
+    }
+    if (nativeMessage.type === "codex-example-explanation-done" || nativeMessage.type === "codex-example-explanation-error") {
+      resolveExampleExplanationRequest(nativeMessage);
+      return;
+    }
     if (hintRequestActive) {
       relayHintMessage(nativeMessage);
     }
@@ -149,6 +191,7 @@ function ensureHintPort() {
       relayHintMessage({ type: "codex-hint-error", error });
     }
     rejectPendingQuestionVariants(error || "Codex helper disconnected.");
+    rejectPendingExampleExplanations(error || "Codex helper disconnected.");
     hintRequestActive = false;
     hintPort = null;
   }
@@ -172,6 +215,45 @@ function resolveQuestionVariantRequest(message) {
   }
   relayQuestionVariantMessage({ type: "codex-question-variant-done", questionId: request.questionId, text: message.text || "" });
   request.sendResponse({ ok: true, text: message.text || "" });
+}
+
+function resolveExampleExplanationRequest(message) {
+  const request = exampleExplanationRequests.get(message.requestId);
+  if (!request) {
+    return;
+  }
+  exampleExplanationRequests.delete(message.requestId);
+  clearTimeout(request.timeout);
+  if (message.type === "codex-example-explanation-error") {
+    relayExampleExplanationMessage({ type: "codex-example-explanation-error", exampleKey: request.exampleKey, error: message.error || "Codex example explanation failed." });
+    request.sendResponse({ ok: false, error: message.error || "Codex example explanation failed." });
+    return;
+  }
+  relayExampleExplanationMessage({ type: "codex-example-explanation-done", exampleKey: request.exampleKey, text: message.text || "" });
+  request.sendResponse({ ok: true, text: message.text || "" });
+}
+
+function rejectPendingExampleExplanations(error) {
+  for (const [requestId, request] of exampleExplanationRequests.entries()) {
+    clearTimeout(request.timeout);
+    relayExampleExplanationMessage({ type: "codex-example-explanation-error", exampleKey: request.exampleKey, error });
+    request.sendResponse({ ok: false, error });
+    exampleExplanationRequests.delete(requestId);
+  }
+}
+
+function relayExampleExplanationChunk(message) {
+  const request = exampleExplanationRequests.get(message.requestId);
+  if (!request) {
+    return;
+  }
+  relayExampleExplanationMessage({ type: "codex-example-explanation-chunk", exampleKey: request.exampleKey, text: message.text || "" });
+}
+
+function relayExampleExplanationMessage(message) {
+  chrome.runtime.sendMessage(message, () => {
+    void chrome.runtime.lastError;
+  });
 }
 
 function rejectPendingQuestionVariants(error) {

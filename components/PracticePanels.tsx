@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Badge,
   Box,
+  Button,
   Card,
   Divider,
   Grid,
@@ -21,6 +22,14 @@ import MonacoEditor, { type OnMount } from "@monaco-editor/react";
 import { HeroSiegeButton } from "./HeroSiegeUi";
 import { HighlightedCode } from "./HighlightedCode";
 import { MonsterEncounter, type MonsterDamagePop } from "./MonsterEncounter";
+import {
+  CODEX_EXAMPLE_EXPLANATION_CHUNK,
+  CODEX_EXAMPLE_EXPLANATION_DONE,
+  CODEX_EXAMPLE_EXPLANATION_ERROR,
+  createExampleExplanationPrompt,
+  requestCodexExampleExplanation,
+  type CodexExampleExplanationStreamMessage
+} from "../lib/hintPrompt";
 import { difficultyLabels, getVisibleQuestionTopics } from "../lib/studyCore";
 import type { ActiveWarriorSkillId, ConsoleRunResult, Question, RunResult, StudyState } from "../types/study";
 
@@ -60,6 +69,7 @@ const RUN_TITLE_ORDER = 3;
 const FIRST_CASE_INDEX = 0;
 const ARG_INDEX_OFFSET = 1;
 const FUNCTION_SIGNATURE_GROUP = 1;
+const EXAMPLE_EXPLANATION_MIN_HEIGHT = 42;
 
 type HintSegment = {
   content: string;
@@ -67,6 +77,7 @@ type HintSegment = {
 };
 
 type QuestionExample = Question["examples"][number];
+type ExampleExplanationState = Record<string, { error: string; loading: boolean; text: string }>;
 
 export type PracticePanelActions = {
   updateDraft: (nextCode: string) => void;
@@ -188,6 +199,7 @@ function LockedProblemHeader() {
 }
 
 function ProblemDetails(props: { currentQuestion: Question; damagePop?: MonsterDamagePop | null; state: StudyState }) {
+  const { explainExample, explanations } = useExampleExplanations(props.currentQuestion);
   return (
     <>
       <MonsterEncounter damagePop={props.damagePop} question={props.currentQuestion} state={props.state} />
@@ -195,7 +207,18 @@ function ProblemDetails(props: { currentQuestion: Question; damagePop?: MonsterD
       <Divider my="md" />
       <Title order={5}>Examples</Title>
       <Box mt="xs" style={{ display: "grid", gap: EXAMPLE_BLOCK_GAP }}>
-        {props.currentQuestion.examples.map((example, index) => <ExampleBlock key={example.input} example={example} index={index} />)}
+        {props.currentQuestion.examples.map((example, index) => {
+          const exampleKey = getExampleKey(props.currentQuestion, example, index);
+          return (
+            <ExampleBlock
+              key={exampleKey}
+              example={example}
+              explanation={explanations[exampleKey]}
+              index={index}
+              onExplain={() => explainExample(example, index)}
+            />
+          );
+        })}
       </Box>
       <Title order={5} mt="md">Constraints</Title>
       <List mt="xs" size="sm">
@@ -217,17 +240,103 @@ function LockedProblemDetails() {
   );
 }
 
-function ExampleBlock(props: { example: QuestionExample; index: number }) {
+function ExampleBlock(props: { example: QuestionExample; explanation?: ExampleExplanationState[string]; index: number; onExplain: () => void }) {
   return (
     <Box>
-      <Text size="sm" fw={700}>Example {props.index + 1}:</Text>
+      <Group justify="space-between" gap="xs">
+        <Text size="sm" fw={700}>Example {props.index + 1}:</Text>
+        <Button
+          leftSection={<IconBulb size={ICON_XS} />}
+          loading={props.explanation?.loading}
+          onClick={props.onExplain}
+          size="compact-xs"
+          variant="light"
+        >
+          Explain
+        </Button>
+      </Group>
       <Box mt="xs" pl={EXAMPLE_BLOCK_PADDING_LEFT} style={{ borderLeft: EXAMPLE_BLOCK_BORDER, display: "grid", gap: EXAMPLE_ROW_GAP }}>
         <ExampleRow label="Input" value={props.example.input} />
         <ExampleRow label="Output" value={props.example.output} />
         {props.example.explanation && <ExampleRow label="Explanation" value={props.example.explanation} />}
+        {(props.explanation?.text || props.explanation?.error || props.explanation?.loading) && (
+          <Paper withBorder p="xs" mt={4} bg="dark.7" mih={EXAMPLE_EXPLANATION_MIN_HEIGHT}>
+            {props.explanation?.error ? (
+              <Text size="sm" c="red.3" style={{ whiteSpace: "pre-wrap" }}>{props.explanation.error}</Text>
+            ) : (
+              <HintContent content={props.explanation?.text || "Codex is working through the example..."} />
+            )}
+          </Paper>
+        )}
       </Box>
     </Box>
   );
+}
+
+function useExampleExplanations(question: Question) {
+  const [explanations, setExplanations] = useState<ExampleExplanationState>({});
+
+  useEffect(() => {
+    const runtime = getChromeRuntime();
+    if (!runtime?.onMessage) {
+      return undefined;
+    }
+    function handleRuntimeMessage(message: unknown) {
+      if (!isExampleExplanationMessage(message) || !message.exampleKey) {
+        return;
+      }
+      const exampleKey = message.exampleKey;
+      setExplanations((current) => {
+        const previous = current[exampleKey] || { error: "", loading: false, text: "" };
+        if (message.type === CODEX_EXAMPLE_EXPLANATION_CHUNK) {
+          return { ...current, [exampleKey]: { error: "", loading: true, text: `${previous.text}${message.text || ""}` } };
+        }
+        if (message.type === CODEX_EXAMPLE_EXPLANATION_DONE) {
+          return { ...current, [exampleKey]: { error: "", loading: false, text: previous.text || message.text || "" } };
+        }
+        return { ...current, [exampleKey]: { error: message.error || "Codex could not explain this example.", loading: false, text: previous.text } };
+      });
+    }
+    runtime.onMessage.addListener(handleRuntimeMessage);
+    return () => runtime.onMessage?.removeListener(handleRuntimeMessage);
+  }, []);
+
+  const explainExample = useCallback((example: QuestionExample, index: number) => {
+    const exampleKey = getExampleKey(question, example, index);
+    setExplanations((current) => ({ ...current, [exampleKey]: { error: "", loading: true, text: "" } }));
+    const prompt = createExampleExplanationPrompt(question, example, index + 1);
+    requestCodexExampleExplanation(exampleKey, prompt).then((response) => {
+      if (response.ok) {
+        return;
+      }
+      setExplanations((current) => ({
+        ...current,
+        [exampleKey]: {
+          error: response.error || "Could not start Codex example explanation.",
+          loading: false,
+          text: current[exampleKey]?.text || ""
+        }
+      }));
+    });
+  }, [question]);
+
+  return { explainExample, explanations };
+}
+
+function getChromeRuntime() {
+  return (globalThis as typeof globalThis & { chrome?: { runtime?: { onMessage?: { addListener: (listener: (message: unknown) => void) => void; removeListener: (listener: (message: unknown) => void) => void } } } }).chrome?.runtime;
+}
+
+function isExampleExplanationMessage(message: unknown): message is CodexExampleExplanationStreamMessage {
+  if (!message || typeof message !== "object" || !("type" in message)) {
+    return false;
+  }
+  const type = (message as CodexExampleExplanationStreamMessage).type;
+  return type === CODEX_EXAMPLE_EXPLANATION_CHUNK || type === CODEX_EXAMPLE_EXPLANATION_DONE || type === CODEX_EXAMPLE_EXPLANATION_ERROR;
+}
+
+function getExampleKey(question: Question, example: QuestionExample, index: number) {
+  return `${question.id}:${index}:${example.input}:${example.output}`;
 }
 
 function ExampleRow(props: { label: string; value: string }) {
@@ -539,7 +648,42 @@ function HintSegmentView(props: { segment: HintSegment }) {
     return <HighlightedCode code={props.segment.content} />;
   }
 
-  return <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>{props.segment.content}</Text>;
+  return <FormattedTextBlock content={props.segment.content} />;
+}
+
+function FormattedTextBlock(props: { content: string }) {
+  const lines = props.content.split("\n");
+  return (
+    <Box style={{ display: "grid", gap: 4 }}>
+      {lines.map((line, index) => <FormattedLine key={`${line}-${index}`} line={line} />)}
+    </Box>
+  );
+}
+
+function FormattedLine(props: { line: string }) {
+  const bullet = props.line.match(/^\s*-\s+(.*)$/);
+  if (bullet) {
+    return (
+      <Group align="flex-start" gap={6} wrap="nowrap">
+        <Text size="sm" c="gray.5">-</Text>
+        <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>{formatInlineMarkdown(bullet[FUNCTION_SIGNATURE_GROUP])}</Text>
+      </Group>
+    );
+  }
+  return <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>{formatInlineMarkdown(props.line)}</Text>;
+}
+
+function formatInlineMarkdown(text: string) {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean);
+  return parts.map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <Text key={`${part}-${index}`} span fw={700}>{part.slice(2, -2)}</Text>;
+    }
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return <Text key={`${part}-${index}`} span c="blue.2" style={{ fontFamily: EXAMPLE_FONT_FAMILY }}>{part.slice(1, -1)}</Text>;
+    }
+    return part;
+  });
 }
 
 function splitHintMarkdown(content: string) {
