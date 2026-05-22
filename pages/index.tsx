@@ -901,7 +901,7 @@ function formatQuestionVariantStreamStatus(text: string) {
     return "Preparing a fresh question...\nChecking the final draft.";
   }
   if (compact.includes("waiting for codex response")) {
-    return "Preparing a fresh question...\nCodex is writing a twisted version now.";
+    return "Preparing a fresh question...\nCodex is writing a fresh variation now.";
   }
   if (compact.includes("codex draft") || compact.includes("{")) {
     return "Preparing a fresh question...\nReviewing the Codex draft.";

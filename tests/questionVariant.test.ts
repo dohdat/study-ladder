@@ -9,6 +9,8 @@ describe("questionVariant", () => {
 
     expect(prompt).toContain("Preserve the exact function name and argument list");
     expect(prompt).toContain("You MAY change the return semantics");
+    expect(prompt).toContain("Keep the estimated difficulty rating");
+    expect(prompt).toContain("estimatedRating");
     expect(prompt).toContain("Generate new tests for your changed semantics");
     expect(prompt).toContain("Keep prompt text concise");
     expect(prompt).toContain("not HOW to solve it");
@@ -29,6 +31,7 @@ describe("questionVariant", () => {
     ];
     const variant = createQuestionVariant(original, JSON.stringify({
       constraints: ["Use the same arguments.", "Return the same output shape."],
+      estimatedRating: original.rating,
       examples: [{ input: "nums = [1,2,1]", output: "1", explanation: "The repeated value is detected." }],
       prompt: "A log scanner receives event codes and needs the first code that appears twice while reading left to right.",
       tests: variantTests,
@@ -51,12 +54,14 @@ describe("questionVariant", () => {
     expect(createQuestionVariant(questions[0], JSON.stringify({ title: "Too short" }))).toBeNull();
     expect(createQuestionVariant(questions[0], JSON.stringify({
       constraints: ["Valid constraint."],
+      estimatedRating: questions[0].rating,
       examples: [{ input: "nums = [1,2]", output: "2" }],
       prompt: "This has display fields but no playable generated tests.",
       title: "Missing Tests"
     }))).toBeNull();
     expect(createQuestionVariant(questions[0], JSON.stringify({
       constraints: ["Valid constraint."],
+      estimatedRating: questions[0].rating,
       examples: [{ input: "nums = [1,2]", output: "2" }],
       prompt: "Long ".repeat(140),
       tests: [
@@ -71,6 +76,7 @@ describe("questionVariant", () => {
     }))).toBeNull();
     expect(createQuestionVariant(questions[0], JSON.stringify({
       constraints: ["Return -1 when no answer exists."],
+      estimatedRating: questions[0].rating,
       examples: [{ input: "nums = [1,2,1]", output: "1" }],
       prompt: "Scan the array with a hash map and return the first duplicated number.",
       tests: [
@@ -82,6 +88,21 @@ describe("questionVariant", () => {
         { name: "case 6", args: [[6]], expected: 6 }
       ],
       title: "Gives Away Strategy"
+    }))).toBeNull();
+    expect(createQuestionVariant(questions[0], JSON.stringify({
+      constraints: ["Return -1 when no answer exists."],
+      estimatedRating: questions[0].rating + 300,
+      examples: [{ input: "nums = [1,2,1]", output: "1" }],
+      prompt: "Return the first repeated number in nums, or -1 when no number repeats.",
+      tests: [
+        { name: "case 1", args: [[1]], expected: 1 },
+        { name: "case 2", args: [[2]], expected: 2 },
+        { name: "case 3", args: [[3]], expected: 3 },
+        { name: "case 4", args: [[4]], expected: 4 },
+        { name: "case 5", args: [[5]], expected: 5 },
+        { name: "case 6", args: [[6]], expected: 6 }
+      ],
+      title: "Too Hard"
     }))).toBeNull();
   });
 });

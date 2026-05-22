@@ -7,6 +7,7 @@ const MAX_VARIANT_TESTS = 12;
 const MIN_VARIANT_TESTS = 6;
 const MAX_PROMPT_LENGTH = 280;
 const MAX_EXAMPLE_FIELD_LENGTH = 240;
+const RATING_TOLERANCE = 150;
 const MIN_MEANINGFUL_TEXT_LENGTH = 12;
 const SOLUTION_LANGUAGE_PATTERN = /\b(sort|sorted|scan|iterate|loop|hash|map|stack|queue|two[- ]?pointer|dynamic programming|greedy|binary search|frequency order|lexicographically)\b/i;
 
@@ -17,6 +18,7 @@ export type QuestionVariantPayload = {
     input: string;
     output: string;
   }>;
+  estimatedRating: number;
   prompt: string;
   tests: TestCase[];
   title: string;
@@ -31,9 +33,11 @@ export function createQuestionVariantPrompt(question: Question) {
     "- Preserve the exact function name and argument list. Do not add, remove, or reorder parameters.",
     "- You MAY change the return semantics and output shape to make the task feel different.",
     "- Keep the same core algorithmic family and difficulty, but require a different final thing than the stock prompt.",
+    `- Keep the estimated difficulty rating between ${question.rating - RATING_TOLERANCE} and ${question.rating + RATING_TOLERANCE}. Do not make the task easier or harder than that band.`,
+    "- Set estimatedRating to your best LeetCode-style rating estimate for the changed task.",
     "- Generate new tests for your changed semantics. These tests will grade the answer, not the original expected outputs.",
     "- Do not only rename variables, change numbers, or change the story. The implementation goal must be slightly different.",
-    "- Good twists: return pair values instead of indices, return a count instead of a boolean, return a repaired/normalized result, add a tie-break rule, or ask for the earliest/widest/cheapest valid choice.",
+    "- Good variations: return pair values instead of indices, return a count instead of a boolean, return a repaired/normalized result, add a tie-break rule, or ask for the earliest/widest/cheapest valid choice.",
     "- Prefer a simple return value: number, boolean, string, array, or a tiny object with at most 2 fields.",
     "- Keep prompt text concise: 1 or 2 sentences, under 45 words.",
     "- The prompt must state WHAT to return, not HOW to solve it. Do not mention sorting, scanning, hashing, stacks, maps, greedy, DP, or traversal strategy.",
@@ -45,9 +49,10 @@ export function createQuestionVariantPrompt(question: Question) {
     "- Do not mention that this is a variant, remix, hidden test, LeetCode, or NeetCode.",
     "",
     "JSON schema:",
-    "{\"title\":\"string\",\"prompt\":\"string\",\"constraints\":[\"string\"],\"examples\":[{\"input\":\"string\",\"output\":\"string\",\"explanation\":\"string\"}],\"tests\":[{\"name\":\"string\",\"args\":[...],\"expected\":...}]}",
+    "{\"title\":\"string\",\"estimatedRating\":1300,\"prompt\":\"string\",\"constraints\":[\"string\"],\"examples\":[{\"input\":\"string\",\"output\":\"string\",\"explanation\":\"string\"}],\"tests\":[{\"name\":\"string\",\"args\":[...],\"expected\":...}]}",
     "",
     `Original title: ${question.title}`,
+    `Original rating: ${question.rating}`,
     `Function: ${getFunctionSignature(question.starter, question.functionName)}`,
     `Original prompt: ${question.prompt}`,
     `Topics: ${question.topics.join(", ")}`,
@@ -58,7 +63,7 @@ export function createQuestionVariantPrompt(question: Question) {
 }
 
 export function createQuestionVariant(question: Question, text: string): Question | null {
-  const payload = parseVariantPayload(text);
+  const payload = parseVariantPayload(question, text);
   if (!payload) {
     return null;
   }
@@ -72,7 +77,7 @@ export function createQuestionVariant(question: Question, text: string): Questio
   };
 }
 
-function parseVariantPayload(text: string): QuestionVariantPayload | null {
+function parseVariantPayload(question: Question, text: string): QuestionVariantPayload | null {
   const jsonText = extractJsonObject(text);
   if (!jsonText) {
     return null;
@@ -91,11 +96,12 @@ function parseVariantPayload(text: string): QuestionVariantPayload | null {
   const prompt = normalizeMeaningfulString(record.prompt);
   const constraints = normalizeConstraints(record.constraints);
   const examples = normalizeExamples(record.examples);
+  const estimatedRating = normalizeEstimatedRating(record.estimatedRating);
   const tests = normalizeTests(record.tests);
-  if (!title || !prompt || prompt.length > MAX_PROMPT_LENGTH || SOLUTION_LANGUAGE_PATTERN.test(prompt) || constraints.length === 0 || examples.length === 0 || tests.length < MIN_VARIANT_TESTS) {
+  if (!title || !prompt || prompt.length > MAX_PROMPT_LENGTH || SOLUTION_LANGUAGE_PATTERN.test(prompt) || !isRatingInBand(question.rating, estimatedRating) || constraints.length === 0 || examples.length === 0 || tests.length < MIN_VARIANT_TESTS) {
     return null;
   }
-  return { constraints, examples, prompt, tests, title };
+  return { constraints, estimatedRating, examples, prompt, tests, title };
 }
 
 function extractJsonObject(text: string) {
@@ -154,6 +160,14 @@ function normalizeExamples(value: unknown): QuestionVariantPayload["examples"] {
     })
     .filter((example): example is QuestionVariantPayload["examples"][number] => Boolean(example?.input && example?.output))
     .slice(0, MAX_EXAMPLES);
+}
+
+function normalizeEstimatedRating(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : 0;
+}
+
+function isRatingInBand(originalRating: number, estimatedRating: number) {
+  return estimatedRating >= originalRating - RATING_TOLERANCE && estimatedRating <= originalRating + RATING_TOLERANCE;
 }
 
 function normalizeTests(value: unknown) {

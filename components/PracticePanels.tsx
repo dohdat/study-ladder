@@ -46,6 +46,7 @@ const EXAMPLE_ROW_GAP = 4;
 const EXAMPLE_BLOCK_PADDING_LEFT = 14;
 const EXAMPLE_BLOCK_BORDER = "2px solid rgba(255, 255, 255, 0.18)";
 const EXAMPLE_FONT_FAMILY = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+const COMPACT_EXAMPLE_JSON_MAX_LENGTH = 80;
 const CASE_TAB_MIN_WIDTH = 92;
 const RUN_PANEL_MAX_HEIGHT = 720;
 const RUN_BLOCK_BG = "#303030";
@@ -245,10 +246,19 @@ function formatExampleValue(value: string) {
     return value;
   }
   try {
-    return JSON.stringify(JSON.parse(trimmed), null, 2);
+    const parsed = JSON.parse(trimmed);
+    const compact = JSON.stringify(parsed);
+    if (Array.isArray(parsed) && isFlatJsonArray(parsed) && compact.length <= COMPACT_EXAMPLE_JSON_MAX_LENGTH) {
+      return compact;
+    }
+    return JSON.stringify(parsed, null, 2);
   } catch {
     return value;
   }
+}
+
+function isFlatJsonArray(value: unknown[]) {
+  return value.every((item) => item === null || ["boolean", "number", "string"].includes(typeof item));
 }
 
 function EditorCard(props: EditorProps & { actions: PracticePanelActions; currentQuestion: Question; state: StudyState }) {
