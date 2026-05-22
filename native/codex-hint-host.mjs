@@ -8,10 +8,13 @@ const LENGTH_BYTES = 4;
 const BUFFER_START = 0;
 const PORT_AUTO = 0;
 const FIRST_REQUEST_ID = 1;
+const SECOND_MS = 1000;
 const READY_STATUS = 200;
 const READY_ATTEMPTS = 100;
 const READY_DELAY_MS = 150;
 const HINT_TOTAL_TIMEOUT_MS = 12000;
+const QUESTION_VARIANT_TOTAL_TIMEOUT_MS = 60000;
+const SESSION_REQUEST_TIMEOUT_MS = 20000;
 const TURN_TIMEOUT_MS = 120000;
 const STDERR_LIMIT = 8000;
 const HINT_EFFORT = "low";
@@ -23,21 +26,23 @@ const HOST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.dirname(HOST_DIR);
 const DEVELOPER_INSTRUCTIONS = [
   "You are embedded in Study Ladder, a JavaScript interview-practice Chrome extension.",
-  "Give exactly one fast next-step hint for the current question and code.",
-  "Use one short sentence and up to 2 lines of partial JavaScript.",
-  "The code must be an incomplete fragment, not a runnable implementation.",
-  "Do not include the full function, a complete loop, final return path, final code, or complete algorithm.",
-  "Keep the whole hint under 45 words."
+  "Follow each turn's requested output format exactly.",
+  "When asked for a hint, give exactly one fast next step: one short sentence and up to 2 lines of partial JavaScript.",
+  "Hint code must be incomplete, not a runnable implementation.",
+  "When asked for a question variant, return valid JSON only and preserve the original function contract."
 ].join("\n");
 
 let pendingInput = Buffer.alloc(BUFFER_START);
 let appServerHandle = null;
 let appServerPromise = null;
 let codexSessionPromise = null;
-let hintQueue = Promise.resolve();
+let codexQueue = Promise.resolve();
 
 process.stdin.on("data", handleNativeData);
 process.stdin.on("end", handleNativeEnd);
+process.once("exit", cleanupNativeHost);
+process.once("SIGINT", handleSignalExit);
+process.once("SIGTERM", handleSignalExit);
 
 function handleNativeData(chunk) {
   pendingInput = Buffer.concat([pendingInput, chunk]);
@@ -45,7 +50,13 @@ function handleNativeData(chunk) {
 }
 
 function handleNativeEnd() {
+  cleanupNativeHost();
   process.exitCode = BUFFER_START;
+}
+
+function handleSignalExit() {
+  cleanupNativeHost();
+  process.exit(BUFFER_START);
 }
 
 function readNativeMessages() {
@@ -71,8 +82,15 @@ function handleNativeMessage(payload) {
   }
 
   if (message?.type === "warm") {
-    warmCodexSession().catch((error) => {
+    warmCodexSession({ streamType: "warm" }).catch((error) => {
       sendNativeMessage({ type: "codex-hint-error", error: getErrorMessage(error) });
+    });
+    return;
+  }
+
+  if (message?.type === "question-variant" && typeof message.prompt === "string") {
+    codexQueue = codexQueue.then(() => runQuestionVariantRequest(message.requestId, message.prompt)).catch((error) => {
+      sendNativeMessage({ type: "codex-question-variant-error", requestId: message.requestId, error: getErrorMessage(error) });
     });
     return;
   }
@@ -82,7 +100,7 @@ function handleNativeMessage(payload) {
     return;
   }
 
-  hintQueue = hintQueue.then(() => runHintRequest(message.prompt)).catch((error) => {
+  codexQueue = codexQueue.then(() => runHintRequest(message.prompt)).catch((error) => {
     sendNativeMessage({ type: "codex-hint-error", error: getErrorMessage(error) });
   });
 }
@@ -96,9 +114,9 @@ function sendNativeMessage(message) {
 }
 
 async function runHintRequest(prompt) {
-  const requestTimeout = createTimeout(HINT_TOTAL_TIMEOUT_MS);
+  const requestTimeout = createTimeout(HINT_TOTAL_TIMEOUT_MS, "Timed out waiting for Codex hint.");
   try {
-    const text = await Promise.race([runCodexHint(prompt), requestTimeout.promise]);
+    const text = await Promise.race([runCodexTurn(prompt, { streamType: "hint" }), requestTimeout.promise]);
     sendNativeMessage({ type: "codex-hint-done", text });
   } catch (error) {
     resetCodexConnection();
@@ -108,18 +126,39 @@ async function runHintRequest(prompt) {
   }
 }
 
-async function runCodexHint(prompt) {
+async function runQuestionVariantRequest(requestId, prompt) {
+  const requestTimeout = createTimeout(QUESTION_VARIANT_TOTAL_TIMEOUT_MS, "Timed out waiting for Codex question variant.");
+  try {
+    const text = await Promise.race([runCodexTurn(prompt, { requestId, streamType: "question-variant" }), requestTimeout.promise]);
+    sendNativeMessage({ type: "codex-question-variant-done", requestId, text });
+  } catch (error) {
+    resetCodexConnection();
+    sendNativeMessage({ type: "codex-question-variant-error", requestId, error: getErrorMessage(error) });
+  } finally {
+    requestTimeout.cancel();
+  }
+}
+
+async function runCodexTurn(prompt, options) {
   if (typeof WebSocket === "undefined") {
     throw new Error("Node WebSocket support is unavailable. Use Node 22 or newer for the native host.");
   }
 
-  const session = await warmCodexSession();
-  return await streamCodexHint(session, prompt);
+  sendCodexProgress(options, "Connecting to Codex app-server...\n");
+  const session = await warmCodexSession(options);
+  sendCodexProgress(options, "Codex session ready. Submitting rewrite prompt...\n");
+  return await streamCodexTurn(session, prompt, options);
 }
 
-async function warmHintServer() {
+function sendCodexProgress(options, text) {
+  if (options.streamType === "question-variant") {
+    sendNativeMessage({ type: "codex-question-variant-chunk", requestId: options.requestId, text });
+  }
+}
+
+async function warmHintServer(options = {}) {
   if (!appServerPromise) {
-    appServerPromise = startAppServer().then((appServer) => {
+    appServerPromise = startAppServer(options).then((appServer) => {
       appServerHandle = appServer;
       appServer.childExitPromise.catch(() => {
         if (appServerPromise) {
@@ -133,31 +172,39 @@ async function warmHintServer() {
       appServerPromise = null;
       throw error;
     });
+  } else {
+    sendCodexProgress(options, "Waiting for existing Codex app-server startup...\n");
   }
   return await appServerPromise;
 }
 
-async function warmCodexSession() {
+async function warmCodexSession(options = {}) {
   if (!codexSessionPromise) {
-    codexSessionPromise = createCodexSession().catch((error) => {
+    codexSessionPromise = createCodexSession(options).catch((error) => {
       codexSessionPromise = null;
       throw error;
     });
+  } else {
+    sendCodexProgress(options, "Waiting for existing Codex session startup...\n");
   }
   return await codexSessionPromise;
 }
 
-async function createCodexSession() {
-  const appServer = await warmHintServer();
+async function createCodexSession(options = {}) {
+  const appServer = await warmHintServer(options);
+  sendCodexProgress(options, "Codex app-server is ready. Opening websocket...\n");
   const ws = await connectWebSocket(`ws://127.0.0.1:${appServer.port}`);
+  sendCodexProgress(options, "Websocket connected. Initializing Codex session...\n");
   const state = createCodexState();
+  attachCodexRpcListener(ws, state);
   ws.addEventListener("close", resetCodexSession);
   ws.addEventListener("error", resetCodexSession);
-  await sendCodexRequest(ws, state, "initialize", {
+  await withTimeout(sendCodexRequest(ws, state, "initialize", {
     capabilities: { experimentalApi: true },
     clientInfo: CLIENT_INFO
-  });
-  await startCodexThread(ws, state);
+  }), SESSION_REQUEST_TIMEOUT_MS, "Timed out initializing Codex app-server session.");
+  sendCodexProgress(options, "Codex initialized. Starting rewrite thread...\n");
+  await startCodexThread(ws, state, options);
   return { state, ws };
 }
 
@@ -165,9 +212,10 @@ function resetCodexSession() {
   codexSessionPromise = null;
 }
 
-async function startAppServer() {
+async function startAppServer(options = {}) {
   const port = await findFreePort();
   const launch = resolveCodexLaunchCommand();
+  sendCodexProgress(options, "Launching Codex app-server process...\n");
   const child = spawn(launch.command, [...launch.args, "app-server", "--listen", `ws://127.0.0.1:${port}`], {
     cwd: REPO_ROOT,
     env: { ...process.env, CODEX_SUPPRESS_COMPLETION_NOTIFICATION: "1" },
@@ -175,7 +223,7 @@ async function startAppServer() {
     windowsHide: true
   });
   const appServer = createAppServerHandle(child, port);
-  await Promise.race([waitForReady(port), appServer.childExitPromise]);
+  await Promise.race([waitForReady(port, options, appServer), appServer.childExitPromise]);
   return appServer;
 }
 
@@ -211,6 +259,13 @@ function createChildExitPromise(child, getStderrBuffer) {
 
 function stopAppServer(appServer) {
   if (!appServer.child.killed) {
+    if (process.platform === "win32") {
+      spawn("taskkill.exe", ["/pid", String(appServer.child.pid), "/t", "/f"], {
+        stdio: "ignore",
+        windowsHide: true
+      }).once("error", () => appServer.child.kill());
+      return;
+    }
     appServer.child.kill();
   }
 }
@@ -226,6 +281,16 @@ function resetCodexConnection() {
     return;
   }
   currentAppServerPromise?.then(stopAppServer).catch(() => undefined);
+}
+
+function cleanupNativeHost() {
+  const currentAppServer = appServerHandle;
+  appServerHandle = null;
+  appServerPromise = null;
+  codexSessionPromise = null;
+  if (currentAppServer) {
+    stopAppServer(currentAppServer);
+  }
 }
 
 function resolveCodexLaunchCommand() {
@@ -258,15 +323,22 @@ async function findFreePort() {
   });
 }
 
-async function waitForReady(port) {
+async function waitForReady(port, options = {}, appServer = null) {
   const url = `http://127.0.0.1:${port}/readyz`;
   for (let attempt = BUFFER_START; attempt < READY_ATTEMPTS; attempt += FIRST_REQUEST_ID) {
     if (await isReady(url)) {
+      sendCodexProgress(options, "Codex app-server readyz passed.\n");
       return;
+    }
+    if (attempt > BUFFER_START && attempt % 20 === BUFFER_START) {
+      const elapsedMs = attempt * READY_DELAY_MS;
+      const stderr = appServer?.getStderrBuffer?.().trim();
+      sendCodexProgress(options, `Waiting for Codex app-server readyz (${Math.round(elapsedMs / SECOND_MS)}s)...${stderr ? ` Recent stderr: ${stderr.slice(-240)}` : ""}\n`);
     }
     await delay(READY_DELAY_MS);
   }
-  throw new Error("Timed out waiting for Codex app-server to become ready.");
+  const stderr = appServer?.getStderrBuffer?.().trim();
+  throw new Error(`Timed out waiting for Codex app-server to become ready.${stderr ? ` Recent stderr: ${stderr}` : ""}`);
 }
 
 async function isReady(url) {
@@ -284,10 +356,12 @@ function delay(ms) {
   });
 }
 
-async function streamCodexHint(session, prompt) {
-  const turnTimeout = createTimeout(TURN_TIMEOUT_MS);
+async function streamCodexTurn(session, prompt, options) {
+  const turnTimeout = createTimeout(TURN_TIMEOUT_MS, "Timed out waiting for Codex.");
   const { state, ws } = session;
   resetTurnState(state);
+  state.requestId = options.requestId;
+  state.streamType = options.streamType;
   try {
     const turnCompletion = createTurnCompletion(ws, state);
     await sendCodexRequest(ws, state, "turn/start", {
@@ -296,6 +370,7 @@ async function streamCodexHint(session, prompt) {
       input: [{ type: "text", text: prompt, text_elements: [] }],
       threadId: state.threadId
     });
+    sendCodexProgress(options, "Rewrite turn submitted. Waiting for Codex response...\n");
     return await Promise.race([turnCompletion.promise, turnTimeout.promise]);
   } finally {
     turnTimeout.cancel();
@@ -309,18 +384,22 @@ function createCodexState() {
     nextRequestId: FIRST_REQUEST_ID,
     pending: new Map(),
     threadId: "",
-    turnCompleted: false
+    turnCompleted: false,
+    requestId: null,
+    streamType: null
   };
 }
 
 function resetTurnState(state) {
   state.accumulatedText = "";
   state.fallbackText = "";
+  state.requestId = null;
+  state.streamType = null;
   state.turnCompleted = false;
 }
 
-async function startCodexThread(ws, state) {
-  const result = await sendCodexRequest(ws, state, "thread/start", {
+async function startCodexThread(ws, state, options = {}) {
+  const result = await withTimeout(sendCodexRequest(ws, state, "thread/start", {
     approvalPolicy: "never",
     cwd: REPO_ROOT,
     developerInstructions: DEVELOPER_INSTRUCTIONS,
@@ -330,11 +409,12 @@ async function startCodexThread(ws, state) {
     persistExtendedHistory: false,
     sandbox: "read-only",
     sessionStartSource: "clear"
-  });
+  }), SESSION_REQUEST_TIMEOUT_MS, "Timed out starting Codex rewrite thread.");
   state.threadId = result?.thread?.id || "";
   if (!state.threadId) {
     throw new Error("Codex app-server did not return a thread id.");
   }
+  sendCodexProgress(options, "Codex rewrite thread ready.\n");
 }
 
 function connectWebSocket(url) {
@@ -355,6 +435,19 @@ function connectWebSocket(url) {
     ws.addEventListener("open", handleOpen);
     ws.addEventListener("error", handleError);
   });
+}
+
+function attachCodexRpcListener(ws, state) {
+  function handleMessage(event) {
+    const message = parseCodexMessage(event.data);
+    if (message && typeof message.id === "number") {
+      resolvePendingRequest(message, state);
+    }
+  }
+  ws.addEventListener("message", handleMessage);
+  ws.addEventListener("close", () => {
+    ws.removeEventListener("message", handleMessage);
+  }, { once: true });
 }
 
 function sendCodexRequest(ws, state, method, params) {
@@ -453,7 +546,13 @@ function handleAgentDelta(message, state) {
     return;
   }
   state.accumulatedText += delta;
-  sendNativeMessage({ type: "codex-hint-chunk", text: delta });
+  if (state.streamType === "hint") {
+    sendNativeMessage({ type: "codex-hint-chunk", text: delta });
+    return;
+  }
+  if (state.streamType === "question-variant") {
+    sendNativeMessage({ type: "codex-question-variant-chunk", requestId: state.requestId, text: delta });
+  }
 }
 
 function handleCompletedItem(message, state) {
@@ -484,21 +583,30 @@ function handleTurnCompleted(message, state, resolveTurn, rejectTurn) {
   state.turnCompleted = true;
   const turn = message.params?.turn;
   if (turn?.status === "failed") {
-    rejectTurn(new Error(turn?.error?.message || "Codex turn failed while generating a hint."));
+    rejectTurn(new Error(turn?.error?.message || "Codex turn failed."));
     return;
   }
   resolveTurn(state.accumulatedText || state.fallbackText);
 }
 
-function createTimeout(ms) {
+function createTimeout(ms, message) {
   let timer;
   const promise = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error("Timed out waiting for Codex hint.")), ms);
+    timer = setTimeout(() => reject(new Error(message)), ms);
   });
   return {
     promise,
     cancel: () => clearTimeout(timer)
   };
+}
+
+async function withTimeout(promise, ms, message) {
+  const timeout = createTimeout(ms, message);
+  try {
+    return await Promise.race([promise, timeout.promise]);
+  } finally {
+    timeout.cancel();
+  }
 }
 
 function getErrorMessage(error) {

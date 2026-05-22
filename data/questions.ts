@@ -30,53 +30,53 @@ const curatedQuestions: Question[] = [
   },
   {
     id: "string-valid-palindrome",
-    title: "Clean Palindrome",
+    title: "Clean Palindrome With One Skip",
     difficulty: 1,
     rating: 1120,
     topics: ["Two Pointers", "Strings"],
     functionName: "isCleanPalindrome",
-    prompt: "Return true when the text is a palindrome after ignoring spaces, punctuation, and letter casing.",
-    constraints: ["Only compare letters and digits.", "An empty cleaned string is a palindrome."],
+    prompt: "Return true when the text is already a palindrome after cleaning, or can become one after deleting at most one cleaned letter or digit.",
+    constraints: ["Only compare letters and digits.", "An empty cleaned string is a palindrome.", "You may skip at most one cleaned character."],
     starter: "function isCleanPalindrome(text) {\n  \n}",
     examples: [
-      { input: "text = \"A man, a plan, a canal: Panama\"", output: "true", explanation: "After removing punctuation and matching case, the cleaned text reads the same forward and backward." },
-      { input: "text = \"race a car\"", output: "false", explanation: "The cleaned text has a mismatch, so it is not a palindrome." }
+      { input: "text = \"abca\"", output: "true", explanation: "After deleting c, the cleaned text becomes aba." },
+      { input: "text = \"race a car\"", output: "false", explanation: "The cleaned text still has more than one mismatch after any single deletion." }
     ],
     tests: [
       { name: "ignores punctuation", args: ["A man, a plan, a canal: Panama"], expected: true },
-      { name: "detects mismatch", args: ["race a car"], expected: false },
+      { name: "detects mismatch beyond one skip", args: ["race a car"], expected: false },
       { name: "handles empty cleaned text", args: ["!!!"], expected: true },
       { name: "handles mixed case word", args: ["Noon"], expected: true },
       { name: "compares digits too", args: ["1a2a1"], expected: true },
-      { name: "detects digit mismatch", args: ["1a2"], expected: false },
+      { name: "allows one digit deletion", args: ["1a2"], expected: true },
       { name: "ignores spaces", args: ["never odd or even"], expected: true },
       { name: "single letter is palindrome", args: ["x"], expected: true },
-      { name: "mixed punctuation mismatch", args: ["hello, ollehx"], expected: false },
+      { name: "mixed punctuation one extra tail", args: ["hello, ollehx"], expected: true },
       { name: "handles uppercase punctuation", args: ["Was it a car or a cat I saw?"], expected: true }
     ]
   },
   {
     id: "array-two-sum",
-    title: "Two Sum Indices",
+    title: "Widest Two Sum Indices",
     difficulty: 1,
     rating: 1280,
     topics: ["Hash Map", "Arrays"],
     functionName: "twoSum",
-    prompt: "Return the indices of two different numbers whose sum equals the target. Return the smaller index first. There is exactly one answer.",
-    constraints: ["Input length is between 2 and 2000.", "Do not use the same element twice.", "Return an array like [0, 2]."],
+    prompt: "Return the indices of two different numbers whose sum equals the target. If multiple pairs work, return the valid pair with the widest index distance. Return [] when no pair exists.",
+    constraints: ["Input length is between 2 and 2000.", "Do not use the same element twice.", "Return [left, right] with left < right.", "Break equal-distance ties by the smaller left index."],
     starter: "function twoSum(nums, target) {\n  \n}",
     examples: [
-      { input: "nums = [2, 7, 11, 15], target = 9", output: "[0, 1]", explanation: "Because nums[0] + nums[1] == 9, return [0, 1]." },
-      { input: "nums = [3, 2, 4], target = 6", output: "[1, 2]", explanation: "Because nums[1] + nums[2] == 6, return [1, 2]." }
+      { input: "nums = [4, 2, 7, 5, 4], target = 9", output: "[1, 2]", explanation: "Both [1,2] and [3,4] sum to 9, but [1,2] ties the distance and has the smaller left index." },
+      { input: "nums = [1, 4, 2, 7, 5, 8], target = 9", output: "[0, 5]", explanation: "Pairs [0,5], [1,4], and [2,3] work, and [0,5] is the widest valid pair." }
     ],
     tests: [
       { name: "basic pair", args: [[2, 7, 11, 15], 9], expected: [0, 1] },
-      { name: "middle pair", args: [[3, 2, 4], 6], expected: [1, 2] },
+      { name: "widest among multiple pairs", args: [[1, 4, 2, 7, 5, 8], 9], expected: [0, 5] },
       { name: "uses duplicate values at different indices", args: [[3, 3], 6], expected: [0, 1] },
       { name: "handles negative complement", args: [[-3, 4, 3, 90], 0], expected: [0, 2] },
       { name: "finds pair at edges", args: [[8, 1, 2, 7], 15], expected: [0, 3] },
       { name: "handles zero target", args: [[0, 4, 3, 0], 0], expected: [0, 3] },
-      { name: "returns smaller index first", args: [[5, 75, 25], 100], expected: [1, 2] },
+      { name: "returns empty when missing", args: [[5, 75, 25], 101], expected: [] },
       { name: "finds late pair", args: [[1, 2, 3, 4, 5], 9], expected: [3, 4] },
       { name: "handles repeated non-answer", args: [[1, 1, 2, 4], 6], expected: [2, 3] },
       { name: "handles negative pair", args: [[-5, -2, -3, 9], -8], expected: [0, 2] }
@@ -111,44 +111,44 @@ const curatedQuestions: Question[] = [
   },
   {
     id: "array-merge-intervals",
-    title: "Merge Intervals",
+    title: "Merge Intervals With Counts",
     difficulty: 2,
     rating: 1640,
     topics: ["Arrays", "Sorting", "Intervals"],
     functionName: "mergeIntervals",
-    prompt: "Merge overlapping intervals and return them sorted by start time.",
-    constraints: ["Each interval is [start, end].", "Touching intervals like [1, 3] and [3, 5] should merge.", "Do not mutate the original interval arrays."],
+    prompt: "Merge overlapping intervals and return each merged block as [start, end, count], where count is how many original intervals were absorbed.",
+    constraints: ["Each interval is [start, end].", "Touching intervals like [1, 3] and [3, 5] should merge.", "Do not mutate the original interval arrays.", "Sort merged blocks by start time."],
     starter: "function mergeIntervals(intervals) {\n  \n}",
     examples: [
-      { input: "intervals = [[1,3],[2,6],[8,10]]", output: "[[1,6],[8,10]]", explanation: "[1,3] overlaps [2,6], so they merge into [1,6]." },
-      { input: "intervals = [[1,4],[4,5]]", output: "[[1,5]]", explanation: "The intervals touch at 4, so they merge into one interval." }
+      { input: "intervals = [[1,3],[2,6],[8,10]]", output: "[[1,6,2],[8,10,1]]", explanation: "[1,3] overlaps [2,6], so that block records two absorbed intervals." },
+      { input: "intervals = [[1,4],[4,5]]", output: "[[1,5,2]]", explanation: "The intervals touch at 4, so they merge into one block with count 2." }
     ],
     tests: [
-      { name: "merges overlap", args: [[[1, 3], [2, 6], [8, 10], [15, 18]]], expected: [[1, 6], [8, 10], [15, 18]] },
-      { name: "merges touching intervals", args: [[[1, 4], [4, 5]]], expected: [[1, 5]] },
-      { name: "handles unsorted input", args: [[[5, 7], [1, 2], [2, 4]]], expected: [[1, 4], [5, 7]] },
+      { name: "merges overlap", args: [[[1, 3], [2, 6], [8, 10], [15, 18]]], expected: [[1, 6, 2], [8, 10, 1], [15, 18, 1]] },
+      { name: "merges touching intervals", args: [[[1, 4], [4, 5]]], expected: [[1, 5, 2]] },
+      { name: "handles unsorted input", args: [[[5, 7], [1, 2], [2, 4]]], expected: [[1, 4, 2], [5, 7, 1]] },
       { name: "empty input", args: [[]], expected: [] },
-      { name: "single interval", args: [[[2, 3]]], expected: [[2, 3]] },
-      { name: "nested interval", args: [[[1, 10], [2, 3], [4, 8]]], expected: [[1, 10]] },
-      { name: "keeps separated intervals", args: [[[1, 2], [4, 5], [7, 8]]], expected: [[1, 2], [4, 5], [7, 8]] },
-      { name: "merges negative intervals", args: [[[-5, -1], [-3, 2], [4, 6]]], expected: [[-5, 2], [4, 6]] },
-      { name: "merges chain overlaps", args: [[[1, 4], [2, 5], [5, 9]]], expected: [[1, 9]] },
-      { name: "sorts before merging", args: [[[10, 12], [0, 1], [1, 2]]], expected: [[0, 2], [10, 12]] }
+      { name: "single interval", args: [[[2, 3]]], expected: [[2, 3, 1]] },
+      { name: "nested interval", args: [[[1, 10], [2, 3], [4, 8]]], expected: [[1, 10, 3]] },
+      { name: "keeps separated intervals", args: [[[1, 2], [4, 5], [7, 8]]], expected: [[1, 2, 1], [4, 5, 1], [7, 8, 1]] },
+      { name: "merges negative intervals", args: [[[-5, -1], [-3, 2], [4, 6]]], expected: [[-5, 2, 2], [4, 6, 1]] },
+      { name: "merges chain overlaps", args: [[[1, 4], [2, 5], [5, 9]]], expected: [[1, 9, 3]] },
+      { name: "sorts before merging", args: [[[10, 12], [0, 1], [1, 2]]], expected: [[0, 2, 2], [10, 12, 1]] }
     ]
   },
   {
     id: "stack-valid-brackets",
-    title: "Valid Brackets",
+    title: "Repairable Bracket Stream",
     difficulty: 2,
     rating: 1480,
     topics: ["Stacks", "Strings"],
     functionName: "validBrackets",
-    prompt: "Return true if every opening bracket is closed by the same type of bracket in the correct order.",
-    constraints: ["The string contains only (), {}, and [].", "An empty string is valid."],
+    prompt: "Return true if the bracket characters are valid after ignoring all non-bracket text, or can become valid by removing at most one bracket character.",
+    constraints: ["Only (), {}, and [] affect validation.", "Letters, spaces, and punctuation are ignored.", "You may remove at most one bracket character."],
     starter: "function validBrackets(s) {\n  \n}",
     examples: [
-      { input: "s = \"()[]{}\"", output: "true", explanation: "Every opening bracket closes with the same bracket type in the correct order." },
-      { input: "s = \"(]\"", output: "false", explanation: "The opening parenthesis cannot be closed by a square bracket." }
+      { input: "s = \"if (items[0]) { run(); }\"", output: "true", explanation: "Ignoring normal text leaves a valid bracket stream." },
+      { input: "s = \"([)]\"", output: "false", explanation: "No single bracket removal can repair the crossing order." }
     ],
     tests: [
       { name: "valid mixed brackets", args: ["()[]{}"], expected: true },
@@ -156,26 +156,26 @@ const curatedQuestions: Question[] = [
       { name: "nested valid", args: ["{[]}"], expected: true },
       { name: "wrong order", args: ["([)]"], expected: false },
       { name: "empty string", args: [""], expected: true },
-      { name: "single opener", args: ["("], expected: false },
-      { name: "single closer", args: [")"], expected: false },
+      { name: "single opener removable", args: ["("], expected: true },
+      { name: "single closer removable", args: [")"], expected: true },
       { name: "deep nesting", args: ["((({[]})))"], expected: true },
-      { name: "extra closer at end", args: ["(()))"], expected: false },
-      { name: "extra opener at end", args: ["(()"], expected: false }
+      { name: "extra closer at end can be repaired", args: ["(()))"], expected: true },
+      { name: "extra opener at end can be repaired", args: ["(()"], expected: true }
     ]
   },
   {
     id: "dp-climb-cost",
-    title: "Minimum Climb Cost",
+    title: "Minimum Climb Cost With Broken Steps",
     difficulty: 3,
     rating: 2050,
     topics: ["Dynamic Programming"],
     functionName: "minClimbCost",
-    prompt: "You can climb one or two steps at a time. Each step has a cost paid when you step on it. Return the minimum cost to reach just beyond the final step.",
-    constraints: ["Input length is between 2 and 1000.", "Costs are non-negative integers.", "You may start on step 0 or step 1."],
+    prompt: "You can climb one or two steps at a time. Each step has a cost paid when you step on it, but -1 means that step is broken and cannot be used. Return the minimum cost to reach just beyond the final step, or -1 if no route exists.",
+    constraints: ["Input length is between 2 and 1000.", "Usable costs are non-negative integers.", "A cost of -1 marks a broken step.", "You may start on step 0 or step 1 if that step is usable."],
     starter: "function minClimbCost(cost) {\n  \n}",
     examples: [
-      { input: "cost = [10, 15, 20]", output: "15", explanation: "Start at step 1, pay 15, then climb beyond the final step." },
-      { input: "cost = [1,100,1,1,1,100,1,1,100,1]", output: "6", explanation: "The cheapest route avoids the expensive 100-cost steps where possible." }
+      { input: "cost = [10, -1, 20]", output: "30", explanation: "Step 1 is broken, so the only valid route pays 10 then 20." },
+      { input: "cost = [-1, -1, 5]", output: "-1", explanation: "Both possible starting steps are broken, so the climb cannot begin." }
     ],
     tests: [
       { name: "short path", args: [[10, 15, 20]], expected: 15 },
@@ -187,21 +187,24 @@ const curatedQuestions: Question[] = [
       { name: "skip expensive middle", args: [[1, 100, 1]], expected: 2 },
       { name: "long steady costs", args: [[1, 2, 3, 4, 5, 6]], expected: 9 },
       { name: "expensive first step", args: [[100, 1, 1, 1]], expected: 2 },
-      { name: "expensive last step can be skipped", args: [[1, 1, 100]], expected: 1 }
+      { name: "broken middle can be jumped", args: [[1, -1, 1]], expected: 2 },
+      { name: "broken first allows second start", args: [[-1, 2, 3]], expected: 2 },
+      { name: "broken starts are impossible", args: [[-1, -1, 5]], expected: -1 },
+      { name: "broken last step can be skipped", args: [[1, 1, -1]], expected: 1 }
     ]
   },
   {
     id: "binary-search-rotated",
-    title: "Search Rotated Array",
+    title: "First Index in Rotated Array",
     difficulty: 3,
     rating: 2180,
     topics: ["Binary Search", "Arrays"],
     functionName: "searchRotated",
-    prompt: "Return the index of target in a sorted array that was rotated at an unknown pivot. Return -1 when target is missing.",
-    constraints: ["All numbers are unique.", "Aim for O(log n) time.", "Input length is between 0 and 5000."],
+    prompt: "Return the smallest original index containing target in a sorted array that was rotated at an unknown pivot. Values may repeat. Return -1 when target is missing.",
+    constraints: ["Numbers may repeat.", "Return the smallest index in the provided array, not the sorted position.", "Input length is between 0 and 5000."],
     starter: "function searchRotated(nums, target) {\n  \n}",
     examples: [
-      { input: "nums = [4,5,6,7,0,1,2], target = 0", output: "4", explanation: "After the rotation point between 7 and 0, the target 0 is found at index 4." },
+      { input: "nums = [4,5,5,6,1,2,4], target = 4", output: "0", explanation: "The target appears at indices 0 and 6, so return the smaller original index." },
       { input: "nums = [4,5,6,7,0,1,2], target = 3", output: "-1", explanation: "The target 3 is not present in the array." }
     ],
     tests: [
@@ -214,61 +217,63 @@ const curatedQuestions: Question[] = [
       { name: "finds left sorted side", args: [[6, 7, 8, 1, 2, 3, 4, 5], 7], expected: 1 },
       { name: "empty array", args: [[], 3], expected: -1 },
       { name: "two items rotated", args: [[2, 1], 1], expected: 1 },
-      { name: "two items not rotated", args: [[1, 2], 1], expected: 0 }
+      { name: "two items not rotated", args: [[1, 2], 1], expected: 0 },
+      { name: "returns first duplicate index", args: [[4, 5, 5, 6, 1, 2, 4], 4], expected: 0 },
+      { name: "handles duplicate pivot values", args: [[2, 2, 2, 3, 4, 2], 2], expected: 0 }
     ]
   },
   {
     id: "tree-level-order",
-    title: "Level Order Values",
+    title: "Zigzag Level Order Values",
     difficulty: 3,
     rating: 1980,
     topics: ["Trees", "Queue", "BFS"],
     functionName: "levelOrderValues",
-    prompt: "Given a binary tree object with val, left, and right fields, return an array of values grouped by depth.",
-    constraints: ["Return [] for a null root.", "Keep values left-to-right within each level."],
+    prompt: "Given a binary tree object with val, left, and right fields, return values grouped by depth, alternating left-to-right then right-to-left on each level.",
+    constraints: ["Return [] for a null root.", "Level 0 is left-to-right.", "Odd-numbered levels are returned right-to-left."],
     starter: "function levelOrderValues(root) {\n  \n}",
     examples: [
-      { input: "root = { val: 1, left: { val: 2 }, right: { val: 3 } }", output: "[[1],[2,3]]", explanation: "The root is level 0, and its left and right children form the next level." }
+      { input: "root = { val: 1, left: { val: 2 }, right: { val: 3 } }", output: "[[1],[3,2]]", explanation: "Level 0 reads normally, then level 1 reads from right to left." }
     ],
     tests: [
-      { name: "balanced tree", args: [{ val: 1, left: { val: 2, left: null, right: null }, right: { val: 3, left: null, right: null } }], expected: [[1], [2, 3]] },
+      { name: "balanced tree", args: [{ val: 1, left: { val: 2, left: null, right: null }, right: { val: 3, left: null, right: null } }], expected: [[1], [3, 2]] },
       { name: "empty tree", args: [null], expected: [] },
       { name: "left leaning tree", args: [{ val: 4, left: { val: 5, left: { val: 6, left: null, right: null }, right: null }, right: null }], expected: [[4], [5], [6]] },
       { name: "single root", args: [{ val: 1, left: null, right: null }], expected: [[1]] },
       { name: "right leaning tree", args: [{ val: 1, left: null, right: { val: 2, left: null, right: { val: 3, left: null, right: null } } }], expected: [[1], [2], [3]] },
-      { name: "complete three levels", args: [{ val: 1, left: { val: 2, left: { val: 4, left: null, right: null }, right: { val: 5, left: null, right: null } }, right: { val: 3, left: { val: 6, left: null, right: null }, right: { val: 7, left: null, right: null } } }], expected: [[1], [2, 3], [4, 5, 6, 7]] },
+      { name: "complete three levels", args: [{ val: 1, left: { val: 2, left: { val: 4, left: null, right: null }, right: { val: 5, left: null, right: null } }, right: { val: 3, left: { val: 6, left: null, right: null }, right: { val: 7, left: null, right: null } } }], expected: [[1], [3, 2], [4, 5, 6, 7]] },
       { name: "missing left child", args: [{ val: 1, left: null, right: { val: 3, left: { val: 4, left: null, right: null }, right: null } }], expected: [[1], [3], [4]] },
       { name: "missing right child", args: [{ val: 1, left: { val: 2, left: null, right: { val: 5, left: null, right: null } }, right: null }], expected: [[1], [2], [5]] },
-      { name: "string values", args: [{ val: "a", left: { val: "b", left: null, right: null }, right: { val: "c", left: null, right: null } }], expected: [["a"], ["b", "c"]],
+      { name: "string values", args: [{ val: "a", left: { val: "b", left: null, right: null }, right: { val: "c", left: null, right: null } }], expected: [["a"], ["c", "b"]],
       },
       { name: "zero value root", args: [{ val: 0, left: { val: -1, left: null, right: null }, right: null }], expected: [[0], [-1]] }
     ]
   },
   {
     id: "heap-top-k",
-    title: "Top K Frequent",
+    title: "Top K Frequent First Seen",
     difficulty: 4,
     rating: 2720,
     topics: ["Hash Map", "Sorting"],
     functionName: "topKFrequent",
-    prompt: "Return the k most frequent numbers. When frequencies tie, the smaller number should come first.",
-    constraints: ["Return the result sorted by frequency descending, then value ascending.", "Input length is between 1 and 5000."],
+    prompt: "Return the k most frequent numbers. When frequencies tie, prefer the value that appeared earlier in the original array.",
+    constraints: ["Return the result sorted by frequency descending, then first appearance ascending.", "Input length is between 1 and 5000."],
     starter: "function topKFrequent(nums, k) {\n  \n}",
     examples: [
       { input: "nums = [1,1,1,2,2,3], k = 2", output: "[1,2]", explanation: "1 appears three times and 2 appears two times, so they are the top two values." },
-      { input: "nums = [4,4,1,1,2], k = 2", output: "[1,4]", explanation: "1 and 4 tie in frequency, so the smaller value comes first." }
+      { input: "nums = [4,4,1,1,2], k = 2", output: "[4,1]", explanation: "4 and 1 tie in frequency, and 4 appears first in the original array." }
     ],
     tests: [
       { name: "basic top two", args: [[1, 1, 1, 2, 2, 3], 2], expected: [1, 2] },
-      { name: "tie sorts smaller first", args: [[4, 4, 1, 1, 2], 2], expected: [1, 4] },
+      { name: "tie uses first appearance", args: [[4, 4, 1, 1, 2], 2], expected: [4, 1] },
       { name: "single item", args: [[9], 1], expected: [9] },
-      { name: "returns all when k equals unique count", args: [[3, 3, 2, 1], 3], expected: [3, 1, 2] },
+      { name: "returns all when k equals unique count", args: [[3, 3, 2, 1], 3], expected: [3, 2, 1] },
       { name: "negative values", args: [[-1, -1, -2, -2, -2, 3], 2], expected: [-2, -1] },
       { name: "zero participates in tie", args: [[0, 0, 1, 1, 2], 2], expected: [0, 1] },
       { name: "k one with clear winner", args: [[5, 5, 5, 6, 6], 1], expected: [5] },
-      { name: "three way frequency tie", args: [[3, 2, 1], 2], expected: [1, 2] },
-      { name: "larger mixed ranking", args: [[4, 4, 4, 2, 2, 3, 3, 3, 1], 3], expected: [3, 4, 2] },
-      { name: "tie after top value", args: [[9, 9, 8, 7], 3], expected: [9, 7, 8] }
+      { name: "three way frequency tie", args: [[3, 2, 1], 2], expected: [3, 2] },
+      { name: "larger mixed ranking", args: [[4, 4, 4, 2, 2, 3, 3, 3, 1], 3], expected: [4, 3, 2] },
+      { name: "tie after top value", args: [[9, 9, 8, 7], 3], expected: [9, 8, 7] }
     ]
   },
   {
@@ -300,29 +305,29 @@ const curatedQuestions: Question[] = [
   },
   {
     id: "dp-coin-change",
-    title: "Coin Change",
+    title: "Single-Use Coin Change",
     difficulty: 5,
     rating: 3370,
     topics: ["Dynamic Programming"],
     functionName: "coinChange",
-    prompt: "Return the fewest number of coins needed to make the amount. Return -1 when the amount cannot be made.",
-    constraints: ["You may use each coin value unlimited times.", "Amount is between 0 and 10000.", "Coin values are positive integers."],
+    prompt: "Return the fewest number of listed coins needed to make the amount when each coin entry can be used at most once. Return -1 when the amount cannot be made.",
+    constraints: ["Each array entry is one physical coin.", "Duplicate values are separate usable coins.", "Amount is between 0 and 10000.", "Coin values are positive integers."],
     starter: "function coinChange(coins, amount) {\n  \n}",
     examples: [
-      { input: "coins = [1, 2, 5], amount = 11", output: "3", explanation: "11 can be made with 5 + 5 + 1, using 3 coins." },
-      { input: "coins = [2], amount = 3", output: "-1", explanation: "Only coin value 2 is available, so amount 3 cannot be made." }
+      { input: "coins = [1, 2, 5], amount = 8", output: "3", explanation: "Use each listed coin once to make 1 + 2 + 5." },
+      { input: "coins = [7], amount = 14", output: "-1", explanation: "The single 7 coin cannot be reused." }
     ],
     tests: [
-      { name: "uses mixed coins", args: [[1, 2, 5], 11], expected: 3 },
+      { name: "uses mixed single coins", args: [[1, 2, 5], 8], expected: 3 },
       { name: "impossible amount", args: [[2], 3], expected: -1 },
       { name: "zero amount", args: [[1], 0], expected: 0 },
-      { name: "larger dynamic case", args: [[1, 3, 4], 6], expected: 2 },
-      { name: "single coin exact", args: [[7], 14], expected: 2 },
-      { name: "single coin impossible", args: [[5], 3], expected: -1 },
+      { name: "single-use optimal pair", args: [[2, 3, 5, 6], 8], expected: 2 },
+      { name: "single coin exact", args: [[7], 7], expected: 1 },
+      { name: "single coin cannot repeat", args: [[7], 14], expected: -1 },
       { name: "prefers larger coin mix", args: [[1, 5, 10, 25], 30], expected: 2 },
-      { name: "non greedy optimal", args: [[1, 3, 4], 10], expected: 3 },
-      { name: "unordered coins", args: [[5, 1, 2], 4], expected: 2 },
-      { name: "large impossible parity", args: [[4, 6], 7], expected: -1 }
+      { name: "pair beats longer option", args: [[1, 4, 5, 7], 9], expected: 2 },
+      { name: "unordered coins", args: [[5, 1, 2, 7], 8], expected: 2 },
+      { name: "duplicate denominations are separate", args: [[2, 2, 3], 4], expected: 2 }
     ]
   }
 ];
@@ -3845,7 +3850,7 @@ function createExternalRatedQuestion(seed: ExternalRatedQuestionSeed): Question 
 }
 
 function createGeneratedQuestion(family: GeneratedFamily, variant: number): Question {
-  const tests = Array.from({ length: GENERATED_TEST_COUNT }, (_, index) => createGeneratedTest(family, variant, index));
+  const tests = createGeneratedTests(family, variant);
   const functionName = getGeneratedFunctionName(family, variant);
   return {
     constraints: family.constraints,
@@ -3875,9 +3880,23 @@ function createGeneratedQuestions() {
     .flatMap((variant) => GENERATED_FAMILIES.filter((family) => variant <= family.count).map((family) => createGeneratedQuestion(family, variant)));
 }
 
-function createGeneratedTest(family: GeneratedFamily, variant: number, index: number) {
-  const test = family.buildCase(variant, index);
-  return { ...test, expected: family.solver(test.args, variant) };
+function createGeneratedTests(family: GeneratedFamily, variant: number) {
+  const tests: Array<TestInput & { expected: unknown }> = [];
+  const seenArgs = new Set<string>();
+  for (let sourceIndex = 0; tests.length < GENERATED_TEST_COUNT && sourceIndex < GENERATED_TEST_COUNT * 20; sourceIndex += 1) {
+    const test = family.buildCase(variant, sourceIndex);
+    const key = JSON.stringify(test.args);
+    if (seenArgs.has(key)) {
+      continue;
+    }
+    seenArgs.add(key);
+    tests.push({
+      ...test,
+      expected: family.solver(test.args, variant),
+      name: `${test.name} - edge ${sourceIndex + 1}: ${describeEdgeCase(test.args, sourceIndex)}`
+    });
+  }
+  return tests;
 }
 
 function createGeneratedExample(family: GeneratedFamily, variant: number, test: TestInput & { expected: unknown }) {
@@ -4597,7 +4616,7 @@ function makeBinaryList(index: number) {
 }
 
 function makeTemperatureList(index: number) {
-  return Array.from({ length: 7 + (index % 4) }, (_value, offset) => 55 + ((index * 3 + offset * offset + offset) % 24));
+  return Array.from({ length: 7 + (index % 4) }, (_value, offset) => 55 + Math.floor(index / 4) + ((index * 3 + offset * offset + offset) % 24));
 }
 
 function makeRotatedSorted(index: number) {
@@ -4612,17 +4631,17 @@ function makePeakList(index: number) {
 }
 
 function makeCoursePlan(index: number): TestInput {
-  const courseCount = 4 + (index % 3);
-  const acyclic: Array<[number, number]> = [[1, 0], [2, 1], [3, 1]];
-  const cyclic: Array<[number, number]> = [[1, 0], [2, 1], [0, 2]];
+  const courseCount = 4 + index;
+  const acyclic: Array<[number, number]> = Array.from({ length: courseCount - 1 }, (_value, course) => [course + 1, Math.max(0, course - (index % 2))]);
+  const cyclic: Array<[number, number]> = [[1, 0], [2, 1], [0, 2], ...acyclic.slice(3)];
   return { args: [courseCount, index % 4 === 0 ? cyclic : acyclic], name: "checks course plan feasibility" };
 }
 
 function makeComponentGraph(index: number): TestInput {
-  const n = 6 + (index % 3);
-  const edges: Array<[number, number]> = [[0, 1], [1, 2], [3, 4]];
+  const n = 6 + index;
+  const edges: Array<[number, number]> = [[0, 1], [1, 2], [3, 4], [index % n, (index + 2) % n]];
   if (index % 2 === 0) {
-    edges.push([4, 5]);
+    edges.push([4, Math.min(n - 1, 5 + (index % 3))]);
   }
   return { args: [n, edges], name: "counts graph components" };
 }
@@ -4632,7 +4651,13 @@ function makeWordBreakCase(index: number): TestInput {
     ["codepath", ["code", "path", "pat", "h"]],
     ["applepenapple", ["apple", "pen"]],
     ["catsandog", ["cats", "dog", "sand", "and", "cat"]],
-    ["aaaaaaa", ["aaaa", "aaa"]]
+    ["aaaaaaa", ["aaaa", "aaa"]],
+    ["leetcode", ["leet", "code"]],
+    ["cars", ["car", "ca", "rs"]],
+    ["aaaaab", ["a", "aa", "aaa"]],
+    ["pineapplepenapple", ["apple", "pen", "applepen", "pine", "pineapple"]],
+    ["ab", ["a", "b", "ab"]],
+    ["abc", ["ab", "bc"]]
   ];
   const [text, dictionary] = cases[index % cases.length];
   return { args: [text, dictionary], name: "checks word segmentation" };
@@ -4643,7 +4668,7 @@ function makeNonAdjacentRewards(index: number) {
 }
 
 function makeDecodeString(index: number) {
-  const cases = ["12", "226", "06", "11106", "2611055971756562", "27", "2101", "101"];
+  const cases = ["12", "226", "06", "11106", "2611055971756562", "27", "2101", "101", "111111", "301"];
   return cases[index % cases.length];
 }
 
@@ -4653,7 +4678,7 @@ function makeMeetingCase(index: number): TestInput {
 }
 
 function makeOverlapCase(index: number): TestInput {
-  const intervals = [[1, 3], [2, 4], [4, 6], [5, 7], [8, 9 + index % 4]];
+  const intervals = [[1, 3 + index], [2, 4 + index], [4, 6 + (index % 3)], [5, 7 + (index % 4)], [8, 9 + index]];
   return { args: [index % 2 ? intervals.reverse() : intervals], name: "removes overlapping intervals" };
 }
 
@@ -4663,13 +4688,13 @@ function makeSingleNumberList(index: number) {
 }
 
 function makePrefixCase(index: number): TestInput {
-  const words = ["stone", "storm", "story", "stack", "graph", "grid", "greedy"];
+  const words = ["stone", "storm", "story", "stack", "graph", "grid", "greedy", `study${index}`];
   const prefixes = ["sto", "gr", "sta", "z"];
   return { args: [words, prefixes[index % prefixes.length]], name: "counts matching prefixes" };
 }
 
 function makeSmallUniqueList(index: number) {
-  return [index % 4, (index % 4) + 2, (index % 4) + 5];
+  return [index, index + 2, index + 5];
 }
 
 function makeTree(index: number): TreeNode | null {
@@ -4690,7 +4715,7 @@ function makeKthCase(index: number): TestInput {
 }
 
 function makeTargetSumCase(index: number): TestInput {
-  const nums = [1, 1, 2 + (index % 3), 3, 1];
+  const nums = [1, 1, 2 + (index % 3), 3 + Math.floor(index / 3), 1];
   return { args: [nums, index % 2 ? 2 : 4], name: "counts target expressions" };
 }
 
@@ -5033,7 +5058,9 @@ function maxSortedGap(nums: number[]) {
 }
 
 function makeGrid(seed: number, index: number) {
-  return Array.from({ length: 4 }, (_, row) => Array.from({ length: 5 }, (_, column) => Number((seed + index + row * 2 + column * 3) % 4 === 0)));
+  const rows = 3 + (index % 4);
+  const columns = 4 + (Math.floor(index / 4) % 3);
+  return Array.from({ length: rows }, (_rowValue, row) => Array.from({ length: columns }, (_columnValue, column) => Number((seed + index * (row + 1) + row * 2 + column * 3) % 5 <= 1)));
 }
 
 function countIslands(grid: number[][]) {
@@ -6236,8 +6263,104 @@ function maxCircularSubarraySum(nums: number[]) {
   return bestMax < 0 ? bestMax : Math.max(bestMax, total - bestMin);
 }
 
+function describeEdgeCase(args: unknown[], index: number) {
+  const descriptors = Array.from(new Set(args.flatMap((arg) => getEdgeDescriptors(arg))));
+  return descriptors.slice(0, 2).join(" + ") || `case ${index + 1}`;
+}
+
+function getEdgeDescriptors(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return getArrayEdgeDescriptors(value);
+  }
+  if (typeof value === "string") {
+    return getStringEdgeDescriptors(value);
+  }
+  if (typeof value === "number") {
+    return getNumberEdgeDescriptors(value);
+  }
+  if (value === null) {
+    return ["null input"];
+  }
+  if (typeof value === "object") {
+    return ["object graph shape"];
+  }
+  return [];
+}
+
+function getArrayEdgeDescriptors(value: unknown[]): string[] {
+  const descriptors: string[] = [];
+  if (value.length === 0) {
+    return ["empty input"];
+  }
+  if (value.length === 1) {
+    descriptors.push("single item");
+  }
+  if (value.every((item) => Array.isArray(item))) {
+    descriptors.push("nested intervals/grid");
+  }
+  const numbers = value.filter((item): item is number => typeof item === "number");
+  if (numbers.length === value.length) {
+    descriptors.push(...getNumberArrayEdgeDescriptors(numbers));
+  }
+  return descriptors.length ? descriptors : ["mixed shape"];
+}
+
+function getNumberArrayEdgeDescriptors(nums: number[]) {
+  const descriptors: string[] = [];
+  const uniqueCount = new Set(nums).size;
+  if (uniqueCount < nums.length) {
+    descriptors.push(uniqueCount === 1 ? "all equal values" : "duplicates present");
+  }
+  if (nums.some((value) => value < 0)) {
+    descriptors.push("negative values");
+  }
+  if (nums.includes(0)) {
+    descriptors.push("zero boundary");
+  }
+  if (nums.every((value, index, array) => index === 0 || array[index - 1] <= value)) {
+    descriptors.push("sorted ascending");
+  }
+  if (nums.every((value, index, array) => index === 0 || array[index - 1] >= value)) {
+    descriptors.push("sorted descending");
+  }
+  return descriptors.length ? descriptors : ["varied numeric values"];
+}
+
+function getStringEdgeDescriptors(value: string) {
+  const descriptors: string[] = [];
+  if (value.length === 0) {
+    return ["empty string"];
+  }
+  if (value.length === 1) {
+    descriptors.push("single character");
+  }
+  if (/[A-Z]/.test(value)) {
+    descriptors.push("mixed casing");
+  }
+  if (/\d/.test(value)) {
+    descriptors.push("digit characters");
+  }
+  if (/[^a-z0-9]/i.test(value)) {
+    descriptors.push("punctuation or spaces");
+  }
+  if (new Set(value).size < value.length) {
+    descriptors.push("repeated characters");
+  }
+  return descriptors.length ? descriptors : ["plain text input"];
+}
+
+function getNumberEdgeDescriptors(value: number) {
+  if (value === 0) {
+    return ["zero boundary"];
+  }
+  if (value < 0) {
+    return ["negative value"];
+  }
+  return ["positive limit"];
+}
+
 function makeCases(argsList: unknown[][], label: string): TestInput[] {
-  return argsList.map((args, index) => ({ args, name: `${label} ${index + 1}` }));
+  return argsList.map((args, index) => ({ args, name: `${label} - edge ${index + 1}: ${describeEdgeCase(args, index)}` }));
 }
 
 function countBinarySubarraysWithSum(nums: number[], goal: number) {

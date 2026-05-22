@@ -83,6 +83,7 @@ type EditorProps = {
   code: string;
   consoleRunResult: ConsoleRunResult | null;
   questionFinished: boolean;
+  questionVariantReady: boolean;
   results: RunResult[];
   runnerReady: boolean;
   running: boolean;
@@ -229,11 +230,25 @@ function ExampleBlock(props: { example: QuestionExample; index: number }) {
 }
 
 function ExampleRow(props: { label: string; value: string }) {
+  const value = formatExampleValue(props.value);
+  const multiline = value.includes("\n");
   return (
     <Text size="sm" style={{ fontFamily: EXAMPLE_FONT_FAMILY, whiteSpace: "pre-wrap" }}>
-      <Text span fw={700}>{props.label}:</Text> {props.value}
+      <Text span fw={700}>{props.label}:</Text>{multiline ? `\n${value}` : ` ${value}`}
     </Text>
   );
+}
+
+function formatExampleValue(value: string) {
+  const trimmed = value.trim();
+  if (!/^[{[]/.test(trimmed)) {
+    return value;
+  }
+  try {
+    return JSON.stringify(JSON.parse(trimmed), null, 2);
+  } catch {
+    return value;
+  }
 }
 
 function EditorCard(props: EditorProps & { actions: PracticePanelActions; currentQuestion: Question; state: StudyState }) {
@@ -296,11 +311,12 @@ function EditorToolbar(props: Parameters<typeof EditorCard>[0]) {
 }
 
 function SetupToolbarActions(props: Parameters<typeof EditorCard>[0]) {
+  const startDisabled = props.sessionStarted || !props.questionVariantReady;
   return (
     <>
-      <Tooltip label="Start timer and enter fullscreen" withArrow>
+      <Tooltip label={props.questionVariantReady ? "Start timer and enter fullscreen" : "Waiting for Codex CLI to rewrite this question"} withArrow>
         <Box component="span">
-          <HeroSiegeButton leftSection={<IconPlayerPlay size={ICON_SM} />} disabled={props.sessionStarted} onClick={props.actions.startQuestion}>Start</HeroSiegeButton>
+          <HeroSiegeButton leftSection={<IconPlayerPlay size={ICON_SM} />} disabled={startDisabled} onClick={props.actions.startQuestion}>Start</HeroSiegeButton>
         </Box>
       </Tooltip>
       <Tooltip label="Restore the starter code" withArrow>

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Box, Badge, Group, Progress, SimpleGrid, Stack, Text, Tooltip } from "@mantine/core";
+import { Box, Badge, Group, Progress, SegmentedControl, SimpleGrid, Stack, Text, Tooltip } from "@mantine/core";
+import { IconCheck, IconLock, IconSparkles, IconTrophy } from "@tabler/icons-react";
 
 import { HeroSiegeButton } from "./HeroSiegeUi";
 import armorArt from "../assets/hero_siege_items/armor.png";
@@ -33,7 +34,8 @@ import quickRecoveryArt from "../assets/hero_siege_skills/quick-recovery.png";
 import shieldMasteryArt from "../assets/hero_siege_skills/shield-mastery.png";
 import swordMasteryArt from "../assets/hero_siege_skills/sword-mastery.png";
 import treasureSenseArt from "../assets/hero_siege_skills/treasure-sense.png";
-import { ACHIEVEMENT_TOTAL, getAchievements } from "../lib/achievementCore";
+import { ACHIEVEMENT_TOTAL, getAchievementTrackerSummary, getAchievements, toggleTrackedAchievement } from "../lib/achievementCore";
+import { MAX_TRACKED_ACHIEVEMENTS } from "../lib/studyCore";
 import type { Achievement } from "../lib/achievementCore";
 import type { StudyState } from "../types/study";
 
@@ -45,14 +47,26 @@ const CARD_MIN_HEIGHT = 110;
 const CARD_PADDING = "sm";
 const LOCKED_OPACITY = 0.58;
 const UNLOCKED_OPACITY = 1;
-const ACHIEVEMENTS_PAGE_SIZE = 8;
+const ACHIEVEMENTS_PAGE_SIZE = 6;
 const CARD_BG_UNLOCKED = "linear-gradient(145deg, #23211d, #12110f)";
 const CARD_BG_LOCKED = "linear-gradient(145deg, #1f1f1f, #101010)";
 const CARD_BORDER_UNLOCKED = "1px solid #8b7448";
 const CARD_BORDER_LOCKED = "1px solid #3a3a3a";
 const LOCKED_BADGE_COLOR = "#555";
 const LOCKED_FILTER = "grayscale(1) brightness(0.55)";
+const XBOX_GREEN_LIGHT = "#7ee787";
+const TRACKER_BG = "linear-gradient(135deg, rgba(16, 124, 16, 0.92), rgba(8, 28, 14, 0.98) 58%, #080a08)";
+const TRACKER_BORDER = "1px solid rgba(126, 231, 135, 0.44)";
+const TRACKER_SHADOW = "inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 14px 34px rgba(0, 0, 0, 0.36)";
+const TRACKER_TILE_BG = "rgba(2, 8, 4, 0.42)";
+const TRACKER_TILE_BORDER = "1px solid rgba(191, 255, 191, 0.18)";
+const TRACKER_TILE_MIN_HEIGHT = 78;
+const TRACKER_ICON_SIZE = 18;
+const TRACKER_HERO_ICON_SIZE = 34;
+const TRACKER_PAGE_ACTION_WIDTH = 64;
+const TRACK_ACTION_WIDTH = 70;
 type StaticImageData = string;
+type AchievementFilter = "all" | "locked" | "unlocked";
 
 const ACHIEVEMENT_ICON_BY_ID: Partial<Record<Achievement["id"], StaticImageData>> = {
   "adept-aggressor": axeMasteryArt,
@@ -130,38 +144,136 @@ const ACHIEVEMENT_ICON_BY_METRIC: Partial<Record<Achievement["metric"], StaticIm
   streak: frenzyArt
 };
 
-export function AchievementsPanel(props: { state: StudyState }) {
+export function AchievementsPanel(props: { state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const [page, setPage] = useState(0);
+  const [filter, setFilter] = useState<AchievementFilter>("all");
   const achievements = getAchievements(props.state);
+  const summary = getAchievementTrackerSummary(props.state);
+  const trackedIds = new Set(props.state.profile.trackedAchievementIds);
+  const trackedCount = props.state.profile.trackedAchievementIds.length;
   const unlockedCount = achievements.filter((achievement) => achievement.unlocked).length;
-  const pageCount = getPageCount(achievements.length);
-  const safePage = Math.min(page, pageCount - 1);
-  const visibleAchievements = achievements.slice(safePage * ACHIEVEMENTS_PAGE_SIZE, (safePage + 1) * ACHIEVEMENTS_PAGE_SIZE);
+  const filteredAchievements = getFilteredAchievements(achievements, filter);
+  const filteredPageCount = getPageCount(filteredAchievements.length);
+  const safePage = Math.min(page, filteredPageCount - 1);
+  const visibleAchievements = filteredAchievements.slice(safePage * ACHIEVEMENTS_PAGE_SIZE, (safePage + 1) * ACHIEVEMENTS_PAGE_SIZE);
   return (
     <Stack gap="md">
+      <AchievementTrackerHero summary={summary} />
+      <ClosestAchievements achievements={summary.closest} />
       <Box>
         <Group justify="space-between" mb={4}>
           <Text size="sm" fw={800}>Achievements</Text>
-          <Text size="sm" c="dimmed">{unlockedCount}/{ACHIEVEMENT_TOTAL}</Text>
+          <Group gap="xs">
+            <Badge color="green" variant="light">Tracked {trackedCount}/{MAX_TRACKED_ACHIEVEMENTS}</Badge>
+            <Text size="sm" c="dimmed">{unlockedCount}/{ACHIEVEMENT_TOTAL}</Text>
+          </Group>
         </Group>
         <Progress value={(unlockedCount / ACHIEVEMENT_TOTAL) * PROGRESS_MAX} color="yellow" />
       </Box>
-      <Group justify="flex-end" gap="xs">
-        <HeroSiegeButton height={26} minWidth={64} disabled={safePage <= 0} onClick={() => setPage((current) => Math.max(0, current - 1))}>Prev</HeroSiegeButton>
-        <Badge variant="light">Page {safePage + 1}/{pageCount}</Badge>
-        <HeroSiegeButton height={26} minWidth={64} disabled={safePage >= pageCount - 1} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}>Next</HeroSiegeButton>
+      <Group justify="space-between" gap="xs">
+        <SegmentedControl
+          data={[
+            { label: "All", value: "all" },
+            { label: "Unlocked", value: "unlocked" },
+            { label: "Locked", value: "locked" }
+          ]}
+          onChange={(value) => {
+            setFilter(value as AchievementFilter);
+            setPage(0);
+          }}
+          size="xs"
+          value={filter}
+        />
+        <Group justify="flex-end" gap="xs">
+          <HeroSiegeButton height={26} minWidth={TRACKER_PAGE_ACTION_WIDTH} disabled={safePage <= 0} onClick={() => setPage((current) => Math.max(0, current - 1))}>Prev</HeroSiegeButton>
+          <Badge variant="light">Page {safePage + 1}/{filteredPageCount}</Badge>
+          <HeroSiegeButton height={26} minWidth={TRACKER_PAGE_ACTION_WIDTH} disabled={safePage >= filteredPageCount - 1} onClick={() => setPage((current) => Math.min(filteredPageCount - 1, current + 1))}>Next</HeroSiegeButton>
+        </Group>
       </Group>
       <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
         {visibleAchievements.map((achievement) => (
-          <AchievementCard key={achievement.id} achievement={achievement} />
+          <AchievementCard
+            key={achievement.id}
+            achievement={achievement}
+            trackingDisabled={!trackedIds.has(achievement.id) && trackedCount >= MAX_TRACKED_ACHIEVEMENTS}
+            trackingEnabled={trackedIds.has(achievement.id)}
+            onToggleTrack={() => props.setState((previous) => toggleTrackedAchievement(previous, achievement.id))}
+          />
         ))}
       </SimpleGrid>
     </Stack>
   );
 }
 
-function AchievementCard(props: { achievement: Achievement }) {
-  const progressValue = Math.min(PROGRESS_MAX, (props.achievement.current / props.achievement.target) * PROGRESS_MAX);
+function AchievementTrackerHero(props: { summary: ReturnType<typeof getAchievementTrackerSummary> }) {
+  return (
+    <Box p="md" style={{ background: TRACKER_BG, border: TRACKER_BORDER, borderRadius: CARD_RADIUS, boxShadow: TRACKER_SHADOW }}>
+      <Group justify="space-between" align="flex-start" gap="md">
+        <Group gap="sm" align="center">
+          <Box c={XBOX_GREEN_LIGHT} style={{ alignItems: "center", display: "flex" }}>
+            <IconTrophy size={TRACKER_HERO_ICON_SIZE} />
+          </Box>
+          <Box>
+            <Text size="xs" fw={900} c="green.1" tt="uppercase">Achievement tracker</Text>
+            <Text size="26px" fw={900} c="white" style={{ fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>
+              {props.summary.gamerscore.toLocaleString()}G
+            </Text>
+          </Box>
+        </Group>
+        <Box miw={220}>
+          <Group justify="space-between" mb={4}>
+            <Text size="xs" fw={900} c="green.1">Completion</Text>
+            <Text size="xs" fw={900} c="white">{props.summary.completionPercent}%</Text>
+          </Group>
+          <Progress value={props.summary.completionPercent} color="green" size="md" />
+          <Group justify="space-between" mt={4}>
+            <Text size="10px" fw={800} c="green.1">{props.summary.totalUnlocked} unlocked</Text>
+            <Text size="10px" fw={800} c="green.1">{props.summary.totalGamerscore.toLocaleString()}G total</Text>
+          </Group>
+        </Box>
+      </Group>
+    </Box>
+  );
+}
+
+function ClosestAchievements(props: { achievements: Achievement[] }) {
+  if (!props.achievements.length) {
+    return (
+      <Box p="sm" style={{ background: TRACKER_TILE_BG, border: TRACKER_TILE_BORDER, borderRadius: CARD_RADIUS }}>
+        <Text size="sm" fw={800} c="green.2">All achievements unlocked</Text>
+      </Box>
+    );
+  }
+  return (
+    <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
+      {props.achievements.map((achievement) => (
+        <ClosestAchievementTile key={achievement.id} achievement={achievement} />
+      ))}
+    </SimpleGrid>
+  );
+}
+
+function ClosestAchievementTile(props: { achievement: Achievement }) {
+  return (
+    <Box p="sm" mih={TRACKER_TILE_MIN_HEIGHT} style={{ background: TRACKER_TILE_BG, border: TRACKER_TILE_BORDER, borderRadius: CARD_RADIUS }}>
+      <Group gap="xs" align="flex-start" wrap="nowrap">
+        <Box c={XBOX_GREEN_LIGHT} style={{ alignItems: "center", display: "flex", marginTop: 2 }}>
+          <IconSparkles size={TRACKER_ICON_SIZE} />
+        </Box>
+        <Box flex={1}>
+          <Text size="xs" fw={900} c="white" lineClamp={1}>{props.achievement.title}</Text>
+          <Group justify="space-between" mt={4} mb={3}>
+            <Text size="10px" fw={800} c="green.1">{props.achievement.progressPercent}%</Text>
+            <Text size="10px" fw={800} c="green.1">{props.achievement.current}/{props.achievement.target}</Text>
+          </Group>
+          <Progress value={props.achievement.progressPercent} color="green" size="xs" />
+        </Box>
+      </Group>
+    </Box>
+  );
+}
+
+function AchievementCard(props: { achievement: Achievement; onToggleTrack: () => void; trackingDisabled: boolean; trackingEnabled: boolean }) {
   return (
     <Box p={CARD_PADDING} mih={CARD_MIN_HEIGHT} style={{ background: getCardBg(props.achievement.unlocked), border: getCardBorder(props.achievement.unlocked), borderRadius: CARD_RADIUS, opacity: getCardOpacity(props.achievement.unlocked) }}>
       <Group align="flex-start" gap="sm" wrap="nowrap">
@@ -169,19 +281,37 @@ function AchievementCard(props: { achievement: Achievement }) {
         <Box flex={1}>
           <Group justify="space-between" gap="xs" wrap="nowrap">
             <Text size="sm" fw={800} lineClamp={1}>{props.achievement.title}</Text>
-            <Badge size="xs" color={props.achievement.unlocked ? "green" : "gray"} variant="light">
-              {props.achievement.unlocked ? "Unlocked" : "Locked"}
-            </Badge>
+            <Group gap={4} wrap="nowrap">
+              <TrackAchievementButton disabled={props.trackingDisabled} tracked={props.trackingEnabled} onToggle={props.onToggleTrack} />
+              <AchievementStatusBadge achievement={props.achievement} />
+            </Group>
           </Group>
           <Text size="xs" c="dimmed" mt={2} lineClamp={2}>{props.achievement.description}</Text>
           <Group justify="space-between" mt="xs" mb={3}>
             <Text size="10px" c="dimmed" fw={700}>Progress</Text>
-            <Text size="10px" c="dimmed" fw={700}>{props.achievement.current}/{props.achievement.target}</Text>
+            <Text size="10px" c="dimmed" fw={700}>{props.achievement.current}/{props.achievement.target} - {props.achievement.gamerscore}G</Text>
           </Group>
-          <Progress value={progressValue} size="xs" color={props.achievement.unlocked ? "yellow" : "gray"} />
+          <Progress value={props.achievement.progressPercent} size="xs" color={props.achievement.unlocked ? "green" : "gray"} />
         </Box>
       </Group>
     </Box>
+  );
+}
+
+function TrackAchievementButton(props: { disabled: boolean; onToggle: () => void; tracked: boolean }) {
+  return (
+    <HeroSiegeButton height={22} minWidth={TRACK_ACTION_WIDTH} disabled={props.disabled} onClick={props.onToggle}>
+      {props.tracked ? "Tracked" : "Track"}
+    </HeroSiegeButton>
+  );
+}
+
+function AchievementStatusBadge(props: { achievement: Achievement }) {
+  const icon = props.achievement.unlocked ? <IconCheck size={12} /> : <IconLock size={12} />;
+  return (
+    <Badge leftSection={icon} size="xs" color={props.achievement.unlocked ? "green" : "gray"} variant="light">
+      {props.achievement.unlocked ? "Unlocked" : "Locked"}
+    </Badge>
   );
 }
 
@@ -236,4 +366,21 @@ function getCardOpacity(unlocked: boolean) {
 
 function getPageCount(total: number) {
   return Math.max(1, Math.ceil(total / ACHIEVEMENTS_PAGE_SIZE));
+}
+
+function getFilteredAchievements(achievements: Achievement[], filter: AchievementFilter) {
+  if (filter === "unlocked") {
+    return achievements.filter((achievement) => achievement.unlocked);
+  }
+  if (filter === "locked") {
+    return achievements.filter((achievement) => !achievement.unlocked).sort(compareLockedAchievements);
+  }
+  return achievements;
+}
+
+function compareLockedAchievements(a: Achievement, b: Achievement) {
+  if (b.progressPercent !== a.progressPercent) {
+    return b.progressPercent - a.progressPercent;
+  }
+  return b.current - a.current;
 }

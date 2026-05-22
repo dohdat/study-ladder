@@ -1,0 +1,201 @@
+import type { Question, TestCase } from "../types/study";
+
+const MAX_PROMPT_TESTS = 10;
+const MAX_CONSTRAINTS = 8;
+const MAX_EXAMPLES = 3;
+const MAX_VARIANT_TESTS = 12;
+const MIN_VARIANT_TESTS = 6;
+const MAX_PROMPT_LENGTH = 280;
+const MAX_EXAMPLE_FIELD_LENGTH = 240;
+const MIN_MEANINGFUL_TEXT_LENGTH = 12;
+const SOLUTION_LANGUAGE_PATTERN = /\b(sort|sorted|scan|iterate|loop|hash|map|stack|queue|two[- ]?pointer|dynamic programming|greedy|binary search|frequency order|lexicographically)\b/i;
+
+export type QuestionVariantPayload = {
+  constraints: string[];
+  examples: Array<{
+    explanation?: string;
+    input: string;
+    output: string;
+  }>;
+  prompt: string;
+  tests: TestCase[];
+  title: string;
+};
+
+export function createQuestionVariantPrompt(question: Question) {
+  return [
+    "Create a fresh playable variant of this JavaScript interview practice prompt.",
+    "Return JSON only. No markdown, no commentary.",
+    "",
+    "Rules:",
+    "- Preserve the exact function name and argument list. Do not add, remove, or reorder parameters.",
+    "- You MAY change the return semantics and output shape to make the task feel different.",
+    "- Keep the same core algorithmic family and difficulty, but require a different final thing than the stock prompt.",
+    "- Generate new tests for your changed semantics. These tests will grade the answer, not the original expected outputs.",
+    "- Do not only rename variables, change numbers, or change the story. The implementation goal must be slightly different.",
+    "- Good twists: return pair values instead of indices, return a count instead of a boolean, return a repaired/normalized result, add a tie-break rule, or ask for the earliest/widest/cheapest valid choice.",
+    "- Prefer a simple return value: number, boolean, string, array, or a tiny object with at most 2 fields.",
+    "- Keep prompt text concise: 1 or 2 sentences, under 45 words.",
+    "- The prompt must state WHAT to return, not HOW to solve it. Do not mention sorting, scanning, hashing, stacks, maps, greedy, DP, or traversal strategy.",
+    "- Put tie-break rules and edge behavior in constraints, not the main prompt.",
+    "- Constraints must be short requirement bullets, not solution steps.",
+    "- Keep each example input/output on one short line. Avoid long JSON objects in examples.",
+    "- Keep all test args compatible with the original function arguments.",
+    "- Include 8 to 10 tests with unique names and edge cases: empty/min input, duplicates, negatives/zero where relevant, ties, no-solution, boundary order, and misleading near misses.",
+    "- Do not mention that this is a variant, remix, hidden test, LeetCode, or NeetCode.",
+    "",
+    "JSON schema:",
+    "{\"title\":\"string\",\"prompt\":\"string\",\"constraints\":[\"string\"],\"examples\":[{\"input\":\"string\",\"output\":\"string\",\"explanation\":\"string\"}],\"tests\":[{\"name\":\"string\",\"args\":[...],\"expected\":...}]}",
+    "",
+    `Original title: ${question.title}`,
+    `Function: ${getFunctionSignature(question.starter, question.functionName)}`,
+    `Original prompt: ${question.prompt}`,
+    `Topics: ${question.topics.join(", ")}`,
+    `Constraints: ${JSON.stringify(question.constraints)}`,
+    `Examples: ${JSON.stringify(question.examples)}`,
+    `Original tests for input shape only. Replace expected values if your semantics change: ${JSON.stringify(question.tests.slice(0, MAX_PROMPT_TESTS))}`
+  ].join("\n");
+}
+
+export function createQuestionVariant(question: Question, text: string): Question | null {
+  const payload = parseVariantPayload(text);
+  if (!payload) {
+    return null;
+  }
+  return {
+    ...question,
+    constraints: payload.constraints,
+    examples: payload.examples,
+    prompt: payload.prompt,
+    tests: payload.tests,
+    title: payload.title
+  };
+}
+
+function parseVariantPayload(text: string): QuestionVariantPayload | null {
+  const jsonText = extractJsonObject(text);
+  if (!jsonText) {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") {
+    return null;
+  }
+  const record = parsed as Partial<QuestionVariantPayload>;
+  const title = normalizeMeaningfulString(record.title);
+  const prompt = normalizeMeaningfulString(record.prompt);
+  const constraints = normalizeConstraints(record.constraints);
+  const examples = normalizeExamples(record.examples);
+  const tests = normalizeTests(record.tests);
+  if (!title || !prompt || prompt.length > MAX_PROMPT_LENGTH || SOLUTION_LANGUAGE_PATTERN.test(prompt) || constraints.length === 0 || examples.length === 0 || tests.length < MIN_VARIANT_TESTS) {
+    return null;
+  }
+  return { constraints, examples, prompt, tests, title };
+}
+
+function extractJsonObject(text: string) {
+  const trimmed = text.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start < 0 || end <= start) {
+    return "";
+  }
+  return trimmed.slice(start, end + 1);
+}
+
+function normalizeMeaningfulString(value: unknown) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  const trimmed = value.trim();
+  return trimmed.length >= MIN_MEANINGFUL_TEXT_LENGTH ? trimmed : "";
+}
+
+function normalizeConstraints(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((constraint): constraint is string => typeof constraint === "string")
+    .map((constraint) => constraint.trim())
+    .filter(Boolean)
+    .slice(0, MAX_CONSTRAINTS);
+}
+
+function normalizeExamples(value: unknown): QuestionVariantPayload["examples"] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((example): QuestionVariantPayload["examples"][number] | null => {
+      if (!example || typeof example !== "object") {
+        return null;
+      }
+      const record = example as Partial<QuestionVariantPayload["examples"][number]>;
+      if (typeof record.input !== "string" || typeof record.output !== "string") {
+        return null;
+      }
+      const input = record.input.trim();
+      const output = record.output.trim();
+      const explanation = typeof record.explanation === "string" ? record.explanation.trim() : undefined;
+      if (input.length > MAX_EXAMPLE_FIELD_LENGTH || output.length > MAX_EXAMPLE_FIELD_LENGTH || (explanation && explanation.length > MAX_EXAMPLE_FIELD_LENGTH)) {
+        return null;
+      }
+      return {
+        explanation,
+        input,
+        output
+      };
+    })
+    .filter((example): example is QuestionVariantPayload["examples"][number] => Boolean(example?.input && example?.output))
+    .slice(0, MAX_EXAMPLES);
+}
+
+function normalizeTests(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const seenNames = new Set<string>();
+  const tests: TestCase[] = [];
+  for (const test of value) {
+    if (!test || typeof test !== "object") {
+      continue;
+    }
+    const record = test as Partial<TestCase>;
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    if (!name || seenNames.has(name) || !Array.isArray(record.args) || !isJsonSafe(record.args) || !isJsonSafe(record.expected)) {
+      continue;
+    }
+    seenNames.add(name);
+    tests.push({ name, args: record.args, expected: record.expected });
+    if (tests.length >= MAX_VARIANT_TESTS) {
+      break;
+    }
+  }
+  return tests;
+}
+
+function isJsonSafe(value: unknown): boolean {
+  if (value === undefined || typeof value === "function" || typeof value === "symbol" || typeof value === "bigint") {
+    return false;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value);
+  }
+  if (!value || typeof value !== "object") {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.every(isJsonSafe);
+  }
+  return Object.values(value).every(isJsonSafe);
+}
+
+function getFunctionSignature(starter: string, fallbackName: string) {
+  return starter.split("\n")[0]?.trim() || `function ${fallbackName}(...)`;
+}

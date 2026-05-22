@@ -17,6 +17,7 @@ import {
 } from "@mantine/core";
 import { IconArrowLeft } from "@tabler/icons-react";
 
+import { AchievementTrackerStrip } from "../components/AchievementTrackerStrip";
 import { CoinAmount } from "../components/CoinIcon";
 import { questions } from "../data/questions";
 import { getEstimatedRating } from "../lib/ratingCore";
@@ -45,6 +46,7 @@ export default function Profile() {
       <Container size="xl" px="md" py="md">
         <Stack gap="md">
           <ProfileHeader loaded={loaded} />
+          <AchievementTrackerStrip state={state} />
           <Box id="stats">
             <ProfileStats attempted={profile.attempted} solved={profile.solved} mastered={profile.mastered} accuracy={profile.accuracy} coins={state.profile.coins} health={state.profile.health} hintsBought={state.profile.hintsBought} maxHealth={maxHealth} rating={rating} stats={stats} />
           </Box>

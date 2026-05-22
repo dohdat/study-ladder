@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { questions } from "../data/questions";
-import { createHintPrompt, requestCodexHint, warmCodexHint } from "../lib/hintPrompt";
+import { createHintPrompt, requestCodexHint, requestCodexQuestionVariant, warmCodexHint } from "../lib/hintPrompt";
 
 const LONG_CODE_LENGTH = 1900;
 const TRUNCATED_PROMPT_LENGTH = 900;
@@ -59,6 +59,14 @@ describe("hintPrompt", () => {
 
     await expect(warmCodexHint()).resolves.toEqual({ ok: true });
     expect(sendMessage).toHaveBeenCalledWith({ type: "warm-codex-hint" }, expect.any(Function));
+  });
+
+  it("sends question variant requests through the Chrome runtime", async () => {
+    const sendMessage = vi.fn((_message, callback) => callback({ ok: true, text: "{\"title\":\"Variant\"}" }));
+    setChromeRuntime({ sendMessage });
+
+    await expect(requestCodexQuestionVariant("question-1", "make variant")).resolves.toEqual({ ok: true, text: "{\"title\":\"Variant\"}" });
+    expect(sendMessage).toHaveBeenCalledWith({ prompt: "make variant", questionId: "question-1", type: "open-codex-question-variant" }, expect.any(Function));
   });
 
   it("uses Chrome runtime lastError when the background does not respond", async () => {

@@ -67,6 +67,7 @@ export const MODIFIER_KEYS: ItemModifierKey[] = ALL_MODIFIER_KEYS;
 export const HINT_COST = 10;
 export const HINT_COST_INCREMENT = 10;
 export const HINT_MAX_COST = 30;
+export const MAX_TRACKED_ACHIEVEMENTS = 5;
 export const MAX_HEALTH = 50;
 export const HEALTH_LOSS_PER_FAIL = 5;
 export const EXPERIENCE_PER_LEVEL = 150;
@@ -129,6 +130,7 @@ function createDefaultStateBase(): StudyState {
       shopStock: [],
       relics: [],
       spireRun: createSpireRun(Date.now(), 1, "normal", undefined, false, DEFAULT_SPIRE_MIN_RATING),
+      trackedAchievementIds: [],
       unlockedAchievementIds: []
     },
     cards: {}
@@ -144,7 +146,7 @@ export const cloneState = (state: StudyState): StudyState => ({
 });
 
 function cloneProfile(state: StudyState): StudyState["profile"] {
-  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, activePotionEffects: cloneActivePotionEffects(state.profile.activePotionEffects), equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), inventorySlots: cloneInventorySlots(state.profile.inventorySlots), metaProgress: { ...state.profile.metaProgress, upgrades: { ...state.profile.metaProgress.upgrades } }, relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, spireRun: { ...state.profile.spireRun, availableNodeIds: [...state.profile.spireRun.availableNodeIds], completedNodeIds: [...state.profile.spireRun.completedNodeIds], nodes: state.profile.spireRun.nodes.map((node) => ({ ...node, nextIds: [...node.nextIds] })), pendingRelicReward: cloneRelicRewardChoice(state.profile.spireRun.pendingRelicReward), roomRewardClaims: cloneRoomRewardClaims(state.profile.spireRun.roomRewardClaims), roundQuestionIds: [...state.profile.spireRun.roundQuestionIds], roundSolvedIds: [...state.profile.spireRun.roundSolvedIds], runCodeQuestionIds: [...state.profile.spireRun.runCodeQuestionIds], unknownEncounterMisses: { ...state.profile.spireRun.unknownEncounterMisses } }, stats: { ...state.profile.stats } };
+  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, activePotionEffects: cloneActivePotionEffects(state.profile.activePotionEffects), equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), inventorySlots: cloneInventorySlots(state.profile.inventorySlots), metaProgress: { ...state.profile.metaProgress, upgrades: { ...state.profile.metaProgress.upgrades } }, relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, spireRun: { ...state.profile.spireRun, availableNodeIds: [...state.profile.spireRun.availableNodeIds], completedNodeIds: [...state.profile.spireRun.completedNodeIds], nodes: state.profile.spireRun.nodes.map((node) => ({ ...node, nextIds: [...node.nextIds] })), pendingRelicReward: cloneRelicRewardChoice(state.profile.spireRun.pendingRelicReward), roomRewardClaims: cloneRoomRewardClaims(state.profile.spireRun.roomRewardClaims), roundQuestionIds: [...state.profile.spireRun.roundQuestionIds], roundSolvedIds: [...state.profile.spireRun.roundSolvedIds], runCodeQuestionIds: [...state.profile.spireRun.runCodeQuestionIds], unknownEncounterMisses: { ...state.profile.spireRun.unknownEncounterMisses } }, stats: { ...state.profile.stats }, trackedAchievementIds: [...state.profile.trackedAchievementIds], unlockedAchievementIds: [...state.profile.unlockedAchievementIds] };
 }
 
 function cloneRelicRewardChoice(choice: StudyState["profile"]["spireRun"]["pendingRelicReward"]) {
@@ -203,6 +205,7 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
       shopStock: normalizeShopStock(profile.shopStock),
       relics: normalizeRelics(profile.relics),
       spireRun: normalizeSpireRun(profile.spireRun, normalizeSpireMinRating(profile.spireMinRating)),
+      trackedAchievementIds: normalizeTrackedAchievementIds(profile.trackedAchievementIds),
       unlockedAchievementIds: normalizeUnlockedAchievementIds(profile.unlockedAchievementIds)
     },
     cards: normalizeCards(stored.cards)
@@ -283,6 +286,8 @@ function normalizeInventoryPosition(position: InventoryItemPosition) {
 }
 
 function normalizeEquipment(equipment: Partial<Record<EquipmentSlot, string | null>> | undefined) { return { ...defaultEquipment(), ...(equipment || {}) }; }
+
+function normalizeTrackedAchievementIds(ids: string[] | undefined) { return [...new Set(ids || [])].slice(0, MAX_TRACKED_ACHIEVEMENTS); }
 
 function normalizeUnlockedAchievementIds(ids: string[] | undefined) { return [...new Set(ids || [])]; }
 

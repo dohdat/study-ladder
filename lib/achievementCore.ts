@@ -1,12 +1,15 @@
 import { questions } from "../data/questions";
 import { HEAT_CONDITION_DEFINITIONS, getHeatLevel } from "./campaignCore";
-import { getCard, getProfileStats, META_UPGRADE_DEFINITIONS } from "./studyCore";
+import { getCard, getProfileStats, MAX_TRACKED_ACHIEVEMENTS, META_UPGRADE_DEFINITIONS } from "./studyCore";
 import type { MetaUpgradeId } from "./studyCore";
 import type { CharacterStatKey, Difficulty, RelicRarity, StudyState } from "../types/study";
 
 const ACHIEVEMENT_COUNT = 43;
+const ACHIEVEMENT_GAMERSCORE = 100;
+const PROGRESS_MAX = 100;
 const TOP_RATING_TARGET = 3000;
 const FIRST_TARGET = 1;
+const TRACKED_NEXT_ACHIEVEMENTS = 3;
 
 type AchievementMetric =
   | "allStats"
@@ -48,6 +51,8 @@ type AchievementDefinition = {
 
 export type Achievement = AchievementDefinition & {
   current: number;
+  gamerscore: number;
+  progressPercent: number;
   unlocked: boolean;
 };
 
@@ -55,6 +60,7 @@ type AchievementSummary = ReturnType<typeof getAchievementSummary>;
 type MetricReader = (definition: AchievementDefinition, summary: AchievementSummary) => number;
 
 export const ACHIEVEMENT_TOTAL = ACHIEVEMENT_COUNT;
+export const ACHIEVEMENT_GAMERSCORE_TOTAL = ACHIEVEMENT_TOTAL * ACHIEVEMENT_GAMERSCORE;
 
 export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] = [
   { badge: "FB", colors: ["#7a2e1f", "#d46a3a", "#ffd0a1"], description: "Clear your first combat question in a roguelike run.", id: "first-blood", metric: "defeats", target: 1, title: "First Blood" },
@@ -106,8 +112,45 @@ export function getAchievements(state: StudyState): Achievement[] {
   const summary = getAchievementSummary(state);
   return ACHIEVEMENT_DEFINITIONS.map((definition) => {
     const current = getAchievementCurrent(definition, summary);
-    return { ...definition, current, unlocked: isAchievementUnlocked(definition, state, current) };
+    const unlocked = isAchievementUnlocked(definition, state, current);
+    return {
+      ...definition,
+      current,
+      gamerscore: ACHIEVEMENT_GAMERSCORE,
+      progressPercent: getAchievementProgressPercent(current, definition.target),
+      unlocked
+    };
   });
+}
+
+export function getAchievementTrackerSummary(state: StudyState) {
+  const achievements = getAchievements(state);
+  const unlocked = achievements.filter((achievement) => achievement.unlocked);
+  const locked = achievements.filter((achievement) => !achievement.unlocked);
+  return {
+    closest: locked.sort(compareClosestAchievement).slice(0, TRACKED_NEXT_ACHIEVEMENTS),
+    completionPercent: getAchievementProgressPercent(unlocked.length, ACHIEVEMENT_TOTAL),
+    gamerscore: unlocked.reduce((sum, achievement) => sum + achievement.gamerscore, 0),
+    totalGamerscore: ACHIEVEMENT_GAMERSCORE_TOTAL,
+    totalUnlocked: unlocked.length,
+    totalLocked: locked.length
+  };
+}
+
+export function getTrackedAchievements(state: StudyState) {
+  const trackedIds = new Set(state.profile.trackedAchievementIds);
+  return getAchievements(state).filter((achievement) => trackedIds.has(achievement.id));
+}
+
+export function toggleTrackedAchievement(state: StudyState, achievementId: string): StudyState {
+  const trackedIds = state.profile.trackedAchievementIds;
+  if (trackedIds.includes(achievementId)) {
+    return { ...state, profile: { ...state.profile, trackedAchievementIds: trackedIds.filter((id) => id !== achievementId) } };
+  }
+  if (trackedIds.length >= MAX_TRACKED_ACHIEVEMENTS || !ACHIEVEMENT_DEFINITIONS.some((achievement) => achievement.id === achievementId)) {
+    return state;
+  }
+  return { ...state, profile: { ...state.profile, trackedAchievementIds: [...trackedIds, achievementId] } };
 }
 
 export function syncUnlockedAchievements(state: StudyState): StudyState {
@@ -121,6 +164,17 @@ export function syncUnlockedAchievements(state: StudyState): StudyState {
 
 function isAchievementUnlocked(definition: AchievementDefinition, state: StudyState, current: number) {
   return current >= definition.target || state.profile.unlockedAchievementIds.includes(definition.id);
+}
+
+function getAchievementProgressPercent(current: number, target: number) {
+  return Math.min(PROGRESS_MAX, Math.max(0, Math.round((current / Math.max(1, target)) * PROGRESS_MAX)));
+}
+
+function compareClosestAchievement(a: Achievement, b: Achievement) {
+  if (b.progressPercent !== a.progressPercent) {
+    return b.progressPercent - a.progressPercent;
+  }
+  return b.current - a.current;
 }
 
 function getAchievementSummary(state: StudyState) {

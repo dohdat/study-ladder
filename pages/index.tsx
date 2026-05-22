@@ -27,9 +27,10 @@ import {
   HINT_COST, applyHealthPenalty, applyIncomingDamage, applyScheduleResult, buyHint, canBuyHint, cloneState, defaultState, getCard,
   getHintCost, getIncomingDamageEffect, getMaxHealth, getMetaStartingGoldBonus, getModifiedQuestionTimeLimitMs, getRunModifierTotals, isQuestionInRecommendedRange, markQuestionRunCode, normalizeStudyState, setCard, setSpireMinimumRating
 } from "../lib/studyCore";
-import { createHintPrompt } from "../lib/hintPrompt";
+import { CODEX_QUESTION_VARIANT_CHUNK, CODEX_QUESTION_VARIANT_DONE, CODEX_QUESTION_VARIANT_ERROR, createHintPrompt, requestCodexQuestionVariant } from "../lib/hintPrompt";
 import { createLocalHint } from "../lib/localHint";
 import { RUNNER_FRAME, STATUS_COLOR, type StatusTone } from "../lib/practiceStatus";
+import { createQuestionVariant, createQuestionVariantPrompt } from "../lib/questionVariant";
 import { migrateLocalStorageState, saveStudyState } from "../lib/studyDb";
 import type { ConsoleRunResult, Question, RunResult, StudyState } from "../types/study";
 
@@ -39,11 +40,24 @@ const VISIBLE_RUN_CASE_COUNT = 3;
 const DAMAGE_POP_TIMEOUT_MS = 840;
 const PLAYER_IMPACT_TIMEOUT_MS = 2200;
 const COMBAT_ADVANCE_DELAY_MS = 680;
+const QUESTION_VARIANT_RETRY_MS = 5000;
 
 type TestRunnerMessage = { type: "run-result"; runId: string; ok: boolean; error?: string; results: RunResult[]; runtimeMs?: number };
 type CodeRunMessage = { type: "code-run-result"; runId: string; ok: boolean; error?: string; output: string[]; results?: RunResult[]; runtimeMs?: number };
 type RunnerReadyMessage = { type: "runner-ready" };
 type RunnerMessage = TestRunnerMessage | CodeRunMessage | RunnerReadyMessage;
+type QuestionVariantStreamMessage = {
+  error?: string;
+  questionId?: string;
+  text?: string;
+  type: typeof CODEX_QUESTION_VARIANT_CHUNK | typeof CODEX_QUESTION_VARIANT_DONE | typeof CODEX_QUESTION_VARIANT_ERROR;
+};
+type QuestionVariantChromeRuntime = {
+  onMessage?: {
+    addListener: (listener: (message: unknown) => void) => void;
+    removeListener: (listener: (message: unknown) => void) => void;
+  };
+};
 
 type FailAndAdvance = (message: string, draft?: string, timeRemainingMs?: number) => void;
 
@@ -381,6 +395,7 @@ function clearRunTimer(runTimer: React.MutableRefObject<number | null>) {
 function usePracticeActions(params: {
   code: string;
   currentQuestion: Question | null;
+  questionVariantReady: boolean;
   runnerReady: boolean;
   setCode: (code: string) => void;
   setCurrentQuestion: (question: Question) => void;
@@ -509,6 +524,11 @@ function useBuyHint(params: Parameters<typeof usePracticeActions>[0]) {
 function useStartQuestion(params: Parameters<typeof usePracticeActions>[0]) {
   return useCallback(() => {
     if (!params.currentQuestion || params.state.mode !== "leetcode" || params.state.profile.spireRun.mapOpen) {
+      return;
+    }
+    if (!params.questionVariantReady) {
+      params.setTone("default");
+      params.setStatus("Waiting for Codex CLI to rewrite this question.");
       return;
     }
     params.runnerFrame.current?.contentWindow?.postMessage({ type: "runner-ping" }, "*");
@@ -708,6 +728,199 @@ function useSyncSpireQuestion(params: {
   }, [params]);
 }
 
+function useQuestionDisplayVariant(params: {
+  currentQuestion: Question | null;
+  hydrated: boolean;
+  sessionStarted: boolean;
+  state: StudyState;
+}) {
+  const cache = useRef(new Map<string, Question>());
+  const inFlight = useRef(new Set<string>());
+  const retryTimers = useRef(new Map<string, number>());
+  const streamTextByQuestionId = useRef(new Map<string, string>());
+  const sessionStartedRef = useRef(params.sessionStarted);
+  const [displayQuestion, setDisplayQuestion] = useState<Question | null>(null);
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    sessionStartedRef.current = params.sessionStarted;
+  }, [params.sessionStarted]);
+
+  const requestVariant = useCallback((question: Question) => {
+    if (cache.current.has(question.id) || inFlight.current.has(question.id)) {
+      return;
+    }
+    const retryTimer = retryTimers.current.get(question.id);
+    if (retryTimer) {
+      window.clearTimeout(retryTimer);
+      retryTimers.current.delete(question.id);
+    }
+    inFlight.current.add(question.id);
+    streamTextByQuestionId.current.set(question.id, "Codex CLI request started. Waiting for first token...");
+    setRevision((current) => current + 1);
+    const scheduleRetry = (message: string) => {
+      streamTextByQuestionId.current.set(question.id, message);
+      const nextRetry = window.setTimeout(() => {
+        retryTimers.current.delete(question.id);
+        setRevision((current) => current + 1);
+        requestVariant(question);
+      }, QUESTION_VARIANT_RETRY_MS);
+      retryTimers.current.set(question.id, nextRetry);
+      setRevision((current) => current + 1);
+    };
+    requestCodexQuestionVariant(question.id, createQuestionVariantPrompt(question))
+      .then((response) => {
+        if (!response.ok || !response.text) {
+          scheduleRetry(`Codex CLI retrying in ${Math.round(QUESTION_VARIANT_RETRY_MS / SECOND_MS)}s: ${response.error || "empty rewrite response"}`);
+          return;
+        }
+        const variant = createQuestionVariant(question, response.text);
+        if (!variant) {
+          scheduleRetry(`Codex draft did not match the question format. Retrying in ${Math.round(QUESTION_VARIANT_RETRY_MS / SECOND_MS)}s...`);
+          return;
+        }
+        const queuedRetry = retryTimers.current.get(question.id);
+        if (queuedRetry) {
+          window.clearTimeout(queuedRetry);
+          retryTimers.current.delete(question.id);
+        }
+        cache.current.set(question.id, variant);
+        setRevision((current) => current + 1);
+        setDisplayQuestion((current) => {
+          if (sessionStartedRef.current || current?.id !== question.id) {
+            return current;
+          }
+          return variant;
+        });
+      })
+      .finally(() => {
+        inFlight.current.delete(question.id);
+        setRevision((current) => current + 1);
+      });
+  }, []);
+
+  useEffect(() => {
+    const timers = retryTimers.current;
+    return () => {
+      for (const timer of timers.values()) {
+        window.clearTimeout(timer);
+      }
+      timers.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    const runtime = getQuestionVariantRuntime();
+    if (!runtime?.onMessage) {
+      return undefined;
+    }
+    function handleRuntimeMessage(message: unknown) {
+      if (!isQuestionVariantStreamMessage(message) || !message.questionId) {
+        return;
+      }
+      if (message.type === CODEX_QUESTION_VARIANT_CHUNK && message.text) {
+        const current = streamTextByQuestionId.current.get(message.questionId) || "";
+        streamTextByQuestionId.current.set(message.questionId, `${current}${message.text}`);
+        setRevision((value) => value + 1);
+        return;
+      }
+      if (message.type === CODEX_QUESTION_VARIANT_DONE) {
+        streamTextByQuestionId.current.set(message.questionId, "Codex CLI rewrite complete. Parsing question...");
+        setRevision((value) => value + 1);
+        return;
+      }
+      if (message.type === CODEX_QUESTION_VARIANT_ERROR) {
+        streamTextByQuestionId.current.set(message.questionId, `Codex CLI error: ${message.error || "rewrite failed"}`);
+        setRevision((value) => value + 1);
+      }
+    }
+    runtime.onMessage.addListener(handleRuntimeMessage);
+    return () => runtime.onMessage?.removeListener(handleRuntimeMessage);
+  }, []);
+
+  useEffect(() => {
+    if (!params.currentQuestion) {
+      setDisplayQuestion(null);
+      return;
+    }
+    setDisplayQuestion(cache.current.get(params.currentQuestion.id) || params.currentQuestion);
+  }, [params.currentQuestion?.id]);
+
+  useEffect(() => {
+    if (!params.hydrated || !params.currentQuestion || params.state.mode !== "leetcode") {
+      return;
+    }
+    requestVariant(params.currentQuestion);
+  }, [params.currentQuestion, params.hydrated, params.state.mode, requestVariant]);
+
+  useEffect(() => {
+    if (!params.hydrated || !params.currentQuestion || params.state.mode !== "leetcode" || params.state.profile.spireRun.mapOpen) {
+      return;
+    }
+    const nextQuestion = chooseNextSpireQuestion(params.state, params.currentQuestion);
+    if (nextQuestion.id !== params.currentQuestion.id) {
+      requestVariant(nextQuestion);
+    }
+  }, [params.currentQuestion, params.hydrated, params.state, requestVariant]);
+
+  if (!params.currentQuestion) {
+    return { loading: false, question: null, ready: false, streamText: "" };
+  }
+  const cached = cache.current.get(params.currentQuestion.id);
+  const loading = inFlight.current.has(params.currentQuestion.id) || retryTimers.current.has(params.currentQuestion.id);
+  return {
+    loading,
+    question: cached || (displayQuestion?.id === params.currentQuestion.id ? displayQuestion : params.currentQuestion),
+    ready: Boolean(cached),
+    revision,
+    streamText: streamTextByQuestionId.current.get(params.currentQuestion.id) || ""
+  };
+}
+
+function getQuestionVariantRuntime() {
+  return (globalThis as typeof globalThis & { chrome?: { runtime?: QuestionVariantChromeRuntime } }).chrome?.runtime;
+}
+
+function isQuestionVariantStreamMessage(message: unknown): message is QuestionVariantStreamMessage {
+  if (!message || typeof message !== "object" || !("type" in message)) {
+    return false;
+  }
+  const type = (message as QuestionVariantStreamMessage).type;
+  return type === CODEX_QUESTION_VARIANT_CHUNK || type === CODEX_QUESTION_VARIANT_DONE || type === CODEX_QUESTION_VARIANT_ERROR;
+}
+
+function formatQuestionVariantStreamStatus(text: string) {
+  const compact = text.replace(/\s+/g, " ").trim().toLowerCase();
+  if (!compact) {
+    return "Preparing a fresh question...\nStarting Codex CLI.";
+  }
+  if (compact.includes("retrying in")) {
+    return "Preparing a fresh question...\nCodex sent a draft that needs cleanup. Asking again in a few seconds.";
+  }
+  if (compact.includes("rewrite complete") || compact.includes("parsing question")) {
+    return "Preparing a fresh question...\nChecking the final draft.";
+  }
+  if (compact.includes("waiting for codex response")) {
+    return "Preparing a fresh question...\nCodex is writing a twisted version now.";
+  }
+  if (compact.includes("codex draft") || compact.includes("{")) {
+    return "Preparing a fresh question...\nReviewing the Codex draft.";
+  }
+  if (compact.includes("submitting rewrite prompt") || compact.includes("session ready")) {
+    return "Preparing a fresh question...\nSending the rewrite request to Codex.";
+  }
+  if (compact.includes("existing codex session")) {
+    return "Preparing a fresh question...\nReusing the active Codex session.";
+  }
+  if (compact.includes("app-server") || compact.includes("websocket") || compact.includes("initialized") || compact.includes("thread ready")) {
+    return "Preparing a fresh question...\nConnecting to Codex.";
+  }
+  if (compact.includes("error") || compact.includes("timed out") || compact.includes("failed")) {
+    return "Preparing a fresh question...\nCodex is taking too long. Retrying automatically.";
+  }
+  return "Preparing a fresh question...\nStarting Codex CLI.";
+}
+
 function useMonsterDamagePop(setMonsterDamagePop: React.Dispatch<React.SetStateAction<MonsterDamagePop | null>>) {
   const clearTimer = useRef<number | null>(null);
   useEffect(() => () => clearRunTimer(clearTimer), [clearTimer]);
@@ -805,14 +1018,29 @@ export default function Home() {
   const showMonsterDamage = useMonsterDamagePop(setMonsterDamagePop);
   const showPlayerImpact = usePlayerImpact(setPlayerImpact);
   usePersistStudy(state, hydrated, setRunTone, setRunStatus);
-  const failAndAdvance = useFailAndAdvance({ code, currentQuestion, setCode, setCurrentQuestion, setConsoleRunResult, setResults, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, clearHint: hints.clearHint, showHealthLoss, showPlayerImpact });
-  const questionTimeLimitMs = currentQuestion ? getModifiedQuestionTimeLimitMs(state, currentQuestion) : 0;
-  const timer = useQuestionTimer({ code, currentQuestion, failAndAdvance, sessionStarted, mode: state.mode, setConsoleRunResult, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer, questionTimeLimitMs });
-  const actions = usePracticeActions({ code, currentQuestion, failAndAdvance, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setConsoleRunResult, setResults, setRunnerReady, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame, clearHint: hints.clearHint, startHint: hints.startHint, showHealthLoss, showPlayerImpact, showRewards, showMonsterDamage, timeRemainingMs: timer.timeRemainingMs });
+  const questionVariant = useQuestionDisplayVariant({ currentQuestion, hydrated, sessionStarted, state });
+  const activeQuestion = questionVariant.question;
+  useEffect(() => {
+    if (!hydrated || sessionStarted || state.mode !== "leetcode" || state.profile.spireRun.mapOpen || !currentQuestion) {
+      return;
+    }
+    if (questionVariant.ready) {
+      setRunTone("default");
+      setRunStatus("Codex question ready.");
+      return;
+    }
+    setRunTone("default");
+    setRunStatus(questionVariant.loading ? formatQuestionVariantStreamStatus(questionVariant.streamText) : "Preparing Codex CLI rewrite.");
+  }, [currentQuestion, hydrated, questionVariant.loading, questionVariant.ready, questionVariant.streamText, sessionStarted, state.mode, state.profile.spireRun.mapOpen]);
+  const failAndAdvance = useFailAndAdvance({ code, currentQuestion: activeQuestion, setCode, setCurrentQuestion, setConsoleRunResult, setResults, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, clearHint: hints.clearHint, showHealthLoss, showPlayerImpact });
+  const questionTimeLimitMs = activeQuestion ? getModifiedQuestionTimeLimitMs(state, activeQuestion) : 0;
+  const timer = useQuestionTimer({ code, currentQuestion: activeQuestion, failAndAdvance, sessionStarted, mode: state.mode, setConsoleRunResult, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer, questionTimeLimitMs });
+  const actions = usePracticeActions({ code, currentQuestion: activeQuestion, questionVariantReady: questionVariant.ready, failAndAdvance, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setConsoleRunResult, setResults, setRunnerReady, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame, clearHint: hints.clearHint, startHint: hints.startHint, showHealthLoss, showPlayerImpact, showRewards, showMonsterDamage, timeRemainingMs: timer.timeRemainingMs });
   const resetAfterDeath = useCallback(() => {
     let freshState = defaultState();
     freshState.cards = state.cards;
     freshState.totalCorrect = state.totalCorrect;
+    freshState.profile.trackedAchievementIds = state.profile.trackedAchievementIds;
     freshState.profile.unlockedAchievementIds = state.profile.unlockedAchievementIds;
     freshState.profile.metaProgress = {
       ...state.profile.metaProgress,
@@ -840,7 +1068,7 @@ export default function Home() {
     setRunTone("default");
     setRunStatus("Run ended. Preserved question progress and prepared the next attempt.");
     hints.clearHint();
-  }, [hints, runTimer, state.cards, state.profile.metaProgress, state.profile.spireMinRating, state.profile.spireRun.heatConditions, state.profile.unlockedAchievementIds, state.totalCorrect]);
+  }, [hints, runTimer, state.cards, state.profile.metaProgress, state.profile.spireMinRating, state.profile.spireRun.heatConditions, state.profile.trackedAchievementIds, state.profile.unlockedAchievementIds, state.totalCorrect]);
   const failQuestionForFocusLoss = useCallback(() => {
     activeRunId.current = null;
     clearRunTimer(runTimer);
@@ -851,10 +1079,10 @@ export default function Home() {
     failAndAdvance("Focus lost for 10 seconds.", code, timer.timeRemainingMs);
   }, [code, failAndAdvance, hints, runTimer, timer.timeRemainingMs]);
   const isDead = state.profile.health <= 0;
-  useStudyTimeTracker(state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished && !isDead);
-  useFullscreenGuard({ active: state.mode === "leetcode" && Boolean(currentQuestion) && sessionStarted && !timer.questionFinished && !isDead, failQuestion: failQuestionForFocusLoss, setStatus: setRunStatus, setTone: setRunTone });
+  useStudyTimeTracker(state.mode === "leetcode" && Boolean(activeQuestion) && sessionStarted && !timer.questionFinished && !isDead);
+  useFullscreenGuard({ active: state.mode === "leetcode" && Boolean(activeQuestion) && sessionStarted && !timer.questionFinished && !isDead, failQuestion: failQuestionForFocusLoss, setStatus: setRunStatus, setTone: setRunTone });
   const headerStats = useHeaderStats(state);
-  const timerDisplay = getTimerDisplay(currentQuestion, timer.timeRemainingMs, questionTimeLimitMs);
+  const timerDisplay = getTimerDisplay(activeQuestion, timer.timeRemainingMs, questionTimeLimitMs);
   const currentSpireNode = getCurrentSpireNode(state);
   const mapOpen = state.profile.spireRun.mapOpen;
   const showPractice = !mapOpen && isSpireCombatNode(currentSpireNode);
@@ -893,7 +1121,7 @@ export default function Home() {
             useActiveSkill={actions.useActiveSkill}
           />
           <SpireMapPanel fillAvailableHeight={mapOpen} state={state} setState={setState} />
-          {showPractice && <PracticeArea actions={actions} currentQuestion={currentQuestion} damagePop={monsterDamagePop} editorProps={{ canBuyHint: currentQuestion ? canBuyHint(state, currentQuestion.id) : false, code, consoleRunResult, hintCost: currentQuestion ? getHintCost(state, currentQuestion.id) : HINT_COST, hintDisabled: areHintsDisabledByHeat(state.profile.spireRun), hintError: hints.hintError, hintStreaming: hints.hintStreaming, hintText: hints.hintText, questionFinished: timer.questionFinished, results, runCodeDisabled: isRunCodeDisabledByHeat(state.profile.spireRun), runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} state={state} />}
+          {showPractice && <PracticeArea actions={actions} currentQuestion={activeQuestion} damagePop={monsterDamagePop} editorProps={{ canBuyHint: activeQuestion ? canBuyHint(state, activeQuestion.id) : false, code, consoleRunResult, hintCost: activeQuestion ? getHintCost(state, activeQuestion.id) : HINT_COST, hintDisabled: areHintsDisabledByHeat(state.profile.spireRun), hintError: hints.hintError, hintStreaming: hints.hintStreaming, hintText: hints.hintText, questionFinished: timer.questionFinished, questionVariantReady: questionVariant.ready, results, runCodeDisabled: isRunCodeDisabledByHeat(state.profile.spireRun), runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} state={state} />}
         </Stack>
       </Container>
       {runnerFrameElement}

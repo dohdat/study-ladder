@@ -402,6 +402,7 @@ export type StudyState = {
     shopStock: ShopItem[];
     relics: Relic[];
     spireRun: SpireRun;
+    trackedAchievementIds: string[];
     unlockedAchievementIds: string[];
   };
   cards: Record<string, CardState>;

@@ -8,6 +8,17 @@ const GENERATED_VARIANT_SUFFIX = /-\d+$/;
 const VARIANT_TITLE_PATTERN = /\bvariant\b|\b\d+$/i;
 const PLACEHOLDER_EXPLANATION_PATTERN = /follows directly|different input shape|\bRule:|For this input|the result is/i;
 const TOPIC_DISTRIBUTION_TOLERANCE_PERCENT = 3;
+const STOCK_PROMPT_TITLE_BY_ID: Record<string, string> = {
+  "array-merge-intervals": "Merge Intervals",
+  "array-two-sum": "Two Sum",
+  "binary-search-rotated": "Search Rotated Array",
+  "dp-climb-cost": "Minimum Climb Cost",
+  "dp-coin-change": "Coin Change",
+  "heap-top-k": "Top K Frequent",
+  "stack-valid-brackets": "Valid Parentheses",
+  "string-valid-palindrome": "Valid Palindrome",
+  "tree-level-order": "Level Order Values"
+};
 const TARGET_TOPIC_DISTRIBUTION = [
   ["Arrays & Strings", 20],
   ["Hash Maps / Sets", 15],
@@ -74,12 +85,49 @@ describe("question bank", () => {
     expect(generatedVariants).toEqual([]);
   });
 
+  it("keeps popular practice prompts as twisted variants", () => {
+    const stockTitles = Object.entries(STOCK_PROMPT_TITLE_BY_ID)
+      .flatMap(([id, stockTitle]) => {
+        const question = questions.find((candidate) => candidate.id === id);
+        if (!question) {
+          return [`${id}: missing question`];
+        }
+        return question.title.toLowerCase() === stockTitle.toLowerCase() ? [`${id}: ${question.title}`] : [];
+      });
+
+    expect(stockTitles).toEqual([]);
+  });
+
   it("keeps every question covered by at least ten runner test cases", () => {
     const underCovered = questions
       .filter((question) => question.tests.length < MIN_TEST_CASES_PER_QUESTION)
       .map((question) => `${question.id}: ${question.tests.length}`);
 
     expect(underCovered).toEqual([]);
+  });
+
+  it("keeps runner test cases unique per question", () => {
+    const duplicateCases = questions
+      .flatMap((question) => {
+        const names = new Set<string>();
+        const args = new Set<string>();
+        return question.tests.flatMap((test) => {
+          const failures: string[] = [];
+          const normalizedName = test.name.toLowerCase();
+          const normalizedArgs = JSON.stringify(test.args);
+          if (names.has(normalizedName)) {
+            failures.push(`${question.id}: duplicate test name "${test.name}"`);
+          }
+          if (args.has(normalizedArgs)) {
+            failures.push(`${question.id}: duplicate args ${normalizedArgs}`);
+          }
+          names.add(normalizedName);
+          args.add(normalizedArgs);
+          return failures;
+        });
+      });
+
+    expect(duplicateCases).toEqual([]);
   });
 
   it("does not show placeholder example explanations", () => {

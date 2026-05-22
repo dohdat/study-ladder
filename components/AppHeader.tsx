@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Box, Group, Text } from "@mantine/core";
 
 import tabSquareBg from "../assets/hero_siege_inventory/tab-square.png";
+import { AchievementTrackerStrip } from "./AchievementTrackerStrip";
 import { HeroSiegeModeSwitch } from "./HeroSiegeUi";
 import { PlayerStatus } from "./PlayerStatus";
 import { UserMenu, USER_MENU_SHORTCUTS } from "./UserMenu";
@@ -68,6 +69,7 @@ export function AppHeader(props: {
           />
         )}
         <TodayProgress />
+        <AchievementTrackerStrip state={props.state} onOpenAchievements={() => setActiveSection("achievements")} />
       </Group>
       <Group>
         <HeroSiegeModeSwitch mode={props.modeValue} onChange={(mode) => props.setState((previous) => ({ ...previous, mode }))} />

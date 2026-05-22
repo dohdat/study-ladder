@@ -2,20 +2,34 @@ import type { Question } from "../types/study";
 
 const MAX_CODE_CHARS = 900;
 const OPEN_CODEX_HINT_TYPE = "open-codex-hint";
+const OPEN_CODEX_QUESTION_VARIANT_TYPE = "open-codex-question-variant";
 const WARM_CODEX_HINT_TYPE = "warm-codex-hint";
 
 export const CODEX_HINT_CHUNK = "codex-hint-chunk";
 export const CODEX_HINT_DONE = "codex-hint-done";
 export const CODEX_HINT_ERROR = "codex-hint-error";
+export const CODEX_QUESTION_VARIANT_CHUNK = "codex-question-variant-chunk";
+export const CODEX_QUESTION_VARIANT_DONE = "codex-question-variant-done";
+export const CODEX_QUESTION_VARIANT_ERROR = "codex-question-variant-error";
 
 type CodexHintResponse = {
   ok: boolean;
   error?: string;
 };
 
+type CodexMessageResponse = CodexHintResponse & {
+  text?: string;
+};
+
 type CodexHintRequest = {
   type: typeof OPEN_CODEX_HINT_TYPE;
   prompt: string;
+};
+
+type CodexQuestionVariantRequest = {
+  type: typeof OPEN_CODEX_QUESTION_VARIANT_TYPE;
+  prompt: string;
+  questionId: string;
 };
 
 type CodexWarmRequest = {
@@ -32,7 +46,7 @@ type ChromeRuntime = {
   lastError?: {
     message?: string;
   };
-  sendMessage?: (message: CodexHintRequest | CodexWarmRequest, callback: (response?: CodexHintResponse) => void) => void;
+  sendMessage?: (message: CodexHintRequest | CodexQuestionVariantRequest | CodexWarmRequest, callback: (response?: CodexMessageResponse) => void) => void;
 };
 
 export function createHintPrompt(question: Question, code: string) {
@@ -63,17 +77,21 @@ export function requestCodexHint(prompt: string) {
   return sendCodexHintMessage({ type: OPEN_CODEX_HINT_TYPE, prompt });
 }
 
+export function requestCodexQuestionVariant(questionId: string, prompt: string) {
+  return sendCodexHintMessage({ type: OPEN_CODEX_QUESTION_VARIANT_TYPE, prompt, questionId });
+}
+
 export function warmCodexHint() {
   return sendCodexHintMessage({ type: WARM_CODEX_HINT_TYPE });
 }
 
-function sendCodexHintMessage(message: CodexHintRequest | CodexWarmRequest) {
+function sendCodexHintMessage(message: CodexHintRequest | CodexQuestionVariantRequest | CodexWarmRequest): Promise<CodexMessageResponse> {
   const runtime = (globalThis as typeof globalThis & { chrome?: { runtime?: ChromeRuntime } }).chrome?.runtime;
   if (!runtime?.sendMessage) {
     return Promise.resolve({ ok: false, error: "Chrome runtime is not available." });
   }
 
-  return new Promise<CodexHintResponse>((resolve) => {
+  return new Promise<CodexMessageResponse>((resolve) => {
     runtime.sendMessage?.(message, (response) => {
       resolve(response || { ok: false, error: runtime.lastError?.message || "No response from extension background." });
     });

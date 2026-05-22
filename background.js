@@ -1,5 +1,6 @@
 const CODEX_HINT_HOST = "com.study_ladder.codex_hint";
 const HINT_REQUEST_TYPE = "open-codex-hint";
+const QUESTION_VARIANT_REQUEST_TYPE = "open-codex-question-variant";
 const WARM_REQUEST_TYPE = "warm-codex-hint";
 const GET_BLOCKER_STATE_TYPE = "study-blocker-get-state";
 const SAVE_BLOCKER_SETTINGS_TYPE = "study-blocker-save-settings";
@@ -9,6 +10,7 @@ const BLOCKER_PROGRESS_KEY = "study-ladder-blocker-progress-v1";
 const STUDY_PAGE = "pages/index.html";
 const DEFAULT_BLOCKER_ENABLED = true;
 const MS_PER_MINUTE = 60000;
+const QUESTION_VARIANT_TIMEOUT_MS = 75000;
 const DEFAULT_DAILY_MINUTES = 30;
 const DEFAULT_DISTRACTING_SITES = [
   "reddit.com",
@@ -23,6 +25,8 @@ const DEFAULT_DISTRACTING_SITES = [
 
 let hintPort = null;
 let hintRequestActive = false;
+let nextQuestionVariantRequestId = 1;
+const questionVariantRequests = new Map();
 
 function getStudyPageUrl() {
   return /^https?:\/\//.test(STUDY_PAGE) ? STUDY_PAGE : chrome.runtime.getURL(STUDY_PAGE);
@@ -44,6 +48,9 @@ function handleMessage(message, _sender, sendResponse) {
   }
   if (message.type === HINT_REQUEST_TYPE) {
     return requestHint(message, _sender, sendResponse);
+  }
+  if (message.type === QUESTION_VARIANT_REQUEST_TYPE) {
+    return requestQuestionVariant(message, sendResponse);
   }
   if (message.type === GET_BLOCKER_STATE_TYPE) {
     return getBlockerState(sendResponse);
@@ -87,6 +94,33 @@ function requestHint(message, sender, sendResponse) {
   return false;
 }
 
+function requestQuestionVariant(message, sendResponse) {
+  if (!message.prompt || !message.questionId) {
+    sendResponse({ ok: false, error: "Question variant prompt is missing." });
+    return false;
+  }
+
+  const port = ensureHintPort();
+  if (!port) {
+    sendResponse({ ok: false, error: "Could not connect to Codex question helper." });
+    return false;
+  }
+
+  const requestId = nextQuestionVariantRequestId;
+  nextQuestionVariantRequestId += 1;
+  const timeout = setTimeout(() => {
+    const request = questionVariantRequests.get(requestId);
+    questionVariantRequests.delete(requestId);
+    if (request) {
+      relayQuestionVariantMessage({ type: "codex-question-variant-error", questionId: request.questionId, error: "Timed out waiting for Codex question variant." });
+    }
+    sendResponse({ ok: false, error: "Timed out waiting for Codex question variant." });
+  }, QUESTION_VARIANT_TIMEOUT_MS);
+  questionVariantRequests.set(requestId, { questionId: message.questionId, sendResponse, timeout });
+  port.postMessage({ type: "question-variant", prompt: message.prompt, questionId: message.questionId, requestId });
+  return true;
+}
+
 function ensureHintPort() {
   if (hintPort) {
     return hintPort;
@@ -94,6 +128,14 @@ function ensureHintPort() {
 
   hintPort = chrome.runtime.connectNative(CODEX_HINT_HOST);
   function relayNativeMessage(nativeMessage) {
+    if (nativeMessage.type === "codex-question-variant-chunk") {
+      relayQuestionVariantChunk(nativeMessage);
+      return;
+    }
+    if (nativeMessage.type === "codex-question-variant-done" || nativeMessage.type === "codex-question-variant-error") {
+      resolveQuestionVariantRequest(nativeMessage);
+      return;
+    }
     if (hintRequestActive) {
       relayHintMessage(nativeMessage);
     }
@@ -106,6 +148,7 @@ function ensureHintPort() {
     if (error && hintRequestActive) {
       relayHintMessage({ type: "codex-hint-error", error });
     }
+    rejectPendingQuestionVariants(error || "Codex helper disconnected.");
     hintRequestActive = false;
     hintPort = null;
   }
@@ -113,6 +156,45 @@ function ensureHintPort() {
   hintPort.onMessage.addListener(relayNativeMessage);
   hintPort.onDisconnect.addListener(handleDisconnect);
   return hintPort;
+}
+
+function resolveQuestionVariantRequest(message) {
+  const request = questionVariantRequests.get(message.requestId);
+  if (!request) {
+    return;
+  }
+  questionVariantRequests.delete(message.requestId);
+  clearTimeout(request.timeout);
+  if (message.type === "codex-question-variant-error") {
+    relayQuestionVariantMessage({ type: "codex-question-variant-error", questionId: request.questionId, error: message.error || "Codex question variant failed." });
+    request.sendResponse({ ok: false, error: message.error || "Codex question variant failed." });
+    return;
+  }
+  relayQuestionVariantMessage({ type: "codex-question-variant-done", questionId: request.questionId, text: message.text || "" });
+  request.sendResponse({ ok: true, text: message.text || "" });
+}
+
+function rejectPendingQuestionVariants(error) {
+  for (const [requestId, request] of questionVariantRequests.entries()) {
+    clearTimeout(request.timeout);
+    relayQuestionVariantMessage({ type: "codex-question-variant-error", questionId: request.questionId, error });
+    request.sendResponse({ ok: false, error });
+    questionVariantRequests.delete(requestId);
+  }
+}
+
+function relayQuestionVariantChunk(message) {
+  const request = questionVariantRequests.get(message.requestId);
+  if (!request) {
+    return;
+  }
+  relayQuestionVariantMessage({ type: "codex-question-variant-chunk", questionId: request.questionId, text: message.text || "" });
+}
+
+function relayQuestionVariantMessage(message) {
+  chrome.runtime.sendMessage(message, () => {
+    void chrome.runtime.lastError;
+  });
 }
 
 function relayHintMessage(message) {

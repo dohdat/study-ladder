@@ -30,7 +30,7 @@ export function useStudyNotifications(state: StudyState, hydrated: boolean, setR
     const newAchievements = getAchievements(state).filter((achievement) => achievement.unlocked && !previous.has(achievement.id));
     unlockedAchievementIds.current = unlocked;
     if (newAchievements.length) {
-      pushNotifications(newAchievements.map((achievement) => ({ achievementTitle: achievement.title, id: `achievement-${achievement.id}-${Date.now()}`, kind: "achievement" })));
+      pushNotifications(newAchievements.map((achievement) => ({ achievementTitle: achievement.title, amount: achievement.gamerscore, id: `achievement-${achievement.id}-${Date.now()}`, kind: "achievement" })));
     }
   }, [hydrated, pushNotifications, state]);
 

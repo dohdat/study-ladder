@@ -12,7 +12,7 @@ const TOAST_RADIUS = 5;
 const TOAST_SHADOW = "0 10px 24px rgba(0, 0, 0, 0.28)";
 const TOAST_BG = "#20c997";
 const HEALTH_TOAST_BG = "#e03131";
-const ACHIEVEMENT_TOAST_BG = "#7b4dbb";
+const ACHIEVEMENT_TOAST_BG = "#107c10";
 const TOAST_ICON_SIZE = 18;
 const TOAST_ICON_GAP = 5;
 
@@ -58,6 +58,7 @@ function RewardToast(props: { item: RewardNotification }) {
         <Text size="sm" fw={700}>{getToastText(props.item, isHealthLoss, label)}</Text>
         <Group gap={TOAST_ICON_GAP} wrap="nowrap">
           <RewardIcon kind={props.item.kind} />
+          {isAchievement && <Text size="sm" fw={800}>+{amount}G</Text>}
           {props.item.kind !== "item" && !isAchievement && <Text size="sm" fw={800}>{isHealthLoss ? "-" : "+"} {amount}</Text>}
         </Group>
       </Group>

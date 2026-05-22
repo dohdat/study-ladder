@@ -235,7 +235,7 @@ function getModalSize(section: UserMenuSection | null) {
 
 function UserModalContent(props: { section: UserMenuSection | null; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   if (props.section === "achievements") {
-    return <AchievementsPanel state={props.state} />;
+    return <AchievementsPanel state={props.state} setState={props.setState} />;
   }
   if (props.section === "wiki") {
     return <WikiPanel />;

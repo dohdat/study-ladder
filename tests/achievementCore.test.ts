@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
-import { ACHIEVEMENT_DEFINITIONS, ACHIEVEMENT_TOTAL, getAchievements, syncUnlockedAchievements } from "../lib/achievementCore";
+import { ACHIEVEMENT_DEFINITIONS, ACHIEVEMENT_GAMERSCORE_TOTAL, ACHIEVEMENT_TOTAL, getAchievementTrackerSummary, getTrackedAchievements, getAchievements, syncUnlockedAchievements, toggleTrackedAchievement } from "../lib/achievementCore";
 import { getAchievementPixelArt } from "../lib/achievementPixelArt";
 import { applyScheduleResult, defaultState } from "../lib/studyCore";
 
@@ -36,6 +36,22 @@ describe("achievementCore", () => {
     expect(achievements.find((achievement) => achievement.id === "completed-grimoire")?.unlocked).toBe(false);
   });
 
+  it("summarizes Xbox-style tracker score and closest locked achievements", () => {
+    let state = defaultState();
+    state = applyScheduleResult(state, questions[0].id, true, "draft", 1000);
+    state = syncUnlockedAchievements(state);
+
+    const summary = getAchievementTrackerSummary(state);
+
+    expect(summary.gamerscore).toBe(100);
+    expect(summary.totalGamerscore).toBe(ACHIEVEMENT_GAMERSCORE_TOTAL);
+    expect(summary.totalUnlocked).toBe(1);
+    expect(summary.totalLocked).toBe(ACHIEVEMENT_TOTAL - 1);
+    expect(summary.completionPercent).toBe(Math.round((1 / ACHIEVEMENT_TOTAL) * 100));
+    expect(summary.closest).toHaveLength(3);
+    expect(summary.closest[0].unlocked).toBe(false);
+  });
+
   it("persists unlocked achievements after progress is reset", () => {
     let state = defaultState();
     state = applyScheduleResult(state, questions[0].id, true, "draft", 1000);
@@ -45,6 +61,20 @@ describe("achievementCore", () => {
 
     expect(reset.profile.unlockedAchievementIds).toContain("first-blood");
     expect(getAchievements(reset).find((achievement) => achievement.id === "first-blood")?.unlocked).toBe(true);
+  });
+
+  it("tracks up to five chosen achievements", () => {
+    let state = defaultState();
+    const ids = ACHIEVEMENT_DEFINITIONS.slice(0, 6).map((achievement) => achievement.id);
+
+    ids.forEach((id) => {
+      state = toggleTrackedAchievement(state, id);
+    });
+
+    expect(state.profile.trackedAchievementIds).toEqual(ids.slice(0, 5));
+    expect(getTrackedAchievements(state).map((achievement) => achievement.id)).toEqual(ids.slice(0, 5));
+    state = toggleTrackedAchievement(state, ids[1]);
+    expect(state.profile.trackedAchievementIds).toEqual([ids[0], ...ids.slice(2, 5)]);
   });
 
   it("unlocks relic and meta progression achievements", () => {
