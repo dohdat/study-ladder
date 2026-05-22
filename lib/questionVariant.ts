@@ -9,6 +9,12 @@ const MAX_PROMPT_LENGTH = 360;
 const MAX_EXAMPLE_FIELD_LENGTH = 240;
 const RATING_TOLERANCE = 150;
 const MIN_MEANINGFUL_TEXT_LENGTH = 12;
+const MAX_REPAIR_DRAFT_CHARS = 5000;
+const LOW_RATING_MAX = 1500;
+const HARD_ALGORITHM_PATTERN = /\b(subset|knapsack|reachable|combination|combinations|dynamic programming|dp table)\b/i;
+const EXTRA_FEASIBILITY_PATTERN = /\b(leaving at least one|leave at least one|at least one .*remain|no valid deletion|invalid because .*remain)\b/i;
+const DISTINCT_OBJECTIVE_PATTERN = /\b(smallest|minimize|minimum)[^.]{0,90}\b(distinct|values|value count)\b/i;
+const SECONDARY_REMOVAL_OBJECTIVE_PATTERN = /\b(smallest|minimize|minimum|maximum|maximize)[^.]{0,90}\b(removed|deletion|deletions|remaining|remainder|residue)\b/i;
 
 export type QuestionVariantPayload = {
   constraints: string[];
@@ -29,6 +35,11 @@ export type QuestionVariantResult = {
 };
 
 export function createQuestionVariantPrompt(question: Question) {
+  const lowRatingRules = question.rating <= LOW_RATING_MAX ? [
+    "- This is a low-rated question: do not add subset-selection, knapsack, dynamic programming, or multiple optimization objectives.",
+    "- For low-rated scalar/array-return questions, do not change the answer into an object with multiple fields.",
+    "- Do not add extra feasibility rules such as requiring at least one element to remain unless the original prompt already has that rule."
+  ] : [];
   return [
     "Create a fresh playable variant of this JavaScript interview practice prompt.",
     "Return JSON only. No markdown, no commentary.",
@@ -42,7 +53,8 @@ export function createQuestionVariantPrompt(question: Question) {
     "- Generate new tests for your changed semantics. These tests will grade the answer, not the original expected outputs.",
     "- Do not only rename variables, change numbers, or change the story. The implementation goal must be slightly different.",
     "- Good variations: return pair values instead of indices, return a count instead of a boolean, return a repaired/normalized result, add a tie-break rule, or ask for the earliest/widest/cheapest valid choice.",
-    "- Prefer a simple return value: number, boolean, string, array, or a tiny object with at most 2 fields.",
+    "- Prefer a simple return value: number, boolean, string, or flat array. Use a tiny object only if the original answer was already object-shaped or the question is above 1500 rating.",
+    ...lowRatingRules,
     "- Keep prompt text concise: 1 or 2 sentences, under 45 words.",
     "- The prompt must state WHAT to return, not HOW to solve it. Do not mention sorting, scanning, hashing, stacks, maps, greedy, DP, or traversal strategy.",
     "- Put tie-break rules and edge behavior in constraints, not the main prompt.",
@@ -63,6 +75,39 @@ export function createQuestionVariantPrompt(question: Question) {
     `Constraints: ${JSON.stringify(question.constraints)}`,
     `Examples: ${JSON.stringify(question.examples)}`,
     `Original tests for input shape only. Replace expected values if your semantics change: ${JSON.stringify(question.tests.slice(0, MAX_PROMPT_TESTS))}`
+  ].join("\n");
+}
+
+export function createQuestionVariantRepairPrompt(question: Question, draft: string, reason = "Invalid JSON") {
+  const lowRatingRules = question.rating <= LOW_RATING_MAX ? [
+    "- low-rated questions must not add subset-selection, knapsack, DP, multiple optimization objectives, or extra feasibility rules.",
+    "- low-rated scalar/array-return questions must not return a multi-field object."
+  ] : [];
+  return [
+    "Repair this question-variant draft into valid JSON.",
+    "Return one JSON object only. No markdown, no code fence, no commentary.",
+    "Do not invent a different task unless needed to satisfy the schema.",
+    "",
+    "Required JSON schema:",
+    "{\"title\":\"string\",\"estimatedRating\":1300,\"prompt\":\"string\",\"constraints\":[\"string\"],\"examples\":[{\"input\":\"string\",\"output\":\"string\",\"explanation\":\"string\"}],\"tests\":[{\"name\":\"string\",\"args\":[...],\"expected\":...}]}",
+    "",
+    "Hard requirements:",
+    `- estimatedRating must be between ${question.rating - RATING_TOLERANCE} and ${question.rating + RATING_TOLERANCE}.`,
+    "- tests must contain at least 5 usable cases.",
+    "- every test must use args, not inputArgs or arguments.",
+    "- prompt must be concise and under 360 characters.",
+    "- preserve the exact function name and argument list from the original question.",
+    ...lowRatingRules,
+    "",
+    `Original title: ${question.title}`,
+    `Original rating: ${question.rating}`,
+    `Function: ${getFunctionSignature(question.starter, question.functionName)}`,
+    `Original prompt: ${question.prompt}`,
+    `Original tests for input shape only: ${JSON.stringify(question.tests.slice(0, MAX_PROMPT_TESTS))}`,
+    "",
+    `Parser rejection reason: ${reason}`,
+    "Draft to repair:",
+    draft.slice(0, MAX_REPAIR_DRAFT_CHARS)
   ].join("\n");
 }
 
@@ -138,6 +183,11 @@ function parseVariantPayload(question: Question, text: string): QuestionVariantP
   }
   if (tests.length < MIN_VARIANT_TESTS) {
     lastParseError = `Codex provided only ${tests.length} usable tests.`;
+    return null;
+  }
+  const driftReason = getDifficultyDriftReason(question, prompt, constraints, examples, tests);
+  if (driftReason) {
+    lastParseError = driftReason;
     return null;
   }
   return { constraints, estimatedRating, examples, prompt, tests, title };
@@ -219,6 +269,37 @@ function normalizeEstimatedRating(record: Partial<QuestionVariantPayload> & Reco
 
 function isRatingInBand(originalRating: number, estimatedRating: number) {
   return estimatedRating >= originalRating - RATING_TOLERANCE && estimatedRating <= originalRating + RATING_TOLERANCE;
+}
+
+function getDifficultyDriftReason(question: Question, prompt: string, constraints: string[], examples: QuestionVariantPayload["examples"], tests: TestCase[]) {
+  if (question.rating > LOW_RATING_MAX) {
+    return "";
+  }
+  const combinedText = [prompt, ...constraints, ...examples.flatMap((example) => [example.input, example.output, example.explanation || ""])].join(" ");
+  if (HARD_ALGORITHM_PATTERN.test(combinedText)) {
+    return "Codex made the low-rated question require a harder algorithm.";
+  }
+  if (DISTINCT_OBJECTIVE_PATTERN.test(combinedText) && SECONDARY_REMOVAL_OBJECTIVE_PATTERN.test(combinedText)) {
+    return "Codex added multiple optimization objectives for a low-rated question.";
+  }
+  if (!EXTRA_FEASIBILITY_PATTERN.test(question.prompt) && EXTRA_FEASIBILITY_PATTERN.test(combinedText)) {
+    return "Codex added an extra feasibility rule to a low-rated question.";
+  }
+  if (getReturnShape(question.tests) !== "object" && getReturnShape(tests) === "object") {
+    return "Codex changed a low-rated scalar/array answer into a multi-field object.";
+  }
+  return "";
+}
+
+function getReturnShape(tests: TestCase[]) {
+  const expected = tests.find((test) => test.expected !== undefined)?.expected;
+  if (Array.isArray(expected)) {
+    return "array";
+  }
+  if (expected && typeof expected === "object") {
+    return "object";
+  }
+  return "scalar";
 }
 
 function normalizeTests(value: unknown) {

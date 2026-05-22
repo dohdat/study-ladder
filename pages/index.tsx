@@ -30,7 +30,7 @@ import {
 import { CODEX_QUESTION_VARIANT_CHUNK, CODEX_QUESTION_VARIANT_DONE, CODEX_QUESTION_VARIANT_ERROR, createHintPrompt, requestCodexQuestionVariant } from "../lib/hintPrompt";
 import { createLocalHint } from "../lib/localHint";
 import { RUNNER_FRAME, STATUS_COLOR, type StatusTone } from "../lib/practiceStatus";
-import { createQuestionVariantPrompt, createQuestionVariantResult } from "../lib/questionVariant";
+import { createQuestionVariantPrompt, createQuestionVariantRepairPrompt, createQuestionVariantResult } from "../lib/questionVariant";
 import { migrateLocalStorageState, saveStudyState } from "../lib/studyDb";
 import type { ConsoleRunResult, Question, RunResult, StudyState } from "../types/study";
 
@@ -784,12 +784,12 @@ function useQuestionDisplayVariant(params: {
       setRevision((current) => current + 1);
     };
     requestCodexQuestionVariant(question.id, createQuestionVariantPrompt(question))
-      .then((response) => {
+      .then(async (response) => {
         if (!response.ok || !response.text) {
           scheduleRetry(`Codex CLI retrying in ${Math.round(QUESTION_VARIANT_RETRY_MS / SECOND_MS)}s: ${response.error || "empty rewrite response"}`);
           return;
         }
-        const variantResult = createQuestionVariantResult(question, response.text);
+        const variantResult = await parseOrRepairQuestionVariant(question, response.text, streamTextByQuestionId, setRevision);
         if (!variantResult.question) {
           scheduleRetry(`${variantResult.error || "Codex draft did not match the question format."} Retrying in ${Math.round(QUESTION_VARIANT_RETRY_MS / SECOND_MS)}s...`);
           return;
@@ -892,6 +892,26 @@ function useQuestionDisplayVariant(params: {
   };
 }
 
+async function parseOrRepairQuestionVariant(
+  question: Question,
+  text: string,
+  streamTextByQuestionId: React.MutableRefObject<Map<string, string>>,
+  setRevision: React.Dispatch<React.SetStateAction<number>>
+) {
+  const initial = createQuestionVariantResult(question, text);
+  if (initial.question) {
+    return initial;
+  }
+  streamTextByQuestionId.current.set(question.id, `${initial.error || "Codex draft did not match the question format."} Repairing the draft format...`);
+  setRevision((current) => current + 1);
+  const repairResponse = await requestCodexQuestionVariant(question.id, createQuestionVariantRepairPrompt(question, text, initial.error));
+  if (!repairResponse.ok || !repairResponse.text) {
+    return { error: repairResponse.error || initial.error || "Codex draft repair failed.", question: null };
+  }
+  const repaired = createQuestionVariantResult(question, repairResponse.text);
+  return repaired.question ? repaired : { error: repaired.error || initial.error, question: null };
+}
+
 function getQuestionVariantRuntime() {
   return (globalThis as typeof globalThis & { chrome?: { runtime?: QuestionVariantChromeRuntime } }).chrome?.runtime;
 }
@@ -923,6 +943,9 @@ function formatQuestionVariantStreamStatus(text: string) {
       return "Preparing a fresh question...\nCodex sent an incomplete draft. Asking again.";
     }
     return "Preparing a fresh question...\nCodex sent a draft that needs cleanup. Asking again in a few seconds.";
+  }
+  if (compact.includes("repairing the draft format")) {
+    return "Preparing a fresh question...\nCodex sent a draft with formatting issues. Repairing it now.";
   }
   if (compact.includes("rewrite complete") || compact.includes("parsing question")) {
     return "Preparing a fresh question...\nChecking the final draft.";

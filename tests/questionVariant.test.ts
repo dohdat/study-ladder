@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
-import { createQuestionVariant, createQuestionVariantPrompt, createQuestionVariantResult } from "../lib/questionVariant";
+import { createQuestionVariant, createQuestionVariantPrompt, createQuestionVariantRepairPrompt, createQuestionVariantResult } from "../lib/questionVariant";
 
 describe("questionVariant", () => {
   it("asks Codex to preserve callable inputs while changing the playable contract", () => {
@@ -14,7 +14,7 @@ describe("questionVariant", () => {
     expect(prompt).toContain("Generate new tests for your changed semantics");
     expect(prompt).toContain("Keep prompt text concise");
     expect(prompt).toContain("not HOW to solve it");
-    expect(prompt).toContain("tiny object with at most 2 fields");
+    expect(prompt).toContain("Use a tiny object only if");
     expect(prompt).toContain(questions[0].functionName);
     expect(prompt).toContain("Return JSON only");
   });
@@ -22,15 +22,15 @@ describe("questionVariant", () => {
   it("applies changed tests while keeping original question identity", () => {
     const original = questions[0];
     const variantTests = [
-      { name: "returns repeated value with count", args: [[1, 2, 1]], expected: { value: 1, count: 2 } },
-      { name: "reports no repeat", args: [[1, 2, 3]], expected: null },
-      { name: "handles immediate repeat", args: [[7, 7, 1]], expected: { value: 7, count: 2 } },
-      { name: "prefers first repeated scan", args: [[5, 1, 5, 1]], expected: { value: 5, count: 2 } },
-      { name: "handles negative repeats", args: [[-1, 2, -1]], expected: { value: -1, count: 2 } },
-      { name: "handles zero repeats", args: [[0, 4, 0]], expected: { value: 0, count: 2 } }
+      { name: "returns repeated value", args: [[1, 2, 1]], expected: 1 },
+      { name: "reports no repeat", args: [[1, 2, 3]], expected: -1 },
+      { name: "handles immediate repeat", args: [[7, 7, 1]], expected: 7 },
+      { name: "prefers first repeated value", args: [[5, 1, 5, 1]], expected: 5 },
+      { name: "handles negative repeats", args: [[-1, 2, -1]], expected: -1 },
+      { name: "handles zero repeats", args: [[0, 4, 0]], expected: 0 }
     ];
     const variant = createQuestionVariant(original, JSON.stringify({
-      constraints: ["Use the same arguments.", "Return the same output shape."],
+      constraints: ["Use the same arguments.", "Return -1 when no value repeats."],
       estimatedRating: original.rating,
       examples: [{ input: "nums = [1,2,1]", output: "1", explanation: "The repeated value is detected." }],
       prompt: "A log scanner receives event codes and needs the first code that appears twice while reading left to right.",
@@ -110,5 +110,40 @@ describe("questionVariant", () => {
 
     expect(result.error).toBeUndefined();
     expect(result.question?.tests).toHaveLength(5);
+  });
+
+  it("builds a repair prompt for invalid Codex drafts", () => {
+    const prompt = createQuestionVariantRepairPrompt(questions[0], "not json", "Codex did not return a JSON object.");
+
+    expect(prompt).toContain("Repair this question-variant draft into valid JSON.");
+    expect(prompt).toContain("Return one JSON object only.");
+    expect(prompt).toContain("Parser rejection reason: Codex did not return a JSON object.");
+    expect(prompt).toContain("Draft to repair:");
+    expect(prompt).toContain(questions[0].functionName);
+  });
+
+  it("rejects low-rated variants that drift into harder optimization", () => {
+    const original = questions.find((question) => question.id === "array-min-set-size") || questions[0];
+    const result = createQuestionVariantResult(original, JSON.stringify({
+      constraints: [
+        "Removing a value deletes all its occurrences from the array.",
+        "At least one element must remain after deletions.",
+        "First minimize distinct deletions, then minimize removed."
+      ],
+      estimatedRating: original.rating,
+      examples: [{ input: "arr = [3,3,3,3,5,5,5,2,2,7]", output: "{\"distinct\":2,\"removed\":5}" }],
+      prompt: "Return {distinct, removed} for the smallest number of distinct values whose complete removal deletes at least half the array while leaving at least one element.",
+      tests: [
+        { name: "case 1", args: [[3, 3, 3, 3, 5, 5, 5, 2, 2, 7]], expected: { distinct: 2, removed: 5 } },
+        { name: "case 2", args: [[7, 7, 7, 7, 7, 7]], expected: { distinct: 0, removed: 0 } },
+        { name: "case 3", args: [[1, 2, 3, 4]], expected: { distinct: 2, removed: 2 } },
+        { name: "case 4", args: [[1, 1, 2, 2, 3]], expected: { distinct: 1, removed: 2 } },
+        { name: "case 5", args: [[0, 0, -1, -1, 2]], expected: { distinct: 1, removed: 2 } }
+      ],
+      title: "Minimum Distinct Deletions with Retained Remainder"
+    }));
+
+    expect(result.question).toBeNull();
+    expect(result.error).toMatch(/multiple optimization|extra feasibility|multi-field object|harder algorithm/);
   });
 });
