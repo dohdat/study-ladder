@@ -15,6 +15,7 @@ const READY_DELAY_MS = 150;
 const HINT_TOTAL_TIMEOUT_MS = 12000;
 const QUESTION_VARIANT_TOTAL_TIMEOUT_MS = 60000;
 const EXAMPLE_EXPLANATION_TOTAL_TIMEOUT_MS = 45000;
+const SOLUTION_REVEAL_TOTAL_TIMEOUT_MS = 75000;
 const SESSION_REQUEST_TIMEOUT_MS = 20000;
 const TURN_TIMEOUT_MS = 120000;
 const STDERR_LIMIT = 8000;
@@ -31,7 +32,8 @@ const DEVELOPER_INSTRUCTIONS = [
   "When asked for a hint, give exactly one fast next step: one short sentence and up to 2 lines of partial JavaScript.",
   "Hint code must be incomplete, not a runnable implementation.",
   "When asked for a question variant, return valid JSON only and preserve the original function contract.",
-  "When asked to explain an example, explain only that example's output calculation without implementation code."
+  "When asked to explain an example, explain only that example's output calculation without implementation code.",
+  "When asked to reveal a solution, return the requested Markdown sections and one complete JavaScript function."
 ].join("\n");
 
 let pendingInput = Buffer.alloc(BUFFER_START);
@@ -104,6 +106,13 @@ function handleNativeMessage(payload) {
     return;
   }
 
+  if (message?.type === "solution-reveal" && typeof message.prompt === "string") {
+    codexQueue = codexQueue.then(() => runSolutionRevealRequest(message.requestId, message.prompt)).catch((error) => {
+      sendNativeMessage({ type: "codex-solution-reveal-error", requestId: message.requestId, error: getErrorMessage(error) });
+    });
+    return;
+  }
+
   if (message?.type !== "hint" || typeof message.prompt !== "string") {
     sendNativeMessage({ type: "codex-hint-error", error: "Native host received an invalid hint request." });
     return;
@@ -156,6 +165,19 @@ async function runExampleExplanationRequest(requestId, prompt) {
   } catch (error) {
     resetCodexConnection();
     sendNativeMessage({ type: "codex-example-explanation-error", requestId, error: getErrorMessage(error) });
+  } finally {
+    requestTimeout.cancel();
+  }
+}
+
+async function runSolutionRevealRequest(requestId, prompt) {
+  const requestTimeout = createTimeout(SOLUTION_REVEAL_TOTAL_TIMEOUT_MS, "Timed out waiting for Codex solution.");
+  try {
+    const text = await Promise.race([runCodexTurn(prompt, { requestId, streamType: "solution-reveal" }), requestTimeout.promise]);
+    sendNativeMessage({ type: "codex-solution-reveal-done", requestId, text });
+  } catch (error) {
+    resetCodexConnection();
+    sendNativeMessage({ type: "codex-solution-reveal-error", requestId, error: getErrorMessage(error) });
   } finally {
     requestTimeout.cancel();
   }

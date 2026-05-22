@@ -4,12 +4,11 @@ const MAX_PROMPT_TESTS = 10;
 const MAX_CONSTRAINTS = 8;
 const MAX_EXAMPLES = 3;
 const MAX_VARIANT_TESTS = 12;
-const MIN_VARIANT_TESTS = 6;
-const MAX_PROMPT_LENGTH = 280;
+const MIN_VARIANT_TESTS = 5;
+const MAX_PROMPT_LENGTH = 360;
 const MAX_EXAMPLE_FIELD_LENGTH = 240;
 const RATING_TOLERANCE = 150;
 const MIN_MEANINGFUL_TEXT_LENGTH = 12;
-const SOLUTION_LANGUAGE_PATTERN = /\b(sort|sorted|scan|iterate|loop|hash|map|stack|queue|two[- ]?pointer|dynamic programming|greedy|binary search|frequency order|lexicographically)\b/i;
 
 export type QuestionVariantPayload = {
   constraints: string[];
@@ -22,6 +21,11 @@ export type QuestionVariantPayload = {
   prompt: string;
   tests: TestCase[];
   title: string;
+};
+
+export type QuestionVariantResult = {
+  error?: string;
+  question: Question | null;
 };
 
 export function createQuestionVariantPrompt(question: Question) {
@@ -63,32 +67,42 @@ export function createQuestionVariantPrompt(question: Question) {
 }
 
 export function createQuestionVariant(question: Question, text: string): Question | null {
+  return createQuestionVariantResult(question, text).question;
+}
+
+export function createQuestionVariantResult(question: Question, text: string): QuestionVariantResult {
   const payload = parseVariantPayload(question, text);
   if (!payload) {
-    return null;
+    return { error: getLastParseError(), question: null };
   }
-  return {
+  return { question: {
     ...question,
     constraints: payload.constraints,
     examples: payload.examples,
     prompt: payload.prompt,
     tests: payload.tests,
     title: payload.title
-  };
+  } };
 }
 
+let lastParseError = "";
+
 function parseVariantPayload(question: Question, text: string): QuestionVariantPayload | null {
+  lastParseError = "";
   const jsonText = extractJsonObject(text);
   if (!jsonText) {
+    lastParseError = "Codex did not return a JSON object.";
     return null;
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(jsonText);
   } catch {
+    lastParseError = "Codex returned JSON with syntax errors.";
     return null;
   }
   if (!parsed || typeof parsed !== "object") {
+    lastParseError = "Codex returned an invalid JSON shape.";
     return null;
   }
   const record = parsed as Partial<QuestionVariantPayload>;
@@ -96,12 +110,41 @@ function parseVariantPayload(question: Question, text: string): QuestionVariantP
   const prompt = normalizeMeaningfulString(record.prompt);
   const constraints = normalizeConstraints(record.constraints);
   const examples = normalizeExamples(record.examples);
-  const estimatedRating = normalizeEstimatedRating(record.estimatedRating);
+  const estimatedRating = normalizeEstimatedRating(record);
   const tests = normalizeTests(record.tests);
-  if (!title || !prompt || prompt.length > MAX_PROMPT_LENGTH || SOLUTION_LANGUAGE_PATTERN.test(prompt) || !isRatingInBand(question.rating, estimatedRating) || constraints.length === 0 || examples.length === 0 || tests.length < MIN_VARIANT_TESTS) {
+  if (!title) {
+    lastParseError = "Codex did not provide a usable title.";
+    return null;
+  }
+  if (!prompt) {
+    lastParseError = "Codex did not provide a usable prompt.";
+    return null;
+  }
+  if (prompt.length > MAX_PROMPT_LENGTH) {
+    lastParseError = "Codex prompt was too long.";
+    return null;
+  }
+  if (!isRatingInBand(question.rating, estimatedRating)) {
+    lastParseError = `Codex estimated rating ${estimatedRating || "missing"} outside the allowed band.`;
+    return null;
+  }
+  if (constraints.length === 0) {
+    lastParseError = "Codex did not provide constraints.";
+    return null;
+  }
+  if (examples.length === 0) {
+    lastParseError = "Codex did not provide short examples.";
+    return null;
+  }
+  if (tests.length < MIN_VARIANT_TESTS) {
+    lastParseError = `Codex provided only ${tests.length} usable tests.`;
     return null;
   }
   return { constraints, estimatedRating, examples, prompt, tests, title };
+}
+
+function getLastParseError() {
+  return lastParseError || "Codex draft did not match the question format.";
 }
 
 function extractJsonObject(text: string) {
@@ -162,8 +205,16 @@ function normalizeExamples(value: unknown): QuestionVariantPayload["examples"] {
     .slice(0, MAX_EXAMPLES);
 }
 
-function normalizeEstimatedRating(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : 0;
+function normalizeEstimatedRating(record: Partial<QuestionVariantPayload> & Record<string, unknown>) {
+  const value = record.estimatedRating ?? record.estimated_rating ?? record.rating ?? record.difficultyRating;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.round(value);
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? Math.round(parsed) : 0;
+  }
+  return 0;
 }
 
 function isRatingInBand(originalRating: number, estimatedRating: number) {
@@ -180,13 +231,14 @@ function normalizeTests(value: unknown) {
     if (!test || typeof test !== "object") {
       continue;
     }
-    const record = test as Partial<TestCase>;
+    const record = test as Partial<TestCase> & { inputArgs?: unknown; arguments?: unknown };
     const name = typeof record.name === "string" ? record.name.trim() : "";
-    if (!name || seenNames.has(name) || !Array.isArray(record.args) || !isJsonSafe(record.args) || !isJsonSafe(record.expected)) {
+    const args = record.args ?? record.inputArgs ?? record.arguments;
+    if (!name || seenNames.has(name) || !Array.isArray(args) || !isJsonSafe(args) || !isJsonSafe(record.expected)) {
       continue;
     }
     seenNames.add(name);
-    tests.push({ name, args: record.args, expected: record.expected });
+    tests.push({ name, args, expected: record.expected });
     if (tests.length >= MAX_VARIANT_TESTS) {
       break;
     }

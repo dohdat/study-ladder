@@ -11,12 +11,13 @@ import {
   Paper,
   Progress,
   ScrollArea,
+  Tabs,
   Text,
   ThemeIcon,
   Tooltip,
   Title
 } from "@mantine/core";
-import { IconArrowRight, IconBulb, IconCheck, IconCode, IconLock, IconPlayerPlay, IconRefresh, IconTerminal2, IconWand, IconX } from "@tabler/icons-react";
+import { IconArrowRight, IconBulb, IconCheck, IconCode, IconEye, IconLock, IconPlayerPlay, IconRefresh, IconTerminal2, IconWand, IconX } from "@tabler/icons-react";
 import MonacoEditor, { type OnMount } from "@monaco-editor/react";
 
 import { HeroSiegeButton } from "./HeroSiegeUi";
@@ -27,7 +28,9 @@ import {
   CODEX_EXAMPLE_EXPLANATION_DONE,
   CODEX_EXAMPLE_EXPLANATION_ERROR,
   createExampleExplanationPrompt,
+  createSolutionRevealPrompt,
   requestCodexExampleExplanation,
+  requestCodexSolutionReveal,
   type CodexExampleExplanationStreamMessage
 } from "../lib/hintPrompt";
 import { difficultyLabels, getVisibleQuestionTopics } from "../lib/studyCore";
@@ -83,6 +86,7 @@ export type PracticePanelActions = {
   updateDraft: (nextCode: string) => void;
   beautifyCurrentCode: (source?: string) => void;
   handleEditorMount: OnMount;
+  markSolutionRevealed: () => void;
   chooseQuestion: (preferNext: boolean) => void;
   buyHint: () => void;
   runCode: () => void;
@@ -383,7 +387,7 @@ function EditorCard(props: EditorProps & { actions: PracticePanelActions; curren
         <Text size="sm" c={`${props.statusColor}.8`} style={{ whiteSpace: "pre-wrap" }}>{props.runStatus}</Text>
       </Paper>
       <HintPanel hintError={props.hintError} hintStreaming={props.hintStreaming} hintText={props.hintText} />
-      <ConsoleOutputPanel currentQuestion={props.currentQuestion} result={props.consoleRunResult} />
+      <ConsoleOutputPanel code={props.code} currentQuestion={props.currentQuestion} markSolutionRevealed={props.actions.markSolutionRevealed} result={props.consoleRunResult} />
       <TestResults results={props.results} />
     </Card>
   );
@@ -475,15 +479,15 @@ function RunToolbarActions(props: Parameters<typeof EditorCard>[0]) {
   );
 }
 
-function ConsoleOutputPanel(props: { currentQuestion: Question; result: ConsoleRunResult | null }) {
+function ConsoleOutputPanel(props: { code: string; currentQuestion: Question; markSolutionRevealed: () => void; result: ConsoleRunResult | null }) {
   if (!props.result) {
     return null;
   }
   if (props.result.hiddenTestCount && !props.result.results?.length) {
-    return <HiddenSubmitPanel result={props.result} />;
+    return <HiddenSubmitPanel code={props.code} currentQuestion={props.currentQuestion} markSolutionRevealed={props.markSolutionRevealed} result={props.result} />;
   }
   if (props.result.results?.length) {
-    return <RunCasePanel currentQuestion={props.currentQuestion} result={props.result} />;
+    return <RunCasePanel code={props.code} currentQuestion={props.currentQuestion} markSolutionRevealed={props.markSolutionRevealed} result={props.result} />;
   }
   const output = props.result.output.length > 0 ? props.result.output.join("\n") : "(no console output)";
   const content = props.result.error ? `${output}\nError: ${props.result.error}` : output;
@@ -500,7 +504,7 @@ function ConsoleOutputPanel(props: { currentQuestion: Question; result: ConsoleR
   );
 }
 
-function HiddenSubmitPanel(props: { result: ConsoleRunResult }) {
+function HiddenSubmitPanel(props: { code: string; currentQuestion: Question; markSolutionRevealed: () => void; result: ConsoleRunResult }) {
   return (
     <Paper radius={0} p="md" bg="dark.8">
       <Group gap="sm" align="baseline" mb={4}>
@@ -510,11 +514,12 @@ function HiddenSubmitPanel(props: { result: ConsoleRunResult }) {
       <Text size="sm" c="gray.3">
         Failed hidden submission tests. Details are hidden unless a relic or mirror upgrade reveals them.
       </Text>
+      <SolutionRevealPanel code={props.code} currentQuestion={props.currentQuestion} markSolutionRevealed={props.markSolutionRevealed} />
     </Paper>
   );
 }
 
-function RunCasePanel(props: { currentQuestion: Question; result: ConsoleRunResult }) {
+function RunCasePanel(props: { code: string; currentQuestion: Question; markSolutionRevealed: () => void; result: ConsoleRunResult }) {
   const [activeIndex, setActiveIndex] = useState(FIRST_CASE_INDEX);
   const results = props.result.results || [];
   const selectedIndex = Math.min(activeIndex, results.length - ARG_INDEX_OFFSET);
@@ -548,8 +553,120 @@ function RunCasePanel(props: { currentQuestion: Question; result: ConsoleRunResu
       <ScrollArea.Autosize mah={RUN_PANEL_MAX_HEIGHT}>
         {selected && <RunCaseDetails argNames={argNames} result={selected} />}
       </ScrollArea.Autosize>
+      {props.result.hiddenTestCount ? <SolutionRevealPanel code={props.code} currentQuestion={props.currentQuestion} markSolutionRevealed={props.markSolutionRevealed} /> : null}
     </Paper>
   );
+}
+
+function SolutionRevealPanel(props: { code: string; currentQuestion: Question; markSolutionRevealed: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [solutionText, setSolutionText] = useState("");
+
+  useEffect(() => {
+    setConfirming(false);
+    setLoading(false);
+    setError("");
+    setSolutionText("");
+  }, [props.currentQuestion.id]);
+
+  const revealSolution = useCallback(() => {
+    if (!confirming) {
+      setConfirming(true);
+      return;
+    }
+    setLoading(true);
+    setError("");
+    props.markSolutionRevealed();
+    requestCodexSolutionReveal(props.currentQuestion.id, createSolutionRevealPrompt(props.currentQuestion, props.code)).then((response) => {
+      setLoading(false);
+      if (!response.ok || !response.text) {
+        setError(response.error || "Codex could not reveal a solution.");
+        return;
+      }
+      setSolutionText(response.text);
+    });
+  }, [confirming, props]);
+
+  const sections = parseSolutionSections(solutionText);
+  return (
+    <Paper withBorder mt="md" p="sm" bg="dark.7">
+      <Group justify="space-between" gap="sm" mb={solutionText || error || loading ? "sm" : 0}>
+        <Box>
+          <Text size="sm" fw={700}>Need the answer?</Text>
+          <Text size="xs" c="dimmed">Revealing marks this question as spoiled for review.</Text>
+        </Box>
+        <Button
+          color={confirming ? "red" : "yellow"}
+          leftSection={<IconEye size={ICON_SM} />}
+          loading={loading}
+          onClick={revealSolution}
+          size="xs"
+          variant={confirming ? "filled" : "light"}
+        >
+          {confirming ? "Confirm reveal" : solutionText ? "Regenerate" : "Reveal solution"}
+        </Button>
+      </Group>
+      {error && <Text size="sm" c="red.3">{error}</Text>}
+      {loading && !solutionText && <Text size="sm" c="gray.3">Codex is preparing the solution...</Text>}
+      {solutionText && (
+        <Tabs defaultValue="approach" keepMounted={false}>
+          <Tabs.List>
+            <Tabs.Tab value="approach">Approach</Tabs.Tab>
+            <Tabs.Tab value="code">Code</Tabs.Tab>
+            <Tabs.Tab value="complexity">Complexity</Tabs.Tab>
+            <Tabs.Tab value="compare">Compare</Tabs.Tab>
+          </Tabs.List>
+          <Tabs.Panel value="approach" pt="sm"><HintContent content={sections.approach} /></Tabs.Panel>
+          <Tabs.Panel value="code" pt="sm"><HighlightedCode code={extractSolutionCode(sections.code)} /></Tabs.Panel>
+          <Tabs.Panel value="complexity" pt="sm"><HintContent content={sections.complexity} /></Tabs.Panel>
+          <Tabs.Panel value="compare" pt="sm"><HintContent content={sections.compare} /></Tabs.Panel>
+        </Tabs>
+      )}
+    </Paper>
+  );
+}
+
+function parseSolutionSections(markdown: string) {
+  const sections = {
+    approach: "",
+    code: "",
+    complexity: "",
+    compare: ""
+  };
+  let current: keyof typeof sections = "approach";
+  for (const line of markdown.split("\n")) {
+    const normalized = line.replace(/^#+\s*/, "").trim().toLowerCase();
+    if (normalized === "approach") {
+      current = "approach";
+      continue;
+    }
+    if (normalized === "code") {
+      current = "code";
+      continue;
+    }
+    if (normalized === "complexity") {
+      current = "complexity";
+      continue;
+    }
+    if (normalized === "compare with my code") {
+      current = "compare";
+      continue;
+    }
+    sections[current] = `${sections[current]}${line}\n`;
+  }
+  return {
+    approach: sections.approach.trim() || markdown.trim(),
+    code: sections.code.trim() || markdown.trim(),
+    complexity: sections.complexity.trim() || "Complexity was not provided.",
+    compare: sections.compare.trim() || "No comparison was provided."
+  };
+}
+
+function extractSolutionCode(markdown: string) {
+  const match = markdown.match(/```(?:javascript|js)?\s*([\s\S]*?)```/i);
+  return (match?.[FUNCTION_SIGNATURE_GROUP] || markdown).trim();
 }
 
 function RunCaseDetails(props: { argNames: string[]; result: RunResult }) {

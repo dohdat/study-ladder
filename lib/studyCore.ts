@@ -349,7 +349,7 @@ function normalizePartialStats(stats: Partial<CharacterStats> | undefined) {
 }
 
 function normalizeCards(cards: StudyState["cards"] | undefined) {
-  return Object.fromEntries(Object.entries(cards || {}).map(([id, card]) => [id, { ...defaultCard(), ...card, failedSubmissions: Math.max(0, card.failedSubmissions || 0), hintsBought: Math.max(0, card.hintsBought || 0), relicFirstHitBlocked: Boolean(card.relicFirstHitBlocked), relicReviveUsed: Boolean(card.relicReviveUsed) }]));
+  return Object.fromEntries(Object.entries(cards || {}).map(([id, card]) => [id, { ...defaultCard(), ...card, failedSubmissions: Math.max(0, card.failedSubmissions || 0), hintsBought: Math.max(0, card.hintsBought || 0), relicFirstHitBlocked: Boolean(card.relicFirstHitBlocked), relicReviveUsed: Boolean(card.relicReviveUsed), solutionRevealedAt: Math.max(0, card.solutionRevealedAt || 0) || undefined }]));
 }
 
 export const getCard = (state: StudyState, questionId: string): CardState => {

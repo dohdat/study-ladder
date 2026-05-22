@@ -40,6 +40,7 @@ export type CardState = {
   monsterHealth?: number;
   relicFirstHitBlocked?: boolean;
   relicReviveUsed?: boolean;
+  solutionRevealedAt?: number;
   draft?: string;
 };
 

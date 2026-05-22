@@ -30,7 +30,7 @@ import {
 import { CODEX_QUESTION_VARIANT_CHUNK, CODEX_QUESTION_VARIANT_DONE, CODEX_QUESTION_VARIANT_ERROR, createHintPrompt, requestCodexQuestionVariant } from "../lib/hintPrompt";
 import { createLocalHint } from "../lib/localHint";
 import { RUNNER_FRAME, STATUS_COLOR, type StatusTone } from "../lib/practiceStatus";
-import { createQuestionVariant, createQuestionVariantPrompt } from "../lib/questionVariant";
+import { createQuestionVariantPrompt, createQuestionVariantResult } from "../lib/questionVariant";
 import { migrateLocalStorageState, saveStudyState } from "../lib/studyDb";
 import type { ConsoleRunResult, Question, RunResult, StudyState } from "../types/study";
 
@@ -431,7 +431,22 @@ function usePracticeActions(params: {
   const runCode = useRunCode({ ...params, updateDraft });
   const useActiveSkill = useActiveWarriorSkillAction({ setState: params.setState, setStatus: params.setStatus, setTone: params.setTone, state: params.state });
   const handleEditorMount = useEditorMount(beautifyCurrentCode, runCode, submitCode);
-  return { updateDraft, beautifyCurrentCode, handleEditorMount, chooseQuestion, buyHint: buyHintAction, runCode, startQuestion, submitCode, useActiveSkill };
+  const markSolutionRevealed = useMarkSolutionRevealed(params);
+  return { updateDraft, beautifyCurrentCode, handleEditorMount, markSolutionRevealed, chooseQuestion, buyHint: buyHintAction, runCode, startQuestion, submitCode, useActiveSkill };
+}
+
+function useMarkSolutionRevealed(params: { currentQuestion: Question | null; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
+  return useCallback(() => {
+    if (!params.currentQuestion) {
+      return;
+    }
+    const question = params.currentQuestion;
+    params.setState((previous) => {
+      const next = cloneState(previous);
+      setCard(next, question.id, { ...getCard(next, question.id), solutionRevealedAt: Date.now() });
+      return next;
+    });
+  }, [params]);
 }
 
 function useUpdateDraft(params: { currentQuestion: Question | null; setCode: (code: string) => void; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
@@ -774,9 +789,9 @@ function useQuestionDisplayVariant(params: {
           scheduleRetry(`Codex CLI retrying in ${Math.round(QUESTION_VARIANT_RETRY_MS / SECOND_MS)}s: ${response.error || "empty rewrite response"}`);
           return;
         }
-        const variant = createQuestionVariant(question, response.text);
-        if (!variant) {
-          scheduleRetry(`Codex draft did not match the question format. Retrying in ${Math.round(QUESTION_VARIANT_RETRY_MS / SECOND_MS)}s...`);
+        const variantResult = createQuestionVariantResult(question, response.text);
+        if (!variantResult.question) {
+          scheduleRetry(`${variantResult.error || "Codex draft did not match the question format."} Retrying in ${Math.round(QUESTION_VARIANT_RETRY_MS / SECOND_MS)}s...`);
           return;
         }
         const queuedRetry = retryTimers.current.get(question.id);
@@ -784,13 +799,13 @@ function useQuestionDisplayVariant(params: {
           window.clearTimeout(queuedRetry);
           retryTimers.current.delete(question.id);
         }
-        cache.current.set(question.id, variant);
+        cache.current.set(question.id, variantResult.question);
         setRevision((current) => current + 1);
         setDisplayQuestion((current) => {
           if (sessionStartedRef.current || current?.id !== question.id) {
             return current;
           }
-          return variant;
+          return variantResult.question;
         });
       })
       .finally(() => {
@@ -895,6 +910,18 @@ function formatQuestionVariantStreamStatus(text: string) {
     return "Preparing a fresh question...\nStarting Codex CLI.";
   }
   if (compact.includes("retrying in")) {
+    if (compact.includes("estimated rating")) {
+      return "Preparing a fresh question...\nCodex made the variation too easy or too hard. Asking again.";
+    }
+    if (compact.includes("provided only")) {
+      return "Preparing a fresh question...\nCodex did not include enough usable tests. Asking again.";
+    }
+    if (compact.includes("prompt was too long")) {
+      return "Preparing a fresh question...\nCodex wrote too much question text. Asking again.";
+    }
+    if (compact.includes("json")) {
+      return "Preparing a fresh question...\nCodex sent an incomplete draft. Asking again.";
+    }
     return "Preparing a fresh question...\nCodex sent a draft that needs cleanup. Asking again in a few seconds.";
   }
   if (compact.includes("rewrite complete") || compact.includes("parsing question")) {

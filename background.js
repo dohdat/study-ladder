@@ -2,6 +2,7 @@ const CODEX_HINT_HOST = "com.study_ladder.codex_hint";
 const HINT_REQUEST_TYPE = "open-codex-hint";
 const QUESTION_VARIANT_REQUEST_TYPE = "open-codex-question-variant";
 const EXAMPLE_EXPLANATION_REQUEST_TYPE = "open-codex-example-explanation";
+const SOLUTION_REVEAL_REQUEST_TYPE = "open-codex-solution-reveal";
 const WARM_REQUEST_TYPE = "warm-codex-hint";
 const GET_BLOCKER_STATE_TYPE = "study-blocker-get-state";
 const SAVE_BLOCKER_SETTINGS_TYPE = "study-blocker-save-settings";
@@ -13,6 +14,7 @@ const DEFAULT_BLOCKER_ENABLED = true;
 const MS_PER_MINUTE = 60000;
 const QUESTION_VARIANT_TIMEOUT_MS = 75000;
 const EXAMPLE_EXPLANATION_TIMEOUT_MS = 45000;
+const SOLUTION_REVEAL_TIMEOUT_MS = 75000;
 const DEFAULT_DAILY_MINUTES = 30;
 const DEFAULT_DISTRACTING_SITES = [
   "reddit.com",
@@ -29,8 +31,10 @@ let hintPort = null;
 let hintRequestActive = false;
 let nextQuestionVariantRequestId = 1;
 let nextExampleExplanationRequestId = 1;
+let nextSolutionRevealRequestId = 1;
 const questionVariantRequests = new Map();
 const exampleExplanationRequests = new Map();
+const solutionRevealRequests = new Map();
 
 function getStudyPageUrl() {
   return /^https?:\/\//.test(STUDY_PAGE) ? STUDY_PAGE : chrome.runtime.getURL(STUDY_PAGE);
@@ -58,6 +62,9 @@ function handleMessage(message, _sender, sendResponse) {
   }
   if (message.type === EXAMPLE_EXPLANATION_REQUEST_TYPE) {
     return requestExampleExplanation(message, sendResponse);
+  }
+  if (message.type === SOLUTION_REVEAL_REQUEST_TYPE) {
+    return requestSolutionReveal(message, sendResponse);
   }
   if (message.type === GET_BLOCKER_STATE_TYPE) {
     return getBlockerState(sendResponse);
@@ -128,6 +135,32 @@ function requestQuestionVariant(message, sendResponse) {
   return true;
 }
 
+function requestSolutionReveal(message, sendResponse) {
+  if (!message.prompt || !message.questionId) {
+    sendResponse({ ok: false, error: "Solution reveal prompt is missing." });
+    return false;
+  }
+
+  const port = ensureHintPort();
+  if (!port) {
+    sendResponse({ ok: false, error: "Could not connect to Codex solution helper." });
+    return false;
+  }
+
+  const requestId = nextSolutionRevealRequestId;
+  nextSolutionRevealRequestId += 1;
+  const timeout = setTimeout(() => {
+    const request = solutionRevealRequests.get(requestId);
+    solutionRevealRequests.delete(requestId);
+    if (request) {
+      request.sendResponse({ ok: false, error: "Timed out waiting for Codex solution." });
+    }
+  }, SOLUTION_REVEAL_TIMEOUT_MS);
+  solutionRevealRequests.set(requestId, { sendResponse, timeout });
+  port.postMessage({ type: "solution-reveal", prompt: message.prompt, questionId: message.questionId, requestId });
+  return true;
+}
+
 function requestExampleExplanation(message, sendResponse) {
   if (!message.prompt || !message.exampleKey) {
     sendResponse({ ok: false, error: "Example explanation prompt is missing." });
@@ -178,6 +211,10 @@ function ensureHintPort() {
       resolveExampleExplanationRequest(nativeMessage);
       return;
     }
+    if (nativeMessage.type === "codex-solution-reveal-done" || nativeMessage.type === "codex-solution-reveal-error") {
+      resolveSolutionRevealRequest(nativeMessage);
+      return;
+    }
     if (hintRequestActive) {
       relayHintMessage(nativeMessage);
     }
@@ -192,6 +229,7 @@ function ensureHintPort() {
     }
     rejectPendingQuestionVariants(error || "Codex helper disconnected.");
     rejectPendingExampleExplanations(error || "Codex helper disconnected.");
+    rejectPendingSolutionReveals(error || "Codex helper disconnected.");
     hintRequestActive = false;
     hintPort = null;
   }
@@ -215,6 +253,28 @@ function resolveQuestionVariantRequest(message) {
   }
   relayQuestionVariantMessage({ type: "codex-question-variant-done", questionId: request.questionId, text: message.text || "" });
   request.sendResponse({ ok: true, text: message.text || "" });
+}
+
+function resolveSolutionRevealRequest(message) {
+  const request = solutionRevealRequests.get(message.requestId);
+  if (!request) {
+    return;
+  }
+  solutionRevealRequests.delete(message.requestId);
+  clearTimeout(request.timeout);
+  if (message.type === "codex-solution-reveal-error") {
+    request.sendResponse({ ok: false, error: message.error || "Codex solution failed." });
+    return;
+  }
+  request.sendResponse({ ok: true, text: message.text || "" });
+}
+
+function rejectPendingSolutionReveals(error) {
+  for (const [requestId, request] of solutionRevealRequests.entries()) {
+    clearTimeout(request.timeout);
+    request.sendResponse({ ok: false, error });
+    solutionRevealRequests.delete(requestId);
+  }
 }
 
 function resolveExampleExplanationRequest(message) {

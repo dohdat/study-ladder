@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
-import { createQuestionVariant, createQuestionVariantPrompt } from "../lib/questionVariant";
+import { createQuestionVariant, createQuestionVariantPrompt, createQuestionVariantResult } from "../lib/questionVariant";
 
 describe("questionVariant", () => {
   it("asks Codex to preserve callable inputs while changing the playable contract", () => {
@@ -76,21 +76,6 @@ describe("questionVariant", () => {
     }))).toBeNull();
     expect(createQuestionVariant(questions[0], JSON.stringify({
       constraints: ["Return -1 when no answer exists."],
-      estimatedRating: questions[0].rating,
-      examples: [{ input: "nums = [1,2,1]", output: "1" }],
-      prompt: "Scan the array with a hash map and return the first duplicated number.",
-      tests: [
-        { name: "case 1", args: [[1]], expected: 1 },
-        { name: "case 2", args: [[2]], expected: 2 },
-        { name: "case 3", args: [[3]], expected: 3 },
-        { name: "case 4", args: [[4]], expected: 4 },
-        { name: "case 5", args: [[5]], expected: 5 },
-        { name: "case 6", args: [[6]], expected: 6 }
-      ],
-      title: "Gives Away Strategy"
-    }))).toBeNull();
-    expect(createQuestionVariant(questions[0], JSON.stringify({
-      constraints: ["Return -1 when no answer exists."],
       estimatedRating: questions[0].rating + 300,
       examples: [{ input: "nums = [1,2,1]", output: "1" }],
       prompt: "Return the first repeated number in nums, or -1 when no number repeats.",
@@ -104,5 +89,26 @@ describe("questionVariant", () => {
       ],
       title: "Too Hard"
     }))).toBeNull();
+  });
+
+  it("accepts common Codex aliases for rating and args", () => {
+    const original = questions[0];
+    const result = createQuestionVariantResult(original, JSON.stringify({
+      constraints: ["Return null when no answer exists."],
+      estimated_rating: String(original.rating),
+      examples: [{ input: "nums = [1,2,1]", output: "1" }],
+      prompt: "Return the first repeated number in nums, or null when no number repeats.",
+      tests: [
+        { name: "case 1", inputArgs: [[1, 2, 1]], expected: 1 },
+        { name: "case 2", inputArgs: [[1, 2, 3]], expected: null },
+        { name: "case 3", inputArgs: [[7, 7]], expected: 7 },
+        { name: "case 4", inputArgs: [[0, 4, 0]], expected: 0 },
+        { name: "case 5", inputArgs: [[-1, 2, -1]], expected: -1 }
+      ],
+      title: "Repeated Number Signal"
+    }));
+
+    expect(result.error).toBeUndefined();
+    expect(result.question?.tests).toHaveLength(5);
   });
 });

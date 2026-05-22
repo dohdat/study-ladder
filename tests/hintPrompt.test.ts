@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { questions } from "../data/questions";
-import { createExampleExplanationPrompt, createHintPrompt, requestCodexExampleExplanation, requestCodexHint, requestCodexQuestionVariant, warmCodexHint } from "../lib/hintPrompt";
+import { createExampleExplanationPrompt, createHintPrompt, createSolutionRevealPrompt, requestCodexExampleExplanation, requestCodexHint, requestCodexQuestionVariant, requestCodexSolutionReveal, warmCodexHint } from "../lib/hintPrompt";
 
 const LONG_CODE_LENGTH = 1900;
 const TRUNCATED_PROMPT_LENGTH = 900;
@@ -45,6 +45,17 @@ describe("hintPrompt", () => {
     expect(prompt).toContain(questions[0].examples[0].output);
   });
 
+  it("asks Codex for reveal sections without why-it-works", () => {
+    const prompt = createSolutionRevealPrompt(questions[0], "function firstDuplicate(nums) {}");
+
+    expect(prompt).toContain("## Approach");
+    expect(prompt).toContain("## Code");
+    expect(prompt).toContain("## Complexity");
+    expect(prompt).toContain("## Compare with my code");
+    expect(prompt).toContain("Do not include a 'Why it works' section.");
+    expect(prompt).toContain(questions[0].functionName);
+  });
+
   it("reports unavailable Chrome runtime when hint requests run outside the extension", async () => {
     setChromeRuntime();
 
@@ -84,6 +95,14 @@ describe("hintPrompt", () => {
 
     await expect(requestCodexExampleExplanation("question-1:0", "explain example")).resolves.toEqual({ ok: true, text: "Step by step" });
     expect(sendMessage).toHaveBeenCalledWith({ exampleKey: "question-1:0", prompt: "explain example", type: "open-codex-example-explanation" }, expect.any(Function));
+  });
+
+  it("sends solution reveal requests through the Chrome runtime", async () => {
+    const sendMessage = vi.fn((_message, callback) => callback({ ok: true, text: "## Approach" }));
+    setChromeRuntime({ sendMessage });
+
+    await expect(requestCodexSolutionReveal("question-1", "reveal")).resolves.toEqual({ ok: true, text: "## Approach" });
+    expect(sendMessage).toHaveBeenCalledWith({ prompt: "reveal", questionId: "question-1", type: "open-codex-solution-reveal" }, expect.any(Function));
   });
 
   it("uses Chrome runtime lastError when the background does not respond", async () => {
