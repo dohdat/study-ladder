@@ -884,9 +884,10 @@ function useQuestionDisplayVariant(params: {
   const cached = cache.current.get(params.currentQuestion.id);
   const loading = inFlight.current.has(params.currentQuestion.id) || retryTimers.current.has(params.currentQuestion.id);
   return {
+    hasVariant: Boolean(cached),
     loading,
     question: cached || (displayQuestion?.id === params.currentQuestion.id ? displayQuestion : params.currentQuestion),
-    ready: Boolean(cached),
+    ready: true,
     revision,
     streamText: streamTextByQuestionId.current.get(params.currentQuestion.id) || ""
   };
@@ -1074,14 +1075,19 @@ export default function Home() {
     if (!hydrated || sessionStarted || state.mode !== "leetcode" || state.profile.spireRun.mapOpen || !currentQuestion) {
       return;
     }
-    if (questionVariant.ready) {
+    if (questionVariant.hasVariant) {
       setRunTone("default");
       setRunStatus("Codex question ready.");
       return;
     }
+    if (questionVariant.ready && questionVariant.loading) {
+      setRunTone("default");
+      setRunStatus("Original question ready. Codex is preparing a fresh variation in the background.");
+      return;
+    }
     setRunTone("default");
-    setRunStatus(questionVariant.loading ? formatQuestionVariantStreamStatus(questionVariant.streamText) : "Preparing Codex CLI rewrite.");
-  }, [currentQuestion, hydrated, questionVariant.loading, questionVariant.ready, questionVariant.streamText, sessionStarted, state.mode, state.profile.spireRun.mapOpen]);
+    setRunStatus("Original question ready.");
+  }, [currentQuestion, hydrated, questionVariant.hasVariant, questionVariant.loading, questionVariant.ready, questionVariant.streamText, sessionStarted, state.mode, state.profile.spireRun.mapOpen]);
   const failAndAdvance = useFailAndAdvance({ code, currentQuestion: activeQuestion, setCode, setCurrentQuestion, setConsoleRunResult, setResults, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, clearHint: hints.clearHint, showHealthLoss, showPlayerImpact });
   const questionTimeLimitMs = activeQuestion ? getModifiedQuestionTimeLimitMs(state, activeQuestion) : 0;
   const timer = useQuestionTimer({ code, currentQuestion: activeQuestion, failAndAdvance, sessionStarted, mode: state.mode, setConsoleRunResult, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer, questionTimeLimitMs });

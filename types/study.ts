@@ -385,6 +385,7 @@ export type StudyState = {
     mana: number;
     rating: number;
     spireMinRating: number;
+    codingTags: string[];
     godMode: boolean;
     statPoints: number;
     statPointsAwardedLevel: number;

@@ -5,6 +5,7 @@ import {
   Group,
   Menu,
   Modal,
+  MultiSelect,
   NumberInput,
   Textarea,
   Progress,
@@ -83,6 +84,7 @@ import { SPIRE_MIN_RATING_MAX, SPIRE_MIN_RATING_MIN, getSpireActBaseRating, getS
 import {
   META_UPGRADE_DEFINITIONS,
   defaultState,
+  getAvailableCodingTags,
   getAttackDamage,
   getCriticalChance,
   getEffectiveCharacterStats,
@@ -91,6 +93,7 @@ import {
   getMaxHealth,
   getRunModifierTotals,
   getWarriorSkillBonusTotals,
+  normalizeCodingTags,
   setSpireMinimumRating,
   spendStatPoint
 } from "../lib/studyCore";
@@ -404,7 +407,7 @@ function WikiPanel() {
         <Tabs.Tab value="relics">Relics</Tabs.Tab>
         <Tabs.Tab value="mirror">Mirror</Tabs.Tab>
         <Tabs.Tab value="pact">Pact</Tabs.Tab>
-        <Tabs.Tab value="questions">LeetCode Bank</Tabs.Tab>
+        <Tabs.Tab value="questions">Coding Bank</Tabs.Tab>
       </Tabs.List>
       <Tabs.Panel value="monsters">
         <MonsterWiki />
@@ -1253,11 +1256,12 @@ function getPactConditionEffectLines(condition: (typeof HEAT_CONDITION_DEFINITIO
 function SettingsPanel(props: { setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
   const { settings, updateSettings } = useStudyBlockerSettings();
   const siteText = settings.distractingSites.join("\n");
+  const codingTagOptions = useMemo(() => getAvailableCodingTags().map((tag) => ({ label: tag, value: tag })), []);
   return (
     <Stack gap="md">
       <Group justify="space-between">
         <Text size="sm" fw={700}>Practice Mode</Text>
-        <Badge variant="light">{props.state.mode === "leetcode" ? "LeetCode" : "System Design"}</Badge>
+        <Badge variant="light">{props.state.mode === "leetcode" ? "Coding" : "System Design"}</Badge>
       </Group>
       <Switch
         checked={settings.enabled}
@@ -1270,6 +1274,16 @@ function SettingsPanel(props: { setState: React.Dispatch<React.SetStateAction<St
         label="God mode"
         description="Testing mode: no health loss from failures, and completed questions always drop an item."
         onChange={(event) => props.setState((previous) => ({ ...previous, profile: { ...previous.profile, godMode: event.currentTarget.checked } }))}
+      />
+      <MultiSelect
+        clearable
+        data={codingTagOptions}
+        label="Coding tags"
+        description="Leave empty to include every coding question. Selecting tags uses questions that match any selected tag."
+        placeholder="All coding tags"
+        searchable
+        value={props.state.profile.codingTags}
+        onChange={(value) => props.setState((previous) => ({ ...previous, profile: { ...previous.profile, codingTags: normalizeCodingTags(value) } }))}
       />
       <NumberInput
         allowDecimal={false}

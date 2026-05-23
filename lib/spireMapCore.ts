@@ -24,13 +24,14 @@ import type { Difficulty, HeatConditionId, HeatConditionRanks, InventoryItem, It
 const SPIRE_ACT_COUNT = 4;
 const MIN_SPIRE_TOTAL_RATING_RANGE = 200;
 const BASE_ACT_RATING_SPAN = 500;
+const SPIRE_MAX_RATING_FLOOR = 3500;
 const SPIRE_RATING_OFFSETS = [0, 40, 75, 115, 150, 190, 225, 265, 300, 340, 375, 415, 450, 475, 500] as const;
 const QUESTION_BANK_RATINGS = questions.map((question) => question.rating).filter(Number.isFinite);
 export const QUESTION_BANK_MIN_RATING = Math.min(...QUESTION_BANK_RATINGS);
 export const QUESTION_BANK_MAX_RATING = Math.max(...QUESTION_BANK_RATINGS);
 export const DEFAULT_SPIRE_MIN_RATING = Math.min(QUESTION_BANK_MAX_RATING, Math.max(QUESTION_BANK_MIN_RATING, 1500));
 export const SPIRE_MIN_RATING_MIN = QUESTION_BANK_MIN_RATING;
-export const SPIRE_MIN_RATING_MAX = Math.max(SPIRE_MIN_RATING_MIN, QUESTION_BANK_MAX_RATING - MIN_SPIRE_TOTAL_RATING_RANGE);
+export const SPIRE_MIN_RATING_MAX = Math.max(SPIRE_MIN_RATING_MIN, Math.max(SPIRE_MAX_RATING_FLOOR, QUESTION_BANK_MAX_RATING) - MIN_SPIRE_TOTAL_RATING_RANGE);
 export const SPIRE_RATINGS = getSpireRatings(1, DEFAULT_SPIRE_MIN_RATING);
 
 const FIRST_TIER = 0;
@@ -175,18 +176,24 @@ export function normalizeSpireMinRating(value: number | undefined) {
 export function getSpireActBaseRating(act: SpireAct, minRating = DEFAULT_SPIRE_MIN_RATING) {
   const safeAct = normalizeSpireAct(act);
   const spireMinRating = normalizeSpireMinRating(minRating);
-  const totalRange = Math.max(SPIRE_ACT_COUNT, QUESTION_BANK_MAX_RATING - spireMinRating);
-  return Math.min(QUESTION_BANK_MAX_RATING, spireMinRating + Math.floor((totalRange * (safeAct - 1)) / SPIRE_ACT_COUNT));
+  const spireMaxRating = getSpireMaxRating(spireMinRating);
+  const totalRange = Math.max(SPIRE_ACT_COUNT, spireMaxRating - spireMinRating);
+  return Math.min(spireMaxRating, spireMinRating + Math.floor((totalRange * (safeAct - 1)) / SPIRE_ACT_COUNT));
 }
 
 export function getSpireActEndRating(act: SpireAct, minRating = DEFAULT_SPIRE_MIN_RATING) {
   const safeAct = normalizeSpireAct(act);
   const spireMinRating = normalizeSpireMinRating(minRating);
-  const totalRange = Math.max(SPIRE_ACT_COUNT, QUESTION_BANK_MAX_RATING - spireMinRating);
+  const spireMaxRating = getSpireMaxRating(spireMinRating);
+  const totalRange = Math.max(SPIRE_ACT_COUNT, spireMaxRating - spireMinRating);
   if (safeAct >= SPIRE_ACT_COUNT) {
-    return QUESTION_BANK_MAX_RATING;
+    return spireMaxRating;
   }
-  return Math.min(QUESTION_BANK_MAX_RATING, spireMinRating + Math.floor((totalRange * safeAct) / SPIRE_ACT_COUNT));
+  return Math.min(spireMaxRating, spireMinRating + Math.floor((totalRange * safeAct) / SPIRE_ACT_COUNT));
+}
+
+function getSpireMaxRating(minRating: number) {
+  return Math.max(SPIRE_MAX_RATING_FLOOR, minRating + BASE_ACT_RATING_SPAN * SPIRE_ACT_COUNT);
 }
 
 export function getSpireRatings(act: SpireAct = 1, minRating = DEFAULT_SPIRE_MIN_RATING) {
@@ -1397,7 +1404,7 @@ export function enterSpireNode(state: StudyState, now = Date.now()) {
       spireRun: {
         ...enteredState.profile.spireRun,
         mapOpen: false,
-        roundQuestionIds: isCombatNode(enteredNode) ? pickRoundQuestions(enteredState.profile.spireRun, enteredNode, state.profile.spireRun.mapSeed + now, state.profile.spireRun.roundQuestionIds, getRoundQuestionCount(enteredState.profile.spireRun, enteredNode, now)) : [],
+        roundQuestionIds: isCombatNode(enteredNode) ? pickRoundQuestions(enteredState, enteredNode, state.profile.spireRun.mapSeed + now, state.profile.spireRun.roundQuestionIds, getRoundQuestionCount(enteredState.profile.spireRun, enteredNode, now)) : [],
         roundSolvedIds: [],
         runCodeQuestionIds: [],
         tierIndex: enteredNode?.tierIndex ?? node.tierIndex
@@ -2128,17 +2135,27 @@ function getRoundQuestionCount(run: SpireRun, node: SpireMapNode, now: number) {
   return Math.max(MIN_ROUND_QUESTION_COUNT, Math.min(MAX_ROUND_QUESTION_COUNT + 2, baseCount));
 }
 
-function pickRoundQuestions(run: SpireRun, node: SpireMapNode, seed: number, previousIds: string[], count: number) {
+function pickRoundQuestions(state: StudyState, node: SpireMapNode, seed: number, previousIds: string[], count: number) {
+  const run = state.profile.spireRun;
   const effectiveRating = getEffectiveSpireRating(run, node.rating);
   const targetRating = node.kind === "boss"
     ? effectiveRating + ELITE_RATING_BOOST + Math.round((getHeatBossMultiplier(run) - 1) * 500)
     : node.kind === "elite"
       ? effectiveRating + ELITE_RATING_BOOST + Math.round((getHeatEliteMultiplier(run) - 1) * 400)
       : effectiveRating;
-  const ranked = [...questions]
+  const ranked = getCodingFilteredQuestions(state)
     .filter((question) => !previousIds.includes(question.id))
     .sort((a, b) => getQuestionSortValue(node, b, targetRating, seed) - getQuestionSortValue(node, a, targetRating, seed));
   return ranked.slice(0, count).map((question) => question.id);
+}
+
+function getCodingFilteredQuestions(state: StudyState) {
+  const selectedTags = new Set((state.profile.codingTags || []).filter((tag) => typeof tag === "string"));
+  if (!selectedTags.size) {
+    return questions;
+  }
+  const filtered = questions.filter((question) => question.topics.some((topic) => selectedTags.has(topic)));
+  return filtered.length ? filtered : questions;
 }
 
 function getQuestionSortValue(node: SpireMapNode, question: Question, targetRating: number, seed: number) { const ratingFit = RATING_FIT_BASE - Math.abs(question.rating - targetRating); const eliteBonus = node.kind === "elite" || node.kind === "boss" ? getUniqueMonsterBonusCount(question) * ELITE_BONUS_SORT_WEIGHT : 0; return ratingFit + eliteBonus + getRoll(`${seed}:${question.id}`); }

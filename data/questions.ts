@@ -83,6 +83,87 @@ const curatedQuestions: Question[] = [
     ]
   },
   {
+    id: "frontend-debounce-events",
+    title: "Debounced Search Events",
+    difficulty: 2,
+    rating: 1420,
+    topics: ["Sliding Window", "TypeScript", "Frontend"],
+    functionName: "debounceEvents",
+    prompt: "Model a TypeScript debounced search input. Given chronological input events with time and value, return the debounced emissions as { time, value } objects. A pending value emits at event.time + waitMs unless a later event arrives before that time.",
+    constraints: ["Events are sorted by time ascending.", "If an event arrives exactly when the pending value would emit, emit the pending value first.", "For multiple events at the same time, later array entries replace earlier pending values.", "Always emit the final pending value."],
+    starter: "function debounceEvents(events, waitMs) {\n  \n}",
+    examples: [
+      { input: 'events = [{ time: 0, value: "r" }, { time: 100, value: "re" }, { time: 250, value: "rea" }], waitMs = 300', output: '[{ "time": 550, "value": "rea" }]', explanation: "Each new value arrives before the previous pending fire time, so only the final value emits." },
+      { input: 'events = [{ time: 0, value: "a" }, { time: 400, value: "ab" }], waitMs = 300', output: '[{ "time": 300, "value": "a" }, { "time": 700, "value": "ab" }]', explanation: "The pause after the first event is long enough for it to emit before the second input." }
+    ],
+    tests: [
+      { name: "collapses rapid typing", args: [[{ time: 0, value: "r" }, { time: 100, value: "re" }, { time: 250, value: "rea" }], 300], expected: [{ time: 550, value: "rea" }] },
+      { name: "emits separated pauses", args: [[{ time: 0, value: "a" }, { time: 400, value: "ab" }], 300], expected: [{ time: 300, value: "a" }, { time: 700, value: "ab" }] },
+      { name: "handles boundary event", args: [[{ time: 0, value: "a" }, { time: 300, value: "ab" }], 300], expected: [{ time: 300, value: "a" }, { time: 600, value: "ab" }] },
+      { name: "returns empty for no events", args: [[], 250], expected: [] },
+      { name: "keeps latest same timestamp value", args: [[{ time: 0, value: "a" }, { time: 0, value: "ab" }], 100], expected: [{ time: 100, value: "ab" }] },
+      { name: "splits multiple bursts", args: [[{ time: 0, value: "c" }, { time: 50, value: "ca" }, { time: 400, value: "car" }, { time: 450, value: "cart" }, { time: 1000, value: "carts" }], 200], expected: [{ time: 250, value: "ca" }, { time: 650, value: "cart" }, { time: 1200, value: "carts" }] },
+      { name: "waits through long burst", args: [[{ time: 0, value: "h" }, { time: 200, value: "he" }, { time: 399, value: "hel" }], 400], expected: [{ time: 799, value: "hel" }] },
+      { name: "dedupes repeated value by timing", args: [[{ time: 0, value: "x" }, { time: 50, value: "x" }], 100], expected: [{ time: 150, value: "x" }] },
+      { name: "emits before later gap", args: [[{ time: 10, value: "a" }, { time: 20, value: "b" }, { time: 40, value: "c" }], 10], expected: [{ time: 20, value: "a" }, { time: 30, value: "b" }, { time: 50, value: "c" }] },
+      { name: "handles single input", args: [[{ time: 500, value: "query" }], 150], expected: [{ time: 650, value: "query" }] }
+    ]
+  },
+  {
+    id: "frontend-todo-reducer",
+    title: "Todo List Reducer",
+    difficulty: 2,
+    rating: 1480,
+    topics: ["Hash Map", "TypeScript", "Frontend"],
+    functionName: "reduceTodoActions",
+    prompt: "Build the core TypeScript reducer for a TodoList. Apply each action and return the final todos in creation order as { id, text, completed } objects.",
+    constraints: ["Actions can be add, toggle, rename, delete, or clearCompleted.", "Ignore add actions when the id already exists.", "Ignore toggle, rename, and delete actions for missing ids.", "Do not mutate action objects."],
+    starter: "function reduceTodoActions(actions) {\n  \n}",
+    examples: [
+      { input: 'actions = [{ type: "add", id: "1", text: "Ship UI" }, { type: "toggle", id: "1" }]', output: '[{ "id": "1", "text": "Ship UI", "completed": true }]', explanation: "The todo is created incomplete, then toggled to completed." },
+      { input: 'actions = [{ type: "add", id: "a", text: "Read" }, { type: "delete", id: "a" }]', output: "[]", explanation: "The delete action removes the existing todo." }
+    ],
+    tests: [
+      { name: "adds and toggles todo", args: [[{ type: "add", id: "1", text: "Ship UI" }, { type: "toggle", id: "1" }]], expected: [{ id: "1", text: "Ship UI", completed: true }] },
+      { name: "preserves add order", args: [[{ type: "add", id: "a", text: "One" }, { type: "add", id: "b", text: "Two" }]], expected: [{ id: "a", text: "One", completed: false }, { id: "b", text: "Two", completed: false }] },
+      { name: "ignores duplicate add id", args: [[{ type: "add", id: "a", text: "First" }, { type: "add", id: "a", text: "Second" }]], expected: [{ id: "a", text: "First", completed: false }] },
+      { name: "renames existing todo", args: [[{ type: "add", id: "a", text: "Draft" }, { type: "rename", id: "a", text: "Review" }]], expected: [{ id: "a", text: "Review", completed: false }] },
+      { name: "ignores missing rename", args: [[{ type: "rename", id: "missing", text: "Noop" }, { type: "add", id: "a", text: "Task" }]], expected: [{ id: "a", text: "Task", completed: false }] },
+      { name: "deletes existing todo", args: [[{ type: "add", id: "a", text: "Read" }, { type: "delete", id: "a" }]], expected: [] },
+      { name: "clears completed todos", args: [[{ type: "add", id: "a", text: "Done" }, { type: "add", id: "b", text: "Open" }, { type: "toggle", id: "a" }, { type: "clearCompleted" }]], expected: [{ id: "b", text: "Open", completed: false }] },
+      { name: "toggles twice back to open", args: [[{ type: "add", id: "a", text: "Task" }, { type: "toggle", id: "a" }, { type: "toggle", id: "a" }]], expected: [{ id: "a", text: "Task", completed: false }] },
+      { name: "ignores missing toggle and delete", args: [[{ type: "toggle", id: "ghost" }, { type: "add", id: "a", text: "Keep" }, { type: "delete", id: "ghost" }]], expected: [{ id: "a", text: "Keep", completed: false }] },
+      { name: "keeps remaining order after deletion", args: [[{ type: "add", id: "a", text: "A" }, { type: "add", id: "b", text: "B" }, { type: "add", id: "c", text: "C" }, { type: "delete", id: "b" }]], expected: [{ id: "a", text: "A", completed: false }, { id: "c", text: "C", completed: false }] }
+    ]
+  },
+  {
+    id: "frontend-tabs-state",
+    title: "Tabs State Manager",
+    difficulty: 2,
+    rating: 1540,
+    topics: ["Arrays", "TypeScript", "Frontend"],
+    functionName: "updateTabs",
+    prompt: "Implement a TypeScript tabs state helper. Given ordered tabs, the current active id, and one action, return { tabs, activeId } after applying select, close, move, or rename.",
+    constraints: ["Each tab has id and title.", "Selecting a missing id does nothing.", "Closing the active tab activates the next tab at that index, otherwise the previous tab, otherwise null.", "Move clamps toIndex into the valid range.", "Rename ignores empty titles."],
+    starter: "function updateTabs(tabs, activeId, action) {\n  \n}",
+    examples: [
+      { input: 'tabs = [{ id: "a", title: "A" }, { id: "b", title: "B" }], activeId = "a", action = { type: "select", id: "b" }', output: '{ "tabs": [{ "id": "a", "title": "A" }, { "id": "b", "title": "B" }], "activeId": "b" }', explanation: "Selecting an existing tab changes only the active id." },
+      { input: 'tabs = [{ id: "a", title: "A" }, { id: "b", title: "B" }], activeId = "b", action = { type: "close", id: "b" }', output: '{ "tabs": [{ "id": "a", "title": "A" }], "activeId": "a" }', explanation: "Closing the active last tab falls back to the previous tab." }
+    ],
+    tests: [
+      { name: "selects existing tab", args: [[{ id: "a", title: "A" }, { id: "b", title: "B" }], "a", { type: "select", id: "b" }], expected: { tabs: [{ id: "a", title: "A" }, { id: "b", title: "B" }], activeId: "b" } },
+      { name: "ignores missing select", args: [[{ id: "a", title: "A" }], "a", { type: "select", id: "x" }], expected: { tabs: [{ id: "a", title: "A" }], activeId: "a" } },
+      { name: "closes inactive tab", args: [[{ id: "a", title: "A" }, { id: "b", title: "B" }, { id: "c", title: "C" }], "a", { type: "close", id: "b" }], expected: { tabs: [{ id: "a", title: "A" }, { id: "c", title: "C" }], activeId: "a" } },
+      { name: "closes active middle tab", args: [[{ id: "a", title: "A" }, { id: "b", title: "B" }, { id: "c", title: "C" }], "b", { type: "close", id: "b" }], expected: { tabs: [{ id: "a", title: "A" }, { id: "c", title: "C" }], activeId: "c" } },
+      { name: "closes active last tab", args: [[{ id: "a", title: "A" }, { id: "b", title: "B" }], "b", { type: "close", id: "b" }], expected: { tabs: [{ id: "a", title: "A" }], activeId: "a" } },
+      { name: "closes only active tab", args: [[{ id: "a", title: "A" }], "a", { type: "close", id: "a" }], expected: { tabs: [], activeId: null } },
+      { name: "moves tab to front", args: [[{ id: "a", title: "A" }, { id: "b", title: "B" }, { id: "c", title: "C" }], "c", { type: "move", id: "c", toIndex: 0 }], expected: { tabs: [{ id: "c", title: "C" }, { id: "a", title: "A" }, { id: "b", title: "B" }], activeId: "c" } },
+      { name: "clamps move past end", args: [[{ id: "a", title: "A" }, { id: "b", title: "B" }], "a", { type: "move", id: "a", toIndex: 99 }], expected: { tabs: [{ id: "b", title: "B" }, { id: "a", title: "A" }], activeId: "a" } },
+      { name: "renames existing tab", args: [[{ id: "a", title: "A" }, { id: "b", title: "B" }], "a", { type: "rename", id: "b", title: "Docs" }], expected: { tabs: [{ id: "a", title: "A" }, { id: "b", title: "Docs" }], activeId: "a" } },
+      { name: "ignores empty rename title", args: [[{ id: "a", title: "A" }], "a", { type: "rename", id: "a", title: "" }], expected: { tabs: [{ id: "a", title: "A" }], activeId: "a" } }
+    ]
+  },
+  {
     id: "string-longest-unique",
     title: "Longest Unique Window",
     difficulty: 2,

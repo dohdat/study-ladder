@@ -34,6 +34,7 @@ import {
   getActiveSetBonuses,
   getCriticalChance,
   getDueQuestions,
+  getCodingFilteredQuestions,
   getElementalResistances,
   getEquipmentModifierTotals,
   getExperienceReward,
@@ -62,6 +63,7 @@ import {
   isQuestionInRecommendedRange,
   isMasteredCard,
   markQuestionRunCode,
+  normalizeCodingTags,
   normalizeStudyState,
   pickQuestion,
   purchaseMetaUpgrade,
@@ -284,6 +286,17 @@ describe("studyCore", () => {
     }
     setCard(state, questions[2].id, { ...defaultCard(), attempts: 0 });
     expect(pickQuestion(state, null, false, 1000).id).toBe(questions[2].id);
+  });
+
+  it("filters coding picks by selected tags", () => {
+    const state = defaultState();
+    state.profile.codingTags = normalizeCodingTags(["Hash Map"]);
+    const filtered = getCodingFilteredQuestions(state);
+
+    expect(filtered.length).toBeGreaterThan(0);
+    expect(filtered.every((question) => question.topics.includes("Hash Map"))).toBe(true);
+    expect(pickQuestion(state, null, false, 1000).topics).toContain("Hash Map");
+    expect(isQuestionInRecommendedRange(state, questions.find((question) => !question.topics.includes("Hash Map")) || questions[0], true)).toBe(false);
   });
 
   it("keeps question picks near the player rating", () => {

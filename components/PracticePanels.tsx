@@ -69,6 +69,13 @@ const RUN_LABEL_MARGIN_BOTTOM = 6;
 const RUN_VALUE_FONT_SIZE = "13px";
 const RUN_VALUE_LINE_HEIGHT = 1.65;
 const RUN_TITLE_ORDER = 3;
+const PREVIEW_BG = "#f8fafc";
+const PREVIEW_BORDER = "1px solid #cbd5e1";
+const PREVIEW_MUTED = "#64748b";
+const PREVIEW_TEXT = "#0f172a";
+const PREVIEW_ACCENT = "#2563eb";
+const PREVIEW_SUCCESS = "#16a34a";
+const PREVIEW_TODO_DONE_BG = "#dcfce7";
 const FIRST_CASE_INDEX = 0;
 const ARG_INDEX_OFFSET = 1;
 const FUNCTION_SIGNATURE_GROUP = 1;
@@ -81,6 +88,9 @@ type HintSegment = {
 
 type QuestionExample = Question["examples"][number];
 type ExampleExplanationState = Record<string, { error: string; loading: boolean; text: string }>;
+type PreviewEvent = { time: number; value: string };
+type PreviewTodo = { completed: boolean; id: string; text: string };
+type PreviewTab = { id: string; title: string };
 
 export type PracticePanelActions = {
   updateDraft: (nextCode: string) => void;
@@ -551,7 +561,7 @@ function RunCasePanel(props: { code: string; currentQuestion: Question; markSolu
         ))}
       </Group>
       <ScrollArea.Autosize mah={RUN_PANEL_MAX_HEIGHT}>
-        {selected && <RunCaseDetails argNames={argNames} result={selected} />}
+        {selected && <RunCaseDetails argNames={argNames} currentQuestion={props.currentQuestion} result={selected} />}
       </ScrollArea.Autosize>
       {props.result.hiddenTestCount ? <SolutionRevealPanel code={props.code} currentQuestion={props.currentQuestion} markSolutionRevealed={props.markSolutionRevealed} /> : null}
     </Paper>
@@ -669,13 +679,14 @@ function extractSolutionCode(markdown: string) {
   return (match?.[FUNCTION_SIGNATURE_GROUP] || markdown).trim();
 }
 
-function RunCaseDetails(props: { argNames: string[]; result: RunResult }) {
+function RunCaseDetails(props: { argNames: string[]; currentQuestion: Question; result: RunResult }) {
   return (
     <Box style={{ display: "grid", gap: RUN_SECTION_GAP }}>
       <RunSection label="Input" value={formatRunInput(props.result.args, props.argNames)} />
       <RunSection label="Stdout" value={formatStdout(props.result.stdout)} />
       <RunSection color={props.result.pass ? "green.4" : "red.4"} label="Output" value={props.result.actual} />
       <RunSection color="green.4" label="Expected" value={props.result.expected} />
+      <FrontendRunPreview currentQuestion={props.currentQuestion} result={props.result} />
     </Box>
   );
 }
@@ -717,6 +728,150 @@ function formatRunValue(value: unknown) {
     return "undefined";
   }
   return JSON.stringify(value);
+}
+
+function FrontendRunPreview(props: { currentQuestion: Question; result: RunResult }) {
+  const value = parsePreviewValue(props.result.actual);
+  if (!value) {
+    return null;
+  }
+  if (props.currentQuestion.id === "frontend-debounce-events" && isPreviewEventList(value)) {
+    return <DebouncePreview events={value} />;
+  }
+  if (props.currentQuestion.id === "frontend-todo-reducer" && isPreviewTodoList(value)) {
+    return <TodoPreview todos={value} />;
+  }
+  if (props.currentQuestion.id === "frontend-tabs-state" && isPreviewTabsState(value)) {
+    return <TabsPreview activeId={value.activeId} tabs={value.tabs} />;
+  }
+  return null;
+}
+
+function parsePreviewValue(actual: string) {
+  if (!actual || actual === "undefined" || actual === "NaN") {
+    return null;
+  }
+  try {
+    return JSON.parse(actual);
+  } catch {
+    return null;
+  }
+}
+
+function isPreviewEventList(value: unknown): value is PreviewEvent[] {
+  return Array.isArray(value) && value.every((event) => {
+    return Boolean(event && typeof event === "object" && typeof (event as PreviewEvent).time === "number" && typeof (event as PreviewEvent).value === "string");
+  });
+}
+
+function isPreviewTodoList(value: unknown): value is PreviewTodo[] {
+  return Array.isArray(value) && value.every((todo) => {
+    return Boolean(todo && typeof todo === "object" && typeof (todo as PreviewTodo).id === "string" && typeof (todo as PreviewTodo).text === "string" && typeof (todo as PreviewTodo).completed === "boolean");
+  });
+}
+
+function isPreviewTabsState(value: unknown): value is { activeId: string | null; tabs: PreviewTab[] } {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const record = value as { activeId?: unknown; tabs?: unknown };
+  return (typeof record.activeId === "string" || record.activeId === null) && Array.isArray(record.tabs) && record.tabs.every((tab) => {
+    return Boolean(tab && typeof tab === "object" && typeof (tab as PreviewTab).id === "string" && typeof (tab as PreviewTab).title === "string");
+  });
+}
+
+function PreviewShell(props: { children: React.ReactNode; title: string }) {
+  return (
+    <Box>
+      <Text size="sm" fw={700} c="dimmed" mb={RUN_LABEL_MARGIN_BOTTOM}>Preview</Text>
+      <Box p="md" style={{ background: PREVIEW_BG, border: PREVIEW_BORDER, borderRadius: RUN_BLOCK_RADIUS, color: PREVIEW_TEXT }}>
+        <Text size="sm" fw={800} mb="sm" style={{ color: PREVIEW_TEXT }}>{props.title}</Text>
+        {props.children}
+      </Box>
+    </Box>
+  );
+}
+
+function DebouncePreview(props: { events: PreviewEvent[] }) {
+  const latest = props.events.at(-1);
+  return (
+    <PreviewShell title="Search">
+      <Box p="sm" mb="sm" style={{ background: "#ffffff", border: PREVIEW_BORDER, borderRadius: 6 }}>
+        <Text size="xs" fw={700} mb={4} style={{ color: PREVIEW_MUTED }}>Search query</Text>
+        <Text size="md" fw={700} style={{ color: PREVIEW_TEXT }}>{latest?.value || ""}</Text>
+      </Box>
+      <Box style={{ display: "grid", gap: 8 }}>
+        {props.events.length === 0 ? (
+          <Text size="sm" style={{ color: PREVIEW_MUTED }}>No debounced search request fired.</Text>
+        ) : props.events.map((event, index) => (
+          <Group key={`${event.time}-${event.value}-${index}`} justify="space-between" p="xs" style={{ background: "#e0f2fe", borderRadius: 6 }}>
+            <Text size="sm" fw={700} style={{ color: PREVIEW_TEXT }}>{event.value}</Text>
+            <Text size="xs" fw={700} style={{ color: PREVIEW_ACCENT }}>{event.time} ms</Text>
+          </Group>
+        ))}
+      </Box>
+    </PreviewShell>
+  );
+}
+
+function TodoPreview(props: { todos: PreviewTodo[] }) {
+  const openCount = props.todos.filter((todo) => !todo.completed).length;
+  return (
+    <PreviewShell title="Todo List">
+      <Group justify="space-between" mb="sm">
+        <Box p="xs" flex={1} style={{ background: "#ffffff", border: PREVIEW_BORDER, borderRadius: 6 }}>
+          <Text size="sm" style={{ color: PREVIEW_MUTED }}>Add a task...</Text>
+        </Box>
+        <Box px="sm" py={7} style={{ background: PREVIEW_ACCENT, borderRadius: 6 }}>
+          <Text size="xs" fw={800} c="white">Add</Text>
+        </Box>
+      </Group>
+      <Box style={{ display: "grid", gap: 8 }}>
+        {props.todos.length === 0 ? (
+          <Text size="sm" style={{ color: PREVIEW_MUTED }}>No todos left.</Text>
+        ) : props.todos.map((todo) => (
+          <Group key={todo.id} justify="space-between" p="xs" style={{ background: todo.completed ? PREVIEW_TODO_DONE_BG : "#ffffff", border: PREVIEW_BORDER, borderRadius: 6 }}>
+            <Group gap="xs">
+              <Box style={{ alignItems: "center", background: todo.completed ? PREVIEW_SUCCESS : "#ffffff", border: `2px solid ${todo.completed ? PREVIEW_SUCCESS : "#94a3b8"}`, borderRadius: 4, color: "#ffffff", display: "flex", height: 18, justifyContent: "center", width: 18 }}>
+                {todo.completed ? <IconCheck size={ICON_XS} /> : null}
+              </Box>
+              <Text size="sm" fw={700} style={{ color: PREVIEW_TEXT, textDecoration: todo.completed ? "line-through" : "none" }}>{todo.text}</Text>
+            </Group>
+            <Text size="xs" fw={700} style={{ color: PREVIEW_MUTED }}>{todo.id}</Text>
+          </Group>
+        ))}
+      </Box>
+      <Text size="xs" mt="sm" style={{ color: PREVIEW_MUTED }}>{openCount} open / {props.todos.length} total</Text>
+    </PreviewShell>
+  );
+}
+
+function TabsPreview(props: { activeId: string | null; tabs: PreviewTab[] }) {
+  const activeTab = props.tabs.find((tab) => tab.id === props.activeId) || null;
+  return (
+    <PreviewShell title="Tabs">
+      <Group gap={0} mb="sm" wrap="nowrap" style={{ overflow: "hidden" }}>
+        {props.tabs.map((tab) => {
+          const active = tab.id === props.activeId;
+          return (
+            <Box key={tab.id} px="sm" py={8} style={{ background: active ? "#ffffff" : "#e2e8f0", border: PREVIEW_BORDER, borderBottomColor: active ? "#ffffff" : "#cbd5e1", color: active ? PREVIEW_ACCENT : PREVIEW_MUTED, fontWeight: 800 }}>
+              <Text size="sm">{tab.title}</Text>
+            </Box>
+          );
+        })}
+      </Group>
+      <Box p="md" style={{ background: "#ffffff", border: PREVIEW_BORDER, borderRadius: 6, minHeight: 96 }}>
+        {activeTab ? (
+          <>
+            <Text size="lg" fw={900} style={{ color: PREVIEW_TEXT }}>{activeTab.title}</Text>
+            <Text size="sm" mt={4} style={{ color: PREVIEW_MUTED }}>Active tab id: {activeTab.id}</Text>
+          </>
+        ) : (
+          <Text size="sm" style={{ color: PREVIEW_MUTED }}>No active tab.</Text>
+        )}
+      </Box>
+    </PreviewShell>
+  );
 }
 
 function getArgumentNames(question: Question) {

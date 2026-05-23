@@ -323,6 +323,18 @@ describe("spireMapCore", () => {
     expect(state.profile.spireRun.roundSolvedIds).toEqual([]);
   });
 
+  it("uses selected coding tags when entering combat rooms", () => {
+    let state = defaultState();
+    state.profile.codingTags = ["Hash Map"];
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
+    const nodeId = state.profile.spireRun.availableNodeIds[0];
+    state = enterSpireNode(selectSpireNode(state, nodeId), 1000);
+    const roomQuestions = state.profile.spireRun.roundQuestionIds.map((id) => questions.find((question) => question.id === id));
+
+    expect(roomQuestions.length).toBeGreaterThan(0);
+    expect(roomQuestions.every((question) => question?.topics.includes("Hash Map"))).toBe(true);
+  });
+
   it("clears room-scoped relic combat state when leaving a room", () => {
     let state = defaultState();
     state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };

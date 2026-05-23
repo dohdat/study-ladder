@@ -112,6 +112,7 @@ function createDefaultStateBase(): StudyState {
       mana: 0,
       rating: DEFAULT_PLAYER_RATING,
       spireMinRating: DEFAULT_SPIRE_MIN_RATING,
+      codingTags: [],
       godMode: false,
       statPoints: 0,
       statPointsAwardedLevel: FIRST_STAT_LEVEL,
@@ -146,7 +147,7 @@ export const cloneState = (state: StudyState): StudyState => ({
 });
 
 function cloneProfile(state: StudyState): StudyState["profile"] {
-  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, activePotionEffects: cloneActivePotionEffects(state.profile.activePotionEffects), equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), inventorySlots: cloneInventorySlots(state.profile.inventorySlots), metaProgress: { ...state.profile.metaProgress, upgrades: { ...state.profile.metaProgress.upgrades } }, relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, spireRun: { ...state.profile.spireRun, availableNodeIds: [...state.profile.spireRun.availableNodeIds], completedNodeIds: [...state.profile.spireRun.completedNodeIds], nodes: state.profile.spireRun.nodes.map((node) => ({ ...node, nextIds: [...node.nextIds] })), pendingRelicReward: cloneRelicRewardChoice(state.profile.spireRun.pendingRelicReward), roomRewardClaims: cloneRoomRewardClaims(state.profile.spireRun.roomRewardClaims), roundQuestionIds: [...state.profile.spireRun.roundQuestionIds], roundSolvedIds: [...state.profile.spireRun.roundSolvedIds], runCodeQuestionIds: [...state.profile.spireRun.runCodeQuestionIds], unknownEncounterMisses: { ...state.profile.spireRun.unknownEncounterMisses } }, stats: { ...state.profile.stats }, trackedAchievementIds: [...state.profile.trackedAchievementIds], unlockedAchievementIds: [...state.profile.unlockedAchievementIds] };
+  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, activePotionEffects: cloneActivePotionEffects(state.profile.activePotionEffects), codingTags: [...(state.profile.codingTags || [])], equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), inventorySlots: cloneInventorySlots(state.profile.inventorySlots), metaProgress: { ...state.profile.metaProgress, upgrades: { ...state.profile.metaProgress.upgrades } }, relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, spireRun: { ...state.profile.spireRun, availableNodeIds: [...state.profile.spireRun.availableNodeIds], completedNodeIds: [...state.profile.spireRun.completedNodeIds], nodes: state.profile.spireRun.nodes.map((node) => ({ ...node, nextIds: [...node.nextIds] })), pendingRelicReward: cloneRelicRewardChoice(state.profile.spireRun.pendingRelicReward), roomRewardClaims: cloneRoomRewardClaims(state.profile.spireRun.roomRewardClaims), roundQuestionIds: [...state.profile.spireRun.roundQuestionIds], roundSolvedIds: [...state.profile.spireRun.roundSolvedIds], runCodeQuestionIds: [...state.profile.spireRun.runCodeQuestionIds], unknownEncounterMisses: { ...state.profile.spireRun.unknownEncounterMisses } }, stats: { ...state.profile.stats }, trackedAchievementIds: [...state.profile.trackedAchievementIds], unlockedAchievementIds: [...state.profile.unlockedAchievementIds] };
 }
 
 function cloneRelicRewardChoice(choice: StudyState["profile"]["spireRun"]["pendingRelicReward"]) {
@@ -191,6 +192,7 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
       experience: 0,
       rating: normalizeRating(stored, fallback),
       spireMinRating: normalizeSpireMinRating(profile.spireMinRating),
+      codingTags: normalizeCodingTags(profile.codingTags),
       statPoints: 0,
       statPointsAwardedLevel: FIRST_STAT_LEVEL,
       stats: normalizeCharacterStats(profile.stats),
@@ -290,6 +292,27 @@ function normalizeEquipment(equipment: Partial<Record<EquipmentSlot, string | nu
 function normalizeTrackedAchievementIds(ids: string[] | undefined) { return [...new Set(ids || [])].slice(0, MAX_TRACKED_ACHIEVEMENTS); }
 
 function normalizeUnlockedAchievementIds(ids: string[] | undefined) { return [...new Set(ids || [])]; }
+
+export function getAvailableCodingTags() {
+  return [...new Set(questions.flatMap((question) => question.topics))].sort((a, b) => a.localeCompare(b));
+}
+
+export function normalizeCodingTags(tags: unknown) {
+  const available = new Set(getAvailableCodingTags());
+  if (!Array.isArray(tags)) {
+    return [];
+  }
+  return [...new Set(tags.filter((tag): tag is string => typeof tag === "string" && available.has(tag)))];
+}
+
+export function getCodingFilteredQuestions(state: StudyState) {
+  const selectedTags = new Set(normalizeCodingTags(state.profile.codingTags));
+  if (!selectedTags.size) {
+    return questions;
+  }
+  const filtered = questions.filter((question) => question.topics.some((topic) => selectedTags.has(topic)));
+  return filtered.length ? filtered : questions;
+}
 
 function normalizeMetaProgress(progress: Partial<StudyState["profile"]["metaProgress"]> | undefined): StudyState["profile"]["metaProgress"] {
   const fallback = createDefaultMetaProgress();
@@ -986,19 +1009,20 @@ export const getDueQuestions = (_state: StudyState, _now = Date.now()) => [] as 
 export const pickQuestion = (state: StudyState, currentQuestion: Question | null, preferNext = false, _now = Date.now()) => {
   const recommended = getRecommendedDifficulty(state);
   const ratingLimit = getEstimatedRating(state) + (preferNext ? NEXT_QUESTION_RATING_BUFFER : QUESTION_RATING_BUFFER);
-  const currentIndex = currentQuestion ? questions.findIndex((question) => question.id === currentQuestion.id) : MISSING_INDEX;
+  const candidateQuestions = getCodingFilteredQuestions(state);
+  const currentIndex = currentQuestion ? candidateQuestions.findIndex((question) => question.id === currentQuestion.id) : MISSING_INDEX;
   const sorted = getRatingSortedQuestions(state);
   const withinRatingLimit = sorted.filter((question) => question.rating <= ratingLimit);
-  const unseenWithinLevel = questions.filter((question) => {
+  const unseenWithinLevel = candidateQuestions.filter((question) => {
     const card = getCard(state, question.id);
     return card.attempts === 0 && isQuestionRecommended(question, recommended, ratingLimit);
   });
 
   let picked = unseenWithinLevel[0] || withinRatingLimit[0] || sorted[0];
   if (preferNext) {
-    const nextInOrder = questions
+    const nextInOrder = candidateQuestions
       .slice(currentIndex + 1)
-      .concat(questions.slice(0, Math.max(0, currentIndex + 1)))
+      .concat(candidateQuestions.slice(0, Math.max(0, currentIndex + 1)))
       .find((question) => question.id !== currentQuestion?.id && isQuestionRecommended(question, (recommended + 1) as Question["difficulty"], ratingLimit));
     picked = nextInOrder || picked;
   }
@@ -1008,7 +1032,7 @@ export const pickQuestion = (state: StudyState, currentQuestion: Question | null
 
 function getRatingSortedQuestions(state: StudyState) {
   const targetRating = getEstimatedRating(state) + RATING_TARGET_OFFSET;
-  return [...questions].sort((a, b) => {
+  return [...getCodingFilteredQuestions(state)].sort((a, b) => {
     const cardA = getCard(state, a.id);
     const cardB = getCard(state, b.id);
     return cardA.correct - cardB.correct || Math.abs(a.rating - targetRating) - Math.abs(b.rating - targetRating) || a.rating - b.rating;
@@ -1018,8 +1042,13 @@ function getRatingSortedQuestions(state: StudyState) {
 export const isQuestionInRecommendedRange = (state: StudyState, question: Question, preferNext = false) => {
   const recommended = getRecommendedDifficulty(state);
   const ratingLimit = getEstimatedRating(state) + (preferNext ? NEXT_QUESTION_RATING_BUFFER : QUESTION_RATING_BUFFER);
-  return isQuestionRecommended(question, Math.min(MAX_DIFFICULTY, recommended + (preferNext ? 1 : 0)) as Question["difficulty"], ratingLimit);
+  return isQuestionAllowedByCodingTags(state, question) && isQuestionRecommended(question, Math.min(MAX_DIFFICULTY, recommended + (preferNext ? 1 : 0)) as Question["difficulty"], ratingLimit);
 };
+
+function isQuestionAllowedByCodingTags(state: StudyState, question: Question) {
+  const selectedTags = new Set(normalizeCodingTags(state.profile.codingTags));
+  return !selectedTags.size || question.topics.some((topic) => selectedTags.has(topic));
+}
 
 function isQuestionRecommended(question: Question, maxDifficulty: Question["difficulty"], ratingLimit: number) {
   return question.difficulty <= maxDifficulty && question.rating <= ratingLimit;

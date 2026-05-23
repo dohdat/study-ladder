@@ -149,7 +149,7 @@ export function HeroSiegeTabButton(props: HeroSiegeTabButtonProps) {
 export function HeroSiegeModeSwitch(props: { mode: string; onChange: (mode: "leetcode" | "system") => void }) {
   return (
     <Group gap={0} wrap="nowrap">
-      <HeroSiegeTabButton active={props.mode === "leetcode"} onClick={() => props.onChange("leetcode")}>LeetCode</HeroSiegeTabButton>
+      <HeroSiegeTabButton active={props.mode === "leetcode"} onClick={() => props.onChange("leetcode")}>Coding</HeroSiegeTabButton>
       <HeroSiegeTabButton active={props.mode === "system"} onClick={() => props.onChange("system")} width={SYSTEM_TAB_WIDTH}>System Design</HeroSiegeTabButton>
     </Group>
   );
