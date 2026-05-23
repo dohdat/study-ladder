@@ -326,6 +326,7 @@ describe("spireMapCore", () => {
   it("uses selected coding tags when entering combat rooms", () => {
     let state = defaultState();
     state.profile.codingTags = ["Hash Map"];
+    state.profile.codingMinRating = 1500;
     state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
     const nodeId = state.profile.spireRun.availableNodeIds[0];
     state = enterSpireNode(selectSpireNode(state, nodeId), 1000);
@@ -333,6 +334,7 @@ describe("spireMapCore", () => {
 
     expect(roomQuestions.length).toBeGreaterThan(0);
     expect(roomQuestions.every((question) => question?.topics.includes("Hash Map"))).toBe(true);
+    expect(roomQuestions.every((question) => (question?.rating || 0) >= 1500)).toBe(true);
   });
 
   it("retargets an unstarted combat room when coding tags change", () => {
@@ -341,12 +343,13 @@ describe("spireMapCore", () => {
     const nodeId = state.profile.spireRun.availableNodeIds[0];
     state = enterSpireNode(selectSpireNode(state, nodeId), 1000);
 
-    state = retargetCurrentSpireRoomQuestions({ ...state, profile: { ...state.profile, codingTags: ["Frontend"] } }, 2000);
+    state = retargetCurrentSpireRoomQuestions({ ...state, profile: { ...state.profile, codingMinRating: 1700, codingTags: ["Frontend"] } }, 2000);
     const roomQuestions = state.profile.spireRun.roundQuestionIds.map((id) => questions.find((question) => question.id === id));
 
     expect(roomQuestions.length).toBeGreaterThan(0);
     expect(state.currentId).toBe(state.profile.spireRun.roundQuestionIds[0]);
     expect(roomQuestions.every((question) => question?.topics.includes("Frontend"))).toBe(true);
+    expect(roomQuestions.every((question) => (question?.rating || 0) >= 1700)).toBe(true);
   });
 
   it("clears room-scoped relic combat state when leaving a room", () => {

@@ -402,6 +402,9 @@ export type StudyState = {
     rating: number;
     spireMinRating: number;
     codingTags: string[];
+    codingMinRating: number;
+    codingProfiles: CodingCompanyProfile[];
+    activeCodingProfileId: string | null;
     godMode: boolean;
     statPoints: number;
     statPointsAwardedLevel: number;
@@ -424,6 +427,13 @@ export type StudyState = {
     unlockedAchievementIds: string[];
   };
   cards: Record<string, CardState>;
+};
+
+export type CodingCompanyProfile = {
+  id: string;
+  name: string;
+  codingTags: string[];
+  codingMinRating: number;
 };
 
 export type RunResult = {

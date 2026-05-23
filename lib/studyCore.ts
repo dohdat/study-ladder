@@ -10,7 +10,7 @@ import { getWarriorSkillBonuses, normalizeWarriorSkillRanks } from "./skillCore"
 import { createShopStock, normalizeShopStock } from "./shopCore";
 import { DEFAULT_SPIRE_MIN_RATING, createSpireRun, getSpireRatings, normalizeSpireMinRating, normalizeSpireRun } from "./spireMapCore";
 import { getUniqueMonsterBonuses } from "./monsterCore";
-import type { ActivePotionEffect, CardState, CharacterStatKey, CharacterStats, DamageType, EquipmentSlot, InventoryItem, InventoryItemPosition, ItemModifierKey, Question, StudyState } from "../types/study";
+import type { ActivePotionEffect, CardState, CharacterStatKey, CharacterStats, CodingCompanyProfile, DamageType, EquipmentSlot, InventoryItem, InventoryItemPosition, ItemModifierKey, Question, StudyState } from "../types/study";
 
 const MS_PER_MINUTE = 60000;
 const MS_PER_SECOND = 1000;
@@ -62,6 +62,8 @@ const META_STARTER_RELICS_PER_RANK = 1;
 const META_RELIC_CHOICE_BONUS_CAP = 2;
 const META_RELIC_LUCK_PERCENT = 6;
 const META_REVEAL_SUBMIT_TESTS_PER_RANK = 1;
+const CODING_MIN_RATING_FLOOR = 0;
+const CODING_PROFILE_NAME_MAX_LENGTH = 48;
 export const MODIFIER_KEYS: ItemModifierKey[] = ALL_MODIFIER_KEYS;
 
 export const HINT_COST = 10;
@@ -113,6 +115,9 @@ function createDefaultStateBase(): StudyState {
       rating: DEFAULT_PLAYER_RATING,
       spireMinRating: DEFAULT_SPIRE_MIN_RATING,
       codingTags: [],
+      codingMinRating: CODING_MIN_RATING_FLOOR,
+      codingProfiles: [],
+      activeCodingProfileId: null,
       godMode: false,
       statPoints: 0,
       statPointsAwardedLevel: FIRST_STAT_LEVEL,
@@ -147,7 +152,7 @@ export const cloneState = (state: StudyState): StudyState => ({
 });
 
 function cloneProfile(state: StudyState): StudyState["profile"] {
-  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, activePotionEffects: cloneActivePotionEffects(state.profile.activePotionEffects), codingTags: [...(state.profile.codingTags || [])], equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), inventorySlots: cloneInventorySlots(state.profile.inventorySlots), metaProgress: { ...state.profile.metaProgress, upgrades: { ...state.profile.metaProgress.upgrades } }, relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, spireRun: { ...state.profile.spireRun, availableNodeIds: [...state.profile.spireRun.availableNodeIds], completedNodeIds: [...state.profile.spireRun.completedNodeIds], nodes: state.profile.spireRun.nodes.map((node) => ({ ...node, nextIds: [...node.nextIds] })), pendingRelicReward: cloneRelicRewardChoice(state.profile.spireRun.pendingRelicReward), roomRewardClaims: cloneRoomRewardClaims(state.profile.spireRun.roomRewardClaims), roundQuestionIds: [...state.profile.spireRun.roundQuestionIds], roundSolvedIds: [...state.profile.spireRun.roundSolvedIds], runCodeQuestionIds: [...state.profile.spireRun.runCodeQuestionIds], unknownEncounterMisses: { ...state.profile.spireRun.unknownEncounterMisses } }, stats: { ...state.profile.stats }, trackedAchievementIds: [...state.profile.trackedAchievementIds], unlockedAchievementIds: [...state.profile.unlockedAchievementIds] };
+  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, activePotionEffects: cloneActivePotionEffects(state.profile.activePotionEffects), activeCodingProfileId: normalizeActiveCodingProfileId(state.profile.activeCodingProfileId, state.profile.codingProfiles), codingMinRating: normalizeCodingMinRating(state.profile.codingMinRating), codingProfiles: normalizeCodingCompanyProfiles(state.profile.codingProfiles), codingTags: [...(state.profile.codingTags || [])], equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), inventorySlots: cloneInventorySlots(state.profile.inventorySlots), metaProgress: { ...state.profile.metaProgress, upgrades: { ...state.profile.metaProgress.upgrades } }, relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, spireRun: { ...state.profile.spireRun, availableNodeIds: [...state.profile.spireRun.availableNodeIds], completedNodeIds: [...state.profile.spireRun.completedNodeIds], nodes: state.profile.spireRun.nodes.map((node) => ({ ...node, nextIds: [...node.nextIds] })), pendingRelicReward: cloneRelicRewardChoice(state.profile.spireRun.pendingRelicReward), roomRewardClaims: cloneRoomRewardClaims(state.profile.spireRun.roomRewardClaims), roundQuestionIds: [...state.profile.spireRun.roundQuestionIds], roundSolvedIds: [...state.profile.spireRun.roundSolvedIds], runCodeQuestionIds: [...state.profile.spireRun.runCodeQuestionIds], unknownEncounterMisses: { ...state.profile.spireRun.unknownEncounterMisses } }, stats: { ...state.profile.stats }, trackedAchievementIds: [...state.profile.trackedAchievementIds], unlockedAchievementIds: [...state.profile.unlockedAchievementIds] };
 }
 
 function cloneRelicRewardChoice(choice: StudyState["profile"]["spireRun"]["pendingRelicReward"]) {
@@ -182,6 +187,7 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
   const profile: Partial<StudyState["profile"]> = stored.profile || {};
 
   const inventory: InventoryItem[] = [];
+  const codingProfiles = normalizeCodingCompanyProfiles(profile.codingProfiles);
   const normalized = {
     ...fallback,
     ...stored,
@@ -193,6 +199,9 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
       rating: normalizeRating(stored, fallback),
       spireMinRating: normalizeSpireMinRating(profile.spireMinRating),
       codingTags: normalizeCodingTags(profile.codingTags),
+      codingMinRating: normalizeCodingMinRating(profile.codingMinRating),
+      codingProfiles,
+      activeCodingProfileId: normalizeActiveCodingProfileId(profile.activeCodingProfileId, codingProfiles),
       statPoints: 0,
       statPointsAwardedLevel: FIRST_STAT_LEVEL,
       stats: normalizeCharacterStats(profile.stats),
@@ -305,13 +314,88 @@ export function normalizeCodingTags(tags: unknown) {
   return [...new Set(tags.filter((tag): tag is string => typeof tag === "string" && available.has(tag)))];
 }
 
+export function normalizeCodingMinRating(value: unknown) {
+  if (!Number.isFinite(Number(value))) {
+    return CODING_MIN_RATING_FLOOR;
+  }
+  return Math.max(CODING_MIN_RATING_FLOOR, Math.floor(Number(value)));
+}
+
+export function normalizeCodingCompanyProfiles(profiles: unknown): CodingCompanyProfile[] {
+  if (!Array.isArray(profiles)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  return profiles.reduce<CodingCompanyProfile[]>((normalized, row, index) => {
+    if (!row || typeof row !== "object") {
+      return normalized;
+    }
+    const profile = row as Partial<CodingCompanyProfile>;
+    const fallbackId = `company-profile-${index}`;
+    const id = normalizeCodingProfileId(profile.id, fallbackId);
+    const name = normalizeCodingProfileName(profile.name, `Profile ${index + 1}`);
+    if (seen.has(id)) {
+      return normalized;
+    }
+    seen.add(id);
+    normalized.push({
+      id,
+      name,
+      codingTags: normalizeCodingTags(profile.codingTags),
+      codingMinRating: normalizeCodingMinRating(profile.codingMinRating)
+    });
+    return normalized;
+  }, []);
+}
+
+export function applyCodingCompanyProfile(state: StudyState, profileId: string): StudyState {
+  const profiles = normalizeCodingCompanyProfiles(state.profile.codingProfiles);
+  const profile = profiles.find((candidate) => candidate.id === profileId);
+  if (!profile) {
+    return {
+      ...state,
+      profile: {
+        ...state.profile,
+        codingProfiles: profiles,
+        activeCodingProfileId: normalizeActiveCodingProfileId(state.profile.activeCodingProfileId, profiles)
+      }
+    };
+  }
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      activeCodingProfileId: profile.id,
+      codingMinRating: profile.codingMinRating,
+      codingProfiles: profiles,
+      codingTags: profile.codingTags
+    }
+  };
+}
+
+function normalizeActiveCodingProfileId(profileId: unknown, profiles: unknown) {
+  const normalizedProfiles = normalizeCodingCompanyProfiles(profiles);
+  return typeof profileId === "string" && normalizedProfiles.some((profile) => profile.id === profileId) ? profileId : null;
+}
+
+function normalizeCodingProfileId(value: unknown, fallback: string) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  return raw || fallback;
+}
+
+function normalizeCodingProfileName(value: unknown, fallback: string) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  return (raw || fallback).slice(0, CODING_PROFILE_NAME_MAX_LENGTH);
+}
+
 export function getCodingFilteredQuestions(state: StudyState) {
   const selectedTags = new Set(normalizeCodingTags(state.profile.codingTags));
-  if (!selectedTags.size) {
-    return questions;
-  }
-  const filtered = questions.filter((question) => question.topics.some((topic) => selectedTags.has(topic)));
-  return filtered.length ? filtered : questions;
+  const minRating = normalizeCodingMinRating(state.profile.codingMinRating);
+  const tagFiltered = selectedTags.size
+    ? questions.filter((question) => question.topics.some((topic) => selectedTags.has(topic)))
+    : questions;
+  const filtered = tagFiltered.filter((question) => question.rating >= minRating);
+  return filtered.length ? filtered : tagFiltered.length ? tagFiltered : questions;
 }
 
 function normalizeMetaProgress(progress: Partial<StudyState["profile"]["metaProgress"]> | undefined): StudyState["profile"]["metaProgress"] {
@@ -1046,8 +1130,7 @@ export const isQuestionInRecommendedRange = (state: StudyState, question: Questi
 };
 
 function isQuestionAllowedByCodingTags(state: StudyState, question: Question) {
-  const selectedTags = new Set(normalizeCodingTags(state.profile.codingTags));
-  return !selectedTags.size || question.topics.some((topic) => selectedTags.has(topic));
+  return getCodingFilteredQuestions(state).some((candidate) => candidate.id === question.id);
 }
 
 function isQuestionRecommended(question: Question, maxDifficulty: Question["difficulty"], ratingLimit: number) {

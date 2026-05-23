@@ -2179,11 +2179,12 @@ function pickRoundQuestions(state: StudyState, node: SpireMapNode, seed: number,
 
 function getCodingFilteredQuestions(state: StudyState) {
   const selectedTags = new Set((state.profile.codingTags || []).filter((tag) => typeof tag === "string"));
-  if (!selectedTags.size) {
-    return questions;
-  }
-  const filtered = questions.filter((question) => question.topics.some((topic) => selectedTags.has(topic)));
-  return filtered.length ? filtered : questions;
+  const minRating = Number.isFinite(state.profile.codingMinRating) ? Math.max(0, Math.floor(state.profile.codingMinRating || 0)) : 0;
+  const tagFiltered = selectedTags.size
+    ? questions.filter((question) => question.topics.some((topic) => selectedTags.has(topic)))
+    : questions;
+  const filtered = tagFiltered.filter((question) => question.rating >= minRating);
+  return filtered.length ? filtered : tagFiltered.length ? tagFiltered : questions;
 }
 
 function getQuestionSortValue(node: SpireMapNode, question: Question, targetRating: number, seed: number) { const ratingFit = RATING_FIT_BASE - Math.abs(question.rating - targetRating); const eliteBonus = node.kind === "elite" || node.kind === "boss" ? getUniqueMonsterBonusCount(question) * ELITE_BONUS_SORT_WEIGHT : 0; return ratingFit + eliteBonus + getRoll(`${seed}:${question.id}`); }

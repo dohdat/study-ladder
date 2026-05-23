@@ -1161,6 +1161,9 @@ export default function Home() {
     freshState.profile.trackedAchievementIds = state.profile.trackedAchievementIds;
     freshState.profile.unlockedAchievementIds = state.profile.unlockedAchievementIds;
     freshState.profile.codingTags = state.profile.codingTags;
+    freshState.profile.codingMinRating = state.profile.codingMinRating;
+    freshState.profile.codingProfiles = state.profile.codingProfiles;
+    freshState.profile.activeCodingProfileId = state.profile.activeCodingProfileId;
     freshState.profile.metaProgress = {
       ...state.profile.metaProgress,
       upgrades: { ...state.profile.metaProgress.upgrades }
@@ -1187,7 +1190,7 @@ export default function Home() {
     setRunTone("default");
     setRunStatus("Run ended. Preserved question progress and prepared the next attempt.");
     hints.clearHint();
-  }, [hints, runTimer, state.cards, state.profile.metaProgress, state.profile.spireMinRating, state.profile.spireRun.heatConditions, state.profile.trackedAchievementIds, state.profile.unlockedAchievementIds, state.totalCorrect]);
+  }, [hints, runTimer, state.cards, state.profile.activeCodingProfileId, state.profile.codingMinRating, state.profile.codingProfiles, state.profile.codingTags, state.profile.metaProgress, state.profile.spireMinRating, state.profile.spireRun.heatConditions, state.profile.trackedAchievementIds, state.profile.unlockedAchievementIds, state.totalCorrect]);
   const failQuestionForFocusLoss = useCallback(() => {
     activeRunId.current = null;
     clearRunTimer(runTimer);

@@ -14,6 +14,7 @@ import {
   MAX_CHARACTER_LEVEL,
   MAX_HEALTH,
   MODIFIER_KEYS,
+  applyCodingCompanyProfile,
   applyIncomingDamage,
   applyHealingReceived,
   applyScheduleResult,
@@ -63,6 +64,7 @@ import {
   isQuestionInRecommendedRange,
   isMasteredCard,
   markQuestionRunCode,
+  normalizeCodingMinRating,
   normalizeCodingTags,
   normalizeStudyState,
   pickQuestion,
@@ -297,6 +299,35 @@ describe("studyCore", () => {
     expect(filtered.every((question) => question.topics.includes("Hash Map"))).toBe(true);
     expect(pickQuestion(state, null, false, 1000).topics).toContain("Hash Map");
     expect(isQuestionInRecommendedRange(state, questions.find((question) => !question.topics.includes("Hash Map")) || questions[0], true)).toBe(false);
+  });
+
+  it("filters coding picks by company profile minimum rating", () => {
+    const state = defaultState();
+    state.profile.codingTags = normalizeCodingTags(["Hash Map"]);
+    state.profile.codingMinRating = normalizeCodingMinRating(1500);
+    const filtered = getCodingFilteredQuestions(state);
+
+    expect(filtered.length).toBeGreaterThan(0);
+    expect(filtered.every((question) => question.topics.includes("Hash Map") && question.rating >= 1500)).toBe(true);
+    expect(pickQuestion(state, null, false, 1000).rating).toBeGreaterThanOrEqual(1500);
+    expect(isQuestionInRecommendedRange(state, questions.find((question) => question.topics.includes("Hash Map") && question.rating < 1500) || questions[0], true)).toBe(false);
+  });
+
+  it("applies saved company profiles to coding filters", () => {
+    const state = defaultState();
+    state.profile.codingProfiles = [{
+      id: "roblox",
+      name: "Roblox",
+      codingTags: normalizeCodingTags(["DFS", "BFS"]),
+      codingMinRating: 2000
+    }];
+
+    const applied = applyCodingCompanyProfile(state, "roblox");
+
+    expect(applied.profile.activeCodingProfileId).toBe("roblox");
+    expect(applied.profile.codingTags).toEqual(["DFS", "BFS"]);
+    expect(applied.profile.codingMinRating).toBe(2000);
+    expect(getCodingFilteredQuestions(applied).every((question) => question.rating >= 2000 && question.topics.some((topic) => ["DFS", "BFS"].includes(topic)))).toBe(true);
   });
 
   it("keeps question picks near the player rating", () => {

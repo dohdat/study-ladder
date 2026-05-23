@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Box, Group, MultiSelect, Popover, Text, Tooltip } from "@mantine/core";
-import { IconSettings } from "@tabler/icons-react";
+import { ActionIcon, Badge, Box, Button, Group, MultiSelect, NumberInput, Popover, Stack, Text, TextInput, ThemeIcon, Tooltip } from "@mantine/core";
+import { IconCheck, IconSettings, IconTrash } from "@tabler/icons-react";
 
 import tabSquareBg from "../assets/hero_siege_inventory/tab-square.png";
 import { AchievementTrackerStrip } from "./AchievementTrackerStrip";
@@ -10,11 +10,13 @@ import { UserMenu, USER_MENU_SHORTCUTS } from "./UserMenu";
 import type { UserMenuSection } from "./UserMenu";
 import { STUDY_BLOCKER_MS_PER_MINUTE, useStudyBlockerSettings } from "../hooks/useStudyBlocker";
 import { retargetCurrentSpireRoomQuestions } from "../lib/spireMapCore";
-import { getAvailableCodingTags, normalizeCodingTags } from "../lib/studyCore";
-import type { ActiveWarriorSkillId, StudyState } from "../types/study";
+import { applyCodingCompanyProfile, getAvailableCodingTags, normalizeCodingCompanyProfiles, normalizeCodingMinRating, normalizeCodingTags } from "../lib/studyCore";
+import type { ActiveWarriorSkillId, CodingCompanyProfile, StudyState } from "../types/study";
 import type { CombatImpactVisual } from "./MonsterEncounter";
 
 const PROGRESS_MAX = 100;
+const ICON_SIZE = 16;
+const NO_COMPANY_PROFILE_ID = "__none__";
 const MINUTES_DECIMAL_PLACES = 1;
 const TODAY_PROGRESS_WIDTH = 330;
 const TODAY_PANEL_HEIGHT = 58;
@@ -29,6 +31,13 @@ const TODAY_PROGRESS_FILL = "linear-gradient(180deg, #53b8ff 0%, #167bdd 55%, #0
 const CODING_TAG_PANEL_BG = "linear-gradient(180deg, rgba(25, 10, 8, 0.98), rgba(10, 6, 4, 0.98))";
 const CODING_TAG_PANEL_BORDER = "1px solid rgba(214, 166, 66, 0.82)";
 const CODING_TAG_ICON_SIZE = 24;
+const CODING_MIN_RATING_STEP = 50;
+const COMPANY_PROFILE_ID_RADIX = 36;
+const COMPANY_PROFILE_PANEL_WIDTH = 620;
+const COMPANY_PROFILE_ROW_BG = "linear-gradient(180deg, rgba(35, 19, 12, 0.96), rgba(13, 8, 5, 0.98))";
+const COMPANY_PROFILE_ROW_ACTIVE_BG = "linear-gradient(180deg, rgba(73, 33, 20, 0.98), rgba(24, 11, 7, 0.99))";
+const COMPANY_PROFILE_ROW_BORDER = "1px solid rgba(210, 168, 84, 0.62)";
+type CompanyProfilePanelMode = "select" | "create";
 
 export function AppHeader(props: {
   canRetargetActiveRoom?: boolean;
@@ -94,6 +103,34 @@ export function AppHeader(props: {
 function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
   const [opened, setOpened] = useState(false);
   const codingTagOptions = getAvailableCodingTags().map((tag) => ({ label: tag, value: tag }));
+  const [draftProfiles, setDraftProfiles] = useState<CodingCompanyProfile[]>(() => normalizeCodingCompanyProfiles(props.state.profile.codingProfiles));
+  const [draftActiveProfileId, setDraftActiveProfileId] = useState<string | null>(() => props.state.profile.activeCodingProfileId);
+  const [panelMode, setPanelMode] = useState<CompanyProfilePanelMode>("select");
+  const [profileName, setProfileName] = useState("");
+  const [profileTags, setProfileTags] = useState<string[]>([]);
+  const [profileMinRating, setProfileMinRating] = useState<number | string>(0);
+  const resetDraft = () => {
+    setDraftProfiles(normalizeCodingCompanyProfiles(props.state.profile.codingProfiles));
+    setDraftActiveProfileId(props.state.profile.activeCodingProfileId);
+    setPanelMode("select");
+    setProfileName("");
+    setProfileTags([]);
+    setProfileMinRating(0);
+  };
+  const closeAndReset = () => {
+    resetDraft();
+    setOpened(false);
+  };
+  const confirmDraft = () => {
+    props.setState((previous) => {
+      const withProfiles = { ...previous, profile: { ...previous.profile, codingProfiles: draftProfiles } };
+      const next = draftActiveProfileId
+        ? applyCodingCompanyProfile(withProfiles, draftActiveProfileId)
+        : { ...withProfiles, profile: { ...withProfiles.profile, activeCodingProfileId: null } };
+      return props.canRetargetActiveRoom ? retargetCurrentSpireRoomQuestions(next) : next;
+    });
+    setOpened(false);
+  };
   return (
     <Box
       className="mode-control"
@@ -118,14 +155,24 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
     >
       <HeroSiegeModeSwitch
         codingAccessory={
-          <Popover opened={opened} onChange={setOpened} position="bottom-end" width={360} withArrow shadow="lg">
+          <Popover opened={opened} onChange={(nextOpened) => {
+            if (nextOpened) {
+              resetDraft();
+            }
+            setOpened(nextOpened);
+          }} position="bottom-end" width={COMPANY_PROFILE_PANEL_WIDTH} withArrow shadow="lg">
             <Popover.Target>
-              <Tooltip label="Coding tags" withArrow>
+              <Tooltip label="Company profile" withArrow>
                 <Box
-                  aria-label="Coding tag settings"
+                  aria-label="Company profile settings"
                   className="coding-tag-settings"
                   component="button"
-                  onClick={() => setOpened((current) => !current)}
+                  onClick={() => {
+                    if (!opened) {
+                      resetDraft();
+                    }
+                    setOpened((current) => !current);
+                  }}
                   style={{
                     alignItems: "center",
                     background: "transparent",
@@ -154,18 +201,108 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
               </Tooltip>
             </Popover.Target>
             <Popover.Dropdown style={{ background: CODING_TAG_PANEL_BG, border: CODING_TAG_PANEL_BORDER, boxShadow: HERO_PANEL_SHADOW }}>
-              <MultiSelect
-                clearable
-                data={codingTagOptions}
-                label="Coding tags"
-                placeholder="All coding tags"
-                searchable
-                value={props.state.profile.codingTags}
-                onChange={(value) => props.setState((previous) => {
-                  const next = { ...previous, profile: { ...previous.profile, codingTags: normalizeCodingTags(value) } };
-                  return props.canRetargetActiveRoom ? retargetCurrentSpireRoomQuestions(next) : next;
-                })}
-              />
+              <Stack gap="sm">
+                {panelMode === "select" ? (
+                  <>
+                    <Group justify="space-between" align="center">
+                      <Text size="sm" fw={700}>Apply company profile</Text>
+                      <Group gap="xs">
+                        <Badge variant="light">{getCompanyProfileSummary({ activeProfileId: draftActiveProfileId, profiles: draftProfiles })}</Badge>
+                        <Button size="xs" variant="light" onClick={() => setPanelMode("create")}>Add profile</Button>
+                      </Group>
+                    </Group>
+                    {draftProfiles.length > 0 ? (
+                      <Stack gap="xs">
+                        <CompanyProfileRow
+                          selected={draftActiveProfileId === null}
+                          profile={{
+                            id: NO_COMPANY_PROFILE_ID,
+                            name: "No profile",
+                            codingTags: [],
+                            codingMinRating: 0
+                          }}
+                          onDelete={undefined}
+                          onSelect={() => setDraftActiveProfileId(null)}
+                        />
+                        {draftProfiles.map((profile) => (
+                          <CompanyProfileRow
+                            key={profile.id}
+                            selected={draftActiveProfileId === profile.id}
+                            profile={profile}
+                            onDelete={() => {
+                              setDraftProfiles((current) => current.filter((candidate) => candidate.id !== profile.id));
+                              if (draftActiveProfileId === profile.id) {
+                                setDraftActiveProfileId(null);
+                              }
+                            }}
+                            onSelect={() => setDraftActiveProfileId(profile.id)}
+                          />
+                        ))}
+                      </Stack>
+                    ) : (
+                      <Box style={{ border: COMPANY_PROFILE_ROW_BORDER, padding: "12px 10px" }}>
+                        <Text size="sm" c="dimmed">No saved profiles</Text>
+                      </Box>
+                    )}
+                    <Group justify="flex-end" mt="xs">
+                      <Button variant="default" onClick={closeAndReset}>Cancel</Button>
+                      <Button onClick={confirmDraft}>Confirm</Button>
+                    </Group>
+                  </>
+                ) : (
+                  <>
+                    <Text size="sm" fw={700}>Add company profile</Text>
+                    <TextInput
+                      label="Profile name"
+                      placeholder="Roblox"
+                      value={profileName}
+                      onChange={(event) => setProfileName(event.currentTarget.value)}
+                    />
+                    <MultiSelect
+                      clearable
+                      data={codingTagOptions}
+                      label="Tags"
+                      placeholder="All coding tags"
+                      searchable
+                      value={profileTags}
+                      onChange={(value) => setProfileTags(normalizeCodingTags(value))}
+                    />
+                    <NumberInput
+                      allowDecimal={false}
+                      label="Minimum rating"
+                      min={0}
+                      step={CODING_MIN_RATING_STEP}
+                      value={profileMinRating}
+                      onChange={(value) => setProfileMinRating(value)}
+                    />
+                    <Group justify="flex-end" gap="xs" mt="xs">
+                      <Button
+                        variant="default"
+                        onClick={() => {
+                          setPanelMode("select");
+                          setProfileName("");
+                          setProfileTags([]);
+                          setProfileMinRating(0);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          const saved = createCodingCompanyProfile(profileName, profileTags, profileMinRating);
+                          setDraftProfiles((current) => [...current.filter((profile) => profile.id !== saved.id), saved]);
+                          setPanelMode("select");
+                          setProfileName("");
+                          setProfileTags([]);
+                          setProfileMinRating(0);
+                        }}
+                      >
+                        Save profile
+                      </Button>
+                    </Group>
+                  </>
+                )}
+              </Stack>
             </Popover.Dropdown>
           </Popover>
         }
@@ -174,6 +311,94 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
       />
     </Box>
   );
+}
+
+function createCodingCompanyProfile(name: string, codingTags: string[], minRating: string | number): CodingCompanyProfile {
+  return {
+    id: `company-profile-${Date.now().toString(COMPANY_PROFILE_ID_RADIX)}`,
+    name: name.trim() || "Company profile",
+    codingTags: normalizeCodingTags(codingTags),
+    codingMinRating: normalizeCodingMinRating(minRating)
+  };
+}
+
+function CompanyProfileRow(props: { onDelete?: () => void; onSelect: () => void; profile: CodingCompanyProfile; selected: boolean }) {
+  return (
+    <Box
+      aria-label={`Select ${props.profile.name} company profile`}
+      component="div"
+      onClick={props.onSelect}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          props.onSelect();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      style={getCompanyProfileRowStyle(props.selected)}
+    >
+      <Group justify="space-between" wrap="nowrap">
+        <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+          <ThemeIcon size={26} radius={0} color={props.selected ? "yellow" : "dark"} variant={props.selected ? "light" : "outline"}>
+            {props.selected ? <IconCheck size={ICON_SIZE} /> : null}
+          </ThemeIcon>
+          <Box style={{ minWidth: 0 }}>
+            <Group gap="xs" wrap="nowrap">
+              <Text size="sm" fw={800} truncate>{props.profile.name}</Text>
+              {props.selected && <Badge size="xs" variant="light" color="yellow">Selected</Badge>}
+            </Group>
+            <Text size="xs" c="dimmed" truncate>{getCodingProfileSummary(props.profile)}</Text>
+          </Box>
+        </Group>
+        {props.onDelete ? (
+          <ActionIcon
+            aria-label={`Delete ${props.profile.name}`}
+            color="red"
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onDelete?.();
+            }}
+            variant="subtle"
+          >
+            <IconTrash size={ICON_SIZE} />
+          </ActionIcon>
+        ) : (
+          <Box style={{ width: 28 }} />
+        )}
+      </Group>
+    </Box>
+  );
+}
+
+function getCompanyProfileRowStyle(active: boolean): React.CSSProperties {
+  return {
+    background: active ? COMPANY_PROFILE_ROW_ACTIVE_BG : COMPANY_PROFILE_ROW_BG,
+    border: active ? "1px solid rgba(246, 211, 112, 0.82)" : COMPANY_PROFILE_ROW_BORDER,
+    boxShadow: active ? "inset 0 0 0 1px rgba(0, 0, 0, 0.82), 0 0 12px rgba(246, 211, 112, 0.12)" : "inset 0 0 0 1px rgba(0, 0, 0, 0.72)",
+    color: HERO_TEXT,
+    cursor: "pointer",
+    display: "block",
+    padding: "9px 10px",
+    textAlign: "left",
+    width: "100%"
+  };
+}
+
+function getCompanyProfileSummary(props: { activeProfileId: string | null; profiles: CodingCompanyProfile[] }) {
+  const activeProfile = props.profiles.find((profile) => profile.id === props.activeProfileId);
+  if (activeProfile) {
+    return activeProfile.name;
+  }
+  return "No profile";
+}
+
+function getCodingProfileSummary(profile: CodingCompanyProfile) {
+  if (profile.id === NO_COMPANY_PROFILE_ID) {
+    return "Use custom filters without a saved company profile";
+  }
+  const minRating = normalizeCodingMinRating(profile.codingMinRating);
+  return `${profile.codingTags.length ? profile.codingTags.join(", ") : "All tags"} | ${minRating ? `${minRating}+` : "Any rating"}`;
 }
 
 function isEditableShortcutTarget(target: EventTarget | null) {
