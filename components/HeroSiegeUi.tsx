@@ -14,7 +14,7 @@ const HERO_BUTTON_HEIGHT = 35;
 const HERO_BUTTON_MIN_WIDTH = 92;
 const HERO_TAB_HEIGHT = 33;
 const HERO_TAB_WIDTH = 96;
-const CODING_TAB_WITH_ACCESSORY_WIDTH = 128;
+const CODING_TAB_WITH_ACCESSORY_WIDTH = 192;
 const SYSTEM_TAB_WIDTH = 150;
 const HERO_BUTTON_TEXT_SHADOW = "0 2px 0 #000";
 const HERO_BUTTON_FILTER = "drop-shadow(0 4px 8px rgba(0, 0, 0, 0.32))";
@@ -147,11 +147,11 @@ export function HeroSiegeTabButton(props: HeroSiegeTabButtonProps) {
   );
 }
 
-export function HeroSiegeModeSwitch(props: { codingAccessory?: React.ReactNode; mode: string; onChange: (mode: "leetcode" | "system") => void }) {
+export function HeroSiegeModeSwitch(props: { codingAccessory?: React.ReactNode; codingLabel?: string; mode: string; onChange: (mode: "leetcode" | "system") => void }) {
   return (
     <Group gap={0} wrap="nowrap">
       <Box style={{ position: "relative" }}>
-        <HeroSiegeTabButton active={props.mode === "leetcode"} onClick={() => props.onChange("leetcode")} width={props.codingAccessory ? CODING_TAB_WITH_ACCESSORY_WIDTH : undefined}>Coding</HeroSiegeTabButton>
+        <HeroSiegeTabButton active={props.mode === "leetcode"} onClick={() => props.onChange("leetcode")} width={props.codingAccessory ? CODING_TAB_WITH_ACCESSORY_WIDTH : undefined}>{props.codingLabel || "Coding"}</HeroSiegeTabButton>
         {props.codingAccessory}
       </Box>
       <HeroSiegeTabButton active={props.mode === "system"} onClick={() => props.onChange("system")} width={SYSTEM_TAB_WIDTH}>System Design</HeroSiegeTabButton>

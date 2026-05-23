@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ActionIcon, Badge, Box, Button, Group, MultiSelect, NumberInput, Popover, Stack, Text, TextInput, ThemeIcon, Tooltip } from "@mantine/core";
-import { IconCheck, IconSettings, IconTrash } from "@tabler/icons-react";
+import { IconCheck, IconPencil, IconSettings, IconTrash } from "@tabler/icons-react";
 
 import tabSquareBg from "../assets/hero_siege_inventory/tab-square.png";
 import { AchievementTrackerStrip } from "./AchievementTrackerStrip";
@@ -37,7 +37,7 @@ const COMPANY_PROFILE_PANEL_WIDTH = 620;
 const COMPANY_PROFILE_ROW_BG = "linear-gradient(180deg, rgba(35, 19, 12, 0.96), rgba(13, 8, 5, 0.98))";
 const COMPANY_PROFILE_ROW_ACTIVE_BG = "linear-gradient(180deg, rgba(73, 33, 20, 0.98), rgba(24, 11, 7, 0.99))";
 const COMPANY_PROFILE_ROW_BORDER = "1px solid rgba(210, 168, 84, 0.62)";
-type CompanyProfilePanelMode = "select" | "create";
+type CompanyProfilePanelMode = "select" | "create" | "edit";
 
 export function AppHeader(props: {
   canRetargetActiveRoom?: boolean;
@@ -103,9 +103,11 @@ export function AppHeader(props: {
 function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
   const [opened, setOpened] = useState(false);
   const codingTagOptions = getAvailableCodingTags().map((tag) => ({ label: tag, value: tag }));
+  const activeProfileName = getActiveCodingProfileName(props.state);
   const [draftProfiles, setDraftProfiles] = useState<CodingCompanyProfile[]>(() => normalizeCodingCompanyProfiles(props.state.profile.codingProfiles));
   const [draftActiveProfileId, setDraftActiveProfileId] = useState<string | null>(() => props.state.profile.activeCodingProfileId);
   const [panelMode, setPanelMode] = useState<CompanyProfilePanelMode>("select");
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [profileName, setProfileName] = useState("");
   const [profileTags, setProfileTags] = useState<string[]>([]);
   const [profileMinRating, setProfileMinRating] = useState<number | string>(0);
@@ -113,6 +115,7 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
     setDraftProfiles(normalizeCodingCompanyProfiles(props.state.profile.codingProfiles));
     setDraftActiveProfileId(props.state.profile.activeCodingProfileId);
     setPanelMode("select");
+    setEditingProfileId(null);
     setProfileName("");
     setProfileTags([]);
     setProfileMinRating(0);
@@ -154,6 +157,7 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
       }}
     >
       <HeroSiegeModeSwitch
+        codingLabel={activeProfileName ? `Coding: ${activeProfileName}` : "Coding"}
         codingAccessory={
           <Popover opened={opened} onChange={(nextOpened) => {
             if (nextOpened) {
@@ -235,6 +239,13 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
                                 setDraftActiveProfileId(null);
                               }
                             }}
+                            onEdit={() => {
+                              setEditingProfileId(profile.id);
+                              setPanelMode("edit");
+                              setProfileName(profile.name);
+                              setProfileTags(profile.codingTags);
+                              setProfileMinRating(profile.codingMinRating);
+                            }}
                             onSelect={() => setDraftActiveProfileId(profile.id)}
                           />
                         ))}
@@ -251,7 +262,7 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
                   </>
                 ) : (
                   <>
-                    <Text size="sm" fw={700}>Add company profile</Text>
+                    <Text size="sm" fw={700}>{panelMode === "edit" ? "Edit company profile" : "Add company profile"}</Text>
                     <TextInput
                       label="Profile name"
                       placeholder="Roblox"
@@ -280,6 +291,7 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
                         variant="default"
                         onClick={() => {
                           setPanelMode("select");
+                          setEditingProfileId(null);
                           setProfileName("");
                           setProfileTags([]);
                           setProfileMinRating(0);
@@ -289,15 +301,16 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
                       </Button>
                       <Button
                         onClick={() => {
-                          const saved = createCodingCompanyProfile(profileName, profileTags, profileMinRating);
+                          const saved = createCodingCompanyProfile(profileName, profileTags, profileMinRating, editingProfileId);
                           setDraftProfiles((current) => [...current.filter((profile) => profile.id !== saved.id), saved]);
                           setPanelMode("select");
+                          setEditingProfileId(null);
                           setProfileName("");
                           setProfileTags([]);
                           setProfileMinRating(0);
                         }}
                       >
-                        Save profile
+                        {panelMode === "edit" ? "Save changes" : "Save profile"}
                       </Button>
                     </Group>
                   </>
@@ -313,16 +326,16 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
   );
 }
 
-function createCodingCompanyProfile(name: string, codingTags: string[], minRating: string | number): CodingCompanyProfile {
+function createCodingCompanyProfile(name: string, codingTags: string[], minRating: string | number, existingId?: string | null): CodingCompanyProfile {
   return {
-    id: `company-profile-${Date.now().toString(COMPANY_PROFILE_ID_RADIX)}`,
+    id: existingId || `company-profile-${Date.now().toString(COMPANY_PROFILE_ID_RADIX)}`,
     name: name.trim() || "Company profile",
     codingTags: normalizeCodingTags(codingTags),
     codingMinRating: normalizeCodingMinRating(minRating)
   };
 }
 
-function CompanyProfileRow(props: { onDelete?: () => void; onSelect: () => void; profile: CodingCompanyProfile; selected: boolean }) {
+function CompanyProfileRow(props: { onDelete?: () => void; onEdit?: () => void; onSelect: () => void; profile: CodingCompanyProfile; selected: boolean }) {
   return (
     <Box
       aria-label={`Select ${props.profile.name} company profile`}
@@ -351,20 +364,37 @@ function CompanyProfileRow(props: { onDelete?: () => void; onSelect: () => void;
             <Text size="xs" c="dimmed" truncate>{getCodingProfileSummary(props.profile)}</Text>
           </Box>
         </Group>
-        {props.onDelete ? (
-          <ActionIcon
-            aria-label={`Delete ${props.profile.name}`}
-            color="red"
-            onClick={(event) => {
-              event.stopPropagation();
-              props.onDelete?.();
-            }}
-            variant="subtle"
-          >
-            <IconTrash size={ICON_SIZE} />
-          </ActionIcon>
+        {props.onDelete || props.onEdit ? (
+          <Group gap={4} wrap="nowrap">
+            {props.onEdit && (
+              <ActionIcon
+                aria-label={`Edit ${props.profile.name}`}
+                color="blue"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  props.onEdit?.();
+                }}
+                variant="subtle"
+              >
+                <IconPencil size={ICON_SIZE} />
+              </ActionIcon>
+            )}
+            {props.onDelete && (
+              <ActionIcon
+                aria-label={`Delete ${props.profile.name}`}
+                color="red"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  props.onDelete?.();
+                }}
+                variant="subtle"
+              >
+                <IconTrash size={ICON_SIZE} />
+              </ActionIcon>
+            )}
+          </Group>
         ) : (
-          <Box style={{ width: 28 }} />
+          <Box style={{ width: 60 }} />
         )}
       </Group>
     </Box>
@@ -399,6 +429,10 @@ function getCodingProfileSummary(profile: CodingCompanyProfile) {
   }
   const minRating = normalizeCodingMinRating(profile.codingMinRating);
   return `${profile.codingTags.length ? profile.codingTags.join(", ") : "All tags"} | ${minRating ? `${minRating}+` : "Any rating"}`;
+}
+
+function getActiveCodingProfileName(state: StudyState) {
+  return state.profile.codingProfiles.find((profile) => profile.id === state.profile.activeCodingProfileId)?.name || "";
 }
 
 function isEditableShortcutTarget(target: EventTarget | null) {
