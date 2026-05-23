@@ -30,6 +30,7 @@ for (const requiredPath of [
   path.join(repoRoot, "pages", "reload.js"),
   path.join(repoRoot, "pages", "sandbox.html"),
   path.join(repoRoot, "pages", "sandbox.js"),
+  path.join(repoRoot, "pages", "vendor"),
   path.join(repoRoot, "public", "icons"),
   path.join(repoRoot, "out")
 ]) {
@@ -48,6 +49,7 @@ copyFile(path.join(repoRoot, "background.js"), path.join(targetRoot, "background
 for (const fileName of ["index.html", "profile.html", "reload.html", "reload.js", "sandbox.html", "sandbox.js"]) {
   copyFile(path.join(repoRoot, "pages", fileName), path.join(targetRoot, "pages", fileName));
 }
+copyDirectory(path.join(repoRoot, "pages", "vendor"), path.join(targetRoot, "pages", "vendor"));
 copyDirectory(path.join(repoRoot, "public", "icons"), path.join(targetRoot, "public", "icons"));
 copyDirectory(path.join(repoRoot, "out"), path.join(targetRoot, "out"));
 

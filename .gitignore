@@ -6,6 +6,7 @@ dist-unpacked/
 .vite-dev.err.log
 coverage/
 public/monaco/
+pages/vendor/
 public/hero_siege_yytex_atlases/
 tsconfig.tsbuildinfo
 .env*

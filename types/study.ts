@@ -6,6 +6,14 @@ export type TestCase = {
   expected: unknown;
 };
 
+export type FrontendCheck = {
+  name: string;
+  selector?: string;
+  textIncludes?: string;
+  type: "clickCount" | "clickText" | "count" | "exists" | "inputText";
+  value?: number | string;
+};
+
 export type Question = {
   id: string;
   title: string;
@@ -16,6 +24,13 @@ export type Question = {
   prompt: string;
   constraints: string[];
   starter: string;
+  frontend?: {
+    checks: FrontendCheck[];
+    files: {
+      "App.tsx": string;
+      "styles.css": string;
+    };
+  };
   hint?: string;
   examples: Array<{
     explanation?: string;

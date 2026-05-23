@@ -100,6 +100,7 @@ describe("question bank", () => {
 
   it("keeps every question covered by at least ten runner test cases", () => {
     const underCovered = questions
+      .filter((question) => !question.frontend)
       .filter((question) => question.tests.length < MIN_TEST_CASES_PER_QUESTION)
       .map((question) => `${question.id}: ${question.tests.length}`);
 
@@ -141,8 +142,9 @@ describe("question bank", () => {
 
   it("keeps primary topic distribution close to interview prep weights", () => {
     const distribution = new Map<string, number>();
+    const codingQuestions = questions.filter((question) => !question.frontend);
     const targetBuckets = new Set<string>(TARGET_TOPIC_DISTRIBUTION.map(([bucket]) => bucket));
-    for (const question of questions) {
+    for (const question of codingQuestions) {
       const bucket = TOPIC_BUCKETS[question.topics[0]] || question.topics[0];
       distribution.set(bucket, (distribution.get(bucket) || 0) + 1);
     }
@@ -150,7 +152,7 @@ describe("question bank", () => {
     const unexpectedBuckets = [...distribution.keys()].filter((bucket) => !targetBuckets.has(bucket));
     const outOfRange = TARGET_TOPIC_DISTRIBUTION
       .map(([bucket, targetPercent]) => {
-        const actualPercent = ((distribution.get(bucket) || 0) / questions.length) * 100;
+        const actualPercent = ((distribution.get(bucket) || 0) / codingQuestions.length) * 100;
         return { actualPercent, bucket, targetPercent };
       })
       .filter(({ actualPercent, targetPercent }) => Math.abs(actualPercent - targetPercent) > TOPIC_DISTRIBUTION_TOLERANCE_PERCENT)

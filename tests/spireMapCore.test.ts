@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
 import { buyShopItem } from "../lib/shopCore";
-import { advanceSpireNode, attuneRestSiteRelic, canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, isSpireHeatSetupOpen, isSpireRunSetupOpen, leaveSpireRoom, normalizeSpireRun, selectPendingRelicReward, selectSpireNode, setSpireHeatConditionRank, skipPendingRelicReward, smithSpireNode, SPIRE_RATINGS, startSpireHeatRun, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
+import { advanceSpireNode, attuneRestSiteRelic, canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, isSpireHeatSetupOpen, isSpireRunSetupOpen, leaveSpireRoom, normalizeSpireRun, retargetCurrentSpireRoomQuestions, selectPendingRelicReward, selectSpireNode, setSpireHeatConditionRank, skipPendingRelicReward, smithSpireNode, SPIRE_RATINGS, startSpireHeatRun, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
 import { EXPERIENCE_PER_LEVEL, defaultState, getMaxHealth, getMaxMana } from "../lib/studyCore";
 import type { SpireCombatRewardKind, SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
 
@@ -333,6 +333,20 @@ describe("spireMapCore", () => {
 
     expect(roomQuestions.length).toBeGreaterThan(0);
     expect(roomQuestions.every((question) => question?.topics.includes("Hash Map"))).toBe(true);
+  });
+
+  it("retargets an unstarted combat room when coding tags change", () => {
+    let state = defaultState();
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
+    const nodeId = state.profile.spireRun.availableNodeIds[0];
+    state = enterSpireNode(selectSpireNode(state, nodeId), 1000);
+
+    state = retargetCurrentSpireRoomQuestions({ ...state, profile: { ...state.profile, codingTags: ["Frontend"] } }, 2000);
+    const roomQuestions = state.profile.spireRun.roundQuestionIds.map((id) => questions.find((question) => question.id === id));
+
+    expect(roomQuestions.length).toBeGreaterThan(0);
+    expect(state.currentId).toBe(state.profile.spireRun.roundQuestionIds[0]);
+    expect(roomQuestions.every((question) => question?.topics.includes("Frontend"))).toBe(true);
   });
 
   it("clears room-scoped relic combat state when leaving a room", () => {

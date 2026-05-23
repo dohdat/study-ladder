@@ -23,6 +23,7 @@ import MonacoEditor, { type OnMount } from "@monaco-editor/react";
 import { HeroSiegeButton } from "./HeroSiegeUi";
 import { HighlightedCode } from "./HighlightedCode";
 import { MonsterEncounter, type MonsterDamagePop } from "./MonsterEncounter";
+import { FRONTEND_APP_FILE, FRONTEND_CSS_FILE, type FrontendFileName, createInitialQuestionDraft, isFrontendChallenge, parseFrontendDraft, serializeFrontendDraft } from "../lib/frontendChallenge";
 import {
   CODEX_EXAMPLE_EXPLANATION_CHUNK,
   CODEX_EXAMPLE_EXPLANATION_DONE,
@@ -34,6 +35,7 @@ import {
   type CodexExampleExplanationStreamMessage
 } from "../lib/hintPrompt";
 import { difficultyLabels, getVisibleQuestionTopics } from "../lib/studyCore";
+import { RUNNER_FRAME } from "../lib/practiceStatus";
 import type { ActiveWarriorSkillId, ConsoleRunResult, Question, RunResult, StudyState } from "../types/study";
 
 const ICON_XS = 12;
@@ -127,6 +129,7 @@ type EditorProps = {
   timerColor: string;
   timerLabel: string;
   timeUsedPercent: number;
+  runnerFrame: React.MutableRefObject<HTMLIFrameElement | null>;
 };
 
 export function PracticeArea(props: {
@@ -385,14 +388,32 @@ function isFlatJsonArray(value: unknown[]) {
 }
 
 function EditorCard(props: EditorProps & { actions: PracticePanelActions; currentQuestion: Question; state: StudyState }) {
+  const frontend = isFrontendChallenge(props.currentQuestion);
+  const [activeFile, setActiveFile] = useState<FrontendFileName>(FRONTEND_APP_FILE);
+  useEffect(() => {
+    setActiveFile(FRONTEND_APP_FILE);
+  }, [props.currentQuestion.id]);
+  const frontendFiles = frontend ? parseFrontendDraft(props.currentQuestion, props.code) : null;
+  const editorValue = frontendFiles ? frontendFiles[activeFile] : props.code;
+  const editorLanguage = frontend ? activeFile === FRONTEND_CSS_FILE ? "css" : "typescript" : "javascript";
+  const editorPath = frontend ? `file:///${activeFile}` : undefined;
+  const updateEditorDraft = (value: string) => {
+    if (!frontendFiles) {
+      props.actions.updateDraft(value);
+      return;
+    }
+    props.actions.updateDraft(serializeFrontendDraft({ ...frontendFiles, [activeFile]: value }));
+  };
   return (
     <Card withBorder p={0}>
-      <EditorToolbar {...props} />
+      <EditorToolbar {...props} frontend={frontend} />
+      {frontendFiles && <FrontendFileTabs activeFile={activeFile} setActiveFile={setActiveFile} />}
       <Progress value={props.timeUsedPercent} color={props.timerColor} radius={0} />
       <Box h={EDITOR_HEIGHT} pos="relative">
-        <MonacoEditor height={`${EDITOR_HEIGHT}px`} language="javascript" theme="vs-dark" value={props.code} onChange={(value) => props.actions.updateDraft(value || "")} onMount={props.actions.handleEditorMount} options={{ minimap: { enabled: false }, fontSize: EDITOR_FONT_SIZE, tabSize: TAB_SIZE, wordWrap: "on", scrollBeyondLastLine: false, automaticLayout: true, formatOnPaste: true, formatOnType: true, quickSuggestions: false, suggestOnTriggerCharacters: false, parameterHints: { enabled: false }, readOnly: !props.sessionStarted, readOnlyMessage: EDITOR_READ_ONLY_MESSAGE }} />
+        <MonacoEditor height={`${EDITOR_HEIGHT}px`} language={editorLanguage} path={editorPath} theme="vs-dark" value={editorValue} onChange={(value) => updateEditorDraft(value || "")} onMount={props.actions.handleEditorMount} options={{ minimap: { enabled: false }, fontSize: EDITOR_FONT_SIZE, tabSize: TAB_SIZE, wordWrap: "on", scrollBeyondLastLine: false, automaticLayout: true, formatOnPaste: true, formatOnType: true, quickSuggestions: false, suggestOnTriggerCharacters: false, parameterHints: { enabled: false }, readOnly: !props.sessionStarted, readOnlyMessage: EDITOR_READ_ONLY_MESSAGE }} />
         {!props.sessionStarted && <LockedEditorOverlay />}
       </Box>
+      <RunnerFrame frameRef={props.runnerFrame} visible={frontend} />
       <Paper radius={0} p="sm" bg={`${props.statusColor}.0`}>
         <Text size="sm" c={`${props.statusColor}.8`} style={{ whiteSpace: "pre-wrap" }}>{props.runStatus}</Text>
       </Paper>
@@ -400,6 +421,31 @@ function EditorCard(props: EditorProps & { actions: PracticePanelActions; curren
       <ConsoleOutputPanel code={props.code} currentQuestion={props.currentQuestion} markSolutionRevealed={props.actions.markSolutionRevealed} result={props.consoleRunResult} />
       <TestResults results={props.results} />
     </Card>
+  );
+}
+
+function FrontendFileTabs(props: { activeFile: FrontendFileName; setActiveFile: (file: FrontendFileName) => void }) {
+  return (
+    <Group gap="xs" px="sm" pb="sm">
+      {([FRONTEND_APP_FILE, FRONTEND_CSS_FILE] as FrontendFileName[]).map((file) => (
+        <HeroSiegeButton key={file} active={props.activeFile === file} minWidth={96} onClick={() => props.setActiveFile(file)}>
+          {file}
+        </HeroSiegeButton>
+      ))}
+    </Group>
+  );
+}
+
+function RunnerFrame(props: { frameRef: React.MutableRefObject<HTMLIFrameElement | null>; visible: boolean }) {
+  return (
+    <Box style={props.visible ? { background: "#0f172a", borderTop: "1px solid rgba(255, 255, 255, 0.14)", height: 360 } : { height: 0, overflow: "hidden" }}>
+      <iframe
+        ref={props.frameRef}
+        src={RUNNER_FRAME}
+        title={props.visible ? "Frontend preview" : "JavaScript runner"}
+        style={{ border: 0, display: "block", height: props.visible ? "100%" : 0, width: "100%" }}
+      />
+    </Box>
   );
 }
 
@@ -428,7 +474,7 @@ function LockedEditorOverlay() {
   );
 }
 
-function EditorToolbar(props: Parameters<typeof EditorCard>[0]) {
+function EditorToolbar(props: Parameters<typeof EditorCard>[0] & { frontend: boolean }) {
   return (
     <Group justify="space-between" p="sm">
       <Group gap="xs">
@@ -443,7 +489,7 @@ function EditorToolbar(props: Parameters<typeof EditorCard>[0]) {
   );
 }
 
-function SetupToolbarActions(props: Parameters<typeof EditorCard>[0]) {
+function SetupToolbarActions(props: Parameters<typeof EditorCard>[0] & { frontend: boolean }) {
   const startDisabled = props.sessionStarted || !props.questionVariantReady;
   return (
     <>
@@ -453,11 +499,13 @@ function SetupToolbarActions(props: Parameters<typeof EditorCard>[0]) {
         </Box>
       </Tooltip>
       <Tooltip label="Restore the starter code" withArrow>
-        <HeroSiegeButton leftSection={<IconRefresh size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.updateDraft(props.currentQuestion.starter)}>Reset</HeroSiegeButton>
+        <HeroSiegeButton leftSection={<IconRefresh size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.updateDraft(createInitialQuestionDraft(props.currentQuestion))}>Reset</HeroSiegeButton>
       </Tooltip>
-      <Tooltip label="Format JavaScript code (Ctrl+S)" withArrow>
-        <HeroSiegeButton leftSection={<IconWand size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.beautifyCurrentCode()}>Beautify</HeroSiegeButton>
-      </Tooltip>
+      {!props.frontend ? (
+        <Tooltip label="Format JavaScript code (Ctrl+S)" withArrow>
+          <HeroSiegeButton leftSection={<IconWand size={ICON_SM} />} disabled={!props.sessionStarted} onClick={() => props.actions.beautifyCurrentCode()}>Beautify</HeroSiegeButton>
+        </Tooltip>
+      ) : null}
       {!props.hintDisabled ? (
         <Tooltip label={props.hintCost > 0 ? `Buy one next-step hint for ${props.hintCost} gold` : "Use your free room hint"} withArrow>
           <Box component="span">
@@ -469,14 +517,14 @@ function SetupToolbarActions(props: Parameters<typeof EditorCard>[0]) {
   );
 }
 
-function RunToolbarActions(props: Parameters<typeof EditorCard>[0]) {
+function RunToolbarActions(props: Parameters<typeof EditorCard>[0] & { frontend: boolean }) {
   const disabled = !props.runnerReady || props.questionFinished || !props.sessionStarted || props.timeRemainingMs <= 0;
   return (
     <>
       {!props.runCodeDisabled ? (
-        <Tooltip label="Run code and show console.log output (Ctrl+')" withArrow>
+        <Tooltip label={props.frontend ? "Render the React preview" : "Run code and show console.log output (Ctrl+')"} withArrow>
           <Box component="span">
-            <HeroSiegeButton leftSection={<IconTerminal2 size={ICON_SM} />} loading={props.running} disabled={disabled} onClick={props.actions.runCode}>Run</HeroSiegeButton>
+            <HeroSiegeButton leftSection={<IconTerminal2 size={ICON_SM} />} loading={props.running} disabled={disabled} onClick={props.actions.runCode}>{props.frontend ? "Preview" : "Run"}</HeroSiegeButton>
           </Box>
         </Tooltip>
       ) : null}
@@ -885,6 +933,9 @@ function getArgumentNames(question: Question) {
 function QuestionFunctionBadge(props: { currentQuestion: Question; sessionStarted: boolean }) {
   if (!props.sessionStarted) {
     return <Badge leftSection={<IconLock size={ICON_XS} />} variant="light">Question locked</Badge>;
+  }
+  if (isFrontendChallenge(props.currentQuestion)) {
+    return <Badge leftSection={<IconCode size={ICON_XS} />} variant="light">React / TypeScript</Badge>;
   }
   return <Badge leftSection={<IconCode size={ICON_XS} />} variant="light">{props.currentQuestion.functionName}()</Badge>;
 }

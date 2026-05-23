@@ -1415,6 +1415,34 @@ export function enterSpireNode(state: StudyState, now = Date.now()) {
 
 export function isCombatNode(node: SpireMapNode | undefined) { return Boolean(node && (node.kind === "enemy" || node.kind === "elite" || node.kind === "boss")); }
 
+export function retargetCurrentSpireRoomQuestions(state: StudyState, now = Date.now()) {
+  const node = getCurrentSpireNode(state);
+  if (state.profile.spireRun.mapOpen || !isCombatNode(node) || !state.profile.spireRun.roundQuestionIds.length || state.profile.spireRun.roundSolvedIds.length) {
+    return state;
+  }
+  const roundQuestionIds = pickRoundQuestions(state, node, state.profile.spireRun.mapSeed + now, [], state.profile.spireRun.roundQuestionIds.length);
+  if (!roundQuestionIds.length || areStringArraysEqual(roundQuestionIds, state.profile.spireRun.roundQuestionIds)) {
+    return state;
+  }
+  return {
+    ...state,
+    currentId: roundQuestionIds[0],
+    profile: {
+      ...state.profile,
+      spireRun: {
+        ...state.profile.spireRun,
+        roundQuestionIds,
+        roundSolvedIds: [],
+        runCodeQuestionIds: []
+      }
+    }
+  };
+}
+
+function areStringArraysEqual(left: string[], right: string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
 function revealUnknownSpireNode(state: StudyState, node: SpireMapNode, now: number) {
   const encounter = rollUnknownEncounter(state, node, now);
   const withMisses = updateUnknownEncounterMisses(state, encounter);

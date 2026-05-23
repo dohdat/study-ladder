@@ -29,6 +29,7 @@ import {
 } from "../lib/studyCore";
 import { CODEX_QUESTION_VARIANT_CHUNK, CODEX_QUESTION_VARIANT_DONE, CODEX_QUESTION_VARIANT_ERROR, createHintPrompt, requestCodexQuestionVariant } from "../lib/hintPrompt";
 import { createLocalHint } from "../lib/localHint";
+import { createInitialQuestionDraft, isFrontendChallenge, parseFrontendDraft } from "../lib/frontendChallenge";
 import { RUNNER_FRAME, STATUS_COLOR, type StatusTone } from "../lib/practiceStatus";
 import { createQuestionVariantPrompt, createQuestionVariantRepairPrompt, createQuestionVariantResult } from "../lib/questionVariant";
 import { migrateLocalStorageState, saveStudyState } from "../lib/studyDb";
@@ -76,7 +77,7 @@ function useHydrateStudy(setState: (state: StudyState) => void, setQuestion: (qu
       if (active) {
         setState({ ...saved, currentId: initialQuestion.id });
         setQuestion(initialQuestion);
-        setCode(initialQuestion.starter);
+        setCode(createInitialQuestionDraft(initialQuestion));
         setHydrated(true);
       }
     }
@@ -86,7 +87,7 @@ function useHydrateStudy(setState: (state: StudyState) => void, setQuestion: (qu
       if (active) {
         setState(saved);
         setQuestion(initialQuestion);
-        setCode(initialQuestion.starter);
+        setCode(createInitialQuestionDraft(initialQuestion));
         setHydrated(true);
       }
     });
@@ -259,6 +260,13 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
     }
     params.showHealthLoss(healthLoss, attack.hitCount);
     params.setState((previous) => applyHealthPenalty(previous, attack.damage, attack.manaDamage, question.id, params.code, now, attack.element));
+    if (isFrontendChallenge(question)) {
+      params.setResults([]);
+      params.setConsoleRunResult({ ok: false, output: [], results: message.results, runtimeMs: message.runtimeMs });
+      params.setTone("fail");
+      params.setStatus(getFailStatus(attack));
+      return;
+    }
     const submitResult = createHiddenSubmitResult(params.state, message.results, message.runtimeMs);
     params.setResults([]);
     params.setConsoleRunResult(submitResult);
@@ -328,7 +336,7 @@ function finishPassedSubmit(params: Parameters<typeof useRunnerMessages>[0], que
   params.showRewards(question, params.state, now);
   params.setState(nextState);
   params.setCurrentQuestion(picked);
-  params.setCode(picked.starter);
+  params.setCode(createInitialQuestionDraft(picked));
   params.setSessionStarted(false);
   params.setQuestionFinished(false);
   if (progressed.profile.spireRun.mapOpen) {
@@ -367,6 +375,10 @@ function handleCodeRunMessage(message: CodeRunMessage, params: Parameters<typeof
   params.setResults([]);
   params.setConsoleRunResult({ ok: message.ok, output: message.output, error: message.error, results: message.results, runtimeMs: message.runtimeMs });
   params.setTone(message.ok ? "pass" : "fail");
+  if (isFrontendChallenge(params.currentQuestion)) {
+    params.setStatus(message.ok ? "Preview ready" : "Preview failed");
+    return;
+  }
   params.setStatus(message.ok ? "Accepted" : "Wrong Answer");
 }
 
@@ -476,6 +488,30 @@ function useEditorMount(beautifyCurrentCode: (source?: string) => void, runCode:
   }, [beautifyCurrentCode, runCode, submitCode]);
 
   return useCallback((editor, monaco) => {
+    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+      allowNonTsExtensions: true,
+      esModuleInterop: true,
+      jsx: monaco.languages.typescript.JsxEmit.React,
+      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+      target: monaco.languages.typescript.ScriptTarget.ES2020
+    });
+    monaco.languages.typescript.typescriptDefaults.addExtraLib(`
+      declare namespace JSX {
+        interface IntrinsicElements {
+          [elementName: string]: any;
+        }
+      }
+      declare module "react" {
+        export function useCallback<T extends (...args: any[]) => any>(callback: T, deps: any[]): T;
+        export function useEffect(effect: () => void | (() => void), deps?: any[]): void;
+        export function useMemo<T>(factory: () => T, deps: any[]): T;
+        export function useRef<T>(initialValue: T): { current: T };
+        export function useState<T>(initialValue: T): [T, (value: T | ((previous: T) => T)) => void];
+        const React: { createElement: (...args: any[]) => any };
+        export default React;
+      }
+      declare module "*.css";
+    `, "file:///study-ladder-frontend-globals.d.ts");
     editor.addAction({
       id: "study-ladder-beautify",
       label: "Beautify Code",
@@ -502,7 +538,7 @@ function useChooseQuestion(params: Parameters<typeof usePracticeActions>[0], upd
     const picked = preferNext ? chooseNextSpireQuestion(params.state, params.currentQuestion) : getCurrentRoundQuestion(params.state, params.currentQuestion);
     params.setCurrentQuestion(picked);
     params.setState((previous) => ({ ...previous, currentId: picked.id }));
-    updateDraft(picked.starter);
+    updateDraft(createInitialQuestionDraft(picked));
     params.setResults([]);
     params.setConsoleRunResult(null);
     params.setTone("default");
@@ -582,7 +618,7 @@ function useSubmitCode(params: Parameters<typeof usePracticeActions>[0] & {
       return;
     }
     const runId = `${Date.now()}-${Math.random().toString(NUMBER_BASE_HEX).slice(TIMER_PAD)}`;
-    const formattedCode = beautifyCode(params.code);
+    const formattedCode = isFrontendChallenge(params.currentQuestion) ? params.code : beautifyCode(params.code);
     if (formattedCode !== params.code) {
       params.updateDraft(formattedCode);
     }
@@ -603,7 +639,7 @@ function useRunCode(params: Parameters<typeof usePracticeActions>[0] & {
       return;
     }
     const runId = `${Date.now()}-${Math.random().toString(NUMBER_BASE_HEX).slice(TIMER_PAD)}`;
-    const formattedCode = beautifyCode(params.code);
+    const formattedCode = isFrontendChallenge(params.currentQuestion) ? params.code : beautifyCode(params.code);
     if (formattedCode !== params.code) {
       params.updateDraft(formattedCode);
     }
@@ -621,6 +657,15 @@ function startRun(runId: string, formattedCode: string, params: Parameters<typeo
   params.setConsoleRunResult(null);
   clearRunTimer(params.runTimer);
   params.runTimer.current = window.setTimeout(() => handleRunTimeout(runId, formattedCode, params), RUN_TIMEOUT_MS);
+  if (params.currentQuestion && isFrontendChallenge(params.currentQuestion)) {
+    params.runnerFrame.current?.contentWindow?.postMessage({
+      type: "frontend-submit",
+      runId,
+      checks: params.currentQuestion.frontend?.checks || [],
+      files: parseFrontendDraft(params.currentQuestion, formattedCode)
+    }, "*");
+    return;
+  }
   params.runnerFrame.current?.contentWindow?.postMessage({
     type: "run-tests",
     runId,
@@ -639,6 +684,14 @@ function startConsoleRun(runId: string, formattedCode: string, params: Parameter
   params.setConsoleRunResult(null);
   clearRunTimer(params.runTimer);
   params.runTimer.current = window.setTimeout(() => handleConsoleRunTimeout(runId, params), RUN_TIMEOUT_MS);
+  if (params.currentQuestion && isFrontendChallenge(params.currentQuestion)) {
+    params.runnerFrame.current?.contentWindow?.postMessage({
+      type: "frontend-preview",
+      runId,
+      files: parseFrontendDraft(params.currentQuestion, formattedCode)
+    }, "*");
+    return;
+  }
   params.runnerFrame.current?.contentWindow?.postMessage({
     type: "run-code",
     runId,
@@ -716,7 +769,7 @@ function useFailAndAdvance(params: {
     setSessionStarted(false);
     setState(nextState);
     setCurrentQuestion(picked);
-    setCode(picked.starter);
+    setCode(createInitialQuestionDraft(picked));
     params.clearHint();
   }, [activeRunId, code, currentQuestion, params, runTimer, setCode, setConsoleRunResult, setCurrentQuestion, setResults, setRunning, setSessionStarted, setState, setStatus, setTone, state]);
 }
@@ -737,7 +790,7 @@ function useSyncSpireQuestion(params: {
     const nextQuestion = getCurrentRoundQuestion(params.state, params.currentQuestion);
     if (nextQuestion.id !== params.currentQuestion?.id) {
       params.setCurrentQuestion(nextQuestion);
-      params.setCode(nextQuestion.starter);
+      params.setCode(createInitialQuestionDraft(nextQuestion));
       params.setState((previous) => ({ ...previous, currentId: nextQuestion.id }));
     }
   }, [params]);
@@ -865,11 +918,17 @@ function useQuestionDisplayVariant(params: {
     if (!params.hydrated || !params.currentQuestion || params.state.mode !== "leetcode") {
       return;
     }
+    if (isFrontendChallenge(params.currentQuestion)) {
+      return;
+    }
     requestVariant(params.currentQuestion);
   }, [params.currentQuestion, params.hydrated, params.state.mode, requestVariant]);
 
   useEffect(() => {
     if (!params.hydrated || !params.currentQuestion || params.state.mode !== "leetcode" || params.state.profile.spireRun.mapOpen) {
+      return;
+    }
+    if (isFrontendChallenge(params.currentQuestion)) {
       return;
     }
     const nextQuestion = chooseNextSpireQuestion(params.state, params.currentQuestion);
@@ -880,6 +939,9 @@ function useQuestionDisplayVariant(params: {
 
   if (!params.currentQuestion) {
     return { loading: false, question: null, ready: false, streamText: "" };
+  }
+  if (isFrontendChallenge(params.currentQuestion)) {
+    return { hasVariant: false, loading: false, question: params.currentQuestion, ready: true, revision, streamText: "" };
   }
   const cached = cache.current.get(params.currentQuestion.id);
   const loading = inFlight.current.has(params.currentQuestion.id) || retryTimers.current.has(params.currentQuestion.id);
@@ -1120,7 +1182,7 @@ export default function Home() {
     setRewardNotifications([]);
     setState({ ...freshState, currentId: picked.id });
     setCurrentQuestion(picked);
-    setCode(picked.starter);
+    setCode(createInitialQuestionDraft(picked));
     setRunTone("default");
     setRunStatus("Run ended. Preserved question progress and prepared the next attempt.");
     hints.clearHint();
@@ -1143,18 +1205,13 @@ export default function Home() {
   const mapOpen = state.profile.spireRun.mapOpen;
   const showPractice = !mapOpen && isSpireCombatNode(currentSpireNode);
   useSyncSpireQuestion({ active: hydrated, currentQuestion, sessionStarted, setCode, setCurrentQuestion, setState, state });
-  const runnerFrameElement = <iframe ref={runnerFrame} src={RUNNER_FRAME} title="JavaScript runner" hidden onLoad={() => setRunnerReady(true)} />;
-
   if (!hydrated) {
     return (
-      <>
-        <Container fluid px="md" py="md" w={{ base: "100%", lg: "70%" }} style={{ height: "100vh", overflow: "hidden" }}>
-          <Stack gap="md" style={{ height: "100%", minHeight: 0 }}>
-            <div aria-label="Loading study map" style={{ background: "#08090d", border: "1px solid rgba(195, 148, 56, 0.28)", height: "100%", minHeight: 0 }} />
-          </Stack>
-        </Container>
-        {runnerFrameElement}
-      </>
+      <Container fluid px="md" py="md" w={{ base: "100%", lg: "70%" }} style={{ height: "100vh", overflow: "hidden" }}>
+        <Stack gap="md" style={{ height: "100%", minHeight: 0 }}>
+          <div aria-label="Loading study map" style={{ background: "#08090d", border: "1px solid rgba(195, 148, 56, 0.28)", height: "100%", minHeight: 0 }} />
+        </Stack>
+      </Container>
     );
   }
 
@@ -1165,6 +1222,7 @@ export default function Home() {
       <Container fluid px="md" py="md" w={{ base: "100%", lg: "70%" }} style={mapOpen ? { height: "100vh", overflow: "hidden" } : undefined}>
         <Stack gap="md" style={mapOpen ? { height: "100%", minHeight: 0 } : undefined}>
           <AppHeader
+            canRetargetActiveRoom={!sessionStarted}
             coins={state.profile.coins}
             health={state.profile.health}
             hidePlayerStatus={mapOpen}
@@ -1177,10 +1235,9 @@ export default function Home() {
             useActiveSkill={actions.useActiveSkill}
           />
           <SpireMapPanel fillAvailableHeight={mapOpen} state={state} setState={setState} />
-          {showPractice && <PracticeArea actions={actions} currentQuestion={activeQuestion} damagePop={monsterDamagePop} editorProps={{ canBuyHint: activeQuestion ? canBuyHint(state, activeQuestion.id) : false, code, consoleRunResult, hintCost: activeQuestion ? getHintCost(state, activeQuestion.id) : HINT_COST, hintDisabled: areHintsDisabledByHeat(state.profile.spireRun), hintError: hints.hintError, hintStreaming: hints.hintStreaming, hintText: hints.hintText, questionFinished: timer.questionFinished, questionVariantReady: questionVariant.ready, results, runCodeDisabled: isRunCodeDisabledByHeat(state.profile.spireRun), runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} state={state} />}
+          {showPractice && <PracticeArea actions={actions} currentQuestion={activeQuestion} damagePop={monsterDamagePop} editorProps={{ canBuyHint: activeQuestion ? canBuyHint(state, activeQuestion.id) : false, code, consoleRunResult, hintCost: activeQuestion ? getHintCost(state, activeQuestion.id) : HINT_COST, hintDisabled: areHintsDisabledByHeat(state.profile.spireRun), hintError: hints.hintError, hintStreaming: hints.hintStreaming, hintText: hints.hintText, questionFinished: timer.questionFinished, questionVariantReady: questionVariant.ready, results, runCodeDisabled: isRunCodeDisabledByHeat(state.profile.spireRun), runnerFrame, runnerReady, running, runStatus, sessionStarted, statusColor: STATUS_COLOR[runTone], timeRemainingMs: timer.timeRemainingMs, ...timerDisplay }} mode={state.mode} state={state} />}
         </Stack>
       </Container>
-      {runnerFrameElement}
     </>
   );
 }

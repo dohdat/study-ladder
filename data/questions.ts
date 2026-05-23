@@ -83,15 +83,260 @@ const curatedQuestions: Question[] = [
     ]
   },
   {
-    id: "frontend-debounce-events",
-    title: "Debounced Search Events",
+    id: "frontend-star-rating-component",
+    title: "Star Rating Component",
     difficulty: 2,
     rating: 1420,
-    topics: ["Sliding Window", "TypeScript", "Frontend"],
-    functionName: "debounceEvents",
-    prompt: "Model a TypeScript debounced search input. Given chronological input events with time and value, return the debounced emissions as { time, value } objects. A pending value emits at event.time + waitMs unless a later event arrives before that time.",
-    constraints: ["Events are sorted by time ascending.", "If an event arrives exactly when the pending value would emit, emit the pending value first.", "For multiple events at the same time, later array entries replace earlier pending values.", "Always emit the final pending value."],
+    topics: ["Frontend", "React", "TypeScript"],
+    functionName: "App",
+    prompt: "Build a React star rating component. Users should be able to hover over stars, click a star to select a rating, and see a message that reflects the selected value.",
+    constraints: ["Use React state for hover and selected rating.", "Render five interactive stars.", "Hovering a lower star after selecting a higher star should highlight only the hovered range.", "Clicking a star updates the selected rating message.", "Keep the component responsive."],
+    starter: "Frontend challenge: implement App.tsx and styles.css.",
+    frontend: {
+      checks: [
+        { name: "renders five stars", selector: ".star", type: "count", value: 5 },
+        { name: "shows empty-state message", selector: ".rating-message", textIncludes: "Select a rating", type: "exists" },
+        { name: "clicking the third star updates the message", selector: ".star:nth-of-type(3)", textIncludes: "3 out of 5", type: "clickText" }
+      ],
+      files: {
+        "App.tsx": `import React, { useState } from "react";
+import "./styles.css";
+
+export default function App() {
+  // TODO: Store the selected rating and the currently hovered rating in state.
+  const [rating, setRating] = useState(0);
+
+  return (
+    <main className="rating-card">
+      <p className="eyebrow">Component challenge</p>
+      <h1>How was your experience?</h1>
+      <div className="stars" aria-label="Choose a rating">
+        {[1, 2, 3, 4, 5].map((value) => {
+          // TODO: A star is active when it is inside the hovered range, or the selected range when not hovering.
+          const active = false;
+          return (
+          <button
+            key={value}
+            className={active ? "star active" : "star"}
+            aria-label={\`Rate \${value} star\${value === 1 ? "" : "s"}\`}
+            onClick={() => {
+              // TODO: Save the selected rating.
+              setRating(rating);
+            }}
+            onMouseEnter={() => {
+              // TODO: Track the hovered star.
+            }}
+            onMouseLeave={() => {
+              // TODO: Clear the hovered star.
+            }}
+            type="button"
+          >
+            {"\\u2605"}
+          </button>
+          );
+        })}
+      </div>
+      <p className="rating-message">Select a rating.</p>
+    </main>
+  );
+}`,
+        "styles.css": `.rating-card {
+  align-items: center;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  border: 1px solid #d7dde7;
+  border-radius: 16px;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.12);
+  color: #172033;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 36px auto;
+  max-width: 420px;
+  padding: 32px;
+  text-align: center;
+}
+
+.eyebrow {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+h1 {
+  font-size: clamp(1.55rem, 4vw, 2.25rem);
+  line-height: 1.08;
+  margin: 0;
+}
+
+.stars {
+  display: flex;
+  gap: 8px;
+}
+
+.star {
+  background: #eef2f7;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 2rem;
+  height: 52px;
+  line-height: 1;
+  transition: transform 140ms ease, color 140ms ease, background 140ms ease;
+  width: 52px;
+}
+
+.star:hover,
+.star:focus-visible,
+.star.active {
+  background: #fff7d6;
+  border-color: #f4c430;
+  color: #f5a400;
+  transform: translateY(-2px);
+}
+
+.rating-message {
+  color: #475569;
+  font-weight: 700;
+  margin: 0;
+}
+
+@media (max-width: 460px) {
+  .rating-card {
+    margin: 18px;
+    padding: 24px 18px;
+  }
+
+  .star {
+    height: 44px;
+    width: 44px;
+  }
+}`
+      }
+    },
+    examples: [
+      { input: "Click the third star", output: "Message updates to selected 3 out of 5", explanation: "The component stores the selected rating in React state and re-renders the message." },
+      { input: "Hover the second star after selecting five", output: "Only stars one and two are highlighted", explanation: "The hover value temporarily controls the active visual range." }
+    ],
+    tests: []
+  },
+  {
+    id: "frontend-debounce-events",
+    title: "Debounced Search Component",
+    difficulty: 2,
+    rating: 1420,
+    topics: ["Frontend", "React", "TypeScript"],
+    functionName: "DebouncedSearchApp",
+    prompt: "Build a React debounced search component. Typing in the input should update a visible immediate value, then update the search results after a short debounce delay.",
+    constraints: ["Use React state for the input value and debounced query.", "Render a search input with a clear label.", "Show the current typed value immediately.", "Show search result rows for the debounced value.", "Keep the component usable on narrow screens."],
     starter: "function debounceEvents(events, waitMs) {\n  \n}",
+    frontend: {
+      checks: [
+        { name: "renders a search input", selector: ".search-input", type: "exists" },
+        { name: "renders three starter results", selector: ".result-card", type: "count", value: 3 },
+        { name: "typing updates the immediate query text", selector: ".search-input", textIncludes: "react", type: "inputText", value: "react" }
+      ],
+      files: {
+        "App.tsx": `import React, { useEffect, useState } from "react";
+import "./styles.css";
+
+const resources = ["React hooks guide", "TypeScript patterns", "Frontend interview notes"];
+
+export default function App() {
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  useEffect(() => {
+    // TODO: Update debouncedQuery 300ms after query changes, and clean up the timer.
+  }, [query]);
+
+  // TODO: Filter resources using debouncedQuery. Empty query should show every resource.
+  const matches = resources;
+
+  return (
+    <main className="search-card">
+      <p className="eyebrow">Search component</p>
+      <h1>Debounced resource search</h1>
+      <label>
+        Search
+        <input
+          className="search-input"
+          value={query}
+          onChange={() => {
+            // TODO: Store the typed value in query.
+          }}
+          placeholder="Try react"
+        />
+      </label>
+      <p className="live-query">Typing: Nothing yet</p>
+      <p className="debounced-query">Searching for: {debouncedQuery || "All resources"}</p>
+      <section className="results">
+        {matches.map((item) => <article className="result-card" key={item}>{item}</article>)}
+      </section>
+    </main>
+  );
+}`,
+        "styles.css": `.search-card {
+  background: #ffffff;
+  border: 1px solid #dbe4ee;
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  color: #172033;
+  display: grid;
+  gap: 14px;
+  margin: 32px auto;
+  max-width: 520px;
+  padding: 28px;
+}
+
+.eyebrow {
+  color: #2563eb;
+  font-size: 0.78rem;
+  font-weight: 800;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+}
+
+label {
+  color: #475569;
+  display: grid;
+  font-weight: 800;
+  gap: 6px;
+}
+
+.search-input {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font: inherit;
+  padding: 12px 14px;
+}
+
+.live-query,
+.debounced-query {
+  margin: 0;
+}
+
+.results {
+  display: grid;
+  gap: 10px;
+}
+
+.result-card {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  font-weight: 800;
+  padding: 12px;
+}`
+      }
+    },
     examples: [
       { input: 'events = [{ time: 0, value: "r" }, { time: 100, value: "re" }, { time: 250, value: "rea" }], waitMs = 300', output: '[{ "time": 550, "value": "rea" }]', explanation: "Each new value arrives before the previous pending fire time, so only the final value emits." },
       { input: 'events = [{ time: 0, value: "a" }, { time: 400, value: "ab" }], waitMs = 300', output: '[{ "time": 300, "value": "a" }, { "time": 700, "value": "ab" }]', explanation: "The pause after the first event is long enough for it to emit before the second input." }
@@ -111,14 +356,153 @@ const curatedQuestions: Question[] = [
   },
   {
     id: "frontend-todo-reducer",
-    title: "Todo List Reducer",
+    title: "Todo List Component",
     difficulty: 2,
     rating: 1480,
-    topics: ["Hash Map", "TypeScript", "Frontend"],
-    functionName: "reduceTodoActions",
-    prompt: "Build the core TypeScript reducer for a TodoList. Apply each action and return the final todos in creation order as { id, text, completed } objects.",
-    constraints: ["Actions can be add, toggle, rename, delete, or clearCompleted.", "Ignore add actions when the id already exists.", "Ignore toggle, rename, and delete actions for missing ids.", "Do not mutate action objects."],
+    topics: ["Frontend", "React", "TypeScript"],
+    functionName: "TodoListApp",
+    prompt: "Build a React todo list component. Users should be able to add a task, toggle completion, and see the open task count update.",
+    constraints: ["Use React state to store todo items.", "Render an input, add button, and todo rows.", "Do not add an empty task.", "Clicking a todo toggles its completed state.", "Show how many tasks are still open."],
     starter: "function reduceTodoActions(actions) {\n  \n}",
+    frontend: {
+      checks: [
+        { name: "renders the seeded todo rows", selector: ".todo-row", type: "count", value: 2 },
+        { name: "typing updates the draft text", selector: ".todo-input", textIncludes: "Review PR", type: "inputText", value: "Review PR" },
+        { name: "clicking the first todo marks it complete", selector: ".todo-row:first-of-type", type: "clickCount", value: ".todo-row.done" }
+      ],
+      files: {
+        "App.tsx": `import React, { useState } from "react";
+import "./styles.css";
+
+type Todo = { id: number; text: string; completed: boolean };
+
+export default function App() {
+  const [todos, setTodos] = useState<Todo[]>([
+    { id: 1, text: "Wire preview", completed: false },
+    { id: 2, text: "Style empty state", completed: true }
+  ]);
+  const [draft, setDraft] = useState("");
+
+  const addTodo = () => {
+    // TODO: Ignore empty text, add a new open todo, then clear the draft.
+  };
+
+  const toggleTodo = (id: number) => {
+    // TODO: Toggle only the clicked todo.
+    setTodos(todos);
+  };
+
+  // TODO: Count only incomplete todos.
+  const openCount = todos.length;
+
+  return (
+    <main className="todo-card">
+      <p className="eyebrow">Todo component</p>
+      <h1>Frontend launch list</h1>
+      <div className="composer">
+        <input
+          className="todo-input"
+          value={draft}
+          onChange={() => {
+            // TODO: Store the typed draft value.
+          }}
+          placeholder="Add a task"
+        />
+        <button className="add-button" onClick={addTodo} type="button">Add</button>
+      </div>
+      <p className="draft-preview">Draft: {draft || "Nothing typed"}</p>
+      <section className="todo-list">
+        {todos.map((todo) => (
+          <button className={todo.completed ? "todo-row done" : "todo-row"} key={todo.id} onClick={() => toggleTodo(todo.id)} type="button">
+            <span>{todo.text}</span>
+            <span>{todo.completed ? "Done" : "Open"}</span>
+          </button>
+        ))}
+      </section>
+      <p className="todo-count">{openCount} open tasks</p>
+    </main>
+  );
+}`,
+        "styles.css": `.todo-card {
+  background: #ffffff;
+  border: 1px solid #dbe4ee;
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  color: #172033;
+  display: grid;
+  gap: 14px;
+  margin: 32px auto;
+  max-width: 520px;
+  padding: 28px;
+}
+
+.eyebrow {
+  color: #16a34a;
+  font-size: 0.78rem;
+  font-weight: 800;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+}
+
+.composer {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr auto;
+}
+
+.todo-input,
+.add-button,
+.todo-row {
+  border-radius: 10px;
+  font: inherit;
+  padding: 12px 14px;
+}
+
+.todo-input {
+  border: 1px solid #cbd5e1;
+}
+
+.add-button {
+  background: #16a34a;
+  border: 0;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.todo-list {
+  display: grid;
+  gap: 10px;
+}
+
+.todo-row {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dbe4ee;
+  color: #172033;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.todo-row.done {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.draft-preview,
+.todo-count {
+  color: #475569;
+  font-weight: 800;
+  margin: 0;
+}`
+      }
+    },
     examples: [
       { input: 'actions = [{ type: "add", id: "1", text: "Ship UI" }, { type: "toggle", id: "1" }]', output: '[{ "id": "1", "text": "Ship UI", "completed": true }]', explanation: "The todo is created incomplete, then toggled to completed." },
       { input: 'actions = [{ type: "add", id: "a", text: "Read" }, { type: "delete", id: "a" }]', output: "[]", explanation: "The delete action removes the existing todo." }
@@ -138,14 +522,122 @@ const curatedQuestions: Question[] = [
   },
   {
     id: "frontend-tabs-state",
-    title: "Tabs State Manager",
+    title: "Tabs Component",
     difficulty: 2,
     rating: 1540,
-    topics: ["Arrays", "TypeScript", "Frontend"],
-    functionName: "updateTabs",
-    prompt: "Implement a TypeScript tabs state helper. Given ordered tabs, the current active id, and one action, return { tabs, activeId } after applying select, close, move, or rename.",
-    constraints: ["Each tab has id and title.", "Selecting a missing id does nothing.", "Closing the active tab activates the next tab at that index, otherwise the previous tab, otherwise null.", "Move clamps toIndex into the valid range.", "Rename ignores empty titles."],
+    topics: ["Frontend", "React", "TypeScript"],
+    functionName: "TabsApp",
+    prompt: "Build a React tabs component. Users should be able to switch tabs and clearly see which panel is active.",
+    constraints: ["Use React state for the active tab id.", "Render at least three tabs.", "Clicking a tab changes the active panel.", "Expose accessible button labels for each tab.", "Keep the tab list responsive."],
     starter: "function updateTabs(tabs, activeId, action) {\n  \n}",
+    frontend: {
+      checks: [
+        { name: "renders three tab buttons", selector: ".tab-button", type: "count", value: 3 },
+        { name: "shows the Overview panel first", selector: ".tab-panel", textIncludes: "Overview", type: "exists" },
+        { name: "clicking Metrics opens the metrics panel", selector: ".tab-button:nth-of-type(2)", textIncludes: "Conversion", type: "clickText" }
+      ],
+      files: {
+        "App.tsx": `import React, { useState } from "react";
+import "./styles.css";
+
+const tabs = [
+  { id: "overview", title: "Overview", body: "Overview: launch checklist and ownership." },
+  { id: "metrics", title: "Metrics", body: "Conversion, retention, and latency are trending up." },
+  { id: "settings", title: "Settings", body: "Settings: notifications and access controls." }
+];
+
+export default function App() {
+  const [activeId, setActiveId] = useState("overview");
+  // TODO: Find the active tab from activeId.
+  const activeTab = tabs[0];
+
+  return (
+    <main className="tabs-card">
+      <p className="eyebrow">Tabs component</p>
+      <h1>Product dashboard</h1>
+      <nav className="tab-list" aria-label="Dashboard sections">
+        {tabs.map((tab) => (
+          <button
+            className={tab.id === activeId ? "tab-button active" : "tab-button"}
+            key={tab.id}
+            onClick={() => {
+              // TODO: Set the active tab id.
+              setActiveId(activeId);
+            }}
+            type="button"
+          >
+            {tab.title}
+          </button>
+        ))}
+      </nav>
+      <section className="tab-panel">
+        <h2>{activeTab.title}</h2>
+        <p>{activeTab.body}</p>
+      </section>
+    </main>
+  );
+}`,
+        "styles.css": `.tabs-card {
+  background: #ffffff;
+  border: 1px solid #dbe4ee;
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  color: #172033;
+  display: grid;
+  gap: 16px;
+  margin: 32px auto;
+  max-width: 560px;
+  padding: 28px;
+}
+
+.eyebrow {
+  color: #7c3aed;
+  font-size: 0.78rem;
+  font-weight: 800;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+.tab-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tab-button {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  color: #475569;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  padding: 10px 14px;
+}
+
+.tab-button.active {
+  background: #ede9fe;
+  border-color: #8b5cf6;
+  color: #5b21b6;
+}
+
+.tab-panel {
+  background: #f8fafc;
+  border: 1px solid #dbe4ee;
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  min-height: 140px;
+  padding: 20px;
+}`
+      }
+    },
     examples: [
       { input: 'tabs = [{ id: "a", title: "A" }, { id: "b", title: "B" }], activeId = "a", action = { type: "select", id: "b" }', output: '{ "tabs": [{ "id": "a", "title": "A" }, { "id": "b", "title": "B" }], "activeId": "b" }', explanation: "Selecting an existing tab changes only the active id." },
       { input: 'tabs = [{ id: "a", title: "A" }, { id: "b", title: "B" }], activeId = "b", action = { type: "close", id: "b" }', output: '{ "tabs": [{ "id": "a", "title": "A" }], "activeId": "a" }', explanation: "Closing the active last tab falls back to the previous tab." }

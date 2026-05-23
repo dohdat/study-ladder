@@ -6,6 +6,19 @@ import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
 function syncExtensionPagesPlugin(): Plugin {
+  const copySandboxVendor = () => {
+    const vendorDir = resolve(__dirname, "pages", "vendor");
+    mkdirSync(vendorDir, { recursive: true });
+    copyFileSync(resolve(__dirname, "node_modules", "typescript", "lib", "typescript.js"), resolve(vendorDir, "typescript.js"));
+    const sources = {
+      react: readFileSync(resolve(__dirname, "node_modules", "react", "cjs", "react.production.js"), "utf8"),
+      "react-dom": readFileSync(resolve(__dirname, "node_modules", "react-dom", "cjs", "react-dom.production.js"), "utf8"),
+      "react-dom/client": readFileSync(resolve(__dirname, "node_modules", "react-dom", "cjs", "react-dom-client.production.js"), "utf8"),
+      scheduler: readFileSync(resolve(__dirname, "node_modules", "scheduler", "cjs", "scheduler.production.js"), "utf8")
+    };
+    writeFileSync(resolve(vendorDir, "react-browser.js"), `"use strict";(()=>{const sources=${JSON.stringify(sources)};const cache={};function load(name){if(cache[name])return cache[name];if(!sources[name])throw new Error("Missing frontend preview dependency: "+name);const module={exports:{}};function require(dependency){return load(dependency)}new Function("module","exports","require",sources[name])(module,module.exports,require);cache[name]=module.exports;return module.exports}self.__studyLadderLoadReactVendor=()=>({React:load("react"),ReactDOMClient:load("react-dom/client")});})();\n`);
+  };
+
   const syncHtml = (fileName: string) => {
     const builtPath = resolve(__dirname, "out", fileName);
     const pagesPath = resolve(__dirname, "pages", fileName);
@@ -28,6 +41,7 @@ function syncExtensionPagesPlugin(): Plugin {
       copyFileSync(resolve(__dirname, "public", "sandbox.js"), resolve(pagesDir, "sandbox.js"));
       copyFileSync(resolve(__dirname, "reload.html"), resolve(pagesDir, "reload.html"));
       copyFileSync(resolve(__dirname, "reload.js"), resolve(pagesDir, "reload.js"));
+      copySandboxVendor();
     }
   };
 }

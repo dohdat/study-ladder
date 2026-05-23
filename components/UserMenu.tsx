@@ -80,7 +80,7 @@ import {
 import { HEAT_CONDITION_DEFINITIONS, MAX_HEAT } from "../lib/campaignCore";
 import { RELIC_DEFINITIONS } from "../lib/relicCore";
 import { formatModifier } from "../lib/modifierFormat";
-import { SPIRE_MIN_RATING_MAX, SPIRE_MIN_RATING_MIN, getSpireActBaseRating, getSpireActEndRating, normalizeSpireMinRating } from "../lib/spireMapCore";
+import { SPIRE_MIN_RATING_MAX, SPIRE_MIN_RATING_MIN, getSpireActBaseRating, getSpireActEndRating, normalizeSpireMinRating, retargetCurrentSpireRoomQuestions } from "../lib/spireMapCore";
 import {
   META_UPGRADE_DEFINITIONS,
   defaultState,
@@ -172,7 +172,7 @@ export const USER_MENU_SHORTCUTS: ReadonlyArray<{ key: string; section: UserMenu
   section: item.id
 }));
 
-export function UserMenu(props: { activeSection: UserMenuSection | null; setActiveSection: (section: UserMenuSection | null) => void; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
+export function UserMenu(props: { activeSection: UserMenuSection | null; canRetargetActiveRoom?: boolean; setActiveSection: (section: UserMenuSection | null) => void; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const modalTitle = USER_MENU_ITEMS.find((item) => item.id === props.activeSection)?.label || "User";
   const [menuOpened, setMenuOpened] = useState(false);
   useEffect(() => {
@@ -220,7 +220,7 @@ export function UserMenu(props: { activeSection: UserMenuSection | null; setActi
         }}
         transitionProps={{ duration: MODAL_TRANSITION_DURATION }}
       >
-        <UserModalContent section={props.activeSection} state={props.state} setState={props.setState} />
+        <UserModalContent canRetargetActiveRoom={props.canRetargetActiveRoom} section={props.activeSection} state={props.state} setState={props.setState} />
       </Modal>
     </>
   );
@@ -236,7 +236,7 @@ function getModalSize(section: UserMenuSection | null) {
   return "lg";
 }
 
-function UserModalContent(props: { section: UserMenuSection | null; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
+function UserModalContent(props: { canRetargetActiveRoom?: boolean; section: UserMenuSection | null; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   if (props.section === "achievements") {
     return <AchievementsPanel state={props.state} setState={props.setState} />;
   }
@@ -244,7 +244,7 @@ function UserModalContent(props: { section: UserMenuSection | null; state: Study
     return <WikiPanel />;
   }
   if (props.section === "settings") {
-    return <SettingsPanel state={props.state} setState={props.setState} />;
+    return <SettingsPanel canRetargetActiveRoom={props.canRetargetActiveRoom} state={props.state} setState={props.setState} />;
   }
   return <ProfilePanel state={props.state} setState={props.setState} />;
 }
@@ -1253,7 +1253,7 @@ function getPactConditionEffectLines(condition: (typeof HEAT_CONDITION_DEFINITIO
   }
 }
 
-function SettingsPanel(props: { setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
+function SettingsPanel(props: { canRetargetActiveRoom?: boolean; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
   const { settings, updateSettings } = useStudyBlockerSettings();
   const siteText = settings.distractingSites.join("\n");
   const codingTagOptions = useMemo(() => getAvailableCodingTags().map((tag) => ({ label: tag, value: tag })), []);
@@ -1283,7 +1283,10 @@ function SettingsPanel(props: { setState: React.Dispatch<React.SetStateAction<St
         placeholder="All coding tags"
         searchable
         value={props.state.profile.codingTags}
-        onChange={(value) => props.setState((previous) => ({ ...previous, profile: { ...previous.profile, codingTags: normalizeCodingTags(value) } }))}
+        onChange={(value) => props.setState((previous) => {
+          const next = { ...previous, profile: { ...previous.profile, codingTags: normalizeCodingTags(value) } };
+          return props.canRetargetActiveRoom ? retargetCurrentSpireRoomQuestions(next) : next;
+        })}
       />
       <NumberInput
         allowDecimal={false}

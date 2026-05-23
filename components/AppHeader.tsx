@@ -25,6 +25,7 @@ const HERO_PROGRESS_BG = "linear-gradient(180deg, #050406, #131018 48%, #050406)
 const TODAY_PROGRESS_FILL = "linear-gradient(180deg, #53b8ff 0%, #167bdd 55%, #063c8f 100%)";
 
 export function AppHeader(props: {
+  canRetargetActiveRoom?: boolean;
   coins: number;
   health: number;
   hidePlayerStatus?: boolean;
@@ -73,7 +74,7 @@ export function AppHeader(props: {
       </Group>
       <Group>
         <HeroSiegeModeSwitch mode={props.modeValue} onChange={(mode) => props.setState((previous) => ({ ...previous, mode }))} />
-        <UserMenu activeSection={activeSection} setActiveSection={setActiveSection} state={props.state} setState={props.setState} />
+        <UserMenu activeSection={activeSection} canRetargetActiveRoom={props.canRetargetActiveRoom} setActiveSection={setActiveSection} state={props.state} setState={props.setState} />
       </Group>
     </Group>
   );
