@@ -30,6 +30,7 @@ export type Question = {
       "App.tsx": string;
       "styles.css": string;
     };
+    wireframe?: string[];
   };
   hint?: string;
   examples: Array<{

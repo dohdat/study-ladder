@@ -5,7 +5,6 @@ import {
   Group,
   Menu,
   Modal,
-  MultiSelect,
   NumberInput,
   Textarea,
   Progress,
@@ -15,6 +14,7 @@ import {
   Switch,
   Tabs,
   Text,
+  TextInput,
   ThemeIcon,
   Tooltip,
   Title
@@ -80,7 +80,7 @@ import {
 import { HEAT_CONDITION_DEFINITIONS, MAX_HEAT } from "../lib/campaignCore";
 import { RELIC_DEFINITIONS } from "../lib/relicCore";
 import { formatModifier } from "../lib/modifierFormat";
-import { SPIRE_MIN_RATING_MAX, SPIRE_MIN_RATING_MIN, getSpireActBaseRating, getSpireActEndRating, normalizeSpireMinRating, retargetCurrentSpireRoomQuestions } from "../lib/spireMapCore";
+import { SPIRE_MIN_RATING_MAX, SPIRE_MIN_RATING_MIN, getSpireActBaseRating, getSpireActEndRating, normalizeSpireMinRating } from "../lib/spireMapCore";
 import {
   META_UPGRADE_DEFINITIONS,
   defaultState,
@@ -93,7 +93,6 @@ import {
   getMaxHealth,
   getRunModifierTotals,
   getWarriorSkillBonusTotals,
-  normalizeCodingTags,
   setSpireMinimumRating,
   spendStatPoint
 } from "../lib/studyCore";
@@ -430,24 +429,64 @@ function WikiPanel() {
 
 function QuestionBankWiki() {
   const [page, setPage] = useState(0);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [nameSearch, setNameSearch] = useState("");
   const sortedQuestions = useMemo(() => [...questions].sort((left, right) => left.rating - right.rating || left.title.localeCompare(right.title)), []);
-  const pageCount = getPageCount(sortedQuestions.length, WIKI_QUESTION_PAGE_SIZE);
+  const tagOptions = useMemo(() => getAvailableCodingTags().map((tag) => ({ label: tag, value: tag })), []);
+  const filteredQuestions = useMemo(() => {
+    const normalizedSearch = nameSearch.trim().toLowerCase();
+    return sortedQuestions.filter((question) => {
+      const matchesTag = !tagFilter || question.topics.includes(tagFilter);
+      const matchesName = !normalizedSearch || question.title.toLowerCase().includes(normalizedSearch) || question.id.toLowerCase().includes(normalizedSearch);
+      return matchesTag && matchesName;
+    });
+  }, [nameSearch, sortedQuestions, tagFilter]);
+  const pageCount = getPageCount(filteredQuestions.length, WIKI_QUESTION_PAGE_SIZE);
   const safePage = clampPage(page, pageCount);
-  const visibleQuestions = getPageItems(sortedQuestions, safePage, WIKI_QUESTION_PAGE_SIZE);
+  const visibleQuestions = getPageItems(filteredQuestions, safePage, WIKI_QUESTION_PAGE_SIZE);
   return (
     <Stack gap="md">
-      <Group justify="space-between">
+      <Group justify="space-between" align="flex-start">
         <Box>
           <Title order={4}>LeetCode Question Bank</Title>
-          <Text size="sm" c="dimmed">{sortedQuestions.length} questions sorted by rating.</Text>
+          <Text size="sm" c="dimmed">{filteredQuestions.length} of {sortedQuestions.length} questions sorted by rating.</Text>
         </Box>
-        <WikiPagination page={safePage} pageCount={pageCount} onPageChange={setPage} total={sortedQuestions.length} unit="questions" />
+        <WikiPagination page={safePage} pageCount={pageCount} onPageChange={setPage} total={filteredQuestions.length} unit="questions" />
       </Group>
-      <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }}>
-        {visibleQuestions.map((question) => (
-          <QuestionWikiCard key={question.id} question={question} />
-        ))}
+      <SimpleGrid cols={{ base: 1, sm: 2 }}>
+        <TextInput
+          label="Search name"
+          placeholder="Question name"
+          value={nameSearch}
+          onChange={(event) => {
+            setNameSearch(event.currentTarget.value);
+            setPage(0);
+          }}
+        />
+        <Select
+          clearable
+          data={tagOptions}
+          label="Filter tag"
+          placeholder="All tags"
+          searchable
+          value={tagFilter}
+          onChange={(value) => {
+            setTagFilter(value);
+            setPage(0);
+          }}
+        />
       </SimpleGrid>
+      {visibleQuestions.length ? (
+        <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }}>
+          {visibleQuestions.map((question) => (
+            <QuestionWikiCard key={question.id} question={question} />
+          ))}
+        </SimpleGrid>
+      ) : (
+        <Box p="md" style={{ background: "var(--mantine-color-dark-7)", border: "1px solid var(--mantine-color-dark-4)", borderRadius: 6 }}>
+          <Text size="sm" c="dimmed">No matching questions.</Text>
+        </Box>
+      )}
     </Stack>
   );
 }
@@ -1256,7 +1295,6 @@ function getPactConditionEffectLines(condition: (typeof HEAT_CONDITION_DEFINITIO
 function SettingsPanel(props: { canRetargetActiveRoom?: boolean; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
   const { settings, updateSettings } = useStudyBlockerSettings();
   const siteText = settings.distractingSites.join("\n");
-  const codingTagOptions = useMemo(() => getAvailableCodingTags().map((tag) => ({ label: tag, value: tag })), []);
   return (
     <Stack gap="md">
       <Group justify="space-between">
@@ -1274,19 +1312,6 @@ function SettingsPanel(props: { canRetargetActiveRoom?: boolean; setState: React
         label="God mode"
         description="Testing mode: no health loss from failures, and completed questions always drop an item."
         onChange={(event) => props.setState((previous) => ({ ...previous, profile: { ...previous.profile, godMode: event.currentTarget.checked } }))}
-      />
-      <MultiSelect
-        clearable
-        data={codingTagOptions}
-        label="Coding tags"
-        description="Leave empty to include every coding question. Selecting tags uses questions that match any selected tag."
-        placeholder="All coding tags"
-        searchable
-        value={props.state.profile.codingTags}
-        onChange={(value) => props.setState((previous) => {
-          const next = { ...previous, profile: { ...previous.profile, codingTags: normalizeCodingTags(value) } };
-          return props.canRetargetActiveRoom ? retargetCurrentSpireRoomQuestions(next) : next;
-        })}
       />
       <NumberInput
         allowDecimal={false}

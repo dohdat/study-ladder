@@ -14,7 +14,11 @@ const serializeLogPart = (value) => {
   if (typeof value === "string") {
     return value;
   }
-  return serialize(value);
+  try {
+    return serialize(value);
+  } catch {
+    return String(value);
+  }
 };
 
 const stableEqual = (actual, expected) => {
@@ -71,7 +75,42 @@ const prepareFrontendSource = (source) => source
   .replace(/export\s+default\s+App\s*;?/g, "")
   .replace(/export\s+default\s+/g, "const App = ");
 
-const createFrontendComponent = (appTsx, React) => {
+const createConsoleTarget = (output) => {
+  const write = (level, args) => {
+    const prefix = level === "log" ? "" : `${level}: `;
+    output.push(`${prefix}${args.map(serializeLogPart).join(" ")}`);
+  };
+  return {
+    assert(condition, ...args) {
+      if (!condition) {
+        write("assert", args.length ? args : ["Assertion failed"]);
+      }
+    },
+    clear() {
+      output.length = 0;
+    },
+    debug(...args) {
+      write("debug", args);
+    },
+    error(...args) {
+      write("error", args);
+    },
+    info(...args) {
+      write("info", args);
+    },
+    log(...args) {
+      write("log", args);
+    },
+    table(value) {
+      write("table", [value]);
+    },
+    warn(...args) {
+      write("warn", args);
+    }
+  };
+};
+
+const createFrontendComponent = (appTsx, React, consoleTarget = console) => {
   const compiler = self.ts;
   if (!compiler?.transpileModule) {
     throw new Error("TypeScript compiler is not loaded.");
@@ -91,16 +130,17 @@ const createFrontendComponent = (appTsx, React) => {
     "useMemo",
     "useRef",
     "useState",
+    "console",
     `"use strict";\n${transpiled}\n; return (typeof App === "function") ? App : undefined;`
   );
-  const component = loadComponent(React, React.useCallback, React.useEffect, React.useMemo, React.useRef, React.useState);
+  const component = loadComponent(React, React.useCallback, React.useEffect, React.useMemo, React.useRef, React.useState, consoleTarget);
   if (typeof component !== "function") {
     throw new Error("Expected App.tsx to export or define a React component named App.");
   }
   return component;
 };
 
-const renderFrontendPreview = async (files) => {
+const renderFrontendPreview = async (files, consoleTarget = console) => {
   const { React, ReactDOMClient } = await loadReactVendor();
   resetFrontendRoot();
   const container = document.getElementById("frontend-root");
@@ -118,7 +158,7 @@ const renderFrontendPreview = async (files) => {
   const mount = document.createElement("div");
   mount.id = "frontend-preview-mount";
   container.appendChild(mount);
-  const App = createFrontendComponent(files["App.tsx"] || "", React);
+  const App = createFrontendComponent(files["App.tsx"] || "", React, consoleTarget);
   frontendRoot = ReactDOMClient.createRoot(mount);
   frontendRoot.render(React.createElement(App));
   await nextFrame();
@@ -239,13 +279,14 @@ async function handleFrontendPreview(event) {
     return;
   }
   const startedAt = Date.now();
+  const output = [];
   try {
-    await renderFrontendPreview(message.files || {});
+    await renderFrontendPreview(message.files || {}, createConsoleTarget(output));
     postResult({
       type: "code-run-result",
       runId: message.runId,
       ok: true,
-      output: ["Preview rendered."],
+      output,
       results: [],
       runtimeMs: Date.now() - startedAt
     });
@@ -255,7 +296,7 @@ async function handleFrontendPreview(event) {
       runId: message.runId,
       ok: false,
       error: error && error.message ? error.message : String(error),
-      output: [],
+      output,
       results: [],
       runtimeMs: Date.now() - startedAt
     });

@@ -1160,6 +1160,7 @@ export default function Home() {
     freshState.totalCorrect = state.totalCorrect;
     freshState.profile.trackedAchievementIds = state.profile.trackedAchievementIds;
     freshState.profile.unlockedAchievementIds = state.profile.unlockedAchievementIds;
+    freshState.profile.codingTags = state.profile.codingTags;
     freshState.profile.metaProgress = {
       ...state.profile.metaProgress,
       upgrades: { ...state.profile.metaProgress.upgrades }

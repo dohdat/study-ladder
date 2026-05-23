@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Box, Group, Text } from "@mantine/core";
+import { Box, Group, MultiSelect, Popover, Text, Tooltip } from "@mantine/core";
+import { IconSettings } from "@tabler/icons-react";
 
 import tabSquareBg from "../assets/hero_siege_inventory/tab-square.png";
 import { AchievementTrackerStrip } from "./AchievementTrackerStrip";
@@ -8,6 +9,8 @@ import { PlayerStatus } from "./PlayerStatus";
 import { UserMenu, USER_MENU_SHORTCUTS } from "./UserMenu";
 import type { UserMenuSection } from "./UserMenu";
 import { STUDY_BLOCKER_MS_PER_MINUTE, useStudyBlockerSettings } from "../hooks/useStudyBlocker";
+import { retargetCurrentSpireRoomQuestions } from "../lib/spireMapCore";
+import { getAvailableCodingTags, normalizeCodingTags } from "../lib/studyCore";
 import type { ActiveWarriorSkillId, StudyState } from "../types/study";
 import type { CombatImpactVisual } from "./MonsterEncounter";
 
@@ -23,6 +26,9 @@ const HERO_PANEL_BORDER = "1px solid rgba(157, 114, 38, 0.72)";
 const HERO_PANEL_SHADOW = "inset 0 0 0 1px #050403, inset 0 0 18px rgba(114, 36, 20, 0.22), 0 8px 16px rgba(0, 0, 0, 0.34)";
 const HERO_PROGRESS_BG = "linear-gradient(180deg, #050406, #131018 48%, #050406)";
 const TODAY_PROGRESS_FILL = "linear-gradient(180deg, #53b8ff 0%, #167bdd 55%, #063c8f 100%)";
+const CODING_TAG_PANEL_BG = "linear-gradient(180deg, rgba(25, 10, 8, 0.98), rgba(10, 6, 4, 0.98))";
+const CODING_TAG_PANEL_BORDER = "1px solid rgba(214, 166, 66, 0.82)";
+const CODING_TAG_ICON_SIZE = 24;
 
 export function AppHeader(props: {
   canRetargetActiveRoom?: boolean;
@@ -73,10 +79,100 @@ export function AppHeader(props: {
         <AchievementTrackerStrip state={props.state} onOpenAchievements={() => setActiveSection("achievements")} />
       </Group>
       <Group>
-        <HeroSiegeModeSwitch mode={props.modeValue} onChange={(mode) => props.setState((previous) => ({ ...previous, mode }))} />
+        <ModeControl
+          canRetargetActiveRoom={props.canRetargetActiveRoom}
+          modeValue={props.modeValue}
+          setState={props.setState}
+          state={props.state}
+        />
         <UserMenu activeSection={activeSection} canRetargetActiveRoom={props.canRetargetActiveRoom} setActiveSection={setActiveSection} state={props.state} setState={props.setState} />
       </Group>
     </Group>
+  );
+}
+
+function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
+  const [opened, setOpened] = useState(false);
+  const codingTagOptions = getAvailableCodingTags().map((tag) => ({ label: tag, value: tag }));
+  return (
+    <Box
+      className="mode-control"
+      style={{ position: "relative" }}
+      onMouseEnter={(event) => {
+        const icon = event.currentTarget.querySelector<HTMLElement>(".coding-tag-settings");
+        if (icon) {
+          icon.style.opacity = "1";
+          icon.style.pointerEvents = "auto";
+        }
+      }}
+      onMouseLeave={(event) => {
+        if (opened) {
+          return;
+        }
+        const icon = event.currentTarget.querySelector<HTMLElement>(".coding-tag-settings");
+        if (icon) {
+          icon.style.opacity = "0";
+          icon.style.pointerEvents = "none";
+        }
+      }}
+    >
+      <HeroSiegeModeSwitch
+        codingAccessory={
+          <Popover opened={opened} onChange={setOpened} position="bottom-end" width={360} withArrow shadow="lg">
+            <Popover.Target>
+              <Tooltip label="Coding tags" withArrow>
+                <Box
+                  aria-label="Coding tag settings"
+                  className="coding-tag-settings"
+                  component="button"
+                  onClick={() => setOpened((current) => !current)}
+                  style={{
+                    alignItems: "center",
+                    background: "transparent",
+                    border: 0,
+                    boxShadow: "none",
+                    color: "#ffe8a8",
+                    cursor: "pointer",
+                    display: "flex",
+                    height: CODING_TAG_ICON_SIZE,
+                    justifyContent: "center",
+                    opacity: opened ? 1 : 0,
+                    padding: 0,
+                    pointerEvents: opened ? "auto" : "none",
+                    position: "absolute",
+                    right: 9,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    transition: "opacity 120ms ease",
+                    width: CODING_TAG_ICON_SIZE,
+                    zIndex: 5
+                  }}
+                  type="button"
+                >
+                  <IconSettings size={14} />
+                </Box>
+              </Tooltip>
+            </Popover.Target>
+            <Popover.Dropdown style={{ background: CODING_TAG_PANEL_BG, border: CODING_TAG_PANEL_BORDER, boxShadow: HERO_PANEL_SHADOW }}>
+              <MultiSelect
+                clearable
+                data={codingTagOptions}
+                label="Coding tags"
+                placeholder="All coding tags"
+                searchable
+                value={props.state.profile.codingTags}
+                onChange={(value) => props.setState((previous) => {
+                  const next = { ...previous, profile: { ...previous.profile, codingTags: normalizeCodingTags(value) } };
+                  return props.canRetargetActiveRoom ? retargetCurrentSpireRoomQuestions(next) : next;
+                })}
+              />
+            </Popover.Dropdown>
+          </Popover>
+        }
+        mode={props.modeValue}
+        onChange={(mode) => props.setState((previous) => ({ ...previous, mode }))}
+      />
+    </Box>
   );
 }
 

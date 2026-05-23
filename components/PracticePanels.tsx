@@ -44,6 +44,7 @@ const ICON_LG = 18;
 const RESULT_ICON_SIZE = 20;
 const EDITOR_FONT_SIZE = 16;
 const EDITOR_HEIGHT = 560;
+const FRONTEND_WORKSPACE_HEIGHT = "max(560px, calc(100vh - 250px))";
 const EDITOR_READ_ONLY_MESSAGE = { value: "Press Start to edit this solution." };
 const LOCKED_OVERLAY_BG = "#2b2b2b";
 const LOCKED_OVERLAY_PANEL_MAX_WIDTH = 360;
@@ -217,31 +218,52 @@ function LockedProblemHeader() {
 
 function ProblemDetails(props: { currentQuestion: Question; damagePop?: MonsterDamagePop | null; state: StudyState }) {
   const { explainExample, explanations } = useExampleExplanations(props.currentQuestion);
+  const frontend = isFrontendChallenge(props.currentQuestion);
   return (
     <>
       <MonsterEncounter damagePop={props.damagePop} question={props.currentQuestion} state={props.state} />
       <Text mt="md">{props.currentQuestion.prompt}</Text>
       <Divider my="md" />
-      <Title order={5}>Examples</Title>
-      <Box mt="xs" style={{ display: "grid", gap: EXAMPLE_BLOCK_GAP }}>
-        {props.currentQuestion.examples.map((example, index) => {
-          const exampleKey = getExampleKey(props.currentQuestion, example, index);
-          return (
-            <ExampleBlock
-              key={exampleKey}
-              example={example}
-              explanation={explanations[exampleKey]}
-              index={index}
-              onExplain={() => explainExample(example, index)}
-            />
-          );
-        })}
-      </Box>
-      <Title order={5} mt="md">Constraints</Title>
+      {frontend && props.currentQuestion.frontend?.wireframe?.length ? (
+        <FrontendWireframe lines={props.currentQuestion.frontend.wireframe} />
+      ) : null}
+      {!frontend && (
+        <>
+          <Title order={5}>Examples</Title>
+          <Box mt="xs" style={{ display: "grid", gap: EXAMPLE_BLOCK_GAP }}>
+            {props.currentQuestion.examples.map((example, index) => {
+              const exampleKey = getExampleKey(props.currentQuestion, example, index);
+              return (
+                <ExampleBlock
+                  key={exampleKey}
+                  example={example}
+                  explanation={explanations[exampleKey]}
+                  index={index}
+                  onExplain={() => explainExample(example, index)}
+                />
+              );
+            })}
+          </Box>
+        </>
+      )}
+      <Title order={5} mt={frontend ? 0 : "md"}>{frontend ? "Requirements" : "Constraints"}</Title>
       <List mt="xs" size="sm">
         {props.currentQuestion.constraints.map((constraint) => <List.Item key={constraint}>{constraint}</List.Item>)}
       </List>
     </>
+  );
+}
+
+function FrontendWireframe(props: { lines: string[] }) {
+  return (
+    <Box mb="md">
+      <Title order={5}>Wireframe</Title>
+      <Box mt="xs" p={RUN_VALUE_PADDING} style={{ background: RUN_BLOCK_BG, border: "1px solid rgba(255, 255, 255, 0.12)", borderRadius: RUN_BLOCK_RADIUS }}>
+        <Text style={{ fontFamily: EXAMPLE_FONT_FAMILY, fontSize: RUN_VALUE_FONT_SIZE, lineHeight: RUN_VALUE_LINE_HEIGHT, whiteSpace: "pre", overflowX: "auto" }}>
+          {props.lines.join("\n")}
+        </Text>
+      </Box>
+    </Box>
   );
 }
 
@@ -409,11 +431,16 @@ function EditorCard(props: EditorProps & { actions: PracticePanelActions; curren
       <EditorToolbar {...props} frontend={frontend} />
       {frontendFiles && <FrontendFileTabs activeFile={activeFile} setActiveFile={setActiveFile} />}
       <Progress value={props.timeUsedPercent} color={props.timerColor} radius={0} />
-      <Box h={EDITOR_HEIGHT} pos="relative">
-        <MonacoEditor height={`${EDITOR_HEIGHT}px`} language={editorLanguage} path={editorPath} theme="vs-dark" value={editorValue} onChange={(value) => updateEditorDraft(value || "")} onMount={props.actions.handleEditorMount} options={{ minimap: { enabled: false }, fontSize: EDITOR_FONT_SIZE, tabSize: TAB_SIZE, wordWrap: "on", scrollBeyondLastLine: false, automaticLayout: true, formatOnPaste: true, formatOnType: true, quickSuggestions: false, suggestOnTriggerCharacters: false, parameterHints: { enabled: false }, readOnly: !props.sessionStarted, readOnlyMessage: EDITOR_READ_ONLY_MESSAGE }} />
-        {!props.sessionStarted && <LockedEditorOverlay />}
-      </Box>
-      <RunnerFrame frameRef={props.runnerFrame} visible={frontend} />
+      <EditorWorkspace
+        editorLanguage={editorLanguage}
+        editorPath={editorPath}
+        editorValue={editorValue}
+        frontend={frontend}
+        handleEditorMount={props.actions.handleEditorMount}
+        runnerFrame={props.runnerFrame}
+        sessionStarted={props.sessionStarted}
+        updateEditorDraft={updateEditorDraft}
+      />
       <Paper radius={0} p="sm" bg={`${props.statusColor}.0`}>
         <Text size="sm" c={`${props.statusColor}.8`} style={{ whiteSpace: "pre-wrap" }}>{props.runStatus}</Text>
       </Paper>
@@ -421,6 +448,50 @@ function EditorCard(props: EditorProps & { actions: PracticePanelActions; curren
       <ConsoleOutputPanel code={props.code} currentQuestion={props.currentQuestion} markSolutionRevealed={props.actions.markSolutionRevealed} result={props.consoleRunResult} />
       <TestResults results={props.results} />
     </Card>
+  );
+}
+
+function EditorWorkspace(props: {
+  editorLanguage: string;
+  editorPath?: string;
+  editorValue: string;
+  frontend: boolean;
+  handleEditorMount: OnMount;
+  runnerFrame: React.MutableRefObject<HTMLIFrameElement | null>;
+  sessionStarted: boolean;
+  updateEditorDraft: (value: string) => void;
+}) {
+  const editor = (
+    <Box h="100%" pos="relative" style={{ minWidth: 0 }}>
+      <MonacoEditor height="100%" language={props.editorLanguage} path={props.editorPath} theme="vs-dark" value={props.editorValue} onChange={(value) => props.updateEditorDraft(value || "")} onMount={props.handleEditorMount} options={{ minimap: { enabled: false }, fontSize: EDITOR_FONT_SIZE, tabSize: TAB_SIZE, wordWrap: "on", scrollBeyondLastLine: false, automaticLayout: true, formatOnPaste: true, formatOnType: true, quickSuggestions: false, suggestOnTriggerCharacters: false, parameterHints: { enabled: false }, readOnly: !props.sessionStarted, readOnlyMessage: EDITOR_READ_ONLY_MESSAGE }} />
+      {!props.sessionStarted && <LockedEditorOverlay />}
+    </Box>
+  );
+
+  if (!props.frontend) {
+    return (
+      <>
+        <Box h={EDITOR_HEIGHT} pos="relative">
+          {editor}
+        </Box>
+        <RunnerFrame frameRef={props.runnerFrame} visible={false} />
+      </>
+    );
+  }
+
+  return (
+    <Box
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 3fr) minmax(320px, 2fr)",
+        height: FRONTEND_WORKSPACE_HEIGHT,
+        minWidth: 0,
+        overflowX: "auto"
+      }}
+    >
+      {editor}
+      <RunnerFrame frameRef={props.runnerFrame} visible />
+    </Box>
   );
 }
 
@@ -438,7 +509,7 @@ function FrontendFileTabs(props: { activeFile: FrontendFileName; setActiveFile: 
 
 function RunnerFrame(props: { frameRef: React.MutableRefObject<HTMLIFrameElement | null>; visible: boolean }) {
   return (
-    <Box style={props.visible ? { background: "#0f172a", borderTop: "1px solid rgba(255, 255, 255, 0.14)", height: 360 } : { height: 0, overflow: "hidden" }}>
+    <Box style={props.visible ? { background: "#0f172a", borderLeft: "1px solid rgba(255, 255, 255, 0.14)", height: "100%", minWidth: 0 } : { height: 0, overflow: "hidden" }}>
       <iframe
         ref={props.frameRef}
         src={RUNNER_FRAME}

@@ -93,50 +93,28 @@ const curatedQuestions: Question[] = [
     constraints: ["Use React state for hover and selected rating.", "Render five interactive stars.", "Hovering a lower star after selecting a higher star should highlight only the hovered range.", "Clicking a star updates the selected rating message.", "Keep the component responsive."],
     starter: "Frontend challenge: implement App.tsx and styles.css.",
     frontend: {
+      wireframe: [
+        "+----------------------------------+",
+        "| COMPONENT CHALLENGE              |",
+        "| How was your experience?         |",
+        "| [*] [*] [*] [*] [*]              |",
+        "| Select a rating.                 |",
+        "+----------------------------------+"
+      ],
       checks: [
         { name: "renders five stars", selector: ".star", type: "count", value: 5 },
         { name: "shows empty-state message", selector: ".rating-message", textIncludes: "Select a rating", type: "exists" },
         { name: "clicking the third star updates the message", selector: ".star:nth-of-type(3)", textIncludes: "3 out of 5", type: "clickText" }
       ],
       files: {
-        "App.tsx": `import React, { useState } from "react";
+        "App.tsx": `import React from "react";
 import "./styles.css";
 
 export default function App() {
-  // TODO: Store the selected rating and the currently hovered rating in state.
-  const [rating, setRating] = useState(0);
-
+  // TODO: Build the star rating component from the prompt and requirements.
   return (
-    <main className="rating-card">
-      <p className="eyebrow">Component challenge</p>
-      <h1>How was your experience?</h1>
-      <div className="stars" aria-label="Choose a rating">
-        {[1, 2, 3, 4, 5].map((value) => {
-          // TODO: A star is active when it is inside the hovered range, or the selected range when not hovering.
-          const active = false;
-          return (
-          <button
-            key={value}
-            className={active ? "star active" : "star"}
-            aria-label={\`Rate \${value} star\${value === 1 ? "" : "s"}\`}
-            onClick={() => {
-              // TODO: Save the selected rating.
-              setRating(rating);
-            }}
-            onMouseEnter={() => {
-              // TODO: Track the hovered star.
-            }}
-            onMouseLeave={() => {
-              // TODO: Clear the hovered star.
-            }}
-            type="button"
-          >
-            {"\\u2605"}
-          </button>
-          );
-        })}
-      </div>
-      <p className="rating-message">Select a rating.</p>
+    <main>
+      {/* TODO: Implement the UI shown in the wireframe. */}
     </main>
   );
 }`,
@@ -234,48 +212,35 @@ h1 {
     constraints: ["Use React state for the input value and debounced query.", "Render a search input with a clear label.", "Show the current typed value immediately.", "Show search result rows for the debounced value.", "Keep the component usable on narrow screens."],
     starter: "function debounceEvents(events, waitMs) {\n  \n}",
     frontend: {
+      wireframe: [
+        "+--------------------------------------+",
+        "| SEARCH COMPONENT                     |",
+        "| Debounced resource search            |",
+        "| Search                               |",
+        "| [ Try react                       ]  |",
+        "| Typing: ...                          |",
+        "| Searching for: ...                   |",
+        "| [ Result card                      ] |",
+        "| [ Result card                      ] |",
+        "+--------------------------------------+"
+      ],
       checks: [
         { name: "renders a search input", selector: ".search-input", type: "exists" },
         { name: "renders three starter results", selector: ".result-card", type: "count", value: 3 },
         { name: "typing updates the immediate query text", selector: ".search-input", textIncludes: "react", type: "inputText", value: "react" }
       ],
       files: {
-        "App.tsx": `import React, { useEffect, useState } from "react";
+        "App.tsx": `import React from "react";
 import "./styles.css";
 
 const resources = ["React hooks guide", "TypeScript patterns", "Frontend interview notes"];
 
 export default function App() {
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-
-  useEffect(() => {
-    // TODO: Update debouncedQuery 300ms after query changes, and clean up the timer.
-  }, [query]);
-
-  // TODO: Filter resources using debouncedQuery. Empty query should show every resource.
-  const matches = resources;
-
+  // TODO: Build the debounced search UI. Use resources as the starting data.
+  void resources;
   return (
-    <main className="search-card">
-      <p className="eyebrow">Search component</p>
-      <h1>Debounced resource search</h1>
-      <label>
-        Search
-        <input
-          className="search-input"
-          value={query}
-          onChange={() => {
-            // TODO: Store the typed value in query.
-          }}
-          placeholder="Try react"
-        />
-      </label>
-      <p className="live-query">Typing: Nothing yet</p>
-      <p className="debounced-query">Searching for: {debouncedQuery || "All resources"}</p>
-      <section className="results">
-        {matches.map((item) => <article className="result-card" key={item}>{item}</article>)}
-      </section>
+    <main>
+      {/* TODO: Implement the UI shown in the wireframe. */}
     </main>
   );
 }`,
@@ -365,61 +330,40 @@ label {
     constraints: ["Use React state to store todo items.", "Render an input, add button, and todo rows.", "Do not add an empty task.", "Clicking a todo toggles its completed state.", "Show how many tasks are still open."],
     starter: "function reduceTodoActions(actions) {\n  \n}",
     frontend: {
+      wireframe: [
+        "+--------------------------------------+",
+        "| TODO COMPONENT                       |",
+        "| Frontend launch list                 |",
+        "| [ Add a task                    ][+] |",
+        "| Draft: ...                           |",
+        "| [ Wire preview              Open  ]  |",
+        "| [ Style empty state         Done  ]  |",
+        "| 1 open tasks                         |",
+        "+--------------------------------------+"
+      ],
       checks: [
         { name: "renders the seeded todo rows", selector: ".todo-row", type: "count", value: 2 },
         { name: "typing updates the draft text", selector: ".todo-input", textIncludes: "Review PR", type: "inputText", value: "Review PR" },
         { name: "clicking the first todo marks it complete", selector: ".todo-row:first-of-type", type: "clickCount", value: ".todo-row.done" }
       ],
       files: {
-        "App.tsx": `import React, { useState } from "react";
+        "App.tsx": `import React from "react";
 import "./styles.css";
 
 type Todo = { id: number; text: string; completed: boolean };
 
+const initialTodos: Todo[] = [
+  { id: 1, text: "Wire preview", completed: false },
+  { id: 2, text: "Style empty state", completed: true }
+];
+
 export default function App() {
-  const [todos, setTodos] = useState<Todo[]>([
-    { id: 1, text: "Wire preview", completed: false },
-    { id: 2, text: "Style empty state", completed: true }
-  ]);
-  const [draft, setDraft] = useState("");
-
-  const addTodo = () => {
-    // TODO: Ignore empty text, add a new open todo, then clear the draft.
-  };
-
-  const toggleTodo = (id: number) => {
-    // TODO: Toggle only the clicked todo.
-    setTodos(todos);
-  };
-
-  // TODO: Count only incomplete todos.
-  const openCount = todos.length;
+  // TODO: Build the todo list UI. Use initialTodos as the starting data.
+  void initialTodos;
 
   return (
-    <main className="todo-card">
-      <p className="eyebrow">Todo component</p>
-      <h1>Frontend launch list</h1>
-      <div className="composer">
-        <input
-          className="todo-input"
-          value={draft}
-          onChange={() => {
-            // TODO: Store the typed draft value.
-          }}
-          placeholder="Add a task"
-        />
-        <button className="add-button" onClick={addTodo} type="button">Add</button>
-      </div>
-      <p className="draft-preview">Draft: {draft || "Nothing typed"}</p>
-      <section className="todo-list">
-        {todos.map((todo) => (
-          <button className={todo.completed ? "todo-row done" : "todo-row"} key={todo.id} onClick={() => toggleTodo(todo.id)} type="button">
-            <span>{todo.text}</span>
-            <span>{todo.completed ? "Done" : "Open"}</span>
-          </button>
-        ))}
-      </section>
-      <p className="todo-count">{openCount} open tasks</p>
+    <main>
+      {/* TODO: Implement the UI shown in the wireframe. */}
     </main>
   );
 }`,
@@ -531,13 +475,24 @@ h1 {
     constraints: ["Use React state for the active tab id.", "Render at least three tabs.", "Clicking a tab changes the active panel.", "Expose accessible button labels for each tab.", "Keep the tab list responsive."],
     starter: "function updateTabs(tabs, activeId, action) {\n  \n}",
     frontend: {
+      wireframe: [
+        "+--------------------------------------+",
+        "| TABS COMPONENT                       |",
+        "| Product dashboard                    |",
+        "| [Overview] [Metrics] [Settings]      |",
+        "| +----------------------------------+ |",
+        "| | Active panel title               | |",
+        "| | Active panel content             | |",
+        "| +----------------------------------+ |",
+        "+--------------------------------------+"
+      ],
       checks: [
         { name: "renders three tab buttons", selector: ".tab-button", type: "count", value: 3 },
         { name: "shows the Overview panel first", selector: ".tab-panel", textIncludes: "Overview", type: "exists" },
         { name: "clicking Metrics opens the metrics panel", selector: ".tab-button:nth-of-type(2)", textIncludes: "Conversion", type: "clickText" }
       ],
       files: {
-        "App.tsx": `import React, { useState } from "react";
+        "App.tsx": `import React from "react";
 import "./styles.css";
 
 const tabs = [
@@ -547,33 +502,12 @@ const tabs = [
 ];
 
 export default function App() {
-  const [activeId, setActiveId] = useState("overview");
-  // TODO: Find the active tab from activeId.
-  const activeTab = tabs[0];
+  // TODO: Build the tabs UI. Use tabs as the starting data.
+  void tabs;
 
   return (
-    <main className="tabs-card">
-      <p className="eyebrow">Tabs component</p>
-      <h1>Product dashboard</h1>
-      <nav className="tab-list" aria-label="Dashboard sections">
-        {tabs.map((tab) => (
-          <button
-            className={tab.id === activeId ? "tab-button active" : "tab-button"}
-            key={tab.id}
-            onClick={() => {
-              // TODO: Set the active tab id.
-              setActiveId(activeId);
-            }}
-            type="button"
-          >
-            {tab.title}
-          </button>
-        ))}
-      </nav>
-      <section className="tab-panel">
-        <h2>{activeTab.title}</h2>
-        <p>{activeTab.body}</p>
-      </section>
+    <main>
+      {/* TODO: Implement the UI shown in the wireframe. */}
     </main>
   );
 }`,
@@ -654,6 +588,667 @@ p {
       { name: "renames existing tab", args: [[{ id: "a", title: "A" }, { id: "b", title: "B" }], "a", { type: "rename", id: "b", title: "Docs" }], expected: { tabs: [{ id: "a", title: "A" }, { id: "b", title: "Docs" }], activeId: "a" } },
       { name: "ignores empty rename title", args: [[{ id: "a", title: "A" }], "a", { type: "rename", id: "a", title: "" }], expected: { tabs: [{ id: "a", title: "A" }], activeId: "a" } }
     ]
+  },
+  {
+    id: "frontend-virtualized-list",
+    title: "Virtualized Activity List",
+    difficulty: 3,
+    rating: 1660,
+    topics: ["Frontend", "React", "TypeScript", "Virtualization"],
+    functionName: "VirtualizedListApp",
+    prompt: "Build a React virtualized list for a long activity feed. Only the visible rows should render, scrolling should update the visible window, and a jump action should move the viewport to a target item.",
+    constraints: ["Render a fixed-height scroll viewport.", "Only render the visible rows plus a small buffer.", "Keep row positions stable with absolute positioning or spacer elements.", "Scrolling should update the visible item range.", "The jump button should reveal Incident 40."],
+    starter: "Frontend challenge: implement App.tsx and styles.css.",
+    frontend: {
+      wireframe: [
+        "+--------------------------------------+",
+        "| VIRTUALIZATION                       |",
+        "| Activity feed              [Jump]    |",
+        "| +----------------------------------+ |",
+        "| | Incident 01        Platform      | |",
+        "| | Incident 02        Payments      | |",
+        "| | Incident 03        Search        | |",
+        "| | ... visible rows only ...        | |",
+        "| +----------------------------------+ |",
+        "| Showing rows 1 through 8             |",
+        "+--------------------------------------+"
+      ],
+      checks: [
+        { name: "renders the virtualized viewport", selector: ".virtual-list", type: "exists" },
+        { name: "renders only the initial visible rows", selector: ".virtual-row", type: "count", value: 8 },
+        { name: "jumping to Incident 40 updates the rendered rows", selector: ".jump-button", textIncludes: "Incident 40", type: "clickText" }
+      ],
+      files: {
+        "App.tsx": `import React from "react";
+import "./styles.css";
+
+const ROW_HEIGHT = 54;
+const VISIBLE_COUNT = 8;
+const activities = Array.from({ length: 80 }, (_, index) => ({
+  id: index + 1,
+  title: "Incident " + String(index + 1).padStart(2, "0"),
+  owner: index % 3 === 0 ? "Platform" : index % 3 === 1 ? "Payments" : "Search"
+}));
+
+export default function App() {
+  // TODO: Build the virtualized list UI. Use the constants and activities data above.
+  void ROW_HEIGHT;
+  void VISIBLE_COUNT;
+  void activities;
+
+  return (
+    <main>
+      {/* TODO: Implement the UI shown in the wireframe. */}
+    </main>
+  );
+}`,
+        "styles.css": `.virtual-card {
+  background: #ffffff;
+  border: 1px solid #dbe4ee;
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  color: #172033;
+  display: grid;
+  gap: 14px;
+  margin: 28px auto;
+  max-width: 620px;
+  padding: 26px;
+}
+
+.eyebrow {
+  color: #0f766e;
+  font-size: 0.78rem;
+  font-weight: 900;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+h1,
+.range-label {
+  margin: 0;
+}
+
+.jump-button {
+  background: #0f766e;
+  border: 0;
+  border-radius: 10px;
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  justify-self: start;
+  padding: 10px 14px;
+}
+
+.virtual-list {
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  height: 432px;
+  overflow: auto;
+  position: relative;
+}
+
+.virtual-spacer {
+  height: 4320px;
+  position: relative;
+}
+
+.virtual-row {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dbe4ee;
+  border-radius: 10px;
+  display: flex;
+  height: 44px;
+  justify-content: space-between;
+  left: 10px;
+  padding: 0 14px;
+  position: absolute;
+  right: 10px;
+}
+
+.range-label {
+  color: #475569;
+  font-weight: 800;
+}`
+      }
+    },
+    examples: [
+      { input: "Scroll near row 40", output: "Only a small group of rows around Incident 40 render", explanation: "The list maps scroll position to a row index and renders just that window." },
+      { input: "Click Jump to Incident 40", output: "Incident 40 appears in the viewport", explanation: "The jump action updates the scroll position or the visible window state." }
+    ],
+    tests: []
+  },
+  {
+    id: "frontend-lazy-image-gallery",
+    title: "Lazy Image Gallery",
+    difficulty: 3,
+    rating: 1710,
+    topics: ["Frontend", "React", "TypeScript", "Lazy Loading"],
+    functionName: "LazyGalleryApp",
+    prompt: "Build a lazy-loading gallery. Cards should start as lightweight placeholders, load when they enter the viewport, and expose a load-all action for users who want every image ready.",
+    constraints: ["Use IntersectionObserver or equivalent viewport detection.", "Track which image ids are loaded in React state.", "Render placeholders before a card is loaded.", "The Load all button should mark every card loaded.", "Avoid layout shift between placeholder and loaded states."],
+    starter: "Frontend challenge: implement App.tsx and styles.css.",
+    frontend: {
+      wireframe: [
+        "+--------------------------------------+",
+        "| LAZY LOADING                         |",
+        "| Dashboard gallery          [Load all]|",
+        "| +----------+ +----------+ +---------+|",
+        "| | image    | | placeholder | image  ||",
+        "| | label    | | label       | label  ||",
+        "| +----------+ +----------+ +---------+|",
+        "| 1 loaded                             |",
+        "+--------------------------------------+"
+      ],
+      checks: [
+        { name: "renders six gallery cards", selector: ".photo-card", type: "count", value: 6 },
+        { name: "shows one initially loaded card", selector: ".photo-loaded", type: "count", value: 1 },
+        { name: "load all marks every image loaded", selector: ".load-all", textIncludes: "6 loaded", type: "clickText" }
+      ],
+      files: {
+        "App.tsx": `import React from "react";
+import "./styles.css";
+
+const photos = [
+  { id: "north", label: "North dashboard", color: "#2563eb" },
+  { id: "south", label: "South dashboard", color: "#16a34a" },
+  { id: "east", label: "East dashboard", color: "#dc2626" },
+  { id: "west", label: "West dashboard", color: "#9333ea" },
+  { id: "central", label: "Central dashboard", color: "#f59e0b" },
+  { id: "global", label: "Global dashboard", color: "#0891b2" }
+];
+
+export default function App() {
+  // TODO: Build the lazy gallery UI. Use photos as the starting data.
+  void photos;
+
+  return (
+    <main>
+      {/* TODO: Implement the UI shown in the wireframe. */}
+    </main>
+  );
+}`,
+        "styles.css": `.gallery-card {
+  background: #ffffff;
+  border: 1px solid #dbe4ee;
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  color: #172033;
+  display: grid;
+  gap: 14px;
+  margin: 28px auto;
+  max-width: 720px;
+  padding: 26px;
+}
+
+.eyebrow {
+  color: #ca8a04;
+  font-size: 0.78rem;
+  font-weight: 900;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+h1,
+.loaded-count {
+  margin: 0;
+}
+
+.load-all {
+  background: #172033;
+  border: 0;
+  border-radius: 10px;
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  justify-self: start;
+  padding: 10px 14px;
+}
+
+.gallery-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.photo-card {
+  background: #f8fafc;
+  border: 1px solid #dbe4ee;
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.photo-frame {
+  align-items: center;
+  aspect-ratio: 16 / 10;
+  border-radius: 10px;
+  color: #ffffff;
+  display: flex;
+  font-weight: 900;
+  justify-content: center;
+}
+
+.photo-card:not(.photo-loaded) .photo-frame {
+  color: #64748b;
+}
+
+.loaded-count {
+  color: #475569;
+  font-weight: 800;
+}`
+      }
+    },
+    examples: [
+      { input: "Scroll a placeholder into view", output: "That card becomes loaded", explanation: "The observer reports visibility and the loaded id set expands." },
+      { input: "Click Load all", output: "The footer reads 6 loaded", explanation: "Every photo id is added while card dimensions stay unchanged." }
+    ],
+    tests: []
+  },
+  {
+    id: "frontend-graphql-directory",
+    title: "GraphQL User Directory",
+    difficulty: 3,
+    rating: 1760,
+    topics: ["Frontend", "React", "TypeScript", "GraphQL", "Fetching"],
+    functionName: "GraphQLDirectoryApp",
+    prompt: "Build a GraphQL-powered user directory. Users should be able to edit the query variables, run the request, and render matching users with loading and error states.",
+    constraints: ["Use the provided fetchGraphQL helper instead of real network access.", "Keep query text and variables in editable controls.", "Show a loading state while the request is pending.", "Render returned users as cards.", "Handle rejected requests without breaking the page."],
+    starter: "Frontend challenge: implement App.tsx and styles.css.",
+    frontend: {
+      wireframe: [
+        "+--------------------------------------+",
+        "| GRAPHQL                              |",
+        "| User directory                       |",
+        "| Query                                |",
+        "| [ query Directory(...) { ... }    ]  |",
+        "| Variables                            |",
+        "| [ { search, role }                ]  |",
+        "| [Run query]  Status                  |",
+        "| [ Ada Lovelace          Engineer ]   |",
+        "+--------------------------------------+"
+      ],
+      checks: [
+        { name: "renders a GraphQL query editor", selector: ".query-field", type: "exists" },
+        { name: "renders variables input", selector: ".variables-field", type: "exists" },
+        { name: "running the query renders matching users", selector: ".run-query", textIncludes: "Ada Lovelace", type: "clickText" }
+      ],
+      files: {
+        "App.tsx": `import React from "react";
+import "./styles.css";
+
+type User = { id: string; name: string; role: string };
+
+const USERS: User[] = [
+  { id: "1", name: "Ada Lovelace", role: "Engineer" },
+  { id: "2", name: "Grace Hopper", role: "Engineer" },
+  { id: "3", name: "Katherine Johnson", role: "Analyst" }
+];
+
+async function fetchGraphQL(query: string, variables: { search: string; role: string }): Promise<User[]> {
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  if (!query.includes("users")) {
+    throw new Error("Query must request users");
+  }
+  return USERS.filter((user) => {
+    const matchesSearch = !variables.search || user.name.toLowerCase().includes(variables.search.toLowerCase());
+    const matchesRole = !variables.role || user.role === variables.role;
+    return matchesSearch && matchesRole;
+  });
+}
+
+export default function App() {
+  // TODO: Build the GraphQL directory UI. Use fetchGraphQL for the mocked request.
+  void fetchGraphQL;
+
+  return (
+    <main>
+      {/* TODO: Implement the UI shown in the wireframe. */}
+    </main>
+  );
+}`,
+        "styles.css": `.graphql-card {
+  background: #ffffff;
+  border: 1px solid #dbe4ee;
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  color: #172033;
+  display: grid;
+  gap: 14px;
+  margin: 28px auto;
+  max-width: 680px;
+  padding: 26px;
+}
+
+.eyebrow {
+  color: #dc2626;
+  font-size: 0.78rem;
+  font-weight: 900;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+h1,
+.status-line {
+  margin: 0;
+}
+
+label {
+  display: grid;
+  font-weight: 900;
+  gap: 6px;
+}
+
+textarea {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font: 0.9rem ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  min-height: 74px;
+  padding: 12px;
+}
+
+.run-query {
+  background: #dc2626;
+  border: 0;
+  border-radius: 10px;
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  justify-self: start;
+  padding: 10px 14px;
+}
+
+.user-results {
+  display: grid;
+  gap: 10px;
+}
+
+.user-card {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dbe4ee;
+  border-radius: 10px;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 14px;
+}`
+      }
+    },
+    examples: [
+      { input: 'variables = { "search": "Ada", "role": "" }', output: "Ada Lovelace is rendered", explanation: "The helper filters the seeded GraphQL user data by the supplied variables." },
+      { input: "query text missing users", output: "An error state is shown", explanation: "The request helper rejects invalid query text and the component keeps rendering." }
+    ],
+    tests: []
+  },
+  {
+    id: "frontend-paginated-fetch-table",
+    title: "Paginated Fetch Table",
+    difficulty: 3,
+    rating: 1810,
+    topics: ["Frontend", "React", "TypeScript", "Fetching", "Pagination"],
+    functionName: "PaginatedFetchApp",
+    prompt: "Build a paginated data table backed by an async fetch helper. Changing pages should fetch new rows, show loading feedback, and ignore stale responses.",
+    constraints: ["Use the provided fetchPage helper instead of real network access.", "Fetch data when the page number changes.", "Render row data in a table-like layout.", "Disable impossible previous and next actions.", "Avoid showing stale data from an older request."],
+    starter: "Frontend challenge: implement App.tsx and styles.css.",
+    frontend: {
+      wireframe: [
+        "+--------------------------------------+",
+        "| FETCHING                             |",
+        "| Product ownership                    |",
+        "| [Previous]  Page 1  [Next]           |",
+        "| Rows ready                           |",
+        "| [ Auth Console          Identity  ]  |",
+        "| [ Billing Hub           Revenue   ]  |",
+        "| [ Search Admin          Discovery ]  |",
+        "+--------------------------------------+"
+      ],
+      checks: [
+        { name: "renders first page rows", selector: ".product-row", type: "count", value: 3 },
+        { name: "shows current page label", selector: ".page-label", textIncludes: "Page 1", type: "exists" },
+        { name: "next page fetches new rows", selector: ".next-button", textIncludes: "Canvas Kit", type: "clickText" }
+      ],
+      files: {
+        "App.tsx": `import React from "react";
+import "./styles.css";
+
+type Product = { id: string; name: string; owner: string };
+
+const PAGES: Product[][] = [
+  [
+    { id: "p1", name: "Auth Console", owner: "Identity" },
+    { id: "p2", name: "Billing Hub", owner: "Revenue" },
+    { id: "p3", name: "Search Admin", owner: "Discovery" }
+  ],
+  [
+    { id: "p4", name: "Canvas Kit", owner: "Design Systems" },
+    { id: "p5", name: "Metric Explorer", owner: "Analytics" },
+    { id: "p6", name: "Release Radar", owner: "Developer Tools" }
+  ]
+];
+
+async function fetchPage(page: number): Promise<Product[]> {
+  await new Promise((resolve) => setTimeout(resolve, 220));
+  return PAGES[page - 1] || [];
+}
+
+export default function App() {
+  // TODO: Build the paginated table UI. Use fetchPage for the mocked request.
+  void fetchPage;
+
+  return (
+    <main>
+      {/* TODO: Implement the UI shown in the wireframe. */}
+    </main>
+  );
+}`,
+        "styles.css": `.table-card {
+  background: #ffffff;
+  border: 1px solid #dbe4ee;
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  color: #172033;
+  display: grid;
+  gap: 14px;
+  margin: 28px auto;
+  max-width: 650px;
+  padding: 26px;
+}
+
+.eyebrow {
+  color: #2563eb;
+  font-size: 0.78rem;
+  font-weight: 900;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+h1,
+.loading-line {
+  margin: 0;
+}
+
+.pager {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.pager button {
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  padding: 10px 14px;
+}
+
+.previous-button {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.next-button {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.page-label {
+  font-weight: 900;
+}
+
+.product-table {
+  display: grid;
+  gap: 10px;
+}
+
+.product-row {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dbe4ee;
+  border-radius: 10px;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 14px;
+}`
+      }
+    },
+    examples: [
+      { input: "Click Next", output: "Rows from page 2 render", explanation: "The page state changes and the effect replaces table rows after the request completes." },
+      { input: "Rapidly change pages", output: "Only the newest response updates the table", explanation: "Cleanup or request tokens prevent stale responses from winning." }
+    ],
+    tests: []
+  },
+  {
+    id: "frontend-infinite-feed-fetch",
+    title: "Infinite Feed Loader",
+    difficulty: 3,
+    rating: 1870,
+    topics: ["Frontend", "React", "TypeScript", "Fetching", "Infinite Scroll"],
+    functionName: "InfiniteFeedApp",
+    prompt: "Build an infinite feed loader. The feed should request the next page, append new items, show loading state, and stop when there are no more pages.",
+    constraints: ["Use the provided fetchFeedPage helper instead of real network access.", "Append new items without replacing the existing feed.", "Prevent duplicate requests while loading.", "Hide or disable loading controls when there are no more pages.", "Keep the feed readable on small screens."],
+    starter: "Frontend challenge: implement App.tsx and styles.css.",
+    frontend: {
+      wireframe: [
+        "+--------------------------------------+",
+        "| INFINITE LOADING                     |",
+        "| Engineering updates                  |",
+        "| [ Hydration bug fixed              ] |",
+        "| [ Search latency down              ] |",
+        "|                                      |",
+        "| [ Load more ]                        |",
+        "| or: End of feed                      |",
+        "+--------------------------------------+"
+      ],
+      checks: [
+        { name: "renders initial feed items", selector: ".feed-item", type: "count", value: 2 },
+        { name: "shows the load more action", selector: ".load-more", type: "exists" },
+        { name: "loading more appends page two", selector: ".load-more", textIncludes: "Cache invalidation", type: "clickText" }
+      ],
+      files: {
+        "App.tsx": `import React from "react";
+import "./styles.css";
+
+type FeedItem = { id: string; title: string; summary: string };
+
+const FEED_PAGES: FeedItem[][] = [
+  [
+    { id: "1", title: "Hydration bug fixed", summary: "Resolved a mismatch in the dashboard shell." },
+    { id: "2", title: "Search latency down", summary: "New index routing reduced p95 latency." }
+  ],
+  [
+    { id: "3", title: "Cache invalidation shipped", summary: "Profiles refresh after permission updates." },
+    { id: "4", title: "GraphQL schema reviewed", summary: "Deprecated fields now emit warnings." }
+  ]
+];
+
+async function fetchFeedPage(page: number): Promise<{ items: FeedItem[]; hasMore: boolean }> {
+  await new Promise((resolve) => setTimeout(resolve, 220));
+  return { items: FEED_PAGES[page - 1] || [], hasMore: page < FEED_PAGES.length };
+}
+
+export default function App() {
+  // TODO: Build the infinite feed UI. Use fetchFeedPage for the mocked request.
+  void fetchFeedPage;
+
+  return (
+    <main>
+      {/* TODO: Implement the UI shown in the wireframe. */}
+    </main>
+  );
+}`,
+        "styles.css": `.feed-card {
+  background: #ffffff;
+  border: 1px solid #dbe4ee;
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  color: #172033;
+  display: grid;
+  gap: 14px;
+  margin: 28px auto;
+  max-width: 620px;
+  padding: 26px;
+}
+
+.eyebrow {
+  color: #9333ea;
+  font-size: 0.78rem;
+  font-weight: 900;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+h1,
+.feed-item p,
+.end-message {
+  margin: 0;
+}
+
+.feed-list {
+  display: grid;
+  gap: 10px;
+}
+
+.feed-item {
+  background: #f8fafc;
+  border: 1px solid #dbe4ee;
+  border-radius: 12px;
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+}
+
+.feed-item p {
+  color: #475569;
+}
+
+.load-more {
+  background: #9333ea;
+  border: 0;
+  border-radius: 10px;
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  justify-self: start;
+  padding: 10px 14px;
+}
+
+.load-more:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}`
+      }
+    },
+    examples: [
+      { input: "Click Load more", output: "Page two items append below the original feed", explanation: "The component requests the next page and concatenates results." },
+      { input: "Click while a request is pending", output: "No duplicate page is appended", explanation: "The loading flag guards the request path until it settles." }
+    ],
+    tests: []
   },
   {
     id: "string-longest-unique",
