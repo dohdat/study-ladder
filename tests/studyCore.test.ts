@@ -15,6 +15,7 @@ import {
   MAX_HEALTH,
   MODIFIER_KEYS,
   applyCodingCompanyProfile,
+  clearCodingCompanyProfile,
   applyIncomingDamage,
   applyHealingReceived,
   applyScheduleResult,
@@ -328,6 +329,45 @@ describe("studyCore", () => {
     expect(applied.profile.codingTags).toEqual(["DFS", "BFS"]);
     expect(applied.profile.codingMinRating).toBe(2000);
     expect(getCodingFilteredQuestions(applied).every((question) => question.rating >= 2000 && question.topics.some((topic) => ["DFS", "BFS"].includes(topic)))).toBe(true);
+  });
+
+  it("clears saved company profile filters when no profile is selected", () => {
+    const state = defaultState();
+    state.profile.activeCodingProfileId = "roblox";
+    state.profile.codingProfiles = [{
+      id: "roblox",
+      name: "Roblox",
+      codingTags: normalizeCodingTags(["DFS", "BFS"]),
+      codingMinRating: 2000
+    }];
+    state.profile.codingTags = normalizeCodingTags(["DFS", "BFS"]);
+    state.profile.codingMinRating = 2000;
+
+    const cleared = clearCodingCompanyProfile(state);
+
+    expect(cleared.profile.activeCodingProfileId).toBeNull();
+    expect(cleared.profile.codingTags).toEqual([]);
+    expect(cleared.profile.codingMinRating).toBe(0);
+    expect(cleared.profile.codingProfiles).toEqual(state.profile.codingProfiles);
+  });
+
+  it("drops stale profile filters while normalizing no-profile states", () => {
+    const state = defaultState();
+    state.profile.activeCodingProfileId = null;
+    state.profile.codingProfiles = [{
+      id: "roblox",
+      name: "Roblox",
+      codingTags: normalizeCodingTags(["DFS", "BFS"]),
+      codingMinRating: 2000
+    }];
+    state.profile.codingTags = normalizeCodingTags(["DFS", "BFS"]);
+    state.profile.codingMinRating = 2000;
+
+    const normalized = normalizeStudyState(state);
+
+    expect(normalized.profile.activeCodingProfileId).toBeNull();
+    expect(normalized.profile.codingTags).toEqual([]);
+    expect(normalized.profile.codingMinRating).toBe(0);
   });
 
   it("keeps question picks near the player rating", () => {

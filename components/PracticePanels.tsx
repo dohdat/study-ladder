@@ -160,6 +160,7 @@ export function PracticeArea(props: {
           currentQuestion={props.currentQuestion}
           chooseQuestion={props.actions.chooseQuestion}
           damagePop={props.damagePop}
+          questionVariantReady={props.editorProps.questionVariantReady}
           sessionStarted={props.editorProps.sessionStarted}
           state={props.state}
         />
@@ -171,7 +172,7 @@ export function PracticeArea(props: {
   );
 }
 
-function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; chooseQuestion: (preferNext: boolean) => void; damagePop?: MonsterDamagePop | null; sessionStarted: boolean; state: StudyState }) {
+function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; chooseQuestion: (preferNext: boolean) => void; damagePop?: MonsterDamagePop | null; questionVariantReady: boolean; sessionStarted: boolean; state: StudyState }) {
   return (
     <Card withBorder>
       <Group justify="space-between" align="flex-start">
@@ -184,7 +185,7 @@ function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; c
           </Box>
         </Tooltip>
       </Group>
-      {props.sessionStarted ? <ProblemDetails currentQuestion={props.currentQuestion} damagePop={props.damagePop} state={props.state} /> : <LockedProblemDetails />}
+      {props.sessionStarted ? <ProblemDetails currentQuestion={props.currentQuestion} damagePop={props.damagePop} state={props.state} /> : <LockedProblemDetails questionVariantReady={props.questionVariantReady} />}
     </Card>
   );
 }
@@ -267,13 +268,13 @@ function FrontendWireframe(props: { lines: string[] }) {
   );
 }
 
-function LockedProblemDetails() {
+function LockedProblemDetails(props: { questionVariantReady: boolean }) {
   return (
     <>
       <Divider my="md" />
       <Group gap="xs" c="dimmed">
-        <IconPlayerPlay size={ICON_SM} />
-        <Text size="sm">Press Start to reveal the question.</Text>
+        {props.questionVariantReady ? <IconPlayerPlay size={ICON_SM} /> : <IconLock size={ICON_SM} />}
+        <Text size="sm">{props.questionVariantReady ? "Press Start to reveal the question." : "Codex CLI is generating a fresh version of this question."}</Text>
       </Group>
     </>
   );
@@ -437,6 +438,7 @@ function EditorCard(props: EditorProps & { actions: PracticePanelActions; curren
         editorValue={editorValue}
         frontend={frontend}
         handleEditorMount={props.actions.handleEditorMount}
+        questionVariantReady={props.questionVariantReady}
         runnerFrame={props.runnerFrame}
         sessionStarted={props.sessionStarted}
         updateEditorDraft={updateEditorDraft}
@@ -457,6 +459,7 @@ function EditorWorkspace(props: {
   editorValue: string;
   frontend: boolean;
   handleEditorMount: OnMount;
+  questionVariantReady: boolean;
   runnerFrame: React.MutableRefObject<HTMLIFrameElement | null>;
   sessionStarted: boolean;
   updateEditorDraft: (value: string) => void;
@@ -464,7 +467,7 @@ function EditorWorkspace(props: {
   const editor = (
     <Box h="100%" pos="relative" style={{ minWidth: 0 }}>
       <MonacoEditor height="100%" language={props.editorLanguage} path={props.editorPath} theme="vs-dark" value={props.editorValue} onChange={(value) => props.updateEditorDraft(value || "")} onMount={props.handleEditorMount} options={{ minimap: { enabled: false }, fontSize: EDITOR_FONT_SIZE, tabSize: TAB_SIZE, wordWrap: "on", scrollBeyondLastLine: false, automaticLayout: true, formatOnPaste: true, formatOnType: true, quickSuggestions: false, suggestOnTriggerCharacters: false, parameterHints: { enabled: false }, readOnly: !props.sessionStarted, readOnlyMessage: EDITOR_READ_ONLY_MESSAGE }} />
-      {!props.sessionStarted && <LockedEditorOverlay />}
+      {!props.sessionStarted && <LockedEditorOverlay questionVariantReady={props.questionVariantReady} />}
     </Box>
   );
 
@@ -520,7 +523,9 @@ function RunnerFrame(props: { frameRef: React.MutableRefObject<HTMLIFrameElement
   );
 }
 
-function LockedEditorOverlay() {
+function LockedEditorOverlay(props: { questionVariantReady: boolean }) {
+  const title = props.questionVariantReady ? "Press Start to unlock the editor." : "Waiting for Codex CLI to generate a variation.";
+  const description = props.questionVariantReady ? "Timer and fullscreen guard start together." : "Start unlocks after the generated question is ready.";
   return (
     <Box
       pos="absolute"
@@ -536,10 +541,10 @@ function LockedEditorOverlay() {
     >
       <Paper withBorder shadow="sm" p="md" maw={LOCKED_OVERLAY_PANEL_MAX_WIDTH}>
         <Group gap="xs" justify="center">
-          <IconPlayerPlay size={ICON_SM} />
-          <Text size="sm" fw={600}>Press Start to unlock the editor.</Text>
+          {props.questionVariantReady ? <IconPlayerPlay size={ICON_SM} /> : <IconLock size={ICON_SM} />}
+          <Text size="sm" fw={600}>{title}</Text>
         </Group>
-        <Text size="xs" c="dimmed" mt={4} ta="center">Timer and fullscreen guard start together.</Text>
+        <Text size="xs" c="dimmed" mt={4} ta="center">{description}</Text>
       </Paper>
     </Box>
   );

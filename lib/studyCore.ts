@@ -188,6 +188,7 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
 
   const inventory: InventoryItem[] = [];
   const codingProfiles = normalizeCodingCompanyProfiles(profile.codingProfiles);
+  const activeCodingProfileId = normalizeActiveCodingProfileId(profile.activeCodingProfileId, codingProfiles);
   const normalized = {
     ...fallback,
     ...stored,
@@ -198,10 +199,10 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
       experience: 0,
       rating: normalizeRating(stored, fallback),
       spireMinRating: normalizeSpireMinRating(profile.spireMinRating),
-      codingTags: normalizeCodingTags(profile.codingTags),
-      codingMinRating: normalizeCodingMinRating(profile.codingMinRating),
+      codingTags: activeCodingProfileId ? normalizeCodingTags(profile.codingTags) : [],
+      codingMinRating: activeCodingProfileId ? normalizeCodingMinRating(profile.codingMinRating) : CODING_MIN_RATING_FLOOR,
       codingProfiles,
-      activeCodingProfileId: normalizeActiveCodingProfileId(profile.activeCodingProfileId, codingProfiles),
+      activeCodingProfileId,
       statPoints: 0,
       statPointsAwardedLevel: FIRST_STAT_LEVEL,
       stats: normalizeCharacterStats(profile.stats),
@@ -369,6 +370,19 @@ export function applyCodingCompanyProfile(state: StudyState, profileId: string):
       codingMinRating: profile.codingMinRating,
       codingProfiles: profiles,
       codingTags: profile.codingTags
+    }
+  };
+}
+
+export function clearCodingCompanyProfile(state: StudyState): StudyState {
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      activeCodingProfileId: null,
+      codingMinRating: CODING_MIN_RATING_FLOOR,
+      codingProfiles: normalizeCodingCompanyProfiles(state.profile.codingProfiles),
+      codingTags: []
     }
   };
 }

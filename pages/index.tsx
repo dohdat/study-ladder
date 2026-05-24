@@ -22,7 +22,7 @@ import { areHintsDisabledByHeat, isRunCodeDisabledByHeat } from "../lib/campaign
 import { beautifyCode } from "../lib/codeFormat";
 import { applyPassedCombatResult, getElapsedPressureRatio, getTimedMonsterAttack, isMonsterEnraged } from "../lib/combatCore";
 import { getTimerDisplay } from "../lib/timerDisplay";
-import { chooseNextSpireQuestion, completeSpireQuestion, getCurrentRoundQuestion, getCurrentSpireNode, isCombatNode as isSpireCombatNode } from "../lib/spireMapCore";
+import { chooseNextSpireQuestion, completeSpireQuestion, getCurrentRoundQuestion, getCurrentSpireNode, isCombatNode as isSpireCombatNode, retargetCurrentSpireRoomQuestions } from "../lib/spireMapCore";
 import {
   HINT_COST, applyHealthPenalty, applyIncomingDamage, applyScheduleResult, buyHint, canBuyHint, cloneState, defaultState, getCard,
   getHintCost, getIncomingDamageEffect, getMaxHealth, getMetaStartingGoldBonus, getModifiedQuestionTimeLimitMs, getRunModifierTotals, isQuestionInRecommendedRange, markQuestionRunCode, normalizeStudyState, setCard, setSpireMinimumRating
@@ -66,12 +66,24 @@ type TimerControls = { timeRemainingMs: number; questionFinished: boolean; setQu
 
 type PracticeActions = PracticePanelActions;
 
+function hasStaleNoProfileCodingFilters(stored: Partial<StudyState> | null | undefined, normalized: StudyState) {
+  if (normalized.profile.activeCodingProfileId !== null || normalized.profile.spireRun.mapOpen || normalized.profile.spireRun.roundSolvedIds.length > 0) {
+    return false;
+  }
+  const storedProfile = stored?.profile;
+  return !storedProfile?.activeCodingProfileId && (Boolean(storedProfile?.codingTags?.length) || Boolean(storedProfile?.codingMinRating));
+}
+
 function useHydrateStudy(setState: (state: StudyState) => void, setQuestion: (question: Question) => void, setCode: (code: string) => void) {
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
     let active = true;
     async function hydrate() {
-      const saved = normalizeStudyState(await migrateLocalStorageState());
+      const stored = await migrateLocalStorageState();
+      let saved = normalizeStudyState(stored);
+      if (hasStaleNoProfileCodingFilters(stored, saved)) {
+        saved = retargetCurrentSpireRoomQuestions(saved, saved.profile.spireRun.mapSeed);
+      }
       const savedQuestion = questions.find((question) => question.id === saved.currentId);
       const initialQuestion = getCurrentRoundQuestion(saved, savedQuestion && isQuestionInRecommendedRange(saved, savedQuestion, true) ? savedQuestion : null);
       if (active) {
@@ -949,7 +961,7 @@ function useQuestionDisplayVariant(params: {
     hasVariant: Boolean(cached),
     loading,
     question: cached || (displayQuestion?.id === params.currentQuestion.id ? displayQuestion : params.currentQuestion),
-    ready: true,
+    ready: Boolean(cached),
     revision,
     streamText: streamTextByQuestionId.current.get(params.currentQuestion.id) || ""
   };
@@ -1142,9 +1154,9 @@ export default function Home() {
       setRunStatus("Codex question ready.");
       return;
     }
-    if (questionVariant.ready && questionVariant.loading) {
+    if (!questionVariant.ready) {
       setRunTone("default");
-      setRunStatus("Original question ready. Codex is preparing a fresh variation in the background.");
+      setRunStatus(formatQuestionVariantStreamStatus(questionVariant.streamText));
       return;
     }
     setRunTone("default");

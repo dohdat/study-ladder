@@ -9,8 +9,9 @@ import { PlayerStatus } from "./PlayerStatus";
 import { UserMenu, USER_MENU_SHORTCUTS } from "./UserMenu";
 import type { UserMenuSection } from "./UserMenu";
 import { STUDY_BLOCKER_MS_PER_MINUTE, useStudyBlockerSettings } from "../hooks/useStudyBlocker";
+import { requestCodexQuestionVariant } from "../lib/hintPrompt";
 import { retargetCurrentSpireRoomQuestions } from "../lib/spireMapCore";
-import { applyCodingCompanyProfile, getAvailableCodingTags, normalizeCodingCompanyProfiles, normalizeCodingMinRating, normalizeCodingTags } from "../lib/studyCore";
+import { applyCodingCompanyProfile, clearCodingCompanyProfile, getAvailableCodingTags, normalizeCodingCompanyProfiles, normalizeCodingMinRating, normalizeCodingTags } from "../lib/studyCore";
 import type { ActiveWarriorSkillId, CodingCompanyProfile, StudyState } from "../types/study";
 import type { CombatImpactVisual } from "./MonsterEncounter";
 
@@ -37,6 +38,7 @@ const COMPANY_PROFILE_PANEL_WIDTH = 620;
 const COMPANY_PROFILE_ROW_BG = "linear-gradient(180deg, rgba(35, 19, 12, 0.96), rgba(13, 8, 5, 0.98))";
 const COMPANY_PROFILE_ROW_ACTIVE_BG = "linear-gradient(180deg, rgba(73, 33, 20, 0.98), rgba(24, 11, 7, 0.99))";
 const COMPANY_PROFILE_ROW_BORDER = "1px solid rgba(210, 168, 84, 0.62)";
+const COMPANY_PROFILE_SUGGESTION_ID = "company-profile-suggestion";
 type CompanyProfilePanelMode = "select" | "create" | "edit";
 
 export function AppHeader(props: {
@@ -111,6 +113,8 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
   const [profileName, setProfileName] = useState("");
   const [profileTags, setProfileTags] = useState<string[]>([]);
   const [profileMinRating, setProfileMinRating] = useState<number | string>(0);
+  const [profileSuggestionError, setProfileSuggestionError] = useState("");
+  const [profileSuggestionLoading, setProfileSuggestionLoading] = useState(false);
   const resetDraft = () => {
     setDraftProfiles(normalizeCodingCompanyProfiles(props.state.profile.codingProfiles));
     setDraftActiveProfileId(props.state.profile.activeCodingProfileId);
@@ -119,6 +123,8 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
     setProfileName("");
     setProfileTags([]);
     setProfileMinRating(0);
+    setProfileSuggestionError("");
+    setProfileSuggestionLoading(false);
   };
   const closeAndReset = () => {
     resetDraft();
@@ -129,7 +135,7 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
       const withProfiles = { ...previous, profile: { ...previous.profile, codingProfiles: draftProfiles } };
       const next = draftActiveProfileId
         ? applyCodingCompanyProfile(withProfiles, draftActiveProfileId)
-        : { ...withProfiles, profile: { ...withProfiles.profile, activeCodingProfileId: null } };
+        : clearCodingCompanyProfile(withProfiles);
       return props.canRetargetActiveRoom ? retargetCurrentSpireRoomQuestions(next) : next;
     });
     setOpened(false);
@@ -245,6 +251,7 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
                               setProfileName(profile.name);
                               setProfileTags(profile.codingTags);
                               setProfileMinRating(profile.codingMinRating);
+                              setProfileSuggestionError("");
                             }}
                             onSelect={() => setDraftActiveProfileId(profile.id)}
                           />
@@ -262,7 +269,25 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
                   </>
                 ) : (
                   <>
-                    <Text size="sm" fw={700}>{panelMode === "edit" ? "Edit company profile" : "Add company profile"}</Text>
+                    <Group justify="space-between" align="center">
+                      <Text size="sm" fw={700}>{panelMode === "edit" ? "Edit company profile" : "Add company profile"}</Text>
+                      <Button
+                        disabled={!profileName.trim()}
+                        loading={profileSuggestionLoading}
+                        size="xs"
+                        variant="light"
+                        onClick={() => suggestCompanyProfile({
+                          companyName: profileName,
+                          setError: setProfileSuggestionError,
+                          setLoading: setProfileSuggestionLoading,
+                          setMinRating: setProfileMinRating,
+                          setTags: setProfileTags,
+                          tags: codingTagOptions.map((option) => option.value)
+                        })}
+                      >
+                        Codex suggest
+                      </Button>
+                    </Group>
                     <TextInput
                       label="Profile name"
                       placeholder="Roblox"
@@ -286,6 +311,7 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
                       value={profileMinRating}
                       onChange={(value) => setProfileMinRating(value)}
                     />
+                    {profileSuggestionError && <Text size="xs" c="red.3">{profileSuggestionError}</Text>}
                     <Group justify="flex-end" gap="xs" mt="xs">
                       <Button
                         variant="default"
@@ -295,6 +321,7 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
                           setProfileName("");
                           setProfileTags([]);
                           setProfileMinRating(0);
+                          setProfileSuggestionError("");
                         }}
                       >
                         Cancel
@@ -308,6 +335,7 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
                           setProfileName("");
                           setProfileTags([]);
                           setProfileMinRating(0);
+                          setProfileSuggestionError("");
                         }}
                       >
                         {panelMode === "edit" ? "Save changes" : "Save profile"}
@@ -333,6 +361,78 @@ function createCodingCompanyProfile(name: string, codingTags: string[], minRatin
     codingTags: normalizeCodingTags(codingTags),
     codingMinRating: normalizeCodingMinRating(minRating)
   };
+}
+
+async function suggestCompanyProfile(params: {
+  companyName: string;
+  setError: (error: string) => void;
+  setLoading: (loading: boolean) => void;
+  setMinRating: (rating: number) => void;
+  setTags: (tags: string[]) => void;
+  tags: string[];
+}) {
+  const companyName = params.companyName.trim();
+  if (!companyName) {
+    params.setError("Enter a company name first.");
+    return;
+  }
+  params.setError("");
+  params.setLoading(true);
+  try {
+    const response = await requestCodexQuestionVariant(COMPANY_PROFILE_SUGGESTION_ID, createCompanyProfileSuggestionPrompt(companyName, params.tags));
+    if (!response.ok || !response.text) {
+      params.setError(response.error || "Codex could not suggest a profile.");
+      return;
+    }
+    const suggestion = parseCompanyProfileSuggestion(response.text, params.tags);
+    if (!suggestion.tags.length) {
+      params.setError("Codex did not return matching tags.");
+      return;
+    }
+    params.setTags(suggestion.tags);
+    params.setMinRating(suggestion.minRating);
+  } catch (error) {
+    params.setError(error instanceof Error ? error.message : "Codex suggestion failed.");
+  } finally {
+    params.setLoading(false);
+  }
+}
+
+function createCompanyProfileSuggestionPrompt(companyName: string, tags: string[]) {
+  return [
+    "Suggest a coding interview practice profile for this company.",
+    "Return JSON only with this exact shape: {\"tags\":[\"DFS\"],\"minRating\":2000}",
+    "Rules:",
+    "- tags must be exact strings from the available tags list.",
+    "- choose 2 to 5 tags.",
+    "- minRating must be an integer multiple of 50 between 0 and 3500.",
+    "- bias toward common interview patterns for the company.",
+    "",
+    `Company: ${companyName}`,
+    `Available tags: ${tags.join(", ")}`
+  ].join("\n");
+}
+
+function parseCompanyProfileSuggestion(text: string, availableTags: string[]) {
+  const parsed = JSON.parse(extractJsonObject(text)) as { minRating?: unknown; tags?: unknown };
+  const available = new Set(availableTags);
+  const tags = Array.isArray(parsed.tags)
+    ? normalizeCodingTags(parsed.tags.filter((tag): tag is string => typeof tag === "string" && available.has(tag)))
+    : [];
+  const minRating = normalizeCodingMinRating(parsed.minRating);
+  return { minRating, tags };
+}
+
+function extractJsonObject(text: string) {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    return trimmed;
+  }
+  const match = trimmed.match(/\{[\s\S]*\}/);
+  if (!match) {
+    throw new Error("Codex did not return JSON.");
+  }
+  return match[0];
 }
 
 function CompanyProfileRow(props: { onDelete?: () => void; onEdit?: () => void; onSelect: () => void; profile: CodingCompanyProfile; selected: boolean }) {
@@ -425,7 +525,7 @@ function getCompanyProfileSummary(props: { activeProfileId: string | null; profi
 
 function getCodingProfileSummary(profile: CodingCompanyProfile) {
   if (profile.id === NO_COMPANY_PROFILE_ID) {
-    return "Use custom filters without a saved company profile";
+    return "Use all coding questions without a saved company profile";
   }
   const minRating = normalizeCodingMinRating(profile.codingMinRating);
   return `${profile.codingTags.length ? profile.codingTags.join(", ") : "All tags"} | ${minRating ? `${minRating}+` : "Any rating"}`;

@@ -14,7 +14,12 @@ const HERO_BUTTON_HEIGHT = 35;
 const HERO_BUTTON_MIN_WIDTH = 92;
 const HERO_TAB_HEIGHT = 33;
 const HERO_TAB_WIDTH = 96;
-const CODING_TAB_WITH_ACCESSORY_WIDTH = 192;
+const CODING_TAB_WITH_ACCESSORY_WIDTH = 128;
+const CODING_TAB_PROFILE_MIN_WIDTH = 190;
+const CODING_TAB_PROFILE_MAX_WIDTH = 260;
+const CODING_TAB_LABEL_BASE_WIDTH = 74;
+const CODING_TAB_LABEL_CHAR_WIDTH = 7;
+const CODING_TAB_ACCESSORY_RESERVED_WIDTH = 32;
 const SYSTEM_TAB_WIDTH = 150;
 const HERO_BUTTON_TEXT_SHADOW = "0 2px 0 #000";
 const HERO_BUTTON_FILTER = "drop-shadow(0 4px 8px rgba(0, 0, 0, 0.32))";
@@ -106,6 +111,7 @@ type HeroSiegeTabButtonProps = {
   active?: boolean;
   children: React.ReactNode;
   onClick: () => void;
+  reservedRight?: number;
   width?: number;
 };
 
@@ -135,28 +141,41 @@ export function HeroSiegeTabButton(props: HeroSiegeTabButtonProps) {
         imageRendering: "pixelated",
         justifyContent: "center",
         letterSpacing: 0,
-        padding: "0 14px",
+        overflow: "hidden",
+        padding: props.reservedRight ? `0 ${props.reservedRight}px 0 14px` : "0 14px",
         textShadow: HERO_BUTTON_TEXT_SHADOW,
         textTransform: "uppercase",
         whiteSpace: "nowrap",
         width: props.width || HERO_TAB_WIDTH
       }}
     >
-      {props.children}
+      <Box component="span" style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {props.children}
+      </Box>
     </Box>
   );
 }
 
 export function HeroSiegeModeSwitch(props: { codingAccessory?: React.ReactNode; codingLabel?: string; mode: string; onChange: (mode: "leetcode" | "system") => void }) {
+  const codingLabel = props.codingLabel || "Coding";
+  const codingWidth = props.codingAccessory ? getCodingTabWidth(codingLabel) : undefined;
   return (
     <Group gap={0} wrap="nowrap">
       <Box style={{ position: "relative" }}>
-        <HeroSiegeTabButton active={props.mode === "leetcode"} onClick={() => props.onChange("leetcode")} width={props.codingAccessory ? CODING_TAB_WITH_ACCESSORY_WIDTH : undefined}>{props.codingLabel || "Coding"}</HeroSiegeTabButton>
+        <HeroSiegeTabButton active={props.mode === "leetcode"} onClick={() => props.onChange("leetcode")} reservedRight={props.codingAccessory ? CODING_TAB_ACCESSORY_RESERVED_WIDTH : undefined} width={codingWidth}>{codingLabel}</HeroSiegeTabButton>
         {props.codingAccessory}
       </Box>
       <HeroSiegeTabButton active={props.mode === "system"} onClick={() => props.onChange("system")} width={SYSTEM_TAB_WIDTH}>System Design</HeroSiegeTabButton>
     </Group>
   );
+}
+
+function getCodingTabWidth(label: string) {
+  if (label === "Coding") {
+    return CODING_TAB_WITH_ACCESSORY_WIDTH;
+  }
+  const contentWidth = CODING_TAB_LABEL_BASE_WIDTH + label.length * CODING_TAB_LABEL_CHAR_WIDTH + CODING_TAB_ACCESSORY_RESERVED_WIDTH;
+  return Math.max(CODING_TAB_PROFILE_MIN_WIDTH, Math.min(CODING_TAB_PROFILE_MAX_WIDTH, contentWidth));
 }
 
 export function getHeroSiegeMenuButtonAsset(): StaticImageData {
