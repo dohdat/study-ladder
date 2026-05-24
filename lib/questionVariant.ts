@@ -1,4 +1,5 @@
-import type { Question, TestCase } from "../types/study";
+import type { FrontendCheck, Question, TestCase } from "../types/study";
+import { FRONTEND_APP_FILE, FRONTEND_CSS_FILE } from "./frontendChallenge";
 
 const MAX_PROMPT_TESTS = 10;
 const MAX_CONSTRAINTS = 8;
@@ -7,6 +8,11 @@ const MAX_VARIANT_TESTS = 12;
 const MIN_VARIANT_TESTS = 5;
 const MAX_PROMPT_LENGTH = 360;
 const MAX_EXAMPLE_FIELD_LENGTH = 240;
+const MAX_FRONTEND_CHECKS = 6;
+const MIN_FRONTEND_CHECKS = 3;
+const MAX_FRONTEND_FILE_LENGTH = 5000;
+const MAX_WIREFRAME_LINES = 10;
+const MAX_WIREFRAME_LINE_LENGTH = 80;
 const RATING_TOLERANCE = 150;
 const MIN_MEANINGFUL_TEXT_LENGTH = 12;
 const MAX_REPAIR_DRAFT_CHARS = 5000;
@@ -27,6 +33,14 @@ export type QuestionVariantPayload = {
   prompt: string;
   tests: TestCase[];
   title: string;
+  frontend?: {
+    checks: FrontendCheck[];
+    files: {
+      "App.tsx": string;
+      "styles.css": string;
+    };
+    wireframe?: string[];
+  };
 };
 
 export type QuestionVariantResult = {
@@ -35,6 +49,9 @@ export type QuestionVariantResult = {
 };
 
 export function createQuestionVariantPrompt(question: Question) {
+  if (question.frontend) {
+    return createFrontendQuestionVariantPrompt(question);
+  }
   const lowRatingRules = question.rating <= LOW_RATING_MAX ? [
     "- This is a low-rated question: do not add subset-selection, knapsack, dynamic programming, or multiple optimization objectives.",
     "- For low-rated scalar/array-return questions, do not change the answer into an object with multiple fields.",
@@ -79,6 +96,9 @@ export function createQuestionVariantPrompt(question: Question) {
 }
 
 export function createQuestionVariantRepairPrompt(question: Question, draft: string, reason = "Invalid JSON") {
+  if (question.frontend) {
+    return createFrontendQuestionVariantRepairPrompt(question, draft, reason);
+  }
   const lowRatingRules = question.rating <= LOW_RATING_MAX ? [
     "- low-rated questions must not add subset-selection, knapsack, DP, multiple optimization objectives, or extra feasibility rules.",
     "- low-rated scalar/array-return questions must not return a multi-field object."
@@ -124,6 +144,7 @@ export function createQuestionVariantResult(question: Question, text: string): Q
     ...question,
     constraints: payload.constraints,
     examples: payload.examples,
+    frontend: payload.frontend || question.frontend,
     prompt: payload.prompt,
     tests: payload.tests,
     title: payload.title
@@ -151,6 +172,9 @@ function parseVariantPayload(question: Question, text: string): QuestionVariantP
     return null;
   }
   const record = parsed as Partial<QuestionVariantPayload>;
+  if (question.frontend) {
+    return parseFrontendVariantPayload(question, record);
+  }
   const title = normalizeMeaningfulString(record.title);
   const prompt = normalizeMeaningfulString(record.prompt);
   const constraints = normalizeConstraints(record.constraints);
@@ -191,6 +215,119 @@ function parseVariantPayload(question: Question, text: string): QuestionVariantP
     return null;
   }
   return { constraints, estimatedRating, examples, prompt, tests, title };
+}
+
+function createFrontendQuestionVariantPrompt(question: Question) {
+  return [
+    "Create a fresh playable variant of this React frontend interview practice prompt.",
+    "Return JSON only. No markdown, no commentary.",
+    "",
+    "Rules:",
+    "- Keep this as a React + TypeScript frontend challenge.",
+    "- Change the UI task enough that it is not the stock prompt, but keep the same broad component family and difficulty.",
+    `- Keep the estimated difficulty rating between ${question.rating - RATING_TOLERANCE} and ${question.rating + RATING_TOLERANCE}.`,
+    "- Generate frontend checks that grade the changed UI behavior. These checks replace the original checks.",
+    "- Put generated checks under frontend.checks.",
+    "- Use only these check types: exists, count, clickText, clickCount, inputText.",
+    "- Use stable class selectors such as .filter-button or .item-card. Do not use data-testid.",
+    "- Include 3 to 5 checks covering initial render and at least one interaction when the prompt is interactive.",
+    "- Include starter files only. App.tsx must not solve the challenge; it should render a TODO placeholder and may include static seed data constants.",
+    "- styles.css may include light scaffolding styles, but must not hide required elements or fake passing checks.",
+    "- Keep prompt text concise: 1 or 2 sentences, under 45 words.",
+    "- Constraints must be short requirement bullets, not implementation steps.",
+    "- Do not mention that this is a variant, remix, hidden test, LeetCode, or NeetCode.",
+    "",
+    "JSON schema:",
+    "{\"title\":\"string\",\"estimatedRating\":1420,\"prompt\":\"string\",\"constraints\":[\"string\"],\"examples\":[{\"input\":\"string\",\"output\":\"string\",\"explanation\":\"string\"}],\"frontend\":{\"wireframe\":[\"string\"],\"checks\":[{\"name\":\"string\",\"type\":\"exists|count|clickText|clickCount|inputText\",\"selector\":\".class\",\"value\":3,\"textIncludes\":\"text\"}],\"files\":{\"App.tsx\":\"string\",\"styles.css\":\"string\"}}}",
+    "",
+    `Original title: ${question.title}`,
+    `Original rating: ${question.rating}`,
+    `Original prompt: ${question.prompt}`,
+    `Topics: ${question.topics.join(", ")}`,
+    `Constraints: ${JSON.stringify(question.constraints)}`,
+    `Examples: ${JSON.stringify(question.examples)}`,
+    `Original wireframe: ${JSON.stringify(question.frontend?.wireframe || [])}`,
+    `Original frontend checks: ${JSON.stringify(question.frontend?.checks || [])}`,
+    `Original starter files for shape only. Replace with starter files for your changed UI: ${JSON.stringify(question.frontend?.files || {})}`
+  ].join("\n");
+}
+
+function createFrontendQuestionVariantRepairPrompt(question: Question, draft: string, reason = "Invalid JSON") {
+  return [
+    "Repair this React frontend question-variant draft into valid JSON.",
+    "Return one JSON object only. No markdown, no code fence, no commentary.",
+    "",
+    "Required JSON schema:",
+    "{\"title\":\"string\",\"estimatedRating\":1420,\"prompt\":\"string\",\"constraints\":[\"string\"],\"examples\":[{\"input\":\"string\",\"output\":\"string\",\"explanation\":\"string\"}],\"frontend\":{\"wireframe\":[\"string\"],\"checks\":[{\"name\":\"string\",\"type\":\"exists|count|clickText|clickCount|inputText\",\"selector\":\".class\",\"value\":3,\"textIncludes\":\"text\"}],\"files\":{\"App.tsx\":\"string\",\"styles.css\":\"string\"}}}",
+    "",
+    "Hard requirements:",
+    `- estimatedRating must be between ${question.rating - RATING_TOLERANCE} and ${question.rating + RATING_TOLERANCE}.`,
+    "- frontend.checks must include at least 3 usable checks.",
+    "- App.tsx must be starter code, not a completed solution.",
+    "- preserve React + TypeScript frontend challenge format.",
+    "",
+    `Original title: ${question.title}`,
+    `Original rating: ${question.rating}`,
+    `Original prompt: ${question.prompt}`,
+    `Original frontend checks: ${JSON.stringify(question.frontend?.checks || [])}`,
+    "",
+    `Parser rejection reason: ${reason}`,
+    "Draft to repair:",
+    draft.slice(0, MAX_REPAIR_DRAFT_CHARS)
+  ].join("\n");
+}
+
+function parseFrontendVariantPayload(question: Question, record: Partial<QuestionVariantPayload>): QuestionVariantPayload | null {
+  const title = normalizeMeaningfulString(record.title);
+  const prompt = normalizeMeaningfulString(record.prompt);
+  const constraints = normalizeConstraints(record.constraints);
+  const examples = normalizeExamples(record.examples);
+  const estimatedRating = normalizeEstimatedRating(record);
+  const frontendRecord = getFrontendRecord(record);
+  const checks = normalizeFrontendChecks(frontendRecord.checks);
+  const files = normalizeFrontendFiles(question, frontendRecord.files);
+  const wireframe = normalizeWireframe(frontendRecord.wireframe);
+  if (!title) {
+    lastParseError = "Codex did not provide a usable title.";
+    return null;
+  }
+  if (!prompt) {
+    lastParseError = "Codex did not provide a usable prompt.";
+    return null;
+  }
+  if (prompt.length > MAX_PROMPT_LENGTH) {
+    lastParseError = "Codex prompt was too long.";
+    return null;
+  }
+  if (!isRatingInBand(question.rating, estimatedRating)) {
+    lastParseError = `Codex estimated rating ${estimatedRating || "missing"} outside the allowed band.`;
+    return null;
+  }
+  if (constraints.length === 0) {
+    lastParseError = "Codex did not provide constraints.";
+    return null;
+  }
+  if (examples.length === 0) {
+    lastParseError = "Codex did not provide short examples.";
+    return null;
+  }
+  if (checks.length < MIN_FRONTEND_CHECKS) {
+    lastParseError = `Codex provided only ${checks.length} usable frontend checks.`;
+    return null;
+  }
+  return {
+    constraints,
+    estimatedRating,
+    examples,
+    frontend: {
+      checks,
+      files,
+      wireframe
+    },
+    prompt,
+    tests: [],
+    title
+  };
 }
 
 function getLastParseError() {
@@ -325,6 +462,113 @@ function normalizeTests(value: unknown) {
     }
   }
   return tests;
+}
+
+function getFrontendRecord(record: Partial<QuestionVariantPayload>) {
+  const frontend = record.frontend && typeof record.frontend === "object" ? record.frontend : {};
+  const topLevel = record as Partial<NonNullable<QuestionVariantPayload["frontend"]>>;
+  return {
+    ...frontend,
+    checks: (frontend as Partial<NonNullable<QuestionVariantPayload["frontend"]>>).checks ?? topLevel.checks,
+    files: (frontend as Partial<NonNullable<QuestionVariantPayload["frontend"]>>).files ?? topLevel.files,
+    wireframe: (frontend as Partial<NonNullable<QuestionVariantPayload["frontend"]>>).wireframe ?? topLevel.wireframe
+  } as Partial<NonNullable<QuestionVariantPayload["frontend"]>>;
+}
+
+function normalizeFrontendChecks(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const checks: FrontendCheck[] = [];
+  const seenNames = new Set<string>();
+  for (const check of value) {
+    if (!check || typeof check !== "object") {
+      continue;
+    }
+    const record = check as Partial<FrontendCheck>;
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    const selector = typeof record.selector === "string" ? record.selector.trim() : "";
+    if (!name || seenNames.has(name) || !selector || !isFrontendCheckType(record.type)) {
+      continue;
+    }
+    const normalized: FrontendCheck = { name, selector, type: record.type };
+    if (typeof record.textIncludes === "string" && record.textIncludes.trim()) {
+      normalized.textIncludes = record.textIncludes.trim();
+    }
+    if (record.type === "count") {
+      const valueNumber = typeof record.value === "number" && Number.isFinite(record.value) ? Math.max(0, Math.floor(record.value)) : Number.NaN;
+      if (!Number.isFinite(valueNumber)) {
+        continue;
+      }
+      normalized.value = valueNumber;
+    }
+    if (record.type === "clickCount") {
+      if (typeof record.value !== "string" || !record.value.trim()) {
+        continue;
+      }
+      normalized.value = record.value.trim();
+    }
+    if (record.type === "clickText" && !normalized.textIncludes) {
+      continue;
+    }
+    if (record.type === "inputText") {
+      if (typeof record.value !== "string" || !record.value.trim() || !normalized.textIncludes) {
+        continue;
+      }
+      normalized.value = record.value;
+    }
+    seenNames.add(name);
+    checks.push(normalized);
+    if (checks.length >= MAX_FRONTEND_CHECKS) {
+      break;
+    }
+  }
+  return checks;
+}
+
+function isFrontendCheckType(type: unknown): type is FrontendCheck["type"] {
+  return type === "clickCount" || type === "clickText" || type === "count" || type === "exists" || type === "inputText";
+}
+
+function normalizeFrontendFiles(question: Question, value: unknown): NonNullable<QuestionVariantPayload["frontend"]>["files"] {
+  const fallback = createDefaultFrontendStarter(question);
+  if (!value || typeof value !== "object") {
+    return fallback;
+  }
+  const record = value as Record<string, unknown>;
+  const appFile = normalizeFrontendFile(record[FRONTEND_APP_FILE], fallback[FRONTEND_APP_FILE]);
+  const cssFile = normalizeFrontendFile(record[FRONTEND_CSS_FILE], fallback[FRONTEND_CSS_FILE]);
+  return {
+    [FRONTEND_APP_FILE]: appFile,
+    [FRONTEND_CSS_FILE]: cssFile
+  };
+}
+
+function normalizeFrontendFile(value: unknown, fallback: string) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const trimmed = value.trim();
+  return trimmed && trimmed.length <= MAX_FRONTEND_FILE_LENGTH ? trimmed : fallback;
+}
+
+function createDefaultFrontendStarter(question: Question): NonNullable<QuestionVariantPayload["frontend"]>["files"] {
+  return {
+    [FRONTEND_APP_FILE]: `import React from "react";\nimport "./styles.css";\n\nexport default function App() {\n  // TODO: Build the UI for: ${question.title}\n  return <main>{/* TODO: Implement the requested experience. */}</main>;\n}`,
+    [FRONTEND_CSS_FILE]: `body {\n  margin: 0;\n  font-family: Inter, system-ui, sans-serif;\n}\n\nmain {\n  padding: 24px;\n}`
+  };
+}
+
+function normalizeWireframe(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((line): line is string => typeof line === "string")
+    .map((line) => line.trimEnd())
+    .filter(Boolean)
+    .map((line) => line.slice(0, MAX_WIREFRAME_LINE_LENGTH))
+    .slice(0, MAX_WIREFRAME_LINES);
 }
 
 function isJsonSafe(value: unknown): boolean {

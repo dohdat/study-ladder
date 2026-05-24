@@ -63,6 +63,7 @@ const META_RELIC_CHOICE_BONUS_CAP = 2;
 const META_RELIC_LUCK_PERCENT = 6;
 const META_REVEAL_SUBMIT_TESTS_PER_RANK = 1;
 const CODING_MIN_RATING_FLOOR = 0;
+const CODING_TAG_WEIGHT_TOTAL = 100;
 const CODING_PROFILE_NAME_MAX_LENGTH = 48;
 export const MODIFIER_KEYS: ItemModifierKey[] = ALL_MODIFIER_KEYS;
 
@@ -115,6 +116,7 @@ function createDefaultStateBase(): StudyState {
       rating: DEFAULT_PLAYER_RATING,
       spireMinRating: DEFAULT_SPIRE_MIN_RATING,
       codingTags: [],
+      codingTagWeights: {},
       codingMinRating: CODING_MIN_RATING_FLOOR,
       codingProfiles: [],
       activeCodingProfileId: null,
@@ -152,7 +154,7 @@ export const cloneState = (state: StudyState): StudyState => ({
 });
 
 function cloneProfile(state: StudyState): StudyState["profile"] {
-  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, activePotionEffects: cloneActivePotionEffects(state.profile.activePotionEffects), activeCodingProfileId: normalizeActiveCodingProfileId(state.profile.activeCodingProfileId, state.profile.codingProfiles), codingMinRating: normalizeCodingMinRating(state.profile.codingMinRating), codingProfiles: normalizeCodingCompanyProfiles(state.profile.codingProfiles), codingTags: [...(state.profile.codingTags || [])], equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), inventorySlots: cloneInventorySlots(state.profile.inventorySlots), metaProgress: { ...state.profile.metaProgress, upgrades: { ...state.profile.metaProgress.upgrades } }, relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, spireRun: { ...state.profile.spireRun, availableNodeIds: [...state.profile.spireRun.availableNodeIds], completedNodeIds: [...state.profile.spireRun.completedNodeIds], nodes: state.profile.spireRun.nodes.map((node) => ({ ...node, nextIds: [...node.nextIds] })), pendingRelicReward: cloneRelicRewardChoice(state.profile.spireRun.pendingRelicReward), roomRewardClaims: cloneRoomRewardClaims(state.profile.spireRun.roomRewardClaims), roundQuestionIds: [...state.profile.spireRun.roundQuestionIds], roundSolvedIds: [...state.profile.spireRun.roundSolvedIds], runCodeQuestionIds: [...state.profile.spireRun.runCodeQuestionIds], unknownEncounterMisses: { ...state.profile.spireRun.unknownEncounterMisses } }, stats: { ...state.profile.stats }, trackedAchievementIds: [...state.profile.trackedAchievementIds], unlockedAchievementIds: [...state.profile.unlockedAchievementIds] };
+  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, activePotionEffects: cloneActivePotionEffects(state.profile.activePotionEffects), activeCodingProfileId: normalizeActiveCodingProfileId(state.profile.activeCodingProfileId, state.profile.codingProfiles), codingMinRating: normalizeCodingMinRating(state.profile.codingMinRating), codingProfiles: normalizeCodingCompanyProfiles(state.profile.codingProfiles), codingTags: [...(state.profile.codingTags || [])], codingTagWeights: { ...(state.profile.codingTagWeights || {}) }, equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), inventorySlots: cloneInventorySlots(state.profile.inventorySlots), metaProgress: { ...state.profile.metaProgress, upgrades: { ...state.profile.metaProgress.upgrades } }, relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, spireRun: { ...state.profile.spireRun, availableNodeIds: [...state.profile.spireRun.availableNodeIds], completedNodeIds: [...state.profile.spireRun.completedNodeIds], nodes: state.profile.spireRun.nodes.map((node) => ({ ...node, nextIds: [...node.nextIds] })), pendingRelicReward: cloneRelicRewardChoice(state.profile.spireRun.pendingRelicReward), roomRewardClaims: cloneRoomRewardClaims(state.profile.spireRun.roomRewardClaims), roundQuestionIds: [...state.profile.spireRun.roundQuestionIds], roundSolvedIds: [...state.profile.spireRun.roundSolvedIds], runCodeQuestionIds: [...state.profile.spireRun.runCodeQuestionIds], unknownEncounterMisses: { ...state.profile.spireRun.unknownEncounterMisses } }, stats: { ...state.profile.stats }, trackedAchievementIds: [...state.profile.trackedAchievementIds], unlockedAchievementIds: [...state.profile.unlockedAchievementIds] };
 }
 
 function cloneRelicRewardChoice(choice: StudyState["profile"]["spireRun"]["pendingRelicReward"]) {
@@ -200,6 +202,7 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
       rating: normalizeRating(stored, fallback),
       spireMinRating: normalizeSpireMinRating(profile.spireMinRating),
       codingTags: activeCodingProfileId ? normalizeCodingTags(profile.codingTags) : [],
+      codingTagWeights: activeCodingProfileId ? normalizeCodingTagWeights(profile.codingTags, profile.codingTagWeights) : {},
       codingMinRating: activeCodingProfileId ? normalizeCodingMinRating(profile.codingMinRating) : CODING_MIN_RATING_FLOOR,
       codingProfiles,
       activeCodingProfileId,
@@ -322,6 +325,52 @@ export function normalizeCodingMinRating(value: unknown) {
   return Math.max(CODING_MIN_RATING_FLOOR, Math.floor(Number(value)));
 }
 
+export function normalizeCodingTagWeights(tags: unknown, weights: unknown) {
+  const normalizedTags = normalizeCodingTags(tags);
+  if (!normalizedTags.length) {
+    return {};
+  }
+  const source = weights && typeof weights === "object" ? weights as Record<string, unknown> : {};
+  const rawWeights = normalizedTags.map((tag) => normalizeCodingTagWeightValue(source[tag]));
+  const hasConfiguredWeight = rawWeights.some((weight) => weight !== null);
+  const values = hasConfiguredWeight
+    ? rawWeights.map((weight) => weight ?? 0)
+    : createEvenCodingTagWeights(normalizedTags.length);
+  const total = values.reduce((sum, weight) => sum + weight, 0);
+  if (total <= 0) {
+    return Object.fromEntries(normalizedTags.map((tag, index) => [tag, createEvenCodingTagWeights(normalizedTags.length)[index]]));
+  }
+  let remaining = CODING_TAG_WEIGHT_TOTAL;
+  return Object.fromEntries(normalizedTags.map((tag, index) => {
+    const value = index === normalizedTags.length - 1
+      ? remaining
+      : Math.min(remaining, Math.max(0, Math.round((values[index] / total) * CODING_TAG_WEIGHT_TOTAL)));
+    remaining -= value;
+    return [tag, value];
+  }));
+}
+
+function normalizeCodingTagWeightValue(value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+  return Math.max(0, Math.min(CODING_TAG_WEIGHT_TOTAL, Math.round(numeric)));
+}
+
+function createEvenCodingTagWeights(count: number) {
+  if (count <= 0) {
+    return [];
+  }
+  const base = Math.floor(CODING_TAG_WEIGHT_TOTAL / count);
+  let remaining = CODING_TAG_WEIGHT_TOTAL;
+  return Array.from({ length: count }, (_row, index) => {
+    const value = index === count - 1 ? remaining : base;
+    remaining -= value;
+    return value;
+  });
+}
+
 export function normalizeCodingCompanyProfiles(profiles: unknown): CodingCompanyProfile[] {
   if (!Array.isArray(profiles)) {
     return [];
@@ -343,6 +392,7 @@ export function normalizeCodingCompanyProfiles(profiles: unknown): CodingCompany
       id,
       name,
       codingTags: normalizeCodingTags(profile.codingTags),
+      codingTagWeights: normalizeCodingTagWeights(profile.codingTags, profile.codingTagWeights),
       codingMinRating: normalizeCodingMinRating(profile.codingMinRating)
     });
     return normalized;
@@ -369,7 +419,8 @@ export function applyCodingCompanyProfile(state: StudyState, profileId: string):
       activeCodingProfileId: profile.id,
       codingMinRating: profile.codingMinRating,
       codingProfiles: profiles,
-      codingTags: profile.codingTags
+      codingTags: profile.codingTags,
+      codingTagWeights: normalizeCodingTagWeights(profile.codingTags, profile.codingTagWeights)
     }
   };
 }
@@ -382,7 +433,8 @@ export function clearCodingCompanyProfile(state: StudyState): StudyState {
       activeCodingProfileId: null,
       codingMinRating: CODING_MIN_RATING_FLOOR,
       codingProfiles: normalizeCodingCompanyProfiles(state.profile.codingProfiles),
-      codingTags: []
+      codingTags: [],
+      codingTagWeights: {}
     }
   };
 }
@@ -410,6 +462,15 @@ export function getCodingFilteredQuestions(state: StudyState) {
     : questions;
   const filtered = tagFiltered.filter((question) => question.rating >= minRating);
   return filtered.length ? filtered : tagFiltered.length ? tagFiltered : questions;
+}
+
+export function getCodingQuestionWeight(state: StudyState, question: Question) {
+  const selectedTags = normalizeCodingTags(state.profile.codingTags);
+  if (!selectedTags.length) {
+    return 0;
+  }
+  const weights = normalizeCodingTagWeights(selectedTags, state.profile.codingTagWeights);
+  return question.topics.reduce((total, topic) => total + (weights[topic] || 0), 0);
 }
 
 function normalizeMetaProgress(progress: Partial<StudyState["profile"]["metaProgress"]> | undefined): StudyState["profile"]["metaProgress"] {
@@ -1133,7 +1194,7 @@ function getRatingSortedQuestions(state: StudyState) {
   return [...getCodingFilteredQuestions(state)].sort((a, b) => {
     const cardA = getCard(state, a.id);
     const cardB = getCard(state, b.id);
-    return cardA.correct - cardB.correct || Math.abs(a.rating - targetRating) - Math.abs(b.rating - targetRating) || a.rating - b.rating;
+    return cardA.correct - cardB.correct || getCodingQuestionWeight(state, b) - getCodingQuestionWeight(state, a) || Math.abs(a.rating - targetRating) - Math.abs(b.rating - targetRating) || a.rating - b.rating;
   });
 }
 

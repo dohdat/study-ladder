@@ -18,7 +18,7 @@ import { createDropItem, SLOT_STAT_BIAS } from "./itemCore";
 import { getUniqueMonsterBonusCount } from "./monsterCore";
 import { getPomEligibleRelics, grantRelic, rollRelic, upgradeRelicRarity } from "./relicCore";
 import { createShopStock } from "./shopCore";
-import { getMaxHealth, getMetaRelicChoiceBonus, getMetaStartingGoldBonus, getMetaStartingRelicCount, getRunModifierTotals } from "./studyCore";
+import { getCodingQuestionWeight, getMaxHealth, getMetaRelicChoiceBonus, getMetaStartingGoldBonus, getMetaStartingRelicCount, getRunModifierTotals } from "./studyCore";
 import type { Difficulty, HeatConditionId, HeatConditionRanks, InventoryItem, ItemModifier, ItemRarity, Question, Relic, RelicRarity, SpireAct, SpireCombatRewardKind, SpireDifficulty, SpireMapNode, SpireNodeKind, SpireRun, StudyState, UnknownEncounterKind } from "../types/study";
 
 const SPIRE_ACT_COUNT = 4;
@@ -2173,7 +2173,7 @@ function pickRoundQuestions(state: StudyState, node: SpireMapNode, seed: number,
       : effectiveRating;
   const ranked = getCodingFilteredQuestions(state)
     .filter((question) => !previousIds.includes(question.id))
-    .sort((a, b) => getQuestionSortValue(node, b, targetRating, seed) - getQuestionSortValue(node, a, targetRating, seed));
+    .sort((a, b) => getQuestionSortValue(state, node, b, targetRating, seed) - getQuestionSortValue(state, node, a, targetRating, seed));
   return ranked.slice(0, count).map((question) => question.id);
 }
 
@@ -2187,7 +2187,7 @@ function getCodingFilteredQuestions(state: StudyState) {
   return filtered.length ? filtered : tagFiltered.length ? tagFiltered : questions;
 }
 
-function getQuestionSortValue(node: SpireMapNode, question: Question, targetRating: number, seed: number) { const ratingFit = RATING_FIT_BASE - Math.abs(question.rating - targetRating); const eliteBonus = node.kind === "elite" || node.kind === "boss" ? getUniqueMonsterBonusCount(question) * ELITE_BONUS_SORT_WEIGHT : 0; return ratingFit + eliteBonus + getRoll(`${seed}:${question.id}`); }
+function getQuestionSortValue(state: StudyState, node: SpireMapNode, question: Question, targetRating: number, seed: number) { const ratingFit = RATING_FIT_BASE - Math.abs(question.rating - targetRating); const topicWeight = getCodingQuestionWeight(state, question) * 6; const eliteBonus = node.kind === "elite" || node.kind === "boss" ? getUniqueMonsterBonusCount(question) * ELITE_BONUS_SORT_WEIGHT : 0; return ratingFit + topicWeight + eliteBonus + getRoll(`${seed}:${question.id}`); }
 
 function getEffectiveSpireRating(run: Pick<SpireRun, "act" | "difficulty" | "heatConditions">, rating: number) {
   return rating + getSpireCampaignRatingBonus(run);

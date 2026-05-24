@@ -65,7 +65,9 @@ import {
   isQuestionInRecommendedRange,
   isMasteredCard,
   markQuestionRunCode,
+  normalizeCodingCompanyProfiles,
   normalizeCodingMinRating,
+  normalizeCodingTagWeights,
   normalizeCodingTags,
   normalizeStudyState,
   pickQuestion,
@@ -327,8 +329,15 @@ describe("studyCore", () => {
 
     expect(applied.profile.activeCodingProfileId).toBe("roblox");
     expect(applied.profile.codingTags).toEqual(["DFS", "BFS"]);
+    expect(applied.profile.codingTagWeights).toEqual({ BFS: 50, DFS: 50 });
     expect(applied.profile.codingMinRating).toBe(2000);
     expect(getCodingFilteredQuestions(applied).every((question) => question.rating >= 2000 && question.topics.some((topic) => ["DFS", "BFS"].includes(topic)))).toBe(true);
+  });
+
+  it("normalizes company profile topic percentages", () => {
+    expect(normalizeCodingTagWeights(["DFS", "BFS", "Arrays"], { Arrays: 20, BFS: 30, DFS: 50 })).toEqual({ Arrays: 20, BFS: 30, DFS: 50 });
+    expect(normalizeCodingTagWeights(["DFS", "BFS"], {})).toEqual({ BFS: 50, DFS: 50 });
+    expect(normalizeCodingTagWeights(["DFS", "BFS"], { BFS: 30, DFS: 90 })).toEqual({ BFS: 25, DFS: 75 });
   });
 
   it("clears saved company profile filters when no profile is selected", () => {
@@ -347,8 +356,9 @@ describe("studyCore", () => {
 
     expect(cleared.profile.activeCodingProfileId).toBeNull();
     expect(cleared.profile.codingTags).toEqual([]);
+    expect(cleared.profile.codingTagWeights).toEqual({});
     expect(cleared.profile.codingMinRating).toBe(0);
-    expect(cleared.profile.codingProfiles).toEqual(state.profile.codingProfiles);
+    expect(cleared.profile.codingProfiles).toEqual(normalizeCodingCompanyProfiles(state.profile.codingProfiles));
   });
 
   it("drops stale profile filters while normalizing no-profile states", () => {
@@ -367,6 +377,7 @@ describe("studyCore", () => {
 
     expect(normalized.profile.activeCodingProfileId).toBeNull();
     expect(normalized.profile.codingTags).toEqual([]);
+    expect(normalized.profile.codingTagWeights).toEqual({});
     expect(normalized.profile.codingMinRating).toBe(0);
   });
 

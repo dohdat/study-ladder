@@ -19,6 +19,17 @@ describe("questionVariant", () => {
     expect(prompt).toContain("Return JSON only");
   });
 
+  it("asks Codex for frontend checks and starter files for frontend variants", () => {
+    const frontendQuestion = questions.find((question) => question.id === "frontend-star-rating-component") || questions[0];
+    const prompt = createQuestionVariantPrompt(frontendQuestion);
+
+    expect(prompt).toContain("React frontend interview practice prompt");
+    expect(prompt).toContain("frontend.checks");
+    expect(prompt).toContain("starter files only");
+    expect(prompt).toContain("Use only these check types");
+    expect(prompt).toContain("Original frontend checks");
+  });
+
   it("applies changed tests while keeping original question identity", () => {
     const original = questions[0];
     const variantTests = [
@@ -47,6 +58,39 @@ describe("questionVariant", () => {
       title: "First Repeated Event Code"
     });
     expect(variant?.prompt).not.toBe(original.prompt);
+  });
+
+  it("applies frontend checks and starter files for frontend variants", () => {
+    const original = questions.find((question) => question.id === "frontend-star-rating-component") || questions[0];
+    const result = createQuestionVariantResult(original, JSON.stringify({
+      constraints: ["Render three plan cards.", "Clicking a plan marks it selected.", "Show the selected plan name."],
+      estimatedRating: original.rating,
+      examples: [{ input: "Click Pro", output: "Selected: Pro", explanation: "The selected plan label updates after the click." }],
+      frontend: {
+        checks: [
+          { name: "renders plan cards", selector: ".plan-card", type: "count", value: 3 },
+          { name: "shows default label", selector: ".selected-plan", textIncludes: "No plan selected", type: "exists" },
+          { name: "clicking pro updates label", selector: ".plan-card:nth-of-type(2)", textIncludes: "Selected: Pro", type: "clickText" }
+        ],
+        files: {
+          "App.tsx": "import React from \"react\";\nimport \"./styles.css\";\n\nexport default function App() {\n  return <main>{/* TODO: build pricing selector */}</main>;\n}",
+          "styles.css": "main { padding: 24px; }"
+        },
+        wireframe: ["+----------------+", "| Pricing cards |", "+----------------+"]
+      },
+      prompt: "Build a React pricing selector where users choose one of three plans and see the selected plan.",
+      title: "Pricing Plan Selector"
+    }));
+
+    expect(result.error).toBeUndefined();
+    expect(result.question).toMatchObject({
+      id: original.id,
+      title: "Pricing Plan Selector",
+      tests: []
+    });
+    expect(result.question?.frontend?.checks).toHaveLength(3);
+    expect(result.question?.frontend?.files["App.tsx"]).toContain("pricing selector");
+    expect(result.question?.frontend?.wireframe).toContain("| Pricing cards |");
   });
 
   it("rejects malformed variant output", () => {

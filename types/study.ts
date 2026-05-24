@@ -402,6 +402,7 @@ export type StudyState = {
     rating: number;
     spireMinRating: number;
     codingTags: string[];
+    codingTagWeights: Record<string, number>;
     codingMinRating: number;
     codingProfiles: CodingCompanyProfile[];
     activeCodingProfileId: string | null;
@@ -433,6 +434,7 @@ export type CodingCompanyProfile = {
   id: string;
   name: string;
   codingTags: string[];
+  codingTagWeights?: Record<string, number>;
   codingMinRating: number;
 };
 

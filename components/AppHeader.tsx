@@ -11,7 +11,7 @@ import type { UserMenuSection } from "./UserMenu";
 import { STUDY_BLOCKER_MS_PER_MINUTE, useStudyBlockerSettings } from "../hooks/useStudyBlocker";
 import { requestCodexQuestionVariant } from "../lib/hintPrompt";
 import { retargetCurrentSpireRoomQuestions } from "../lib/spireMapCore";
-import { applyCodingCompanyProfile, clearCodingCompanyProfile, getAvailableCodingTags, normalizeCodingCompanyProfiles, normalizeCodingMinRating, normalizeCodingTags } from "../lib/studyCore";
+import { applyCodingCompanyProfile, clearCodingCompanyProfile, getAvailableCodingTags, normalizeCodingCompanyProfiles, normalizeCodingMinRating, normalizeCodingTagWeights, normalizeCodingTags } from "../lib/studyCore";
 import type { ActiveWarriorSkillId, CodingCompanyProfile, StudyState } from "../types/study";
 import type { CombatImpactVisual } from "./MonsterEncounter";
 
@@ -33,6 +33,9 @@ const CODING_TAG_PANEL_BG = "linear-gradient(180deg, rgba(25, 10, 8, 0.98), rgba
 const CODING_TAG_PANEL_BORDER = "1px solid rgba(214, 166, 66, 0.82)";
 const CODING_TAG_ICON_SIZE = 24;
 const CODING_MIN_RATING_STEP = 50;
+const CODING_TOPIC_WEIGHT_STEP = 5;
+const CODING_TOPIC_WEIGHT_MIN = 0;
+const CODING_TOPIC_WEIGHT_MAX = 100;
 const COMPANY_PROFILE_ID_RADIX = 36;
 const COMPANY_PROFILE_PANEL_WIDTH = 620;
 const COMPANY_PROFILE_ROW_BG = "linear-gradient(180deg, rgba(35, 19, 12, 0.96), rgba(13, 8, 5, 0.98))";
@@ -112,6 +115,7 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [profileName, setProfileName] = useState("");
   const [profileTags, setProfileTags] = useState<string[]>([]);
+  const [profileTagWeights, setProfileTagWeights] = useState<Record<string, number>>({});
   const [profileMinRating, setProfileMinRating] = useState<number | string>(0);
   const [profileSuggestionError, setProfileSuggestionError] = useState("");
   const [profileSuggestionLoading, setProfileSuggestionLoading] = useState(false);
@@ -122,6 +126,7 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
     setEditingProfileId(null);
     setProfileName("");
     setProfileTags([]);
+    setProfileTagWeights({});
     setProfileMinRating(0);
     setProfileSuggestionError("");
     setProfileSuggestionLoading(false);
@@ -229,6 +234,7 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
                             id: NO_COMPANY_PROFILE_ID,
                             name: "No profile",
                             codingTags: [],
+                            codingTagWeights: {},
                             codingMinRating: 0
                           }}
                           onDelete={undefined}
@@ -250,6 +256,7 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
                               setPanelMode("edit");
                               setProfileName(profile.name);
                               setProfileTags(profile.codingTags);
+                              setProfileTagWeights(normalizeCodingTagWeights(profile.codingTags, profile.codingTagWeights));
                               setProfileMinRating(profile.codingMinRating);
                               setProfileSuggestionError("");
                             }}
@@ -281,6 +288,7 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
                           setError: setProfileSuggestionError,
                           setLoading: setProfileSuggestionLoading,
                           setMinRating: setProfileMinRating,
+                          setTagWeights: setProfileTagWeights,
                           setTags: setProfileTags,
                           tags: codingTagOptions.map((option) => option.value)
                         })}
@@ -301,8 +309,13 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
                       placeholder="All coding tags"
                       searchable
                       value={profileTags}
-                      onChange={(value) => setProfileTags(normalizeCodingTags(value))}
+                      onChange={(value) => {
+                        const nextTags = normalizeCodingTags(value);
+                        setProfileTags(nextTags);
+                        setProfileTagWeights((current) => syncDraftCodingTagWeights(nextTags, current));
+                      }}
                     />
+                    <TopicWeightControls tags={profileTags} weights={profileTagWeights} setWeights={setProfileTagWeights} />
                     <NumberInput
                       allowDecimal={false}
                       label="Minimum rating"
@@ -320,6 +333,7 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
                           setEditingProfileId(null);
                           setProfileName("");
                           setProfileTags([]);
+                          setProfileTagWeights({});
                           setProfileMinRating(0);
                           setProfileSuggestionError("");
                         }}
@@ -328,12 +342,13 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
                       </Button>
                       <Button
                         onClick={() => {
-                          const saved = createCodingCompanyProfile(profileName, profileTags, profileMinRating, editingProfileId);
+                          const saved = createCodingCompanyProfile(profileName, profileTags, profileTagWeights, profileMinRating, editingProfileId);
                           setDraftProfiles((current) => [...current.filter((profile) => profile.id !== saved.id), saved]);
                           setPanelMode("select");
                           setEditingProfileId(null);
                           setProfileName("");
                           setProfileTags([]);
+                          setProfileTagWeights({});
                           setProfileMinRating(0);
                           setProfileSuggestionError("");
                         }}
@@ -354,13 +369,84 @@ function ModeControl(props: { canRetargetActiveRoom?: boolean; modeValue: string
   );
 }
 
-function createCodingCompanyProfile(name: string, codingTags: string[], minRating: string | number, existingId?: string | null): CodingCompanyProfile {
+function createCodingCompanyProfile(name: string, codingTags: string[], tagWeights: Record<string, number>, minRating: string | number, existingId?: string | null): CodingCompanyProfile {
+  const normalizedTags = normalizeCodingTags(codingTags);
   return {
     id: existingId || `company-profile-${Date.now().toString(COMPANY_PROFILE_ID_RADIX)}`,
     name: name.trim() || "Company profile",
-    codingTags: normalizeCodingTags(codingTags),
+    codingTags: normalizedTags,
+    codingTagWeights: normalizeCodingTagWeights(normalizedTags, tagWeights),
     codingMinRating: normalizeCodingMinRating(minRating)
   };
+}
+
+function TopicWeightControls(props: { setWeights: React.Dispatch<React.SetStateAction<Record<string, number>>>; tags: string[]; weights: Record<string, number> }) {
+  if (!props.tags.length) {
+    return null;
+  }
+  const total = props.tags.reduce((sum, tag) => sum + normalizeDraftTopicWeight(props.weights[tag]), 0);
+  return (
+    <Stack gap={6}>
+      <Group justify="space-between" align="center">
+        <Text size="sm" fw={500}>Topic percentages</Text>
+        <Badge color={total === 100 ? "green" : "yellow"} variant="light">{total}%</Badge>
+      </Group>
+      {props.tags.map((tag) => (
+        <Group key={tag} justify="space-between" gap="sm" wrap="nowrap">
+          <Text size="sm" truncate>{tag}</Text>
+          <NumberInput
+            allowDecimal={false}
+            aria-label={`${tag} percentage`}
+            max={CODING_TOPIC_WEIGHT_MAX}
+            min={CODING_TOPIC_WEIGHT_MIN}
+            step={CODING_TOPIC_WEIGHT_STEP}
+            value={normalizeDraftTopicWeight(props.weights[tag])}
+            onChange={(value) => props.setWeights((current) => setDraftTopicWeight(props.tags, current, tag, value))}
+            styles={{ input: { width: 92 } }}
+          />
+        </Group>
+      ))}
+    </Stack>
+  );
+}
+
+function setDraftTopicWeight(tags: string[], current: Record<string, number>, tag: string, value: string | number) {
+  const target = normalizeDraftTopicWeight(value);
+  const otherTags = tags.filter((candidate) => candidate !== tag);
+  if (!otherTags.length) {
+    return { [tag]: CODING_TOPIC_WEIGHT_MAX };
+  }
+  const remaining = CODING_TOPIC_WEIGHT_MAX - target;
+  const otherTotal = otherTags.reduce((sum, candidate) => sum + normalizeDraftTopicWeight(current[candidate]), 0);
+  const balanced = distributeDraftTopicWeights(
+    otherTags,
+    otherTotal > 0
+      ? Object.fromEntries(otherTags.map((candidate) => [candidate, normalizeDraftTopicWeight(current[candidate]) / otherTotal]))
+      : Object.fromEntries(otherTags.map((candidate) => [candidate, 1 / otherTags.length])),
+    remaining
+  );
+  return { ...balanced, [tag]: target };
+}
+
+function distributeDraftTopicWeights(tags: string[], ratios: Record<string, number>, total: number) {
+  let remaining = total;
+  return Object.fromEntries(tags.map((tag, index) => {
+    const value = index === tags.length - 1
+      ? remaining
+      : Math.min(remaining, Math.max(CODING_TOPIC_WEIGHT_MIN, Math.round((ratios[tag] || 0) * total)));
+    remaining -= value;
+    return [tag, value];
+  }));
+}
+
+function syncDraftCodingTagWeights(tags: string[], current: Record<string, number>) {
+  const seeded = Object.fromEntries(tags.map((tag) => [tag, current[tag] ?? CODING_TOPIC_WEIGHT_MAX / Math.max(1, tags.length)]));
+  return normalizeCodingTagWeights(tags, seeded);
+}
+
+function normalizeDraftTopicWeight(value: string | number | undefined) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(CODING_TOPIC_WEIGHT_MIN, Math.min(CODING_TOPIC_WEIGHT_MAX, Math.round(numeric))) : CODING_TOPIC_WEIGHT_MIN;
 }
 
 async function suggestCompanyProfile(params: {
@@ -368,6 +454,7 @@ async function suggestCompanyProfile(params: {
   setError: (error: string) => void;
   setLoading: (loading: boolean) => void;
   setMinRating: (rating: number) => void;
+  setTagWeights: (weights: Record<string, number>) => void;
   setTags: (tags: string[]) => void;
   tags: string[];
 }) {
@@ -390,6 +477,7 @@ async function suggestCompanyProfile(params: {
       return;
     }
     params.setTags(suggestion.tags);
+    params.setTagWeights(normalizeCodingTagWeights(suggestion.tags, suggestion.tagWeights));
     params.setMinRating(suggestion.minRating);
   } catch (error) {
     params.setError(error instanceof Error ? error.message : "Codex suggestion failed.");
@@ -401,10 +489,11 @@ async function suggestCompanyProfile(params: {
 function createCompanyProfileSuggestionPrompt(companyName: string, tags: string[]) {
   return [
     "Suggest a coding interview practice profile for this company.",
-    "Return JSON only with this exact shape: {\"tags\":[\"DFS\"],\"minRating\":2000}",
+    "Return JSON only with this exact shape: {\"tags\":[\"DFS\"],\"tagWeights\":{\"DFS\":100},\"minRating\":2000}",
     "Rules:",
     "- tags must be exact strings from the available tags list.",
     "- choose 2 to 5 tags.",
+    "- tagWeights must use the selected tag strings as keys and integer percentages totaling 100.",
     "- minRating must be an integer multiple of 50 between 0 and 3500.",
     "- bias toward common interview patterns for the company.",
     "",
@@ -414,13 +503,14 @@ function createCompanyProfileSuggestionPrompt(companyName: string, tags: string[
 }
 
 function parseCompanyProfileSuggestion(text: string, availableTags: string[]) {
-  const parsed = JSON.parse(extractJsonObject(text)) as { minRating?: unknown; tags?: unknown };
+  const parsed = JSON.parse(extractJsonObject(text)) as { minRating?: unknown; tagWeights?: unknown; tags?: unknown; weights?: unknown };
   const available = new Set(availableTags);
   const tags = Array.isArray(parsed.tags)
     ? normalizeCodingTags(parsed.tags.filter((tag): tag is string => typeof tag === "string" && available.has(tag)))
     : [];
+  const tagWeights = normalizeCodingTagWeights(tags, parsed.tagWeights ?? parsed.weights);
   const minRating = normalizeCodingMinRating(parsed.minRating);
-  return { minRating, tags };
+  return { minRating, tagWeights, tags };
 }
 
 function extractJsonObject(text: string) {
@@ -528,7 +618,13 @@ function getCodingProfileSummary(profile: CodingCompanyProfile) {
     return "Use all coding questions without a saved company profile";
   }
   const minRating = normalizeCodingMinRating(profile.codingMinRating);
-  return `${profile.codingTags.length ? profile.codingTags.join(", ") : "All tags"} | ${minRating ? `${minRating}+` : "Any rating"}`;
+  const tags = profile.codingTags.length ? getCodingTagWeightSummary(profile.codingTags, profile.codingTagWeights) : "All tags";
+  return `${tags} | ${minRating ? `${minRating}+` : "Any rating"}`;
+}
+
+function getCodingTagWeightSummary(tags: string[], weights: unknown) {
+  const normalizedWeights = normalizeCodingTagWeights(tags, weights);
+  return tags.map((tag) => `${tag} ${normalizedWeights[tag] ?? 0}%`).join(", ");
 }
 
 function getActiveCodingProfileName(state: StudyState) {

@@ -71,7 +71,7 @@ function hasStaleNoProfileCodingFilters(stored: Partial<StudyState> | null | und
     return false;
   }
   const storedProfile = stored?.profile;
-  return !storedProfile?.activeCodingProfileId && (Boolean(storedProfile?.codingTags?.length) || Boolean(storedProfile?.codingMinRating));
+  return !storedProfile?.activeCodingProfileId && (Boolean(storedProfile?.codingTags?.length) || Boolean(storedProfile?.codingMinRating) || Boolean(Object.keys(storedProfile?.codingTagWeights || {}).length));
 }
 
 function useHydrateStudy(setState: (state: StudyState) => void, setQuestion: (question: Question) => void, setCode: (code: string) => void) {
@@ -930,17 +930,11 @@ function useQuestionDisplayVariant(params: {
     if (!params.hydrated || !params.currentQuestion || params.state.mode !== "leetcode") {
       return;
     }
-    if (isFrontendChallenge(params.currentQuestion)) {
-      return;
-    }
     requestVariant(params.currentQuestion);
   }, [params.currentQuestion, params.hydrated, params.state.mode, requestVariant]);
 
   useEffect(() => {
     if (!params.hydrated || !params.currentQuestion || params.state.mode !== "leetcode" || params.state.profile.spireRun.mapOpen) {
-      return;
-    }
-    if (isFrontendChallenge(params.currentQuestion)) {
       return;
     }
     const nextQuestion = chooseNextSpireQuestion(params.state, params.currentQuestion);
@@ -951,9 +945,6 @@ function useQuestionDisplayVariant(params: {
 
   if (!params.currentQuestion) {
     return { loading: false, question: null, ready: false, streamText: "" };
-  }
-  if (isFrontendChallenge(params.currentQuestion)) {
-    return { hasVariant: false, loading: false, question: params.currentQuestion, ready: true, revision, streamText: "" };
   }
   const cached = cache.current.get(params.currentQuestion.id);
   const loading = inFlight.current.has(params.currentQuestion.id) || retryTimers.current.has(params.currentQuestion.id);
@@ -1162,6 +1153,18 @@ export default function Home() {
     setRunTone("default");
     setRunStatus("Original question ready.");
   }, [currentQuestion, hydrated, questionVariant.hasVariant, questionVariant.loading, questionVariant.ready, questionVariant.streamText, sessionStarted, state.mode, state.profile.spireRun.mapOpen]);
+  useEffect(() => {
+    if (!hydrated || sessionStarted || !questionVariant.hasVariant || !activeQuestion) {
+      return;
+    }
+    const starter = createInitialQuestionDraft(activeQuestion);
+    setCode(starter);
+    setState((previous) => {
+      const next = cloneState(previous);
+      setCard(next, activeQuestion.id, { ...getCard(next, activeQuestion.id), draft: starter });
+      return next;
+    });
+  }, [activeQuestion, hydrated, questionVariant.hasVariant, sessionStarted]);
   const failAndAdvance = useFailAndAdvance({ code, currentQuestion: activeQuestion, setCode, setCurrentQuestion, setConsoleRunResult, setResults, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, clearHint: hints.clearHint, showHealthLoss, showPlayerImpact });
   const questionTimeLimitMs = activeQuestion ? getModifiedQuestionTimeLimitMs(state, activeQuestion) : 0;
   const timer = useQuestionTimer({ code, currentQuestion: activeQuestion, failAndAdvance, sessionStarted, mode: state.mode, setConsoleRunResult, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer, questionTimeLimitMs });
@@ -1173,6 +1176,7 @@ export default function Home() {
     freshState.profile.trackedAchievementIds = state.profile.trackedAchievementIds;
     freshState.profile.unlockedAchievementIds = state.profile.unlockedAchievementIds;
     freshState.profile.codingTags = state.profile.codingTags;
+    freshState.profile.codingTagWeights = state.profile.codingTagWeights;
     freshState.profile.codingMinRating = state.profile.codingMinRating;
     freshState.profile.codingProfiles = state.profile.codingProfiles;
     freshState.profile.activeCodingProfileId = state.profile.activeCodingProfileId;
@@ -1202,7 +1206,7 @@ export default function Home() {
     setRunTone("default");
     setRunStatus("Run ended. Preserved question progress and prepared the next attempt.");
     hints.clearHint();
-  }, [hints, runTimer, state.cards, state.profile.activeCodingProfileId, state.profile.codingMinRating, state.profile.codingProfiles, state.profile.codingTags, state.profile.metaProgress, state.profile.spireMinRating, state.profile.spireRun.heatConditions, state.profile.trackedAchievementIds, state.profile.unlockedAchievementIds, state.totalCorrect]);
+  }, [hints, runTimer, state.cards, state.profile.activeCodingProfileId, state.profile.codingMinRating, state.profile.codingProfiles, state.profile.codingTagWeights, state.profile.codingTags, state.profile.metaProgress, state.profile.spireMinRating, state.profile.spireRun.heatConditions, state.profile.trackedAchievementIds, state.profile.unlockedAchievementIds, state.totalCorrect]);
   const failQuestionForFocusLoss = useCallback(() => {
     activeRunId.current = null;
     clearRunTimer(runTimer);
