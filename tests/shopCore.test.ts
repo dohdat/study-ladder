@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
-import { createSpireRun } from "../lib/spireMapCore";
+import { createSpireRun, leaveSpireRoom } from "../lib/spireMapCore";
 import { buyShopItem, createShopStock, getShopItemCost, getShopRelicSellValue, getShopSellableRelics, sellShopRelic } from "../lib/shopCore";
 import { applyScheduleResult, defaultState, getEffectiveCharacterStats, getMaxHealth, MAX_HEALTH } from "../lib/studyCore";
 
@@ -12,7 +12,8 @@ describe("shopCore", () => {
 
     expect(stock.some((item) => item.kind === "consumable" && item.type === "health")).toBe(true);
     expect(stock.some((item) => item.kind === "consumable" && item.type === "random")).toBe(true);
-    expect(stock.filter((item) => item.kind === "consumable")).toHaveLength(2);
+    expect(stock.some((item) => item.kind === "consumable" && item.type === "mystery")).toBe(true);
+    expect(stock.filter((item) => item.kind === "consumable")).toHaveLength(3);
     expect(stock.filter((item) => item.kind === "equipment")).toHaveLength(0);
     expect(stock.filter((item) => item.kind === "relic")).toHaveLength(5);
     const relicIds = stock.filter((item) => item.kind === "relic").map((item) => item.relic.id);
@@ -38,7 +39,7 @@ describe("shopCore", () => {
 
     state = applyScheduleResult(state, questions[0].id, true, "ok", 2000);
     const firstStockIds = state.profile.shopStock.map((item) => item.id);
-    expect(firstStockIds).toHaveLength(7);
+    expect(firstStockIds).toHaveLength(8);
     expect(firstStockIds).not.toEqual(starterStockIds);
 
     const failedAgain = applyScheduleResult(state, questions[0].id, false, "bad", 3000);
@@ -67,12 +68,63 @@ describe("shopCore", () => {
     expect(state.profile.activePotionEffects[0].roomsRemaining).toBe(3);
     expect(state.profile.shopStock.some((item) => item.id === randomPotion?.id)).toBe(false);
 
+    const mysteryBox = state.profile.shopStock.find((item) => item.kind === "consumable" && item.type === "mystery");
+    expect(mysteryBox).toBeTruthy();
+    state = buyShopItem(state, mysteryBox?.id || "", getMaxHealth(state));
+    expect(state.profile.activePotionEffects.some((effect) => effect.mysteryRelicSeed && effect.roomsRemaining === 3)).toBe(true);
+    expect(state.profile.shopStock.some((item) => item.id === mysteryBox?.id)).toBe(false);
+
     expect(state.profile.shopStock.some((item) => item.kind === "equipment")).toBe(false);
 
     const relic = state.profile.shopStock.find((item) => item.kind === "relic");
     expect(relic).toBeTruthy();
     state = buyShopItem(state, relic?.id || "", getMaxHealth(state));
     expect(state.profile.relics.some((item) => item.id === (relic?.kind === "relic" ? relic.relic.id : ""))).toBe(true);
+  });
+
+  it("opens purchased mystery boxes into a random relic after three enemy rooms", () => {
+    let state = defaultState();
+    state.profile.coins = 500;
+    state.profile.shopStock = createShopStock(questions[0], getEffectiveCharacterStats(state), 1000);
+    const mysteryBox = state.profile.shopStock.find((item) => item.kind === "consumable" && item.type === "mystery");
+    const run = createSpireRun(3500);
+    const merchant = run.nodes.find((node) => node.kind === "merchant") || run.nodes[0];
+    const enemy = run.nodes.find((node) => node.kind === "enemy") || run.nodes[0];
+    const rooms = [
+      { ...merchant, id: "shop-room", kind: "merchant" as const, nextIds: ["rest-room"] },
+      { ...merchant, id: "rest-room", kind: "rest" as const, nextIds: ["enemy-1"] },
+      { ...enemy, id: "enemy-1", kind: "enemy" as const, nextIds: ["enemy-2"] },
+      { ...enemy, id: "enemy-2", kind: "enemy" as const, nextIds: ["enemy-3"] },
+      { ...enemy, id: "enemy-3", kind: "enemy" as const, nextIds: [] }
+    ];
+    state.profile.spireRun = { ...run, availableNodeIds: ["shop-room"], currentNodeId: "shop-room", mapOpen: false, nodes: rooms };
+
+    state = buyShopItem(state, mysteryBox?.id || "", getMaxHealth(state));
+    expect(state.profile.activePotionEffects[0]).toMatchObject({ name: "Sealed Mystery Box", roomsRemaining: 3 });
+
+    state = leaveSpireRoom(state, 2000);
+    expect(state.profile.activePotionEffects[0]?.roomsRemaining).toBe(3);
+    expect(state.profile.relics).toHaveLength(0);
+
+    state = { ...state, profile: { ...state.profile, spireRun: { ...state.profile.spireRun, currentNodeId: "rest-room", mapOpen: false } } };
+    state = leaveSpireRoom(state, 3000);
+    expect(state.profile.activePotionEffects[0]?.roomsRemaining).toBe(3);
+    expect(state.profile.relics).toHaveLength(0);
+
+    state = { ...state, profile: { ...state.profile, spireRun: { ...state.profile.spireRun, currentNodeId: "enemy-1", mapOpen: false } } };
+    state = leaveSpireRoom(state, 4000);
+    expect(state.profile.activePotionEffects[0]?.roomsRemaining).toBe(2);
+    expect(state.profile.relics).toHaveLength(0);
+
+    state = { ...state, profile: { ...state.profile, spireRun: { ...state.profile.spireRun, currentNodeId: "enemy-2", mapOpen: false } } };
+    state = leaveSpireRoom(state, 5000);
+    expect(state.profile.activePotionEffects[0]?.roomsRemaining).toBe(1);
+    expect(state.profile.relics).toHaveLength(0);
+
+    state = { ...state, profile: { ...state.profile, spireRun: { ...state.profile.spireRun, currentNodeId: "enemy-3", mapOpen: false } } };
+    state = leaveSpireRoom(state, 6000);
+    expect(state.profile.activePotionEffects).toHaveLength(0);
+    expect(state.profile.relics).toHaveLength(1);
   });
 
   it("extends random potion effects when a relic grants potion duration", () => {

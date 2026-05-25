@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
 import { buyShopItem } from "../lib/shopCore";
+import { RELIC_DEFINITIONS } from "../lib/relicCore";
 import { advanceSpireNode, attuneRestSiteRelic, canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, isSpireHeatSetupOpen, isSpireRunSetupOpen, leaveSpireRoom, normalizeSpireRun, retargetCurrentSpireRoomQuestions, selectPendingRelicReward, selectSpireNode, setSpireHeatConditionRank, skipPendingRelicReward, smithSpireNode, SPIRE_RATINGS, startSpireHeatRun, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
 import { EXPERIENCE_PER_LEVEL, defaultState, getMaxHealth, getMaxMana } from "../lib/studyCore";
 import type { SpireCombatRewardKind, SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
@@ -664,6 +665,7 @@ describe("spireMapCore", () => {
     state = enterSpireNode(state, 4000);
 
     expect(state.profile.shopStock.some((item) => item.kind === "consumable")).toBe(true);
+    expect(state.profile.shopStock.some((item) => item.kind === "consumable" && item.type === "mystery")).toBe(true);
     expect(state.profile.shopStock.some((item) => item.kind === "relic")).toBe(true);
     expect(state.profile.shopStock.filter((item) => item.kind === "equipment")).toHaveLength(0);
     expect(state.profile.shopStock.filter((item) => item.kind === "relic")).toHaveLength(5);
@@ -741,10 +743,10 @@ describe("spireMapCore", () => {
     expect(getCurrentSpireNode(state)?.kind).not.toBe("unknown");
     expect(state.profile.spireRun.mapOpen).toBe(false);
     expect(Object.values(misses).some((value) => value === 0)).toBe(true);
-    expect(Object.values(misses).filter((value) => value === 1).length).toBe(4);
+    expect(Object.values(misses).filter((value) => value === 1).length).toBe(5);
   });
 
-  it("reveals unknown rooms only as monster treasure shop elite or blight rooms", () => {
+  it("reveals unknown rooms only as monster treasure shop elite blight or cursed rooms", () => {
     let baseState = defaultState();
     baseState = { ...baseState, profile: { ...baseState.profile, spireRun: createSpireRun(3500) } };
     const unknown = baseState.profile.spireRun.nodes.find((node) => node.kind === "unknown") || baseState.profile.spireRun.nodes[0];
@@ -752,13 +754,13 @@ describe("spireMapCore", () => {
     baseState = selectSpireNode(baseState, unknown.id);
 
     const revealedKinds = new Set<SpireNodeKind>();
-    for (let offset = 0; offset < 80; offset += 1) {
+    for (let offset = 0; offset < 160 && revealedKinds.size < 6; offset += 1) {
       const entered = enterSpireNode(baseState, 7000 + offset);
       revealedKinds.add(getCurrentSpireNode(entered)?.kind || "unknown");
     }
 
-    expect([...revealedKinds].every((kind) => ["enemy", "treasure", "merchant", "elite", "blight"].includes(kind))).toBe(true);
-    expect(revealedKinds).toEqual(new Set(["enemy", "treasure", "merchant", "elite", "blight"]));
+    expect([...revealedKinds].every((kind) => ["enemy", "treasure", "merchant", "elite", "blight", "cursed"].includes(kind))).toBe(true);
+    expect(revealedKinds).toEqual(new Set(["enemy", "treasure", "merchant", "elite", "blight", "cursed"]));
   });
 
   it("forces blight rooms to choose a blight relic", () => {
@@ -777,6 +779,37 @@ describe("spireMapCore", () => {
     expect(state.profile.spireRun.pendingRelicReward?.rerollsRemaining).toBe(0);
     expect(state.profile.spireRun.pendingRelicReward?.choices.every((relic) => relic.rarity === "blight")).toBe(true);
     expect(skipPendingRelicReward(state)).toBe(state);
+  });
+
+  it("forces cursed rooms to choose a doubled relic and take two blights", () => {
+    let state = defaultState();
+    state.profile.spireRun = createSpireRun(3500);
+    const enemy = state.profile.spireRun.nodes.find((node) => node.kind === "enemy") || state.profile.spireRun.nodes[0];
+    const cursed = { ...enemy, id: "test-cursed", kind: "cursed" as const };
+    state.profile.spireRun.nodes = [cursed];
+    state.profile.spireRun.currentNodeId = cursed.id;
+    state.profile.spireRun.availableNodeIds = [cursed.id];
+    state = enterSpireNode(state, 8200);
+
+    state = claimCurrentSpireRoomReward(state, 8201);
+
+    const pending = state.profile.spireRun.pendingRelicReward;
+    const relic = pending?.choices[0];
+    const baseRelic = RELIC_DEFINITIONS.find((definition) => definition.id === relic?.id);
+    expect(pending?.rewardKind).toBe("cursed");
+    expect(pending?.rerollsRemaining).toBe(0);
+    expect(pending?.choices.every((choice) => choice.rarity !== "blight" && choice.name.endsWith(" (Cursed)"))).toBe(true);
+    if (relic?.modifiers?.length && baseRelic?.modifiers?.length) {
+      expect(relic.modifiers[0]?.value).toBe((baseRelic.modifiers[0]?.value || 0) * 2);
+    }
+    expect(skipPendingRelicReward(state)).toBe(state);
+
+    state = choosePendingRelicReward(state, relic?.id || "");
+
+    const claimedRelics = state.profile.relics;
+    expect(state.profile.spireRun.pendingRelicReward).toBeNull();
+    expect(claimedRelics.find((item) => item.id === relic?.id)?.name).toBe(relic?.name);
+    expect(claimedRelics.filter((item) => item.rarity === "blight")).toHaveLength(2);
   });
 
   it("lets god mode select and enter rooms outside the current route", () => {

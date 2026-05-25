@@ -122,6 +122,7 @@ const RUN_SETUP_START_BAR_BG = "linear-gradient(180deg, rgba(24, 19, 15, 0.18), 
 const NODE_LABELS: Record<SpireNodeKind, string> = {
   blight: "Blight",
   boss: "Boss",
+  cursed: "Cursed",
   event: "Event",
   elite: "Elite",
   enemy: "Enemy",
@@ -134,6 +135,7 @@ const NODE_LABELS: Record<SpireNodeKind, string> = {
 const NODE_ICON_ASSETS: Record<SpireNodeKind, StaticImageData> = {
   blight: deadTreeArt,
   boss: demonKingArt,
+  cursed: dislocatedEyeArt,
   event: questionMarkArt,
   elite: skeletonMageArt,
   enemy: zombieArt,
@@ -151,6 +153,7 @@ const ACT_BOSS_NODE_ASSETS: Partial<Record<SpireAct, StaticImageData>> = {
 const NODE_DIMENSIONS: Record<SpireNodeKind, { icon: number; size: number }> = {
   blight: { icon: 34, size: 44 },
   boss: { icon: BOSS_NODE_ICON_SIZE, size: BOSS_NODE_SIZE },
+  cursed: { icon: 34, size: 44 },
   event: { icon: 24, size: 34 },
   elite: { icon: 42, size: 54 },
   enemy: { icon: 34, size: 44 },
@@ -406,6 +409,7 @@ function RoomPanel(props: { node: SpireMapNode | undefined; setState: React.Disp
       {props.node?.kind === "rest" && <RestRoomPanel node={props.node} setState={props.setState} state={props.state} />}
       {props.node?.kind === "event" && <EventRoomPanel node={props.node} setState={props.setState} state={props.state} />}
       {props.node?.kind === "blight" && <BlightRoomPanel node={props.node} setState={props.setState} state={props.state} />}
+      {props.node?.kind === "cursed" && <CursedRoomPanel node={props.node} setState={props.setState} state={props.state} />}
     </Stack>
   );
 }
@@ -494,6 +498,8 @@ function PendingRelicRewardPanel(props: { floating?: boolean; inlineContinue?: b
     return null;
   }
   const forcedBlight = pending.rewardKind === "blight";
+  const forcedCursed = pending.rewardKind === "cursed";
+  const forcedChoice = forcedBlight || forcedCursed;
   const confirmSelection = () => props.setState((previous) => {
     const selectedRelicId = previous.profile.spireRun.pendingRelicReward?.selectedRelicId;
     return selectedRelicId ? choosePendingRelicReward(previous, selectedRelicId) : previous;
@@ -516,12 +522,12 @@ function PendingRelicRewardPanel(props: { floating?: boolean; inlineContinue?: b
     >
       <Group justify="space-between" align="flex-start" mb="sm" wrap="nowrap">
         <Box>
-          <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>{forcedBlight ? "Choose a Blight" : "Choose a Relic"}</Text>
-          <Text size="xs" c="dimmed">{forcedBlight ? "Pick one blight relic to continue." : `Pick one run relic, reroll the offering, or skip it for ${pending.skipMetaCurrency} insight.`}</Text>
+          <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>{forcedBlight ? "Choose a Blight" : forcedCursed ? "Choose a Cursed Bargain" : "Choose a Relic"}</Text>
+          <Text size="xs" c="dimmed">{forcedBlight ? "Pick one blight relic to continue." : forcedCursed ? "Pick one doubled relic. Two blights are added to the run." : `Pick one run relic, reroll the offering, or skip it for ${pending.skipMetaCurrency} insight.`}</Text>
         </Box>
         <Group gap={8} wrap="nowrap">
           <Badge color="violet" variant="light">Insight {props.state.profile.metaProgress.currency}</Badge>
-          {!forcedBlight ? (
+          {!forcedChoice ? (
             <>
               <HeroSiegeButton disabled={pending.rerollsRemaining <= 0} onClick={() => props.setState((previous) => rerollPendingRelicReward(previous))} minWidth={98}>
                 Reroll {pending.rerollsRemaining}
@@ -816,6 +822,25 @@ function ActMapLabel(props: { state: StudyState }) {
         </Text>
       </Group>
     </Box>
+  );
+}
+
+function CursedRoomPanel(props: { node: SpireMapNode; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
+  const resolved = props.state.profile.spireRun.completedNodeIds.includes(props.node.id);
+  return (
+    <Group justify="space-between" wrap="nowrap" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, padding: "14px 16px" }}>
+      <Group gap="sm" wrap="nowrap">
+        <NodeIcon kind="cursed" size={42} />
+        <Box>
+          <Text size="sm" fw={900} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>{resolved ? "Cursed Bargain Claimed" : "Cursed Room"}</Text>
+          <Text size="xs" c="dimmed">{resolved ? "Continue to choose the next route." : "Choose one doubled relic. Two blights are added to the run."}</Text>
+        </Box>
+      </Group>
+      <Group gap={8} wrap="nowrap">
+        <HeroSiegeButton disabled={resolved} onClick={() => props.setState((previous) => claimCurrentSpireRoomReward(previous))} minWidth={132}>Choose Bargain</HeroSiegeButton>
+        <HeroSiegeButton disabled={!resolved} onClick={() => props.setState((previous) => leaveSpireRoom(previous))} minWidth={104}>Continue</HeroSiegeButton>
+      </Group>
+    </Group>
   );
 }
 
@@ -1569,6 +1594,9 @@ function getNodeIconFilter(kind: SpireNodeKind, shadow: boolean, highlightTone: 
   if (kind === "blight") {
     filters.push("sepia(0.6) saturate(1.4) hue-rotate(250deg) brightness(0.82)");
   }
+  if (kind === "cursed") {
+    filters.push("sepia(0.45) saturate(1.7) hue-rotate(230deg) brightness(0.9)");
+  }
   if (shadow) {
     filters.push(kind === "boss" ? NODE_DROP_SHADOW : "drop-shadow(0 2px 2px rgba(0, 0, 0, 0.32))");
   }
@@ -1600,7 +1628,7 @@ function getNodeHighlightFilter(highlightTone: "active" | "hover" | "selected" |
 }
 
 function Legend(props: { disabled?: boolean; highlightedKind: SpireNodeKind | null; onHighlight: (kind: SpireNodeKind | null) => void }) {
-  const rows: SpireNodeKind[] = ["unknown", "blight", "event", "merchant", "treasure", "rest", "enemy", "elite", "boss"];
+  const rows: SpireNodeKind[] = ["unknown", "blight", "cursed", "event", "merchant", "treasure", "rest", "enemy", "elite", "boss"];
   return (
     <Box p="sm" style={{ background: ACT_LABEL_BG, border: ACT_LABEL_BORDER, borderRadius: 2, boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.72), 0 10px 26px rgba(0, 0, 0, 0.36)", color: "#e7dcc0", pointerEvents: props.disabled ? "none" : undefined, position: "absolute", right: 12, top: 12, width: 150, zIndex: 4 }}>
       <Text size="sm" fw={900} mb={6} style={{ color: "#f1dfad", textShadow: "0 1px 0 #000" }}>Legend</Text>

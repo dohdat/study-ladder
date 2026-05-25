@@ -75,6 +75,7 @@ const REST_ATTUNEMENT_MAX_MODIFIERS = 2;
 const REST_ATTUNEMENT_FALLBACK_LIFE = 8;
 const POTION_HEALTH_RATIO = 0.25;
 const UNKNOWN_BLIGHT_WEIGHT = 1;
+const UNKNOWN_CURSED_WEIGHT = 1;
 const UNKNOWN_MONSTER_WEIGHT = 1;
 const UNKNOWN_TREASURE_WEIGHT = 1;
 const UNKNOWN_SHOP_WEIGHT = 1;
@@ -145,6 +146,7 @@ const CENTAUR_HEART_MAX_HEALTH = 25;
 const POM_FALLBACK_META_REWARD = 6;
 const UNKNOWN_ENCOUNTER_WEIGHTS: Record<UnknownEncounterKind, number> = {
   blight: UNKNOWN_BLIGHT_WEIGHT,
+  cursed: UNKNOWN_CURSED_WEIGHT,
   elite: UNKNOWN_ELITE_WEIGHT,
   monster: UNKNOWN_MONSTER_WEIGHT,
   shop: UNKNOWN_SHOP_WEIGHT,
@@ -284,7 +286,7 @@ function hasRequiredSpireFloors(nodes: SpireMapNode[]) {
   return SPIRE_RATINGS.every((_rating, tierIndex) => nodes.some((node) => node.tierIndex === tierIndex));
 }
 
-function createDefaultUnknownEncounterMisses(): Record<UnknownEncounterKind, number> { return { blight: 0, elite: 0, monster: 0, shop: 0, treasure: 0 }; }
+function createDefaultUnknownEncounterMisses(): Record<UnknownEncounterKind, number> { return { blight: 0, cursed: 0, elite: 0, monster: 0, shop: 0, treasure: 0 }; }
 
 function normalizeSpireAct(value: SpireRun["act"] | undefined): SpireAct {
   return [1, 2, 3, 4].includes(Number(value)) ? Number(value) as SpireAct : 1;
@@ -770,6 +772,9 @@ export function claimSpireNodeReward(state: StudyState, now = Date.now()) {
   if (currentNode.kind === "blight") {
     return applyBlightRoomReward(state, currentNode, now);
   }
+  if (currentNode.kind === "cursed") {
+    return applyCursedRoomReward(state, currentNode, now);
+  }
   return state;
 }
 
@@ -889,6 +894,15 @@ function applyEventRoomReward(state: StudyState, node: SpireMapNode, now: number
 function applyBlightRoomReward(state: StudyState, node: SpireMapNode, now: number) {
   return createPendingRelicReward(state, node, now, "blight", {
     minRarity: ["blight"],
+    rerolls: 0,
+    skipMetaCurrency: 0
+  });
+}
+
+function applyCursedRoomReward(state: StudyState, node: SpireMapNode, now: number) {
+  return createPendingRelicReward(state, node, now, "cursed", {
+    choiceBonus: 1,
+    minRarity: ["event", "rare", "unique"],
     rerolls: 0,
     skipMetaCurrency: 0
   });
@@ -1057,12 +1071,13 @@ function createPendingRelicReward(
   options: { choiceBonus?: number; minRarity?: RelicRarity[]; rerolls?: number; skipMetaCurrency?: number } = {}
 ) {
   const seed = `${node.id}:${now}:${rewardKind}:relic-choice`;
-  const forcedBlight = rewardKind === "blight";
+  const forcedChoice = rewardKind === "blight" || rewardKind === "cursed";
   const modifiers = getRunModifierTotals(state);
   const focusedChoiceBonus = (rewardKind === "elite" ? modifiers.eliteRelicChoiceBonus || 0 : 0)
     + (rewardKind === "boss" ? modifiers.bossRelicChoiceBonus || 0 : 0);
   const choiceCount = Math.max(1, BASE_RELIC_CHOICE_COUNT + getMetaRelicChoiceBonus(state) + modifiers.relicChoiceBonus + focusedChoiceBonus + (options.choiceBonus || 0) - getHeatRelicChoicePenalty(state.profile.spireRun, rewardKind));
-  const rerollsRemaining = forcedBlight ? 0 : Math.max(0, (options.rerolls ?? BASE_RELIC_REROLLS) + Math.max(0, Math.floor(modifiers.relicRerollBonus || 0)) - getHeatRelicRerollPenalty(state.profile.spireRun));
+  const rerollsRemaining = forcedChoice ? 0 : Math.max(0, (options.rerolls ?? BASE_RELIC_REROLLS) + Math.max(0, Math.floor(modifiers.relicRerollBonus || 0)) - getHeatRelicRerollPenalty(state.profile.spireRun));
+  const choices = rollRelicChoices(state, seed, choiceCount, options.minRarity);
   return {
     ...state,
     profile: {
@@ -1070,13 +1085,13 @@ function createPendingRelicReward(
       spireRun: {
         ...state.profile.spireRun,
         pendingRelicReward: {
-          choices: rollRelicChoices(state, seed, choiceCount, options.minRarity),
+          choices: rewardKind === "cursed" ? choices.map(createDoubledCursedRelic) : choices,
           nodeId: node.id,
           rerollsRemaining,
           rewardKind,
           selectedRelicId: null,
           seed,
-          skipMetaCurrency: forcedBlight ? 0 : (options.skipMetaCurrency ?? SKIP_META_COMMON) + Math.max(0, Math.floor(modifiers.skipRelicMetaBonus || 0))
+          skipMetaCurrency: forcedChoice ? 0 : (options.skipMetaCurrency ?? SKIP_META_COMMON) + Math.max(0, Math.floor(modifiers.skipRelicMetaBonus || 0))
         }
       }
     }
@@ -1123,6 +1138,9 @@ export function choosePendingRelicReward(state: StudyState, relicId: string) {
   if (!pending || !relic) {
     return state;
   }
+  if (pending.rewardKind === "cursed") {
+    return grantCursedRelicReward(state, pending, relic);
+  }
   const withRelic = grantRelic(state, relic);
   return recordRoomRewardClaim(clearPendingRelicReward(withRelic), pending.nodeId, {
     ...state.profile.spireRun.roomRewardClaims[pending.nodeId],
@@ -1130,12 +1148,34 @@ export function choosePendingRelicReward(state: StudyState, relicId: string) {
   });
 }
 
+function grantCursedRelicReward(state: StudyState, pending: NonNullable<SpireRun["pendingRelicReward"]>, relic: Relic) {
+  const blights = rollRelicChoices(state, `${pending.seed}:double-downside`, 2, ["blight"]);
+  const withRelic = grantRelic(state, relic);
+  const withBlights = blights.reduce((nextState, blight) => grantRelic(nextState, blight), withRelic);
+  return recordRoomRewardClaim(clearPendingRelicReward(withBlights), pending.nodeId, {
+    ...state.profile.spireRun.roomRewardClaims[pending.nodeId],
+    relicIds: [relic.id, ...blights.map((blight) => blight.id)]
+  });
+}
+
+function createDoubledCursedRelic(relic: Relic): Relic {
+  return {
+    ...relic,
+    description: `${relic.description} The curse doubles its strength.`,
+    modifiers: (relic.modifiers || []).map((modifier) => ({
+      ...modifier,
+      value: modifier.value * 2
+    })),
+    name: `${relic.name} (Cursed)`
+  };
+}
+
 export function skipPendingRelicReward(state: StudyState) {
   const pending = state.profile.spireRun.pendingRelicReward;
   if (!pending) {
     return state;
   }
-  if (pending.rewardKind === "blight") {
+  if (pending.rewardKind === "blight" || pending.rewardKind === "cursed") {
     return state;
   }
   const metaCurrency = pending.skipMetaCurrency;
@@ -1181,6 +1221,9 @@ function getRelicChoiceRarities(kind: RelicRewardKind): RelicRarity[] | undefine
   }
   if (kind === "event") {
     return ["event", "rare"];
+  }
+  if (kind === "cursed") {
+    return ["event", "rare", "unique"];
   }
   if (kind === "blight") {
     return ["blight"];
@@ -1504,6 +1547,9 @@ function getRevealedNodeKind(encounter: UnknownEncounterKind): SpireNodeKind {
   if (encounter === "blight") {
     return "blight";
   }
+  if (encounter === "cursed") {
+    return "cursed";
+  }
   if (encounter === "monster") {
     return "enemy";
   }
@@ -1554,7 +1600,7 @@ function markSpireRoomRewardClaimed(state: StudyState, nodeId: string) {
 }
 
 function completeSpireNode(state: StudyState, node: SpireMapNode, now: number, shouldClaimReward = true) {
-  const rewarded = tickActivePotionEffects(shouldClaimReward ? claimSpireNodeReward(state, now) : state, node.id);
+  const rewarded = tickActivePotionEffects(shouldClaimReward ? claimSpireNodeReward(state, now) : state, node);
   if (rewarded.profile.spireRun.pendingRelicReward) {
     return {
       ...rewarded,
@@ -1644,19 +1690,38 @@ function completeVictoriousRun(state: StudyState, now: number): StudyState {
   };
 }
 
-function tickActivePotionEffects(state: StudyState, completedNodeId: string): StudyState {
-  const activePotionEffects = (state.profile.activePotionEffects || [])
-    .map((effect) => effect.sourceNodeId === completedNodeId ? { ...effect, sourceNodeId: undefined } : { ...effect, roomsRemaining: effect.roomsRemaining - 1, sourceNodeId: undefined })
-    .filter((effect) => effect.roomsRemaining > 0);
+function tickActivePotionEffects(state: StudyState, completedNode: SpireMapNode): StudyState {
+  let nextState = state;
+  const activePotionEffects: StudyState["profile"]["activePotionEffects"] = [];
+  for (const effect of state.profile.activePotionEffects || []) {
+    const nextEffect = effect.sourceNodeId === completedNode.id
+      ? { ...effect, sourceNodeId: undefined }
+      : effect.mysteryRelicSeed && completedNode.kind !== "enemy"
+        ? { ...effect, sourceNodeId: undefined }
+      : { ...effect, roomsRemaining: effect.roomsRemaining - 1, sourceNodeId: undefined };
+    if (nextEffect.roomsRemaining > 0) {
+      activePotionEffects.push(nextEffect);
+      continue;
+    }
+    nextState = openMysteryBoxEffect(nextState, effect, completedNode.id);
+  }
   return {
-    ...state,
+    ...nextState,
     profile: {
-      ...state.profile,
+      ...nextState.profile,
       activePotionEffects,
-      health: Math.min(state.profile.health, getMaxHealth({ ...state, profile: { ...state.profile, activePotionEffects } })),
+      health: Math.min(nextState.profile.health, getMaxHealth({ ...nextState, profile: { ...nextState.profile, activePotionEffects } })),
       mana: 0
     }
   };
+}
+
+function openMysteryBoxEffect(state: StudyState, effect: StudyState["profile"]["activePotionEffects"][number], completedNodeId: string) {
+  if (!effect.mysteryRelicSeed) {
+    return state;
+  }
+  const relic = rollRelic(state, `${effect.mysteryRelicSeed}:${completedNodeId}:open`, { includeShop: true, maxItemLevel: getStateLevel(state), minRarity: ["common", "uncommon", "rare", "shop"] });
+  return grantRelic(state, relic);
 }
 
 function createSpireNodes(seed: number, ratings = SPIRE_RATINGS) {

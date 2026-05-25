@@ -5,6 +5,7 @@ export type ElementalResistances = Record<ElementalDamageType, number>;
 export const ELEMENTAL_DAMAGE_TYPES: ElementalDamageType[] = ["fire", "cold", "lightning", "poison"];
 export const DAMAGE_TYPES: DamageType[] = ["physical", ...ELEMENTAL_DAMAGE_TYPES];
 export const MAX_ELEMENTAL_RESISTANCE_PERCENT = 75;
+const MIN_ELEMENTAL_RESISTANCE_PERCENT = -100;
 const PERCENT = 100;
 
 const RESISTANCE_MODIFIERS: Record<ElementalDamageType, ItemModifierKey> = {
@@ -35,5 +36,5 @@ export function applyElementalResistance(amount: number, element: DamageType | n
 }
 
 function clampResistance(value: number) {
-  return Math.min(MAX_ELEMENTAL_RESISTANCE_PERCENT, Math.max(0, Math.round(value || 0)));
+  return Math.min(MAX_ELEMENTAL_RESISTANCE_PERCENT, Math.max(MIN_ELEMENTAL_RESISTANCE_PERCENT, Math.round(value || 0)));
 }

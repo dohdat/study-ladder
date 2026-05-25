@@ -214,6 +214,8 @@ function ActiveEffectStrip(props: { effects: ActivePotionEffect[] }) {
 
 function ActiveEffectPill(props: { effect: ActivePotionEffect }) {
   const attuned = isAttunement(props.effect);
+  const mystery = isMysteryBox(props.effect);
+  const tone = attuned ? "yellow.3" : mystery ? "violet.2" : "blue.2";
   return (
     <Tooltip
       label={<ActiveEffectTooltip effect={props.effect} />}
@@ -235,12 +237,12 @@ function ActiveEffectPill(props: { effect: ActivePotionEffect }) {
         arrow: {
           borderColor: attuned ? "rgba(250, 204, 21, 0.9)" : "rgba(231, 25, 104, 0.9)"
         }
-      }}
-    >
-      <Box
-        style={{
-          background: attuned ? "linear-gradient(180deg, rgba(91, 58, 7, 0.92), rgba(12, 9, 5, 0.84))" : "linear-gradient(180deg, rgba(22, 14, 17, 0.9), rgba(4, 4, 5, 0.7))",
-          border: attuned ? "1px solid rgba(250, 204, 21, 0.72)" : "1px solid rgba(223, 195, 122, 0.18)",
+        }}
+      >
+        <Box
+          style={{
+          background: attuned ? "linear-gradient(180deg, rgba(91, 58, 7, 0.92), rgba(12, 9, 5, 0.84))" : mystery ? "linear-gradient(180deg, rgba(52, 24, 78, 0.92), rgba(7, 5, 10, 0.84))" : "linear-gradient(180deg, rgba(22, 14, 17, 0.9), rgba(4, 4, 5, 0.7))",
+          border: attuned ? "1px solid rgba(250, 204, 21, 0.72)" : mystery ? "1px solid rgba(204, 93, 232, 0.72)" : "1px solid rgba(223, 195, 122, 0.18)",
           boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.75), 0 2px 3px rgba(0, 0, 0, 0.55)",
           display: "flex",
           flex: "0 1 auto",
@@ -250,7 +252,7 @@ function ActiveEffectPill(props: { effect: ActivePotionEffect }) {
           padding: "2px 6px"
         }}
       >
-        <Text size="9px" fw={900} c={attuned ? "yellow.3" : "blue.2"} lh={1.25}>{attuned ? "ATTUNED" : "BUFF"}</Text>
+        <Text size="9px" fw={900} c={tone} lh={1.25}>{attuned ? "ATTUNED" : mystery ? "SEALED" : "BUFF"}</Text>
         <Text size="9px" fw={900} c="#f8eed4" lh={1.25} truncate>{formatEffectName(props.effect.name)}</Text>
         <Text size="9px" fw={900} c="gray.3" lh={1.25}>{props.effect.roomsRemaining}r</Text>
       </Box>
@@ -259,23 +261,28 @@ function ActiveEffectPill(props: { effect: ActivePotionEffect }) {
 }
 
 function ActiveEffectTooltip(props: { effect: ActivePotionEffect }) {
+  const mystery = isMysteryBox(props.effect);
   const effects = [
     ...props.effect.modifiers.map((modifier) => formatModifier(modifier.key, modifier.value)),
     ...Object.entries(props.effect.stats).filter(([, value]) => value).map(([key, value]) => `+${value} ${formatStatName(key)}`)
   ].filter(Boolean);
   return (
     <Box maw={296}>
-      <Text size="sm" fw={900} tt="uppercase" lh={1.15} c={isAttunement(props.effect) ? "yellow.3" : "blue.2"} style={{ textShadow: "0 2px 0 #000" }}>
+      <Text size="sm" fw={900} tt="uppercase" lh={1.15} c={isAttunement(props.effect) ? "yellow.3" : mystery ? "violet.2" : "blue.2"} style={{ textShadow: "0 2px 0 #000" }}>
         {props.effect.name}
       </Text>
       <Text size="11px" mt={5} c="gray.3" lh={1.25}>
         {props.effect.roomsRemaining} {props.effect.roomsRemaining === 1 ? "room" : "rooms"} remaining
       </Text>
       <Text size="12px" mt={7} c="blue.2" lh={1.28} style={{ textShadow: "0 1px 0 #000" }}>
-        {effects.join(", ") || "Temporary effect active"}
+        {mystery ? "Opens into a random relic after enough enemy rooms are cleared." : effects.join(", ") || "Temporary effect active"}
       </Text>
     </Box>
   );
+}
+
+function isMysteryBox(effect: ActivePotionEffect) {
+  return Boolean(effect.mysteryRelicSeed);
 }
 
 function isAttunement(effect: ActivePotionEffect) {

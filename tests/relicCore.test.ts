@@ -138,6 +138,7 @@ describe("relicCore", () => {
       "increasedRareDropChancePercent",
       "lifeOnKill",
       "lifeStealPercent",
+      "lightningResistPercent",
       "lowHealthClearHeal",
       "magicFindPercent",
       "maxLife",

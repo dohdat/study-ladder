@@ -270,7 +270,7 @@ const BLIGHT_RELICS: Relic[] = [
   relic("Sharp Shadows", "blight", "Enemy damage reduction is weaker.", { reducedEnemyDamagePercent: -10 }),
   relic("Cold Campfire", "blight", "Fire resistance is reduced.", { fireResistPercent: -15 }),
   relic("Elite Burden", "blight", "Armor penetration is reduced.", { armorPenetrationPercent: -12 }),
-  relic("Oracle Tax", "blight", "Free hint charges are reduced.", { freeHintPerRoom: -1 }),
+  relic("Oracle Tax", "blight", "Enemy punishment rises after you lean on the oracle.", { incomingDamagePercent: 12 }),
   relic("Heavy Coffers", "blight", "Physical submit damage drops.", { physicalDamage: -4 }),
   relic("Weak Dawn", "blight", "Physical resistance is reduced.", { physicalResistPercent: -12 }),
   relic("Cursed Beginning", "blight", "Parry chance is reduced.", { parryChancePercent: -6 }),
@@ -279,7 +279,7 @@ const BLIGHT_RELICS: Relic[] = [
   relic("Brittle Shield", "blight", "Block chance is reduced.", { blockChancePercent: -6 }),
   relic("Blind Map", "blight", "Critical strike chance is reduced.", { criticalChancePercent: -6 }),
   relic("Expensive Lessons", "blight", "Cold resistance is reduced.", { coldResistPercent: -15 }),
-  relic("Leaking Flask", "blight", "Life on completion is reduced.", { lifeOnKill: -3 }),
+  relic("Leaking Flask", "blight", "Lightning resistance is reduced.", { lightningResistPercent: -15 }),
   relic("Rusty Coin", "blight", "Magic find is reduced.", { magicFindPercent: -10 }),
   relic("Slow Mind", "blight", "Extra-hit chance is reduced.", { extraAttackChancePercent: -6 })
 ];

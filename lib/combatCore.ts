@@ -124,7 +124,7 @@ export const getMonsterHit = (state: StudyState, question: Question, now = Date.
   const executeProc = currentHealth / maxHealth <= EXECUTE_WOUNDED_THRESHOLD && getSeededRoll(`${question.id}:${now}:execute-proc`) <= (modifiers.executeChancePercent || 0) / 100;
   const extraAttack = getSeededRoll(`${question.id}:${now}:extra-attack`) <= (modifiers.extraAttackChancePercent || 0) / 100 ? 1 : 0;
   const timeHardening = getTimeHardening(options.timePressureRatio);
-  const guardPenetration = Math.max(0, (modifiers.armorPenetrationPercent || 0) + (modifiers.reducedEnemyArmorPercent || 0) + (modifiers.resistancePenetrationPercent || 0));
+  const guardPenetration = (modifiers.armorPenetrationPercent || 0) + (modifiers.reducedEnemyArmorPercent || 0) + (modifiers.resistancePenetrationPercent || 0);
   const timeDefensePercent = Math.max(0, timeHardening.defensePercent - guardPenetration);
   const physicalDamage = executeProc ? Math.max(activeHit.perHitDamage, currentHealth) : activeHit.perHitDamage;
   const damageTypes = getPlayerHitDamageTypes(physicalDamage, modifiers);
@@ -266,7 +266,7 @@ function applyTimeDefense(damage: number, defensePercent: number) {
   if (damage <= 0 || defensePercent <= 0) {
     return damage;
   }
-  return Math.max(1, Math.round(damage * (1 - Math.min(MAX_TIME_MONSTER_DEFENSE_PERCENT, defensePercent) / PERCENT)));
+  return Math.max(1, Math.round(damage * (1 - Math.min(75, defensePercent) / PERCENT)));
 }
 
 function getPlayerHitDamageTypes(physicalDamage: number, modifiers: ReturnType<typeof getRunModifierTotals>): DamageType[] {

@@ -116,6 +116,31 @@ describe("studyCore", () => {
     }
   });
 
+  it("makes negative defensive relic modifiers meaningful downsides", () => {
+    const base = defaultState();
+    const question = questions.find((row) => row.difficulty === 5) || questions[0];
+
+    const enemyDamageBlight = defaultState();
+    enemyDamageBlight.profile.relics = [testRelic("reducedEnemyDamagePercent", -20)];
+    expect(getHealthLoss(enemyDamageBlight)).toBeGreaterThan(getHealthLoss(base));
+
+    const physicalBlight = defaultState();
+    physicalBlight.profile.relics = [testRelic("physicalResistPercent", -20)];
+    expect(getHealthLoss(physicalBlight, HEALTH_LOSS_PER_FAIL, "physical")).toBeGreaterThan(getHealthLoss(base, HEALTH_LOSS_PER_FAIL, "physical"));
+
+    const fireBlight = defaultState();
+    fireBlight.profile.relics = [testRelic("fireResistPercent", -20)];
+    expect(getHealthLoss(fireBlight, HEALTH_LOSS_PER_FAIL, "fire")).toBeGreaterThan(getHealthLoss(base, HEALTH_LOSS_PER_FAIL, "fire"));
+
+    const avoidanceBlight = defaultState();
+    avoidanceBlight.profile.relics = [testRelic("parryChancePercent", -20)];
+    expect(getHealthLoss(avoidanceBlight)).toBeGreaterThan(getHealthLoss(base));
+
+    const armorPenetrationBlight = defaultState();
+    armorPenetrationBlight.profile.relics = [testRelic("armorPenetrationPercent", -80)];
+    expect(getMonsterHit(armorPenetrationBlight, question, 1000, { timePressureRatio: 1 }).perHitDamage).toBeLessThan(getMonsterHit(base, question, 1000, { timePressureRatio: 1 }).perHitDamage);
+  });
+
   it("keeps each warrior skill tab filled out", () => {
     const counts = WARRIOR_SKILLS.reduce<Record<string, number>>((total, skill) => ({ ...total, [skill.branch]: (total[skill.branch] || 0) + 1 }), {});
 

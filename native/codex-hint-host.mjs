@@ -21,7 +21,7 @@ const SESSION_REQUEST_TIMEOUT_MS = 20000;
 const TURN_TIMEOUT_MS = 120000;
 const STDERR_LIMIT = 8000;
 const HINT_EFFORT = "low";
-const DEFAULT_HINT_MODEL = "gpt-5.3-codex-spark-preview";
+const DEFAULT_HINT_MODEL = "gpt-5.2";
 const DEFAULT_NODE_PATH = "C:\\nvm4w\\nodejs\\node.exe";
 const DEFAULT_CODEX_JS_PATH = "C:\\nvm4w\\nodejs\\node_modules\\@openai\\codex\\bin\\codex.js";
 const CLIENT_INFO = { name: "study-ladder", title: "Study Ladder", version: "0.2.0" };
@@ -551,11 +551,12 @@ function createTurnCompletion(ws, state) {
   ws.addEventListener("message", handleMessage);
   ws.addEventListener("close", handleClose);
   ws.addEventListener("error", handleError);
-  promise.finally(() => {
+  promise.then(cleanup, cleanup);
+  function cleanup() {
     ws.removeEventListener("message", handleMessage);
     ws.removeEventListener("close", handleClose);
     ws.removeEventListener("error", handleError);
-  });
+  }
   return { promise };
 }
 
@@ -589,7 +590,26 @@ function routeCodexMessage(message, state, resolveTurn, rejectTurn) {
     return;
   }
   if (message.method === "error") {
-    rejectTurn(new Error(message.params?.message || "Codex app-server emitted an error."));
+    rejectTurn(new Error(getCodexRpcErrorMessage(message)));
+  }
+}
+
+function getCodexRpcErrorMessage(message) {
+  const params = message?.params;
+  const messageText = params?.message || params?.error?.message || params?.error || params?.data?.message || params?.data?.error;
+  if (typeof messageText === "string" && messageText.trim()) {
+    return messageText.trim();
+  }
+  const details = safeJsonStringify(params);
+  return details ? `Codex app-server emitted an error: ${details}` : "Codex app-server emitted an error.";
+}
+
+function safeJsonStringify(value) {
+  try {
+    const json = JSON.stringify(value);
+    return json && json !== "{}" ? json : "";
+  } catch {
+    return "";
   }
 }
 

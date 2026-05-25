@@ -253,10 +253,10 @@ export type Relic = {
   wikiTierGroup?: string;
 };
 
-export type SpireNodeKind = "unknown" | "merchant" | "treasure" | "rest" | "enemy" | "elite" | "boss" | "event" | "blight";
+export type SpireNodeKind = "unknown" | "merchant" | "treasure" | "rest" | "enemy" | "elite" | "boss" | "event" | "blight" | "cursed";
 export type SpireCombatRewardKind = "gold" | "heart" | "insight" | "pom";
 
-export type UnknownEncounterKind = "blight" | "elite" | "monster" | "shop" | "treasure";
+export type UnknownEncounterKind = "blight" | "cursed" | "elite" | "monster" | "shop" | "treasure";
 export type SpireAct = 1 | 2 | 3 | 4;
 export type SpireDifficulty = "normal" | "nightmare" | "hell";
 export type HeatConditionId =
@@ -323,7 +323,7 @@ export type RelicRewardChoice = {
   choices: Relic[];
   nodeId: string;
   rerollsRemaining: number;
-  rewardKind: "blight" | "enemy" | "elite" | "boss" | "treasure" | "event" | "rest";
+  rewardKind: "blight" | "cursed" | "enemy" | "elite" | "boss" | "treasure" | "event" | "rest";
   selectedRelicId: string | null;
   seed: string;
   skipMetaCurrency: number;
@@ -361,11 +361,12 @@ export type InventoryItemPosition = {
   tab: number;
 };
 
-export type ShopConsumableType = "health" | "random";
+export type ShopConsumableType = "health" | "mystery" | "random";
 
 export type ActivePotionEffect = {
   id: string;
   modifiers: ItemModifier[];
+  mysteryRelicSeed?: string;
   name: string;
   roomsRemaining: number;
   sourceNodeId?: string;

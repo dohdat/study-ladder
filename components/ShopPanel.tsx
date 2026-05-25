@@ -7,7 +7,7 @@ import { HeroSiegePotionIcon } from "./HeroSiegeItemIcon";
 import { RelicIcon } from "./RelicIcon";
 import { getRelicRarityColor, getRelicRarityLabel } from "../lib/heroSiegeQuality";
 import { formatModifier } from "../lib/modifierFormat";
-import { buyShopItem, canBuyShopItem, getRandomPotionEffect, getShopItemCost, getShopRelicSellValue, getShopSellableRelics, sellShopRelic } from "../lib/shopCore";
+import { MYSTERY_BOX_DURATION_ROOMS, buyShopItem, canBuyShopItem, getRandomPotionEffect, getShopItemCost, getShopRelicSellValue, getShopSellableRelics, sellShopRelic } from "../lib/shopCore";
 import { getMaxHealth } from "../lib/studyCore";
 import type { CharacterStatKey, Relic, ShopItem, StudyState } from "../types/study";
 
@@ -251,7 +251,7 @@ function PotionTooltip(props: { item: Extract<ShopItem, { kind: "consumable" }> 
     <Stack gap={4} style={{ textAlign: "center", width: 240 }}>
       <Text size="sm" fw={900} tt="uppercase" c={getPotionColor(props.item.type)}>{props.item.name}</Text>
       <Text size="xs" fw={800} c="gray.2">{getPotionEffectText(props.item)}</Text>
-      <Text size="xs" c="dimmed">{props.item.type === "random" ? "Effect lasts for 3 rooms." : "Used immediately when purchased."}</Text>
+      <Text size="xs" c="dimmed">{props.item.type === "random" ? "Effect lasts for 3 rooms." : props.item.type === "mystery" ? "Sealed after purchase." : "Used immediately when purchased."}</Text>
     </Stack>
   );
 }
@@ -260,12 +260,18 @@ function getPotionColor(type: Extract<ShopItem, { kind: "consumable" }>["type"])
   if (type === "health") {
     return "red.3";
   }
+  if (type === "mystery") {
+    return "violet.3";
+  }
   return "blue.3";
 }
 
 function getPotionEffectText(item: Extract<ShopItem, { kind: "consumable" }>) {
   if (item.type === "health") {
     return `Restores ${item.amount}% Health`;
+  }
+  if (item.type === "mystery") {
+    return `Unblocks into a random relic after ${MYSTERY_BOX_DURATION_ROOMS} enemy rooms`;
   }
   const effect = getRandomPotionEffect(item);
   return `${effect.name}: ${formatPotionEffectParts(effect)} for ${effect.roomsRemaining} rooms`;

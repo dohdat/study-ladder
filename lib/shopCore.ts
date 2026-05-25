@@ -9,6 +9,7 @@ const HASH_DIVISOR = 4294967296;
 const HEALTH_POTION_PERCENT = 20;
 const RANDOM_POTION_BASE_AMOUNT = 14;
 const HEALTH_POTION_COST = 16;
+const MYSTERY_BOX_COST = 34;
 const RANDOM_POTION_COST = 20;
 const PERCENT_DIVISOR = 100;
 const POTION_LEVEL_COST_MULTIPLIER = 2;
@@ -27,6 +28,7 @@ const COMMON_RARITY_COST = 8;
 const MAX_SHOP_DISCOUNT_PERCENT = 70;
 const MERCHANT_RELIC_RARITIES = ["common", "uncommon", "rare", "shop"] as const;
 const RELIC_SELL_VALUE_DIVISOR = 4;
+export const MYSTERY_BOX_DURATION_ROOMS = 3;
 type ShopStockOptions = { bossRelicStock?: number; extraRelicStock?: number; maxItemLevel?: number; relicRollState?: StudyState };
 
 const RARITY_COSTS = {
@@ -43,6 +45,7 @@ export function createShopStock(question: Question, stats: CharacterStats, now: 
   return [
     createHealthPotion(question, now, resolvedOptions),
     createRandomPotion(question, now, resolvedOptions),
+    createMysteryBox(question, now, resolvedOptions),
     ...relics
   ];
 }
@@ -118,7 +121,7 @@ function isValidShopItem(item: ShopItem) {
     return false;
   }
   if (item.kind === "consumable") {
-    return item.amount > 0 && (item.type === "health" || item.type === "random");
+    return item.amount > 0 && (item.type === "health" || item.type === "mystery" || item.type === "random");
   }
   if (item.kind === "equipment") {
     return Boolean(item.item);
@@ -133,6 +136,10 @@ function createHealthPotion(question: Question, now: number, options: ShopStockO
 function createRandomPotion(question: Question, now: number, options: ShopStockOptions): ShopItem {
   const amount = RANDOM_POTION_BASE_AMOUNT + Math.max(0, (options.maxItemLevel || 1) - 1);
   return { amount, cost: getScaledShopCost(RANDOM_POTION_COST + question.difficulty, options), id: `shop-random-${question.id}-${now}`, kind: "consumable", name: "Unstable Potion", type: "random" };
+}
+
+function createMysteryBox(question: Question, now: number, options: ShopStockOptions): ShopItem {
+  return { amount: 1, cost: getScaledShopCost(MYSTERY_BOX_COST + question.difficulty, options, RELIC_LEVEL_COST_MULTIPLIER), id: `shop-mystery-${question.id}-${now}`, kind: "consumable", name: "Sealed Mystery Box", type: "mystery" };
 }
 
 function createShopEquipment(question: Question, stats: CharacterStats, now: number, index: number, options: ShopStockOptions): ShopItem {
@@ -244,8 +251,24 @@ function applyConsumable(state: StudyState, item: Extract<ShopItem, { kind: "con
     state.profile.health = Math.min(maxHealth, state.profile.health + Math.max(1, Math.floor(maxHealth * item.amount / PERCENT_DIVISOR)));
     return;
   }
+  if (item.type === "mystery") {
+    state.profile.activePotionEffects = [...(state.profile.activePotionEffects || []), createMysteryBoxEffect(item, state.profile.spireRun.currentNodeId)];
+    return;
+  }
   const potionDurationBonus = Math.max(0, Math.floor(getRelicModifierTotals(state).potionDurationBonus || 0));
   state.profile.activePotionEffects = [...(state.profile.activePotionEffects || []), getRandomPotionEffect(item, state.profile.spireRun.currentNodeId, potionDurationBonus)];
+}
+
+function createMysteryBoxEffect(item: Extract<ShopItem, { kind: "consumable" }>, sourceNodeId = ""): ActivePotionEffect {
+  return {
+    id: `${item.id}-sealed`,
+    modifiers: [],
+    mysteryRelicSeed: `${item.id}:mystery-relic`,
+    name: "Sealed Mystery Box",
+    roomsRemaining: MYSTERY_BOX_DURATION_ROOMS,
+    sourceNodeId,
+    stats: {}
+  };
 }
 
 export function getRandomPotionEffect(item: Extract<ShopItem, { kind: "consumable" }>, sourceNodeId = "", durationBonus = 0): ActivePotionEffect {

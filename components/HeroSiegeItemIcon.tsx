@@ -312,12 +312,18 @@ function getPotionAsset(type: Extract<ShopItem, { kind: "consumable" }>["type"])
   if (type === "health") {
     return healthPotionArt;
   }
+  if (type === "mystery") {
+    return chestArt;
+  }
   return healthPotionArt;
 }
 
 function getPotionBorderColor(type: Extract<ShopItem, { kind: "consumable" }>["type"]) {
   if (type === "health") {
     return "#e03131";
+  }
+  if (type === "mystery") {
+    return "#cc5de8";
   }
   return "#f59f00";
 }

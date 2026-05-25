@@ -730,7 +730,7 @@ function applyPercentBonus(value: number, bonusPercent: number) {
 }
 
 function applyPercentReduction(value: number, reductionPercent: number) {
-  return value * (1 - Math.min(95, Math.max(0, reductionPercent || 0)) / MODIFIER_PERCENT_BASE);
+  return value * (1 - Math.min(95, Math.max(-100, reductionPercent || 0)) / MODIFIER_PERCENT_BASE);
 }
 
 export const getMaxHealth = (state: StudyState) => {
@@ -887,7 +887,7 @@ export const getHealthLoss = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, 
   const incomingDamageMultiplier = 1 + ((modifiers.incomingDamagePercent || 0) + incomingDebuffPercent) / MODIFIER_PERCENT_BASE;
   const scaledAmount = (amount + constrictedDamage) * difficultyModifiers.monsterDamageMultiplier * Math.max(0.1, incomingDamageMultiplier);
   const frailPenalty = getPlayerDebuffStacks(state.profile.playerDebuffs, "frail") ? FRAIL_MITIGATION_REDUCTION_PERCENT : 0;
-  const reducedEnemyDamagePercent = Math.max(0, (modifiers.reducedEnemyDamagePercent || 0) - frailPenalty);
+  const reducedEnemyDamagePercent = (modifiers.reducedEnemyDamagePercent || 0) - frailPenalty;
   const reducedEnemyDamage = scaledAmount * (1 - Math.min(75, reducedEnemyDamagePercent) / MODIFIER_PERCENT_BASE);
   const physicalResistedAmount = element === "physical"
     ? applyPercentReduction(reducedEnemyDamage, modifiers.physicalResistPercent)
