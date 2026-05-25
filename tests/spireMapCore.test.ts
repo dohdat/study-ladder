@@ -411,6 +411,48 @@ describe("spireMapCore", () => {
     expect(state.profile.spireRun.pendingRelicReward?.choices).toHaveLength(5);
   });
 
+  it("uses focused relic choice bonuses only for matching reward rooms", () => {
+    let state = defaultState();
+    state.profile.relics = [{
+      description: "Test elite choice",
+      id: "test-elite-choice",
+      modifiers: [{ key: "eliteRelicChoiceBonus", value: 1 }],
+      name: "Test Elite Choice",
+      rarity: "rare",
+      source: "any"
+    }];
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
+    const elite = state.profile.spireRun.nodes.find((node) => node.kind === "elite") || state.profile.spireRun.nodes[0];
+    state.profile.spireRun.availableNodeIds = [elite.id];
+    state = selectSpireNode(state, elite.id);
+
+    state = advanceSpireNode(state, 1000);
+
+    expect(state.profile.spireRun.pendingRelicReward?.choices).toHaveLength(5);
+  });
+
+  it("turns skipped relics into max life when a relic grants skip life", () => {
+    let state = defaultState();
+    state.profile.relics = [{
+      description: "Test skip life",
+      id: "test-skip-life",
+      modifiers: [{ key: "skipRelicMaxLife", value: 6 }],
+      name: "Test Skip Life",
+      rarity: "rare",
+      source: "any"
+    }];
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
+    const treasure = state.profile.spireRun.nodes.find((node) => node.kind === "treasure") || state.profile.spireRun.nodes[0];
+    const maxHealthBefore = getMaxHealth(state);
+    const healthBefore = state.profile.health;
+    state = advanceTreasureUntilRelic(state, treasure, 1000);
+
+    state = skipPendingRelicReward(state);
+
+    expect(getMaxHealth(state)).toBe(maxHealthBefore + 6);
+    expect(state.profile.health).toBe(healthBefore + 6);
+  });
+
   it("caps map relic reward choices to the current character level", () => {
     let state = defaultState();
     state.profile.experience = EXPERIENCE_PER_LEVEL;

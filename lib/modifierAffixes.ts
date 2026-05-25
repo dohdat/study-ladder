@@ -8,6 +8,8 @@ export const MODIFIER_ROLL_RANGES: Record<ItemModifierKey, { min: number; max: n
   bonusDamageVsElitesPercent: { min: 12, max: 45 },
   bonusDamageWhileFullHealthPercent: { min: 12, max: 40 },
   bonusDamageWhileLowHealthPercent: { min: 12, max: 50 },
+  bossRelicChoiceBonus: { min: 1, max: 2 },
+  bossShopRelicStock: { min: 1, max: 1 },
   bonusXpPercent: { min: 8, max: 25 },
   coldDamage: { min: 3, max: 25 },
   coldResistPercent: { min: 10, max: 45 },
@@ -16,6 +18,7 @@ export const MODIFIER_ROLL_RANGES: Record<ItemModifierKey, { min: number; max: n
   damageReduction: { min: 1, max: 8 },
   dodgeChancePercent: { min: 4, max: 14 },
   eliteDropBonusPercent: { min: 12, max: 35 },
+  eliteRelicChoiceBonus: { min: 1, max: 2 },
   enhancedDamagePercent: { min: 15, max: 55 },
   executeChancePercent: { min: 4, max: 15 },
   extraAttackChancePercent: { min: 4, max: 15 },
@@ -33,12 +36,14 @@ export const MODIFIER_ROLL_RANGES: Record<ItemModifierKey, { min: number; max: n
   lightningResistPercent: { min: 10, max: 45 },
   magicFindPercent: { min: 12, max: 35 },
   maxLife: { min: 10, max: 45 },
+  noHintDamagePercent: { min: 20, max: 50 },
   noRunDamagePercent: { min: 25, max: 60 },
   parryChancePercent: { min: 4, max: 14 },
   physicalDamage: { min: 4, max: 30 },
   physicalResistPercent: { min: 8, max: 32 },
   poisonDamage: { min: 3, max: 25 },
   poisonResistPercent: { min: 10, max: 45 },
+  potionDurationBonus: { min: 1, max: 2 },
   reducedEnemyArmorPercent: { min: 8, max: 32 },
   reducedEnemyDamagePercent: { min: 6, max: 24 },
   relicChoiceBonus: { min: 1, max: 2 },
@@ -52,21 +57,29 @@ export const MODIFIER_ROLL_RANGES: Record<ItemModifierKey, { min: number; max: n
   shopDiscountPercent: { min: 8, max: 25 },
   shopPriceIncreasePercent: { min: 10, max: 30 },
   shopRelicStock: { min: 1, max: 2 },
+  skipRelicMaxLife: { min: 4, max: 10 },
   skipRelicMetaBonus: { min: 2, max: 8 },
   submitFailDamageStackPercent: { min: 8, max: 18 },
   timerDamagePercent: { min: 10, max: 30 },
   timerPenaltyPercent: { min: 10, max: 25 },
-  timerPauseSeconds: { min: 30, max: 90 }
+  timerPauseSeconds: { min: 30, max: 90 },
+  treasureRelicChancePercent: { min: 10, max: 35 }
 };
 
 export const RELIC_UTILITY_MODIFIER_KEYS: ItemModifierKey[] = [
   "blockFirstHit",
+  "bossRelicChoiceBonus",
+  "bossShopRelicStock",
+  "eliteRelicChoiceBonus",
   "freeHintPerRoom",
+  "potionDurationBonus",
   "revealTopicCount",
   "revivePercent",
   "shopDiscountPercent",
   "shopRelicStock",
+  "skipRelicMaxLife",
   "skipRelicMetaBonus",
+  "noHintDamagePercent",
   "noRunDamagePercent",
   "relicChoiceBonus",
   "relicRerollBonus",
@@ -74,7 +87,8 @@ export const RELIC_UTILITY_MODIFIER_KEYS: ItemModifierKey[] = [
   "submitFailDamageStackPercent",
   "timerDamagePercent",
   "timerPenaltyPercent",
-  "timerPauseSeconds"
+  "timerPauseSeconds",
+  "treasureRelicChancePercent"
 ];
 const RELIC_UTILITY_MODIFIER_KEY_SET = new Set<ItemModifierKey>(RELIC_UTILITY_MODIFIER_KEYS);
 

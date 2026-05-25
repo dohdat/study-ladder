@@ -1315,7 +1315,8 @@ function applyShopRefresh(next: StudyState, question: Question | undefined, now:
   if (!question) {
     return;
   }
-  next.profile.shopStock = createShopStock(question, getEffectiveCharacterStats(next), now, { extraRelicStock: getRunModifierTotals(next).shopRelicStock, maxItemLevel: getRewardItemLevelCap(next), relicRollState: next });
+  const shopModifiers = getRunModifierTotals(next);
+  next.profile.shopStock = createShopStock(question, getEffectiveCharacterStats(next), now, { bossRelicStock: shopModifiers.bossShopRelicStock, extraRelicStock: shopModifiers.shopRelicStock, maxItemLevel: getRewardItemLevelCap(next), relicRollState: next });
   next.profile.shopLastRefreshedAt = now;
 }
 

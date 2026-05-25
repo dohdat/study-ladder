@@ -804,13 +804,13 @@ function applyPomReward(state: StudyState, node: SpireMapNode, now: number) {
   };
 }
 
-function addCentaurHeartReward(state: StudyState) {
-  const maxHealthBonus = Math.max(0, Math.floor(state.profile.spireRun.maxHealthBonus || 0)) + CENTAUR_HEART_MAX_HEALTH;
+function addCentaurHeartReward(state: StudyState, amount = CENTAUR_HEART_MAX_HEALTH) {
+  const maxHealthBonus = Math.max(0, Math.floor(state.profile.spireRun.maxHealthBonus || 0)) + amount;
   return {
     ...state,
     profile: {
       ...state.profile,
-      health: state.profile.health + CENTAUR_HEART_MAX_HEALTH,
+      health: state.profile.health + amount,
       spireRun: {
         ...state.profile.spireRun,
         maxHealthBonus
@@ -842,7 +842,8 @@ function applyBossRoomReward(state: StudyState, node: SpireMapNode, now: number)
 function applyTreasureRoomReward(state: StudyState, node: SpireMapNode, now: number) {
   const gold = getRoomGold(state, node, "treasure", now);
   const withGold = addRoomGold(state, gold);
-  if (getRoll(`${node.id}:${now}:treasure-relic`) < TREASURE_RELIC_CHANCE) {
+  const treasureRelicChance = Math.min(0.95, TREASURE_RELIC_CHANCE + Math.max(0, getRunModifierTotals(state).treasureRelicChancePercent || 0) / 100);
+  if (getRoll(`${node.id}:${now}:treasure-relic`) < treasureRelicChance) {
     return recordRoomRewardClaim(createPendingRelicReward(withGold, node, now, "treasure", { skipMetaCurrency: SKIP_META_COMMON }), node.id, { gold });
   }
   const metaCurrency = getRoomMetaCurrency(state, node, now);
@@ -856,7 +857,7 @@ function applyMerchantRoomReward(state: StudyState, node: SpireMapNode, now: num
     profile: {
       ...state.profile,
       shopLastRefreshedAt: now,
-      shopStock: createShopStock(question, state.profile.stats, now, { extraRelicStock: getRunModifierTotals(state).shopRelicStock, maxItemLevel: getStateLevel(state), relicRollState: state })
+      shopStock: createShopStock(question, state.profile.stats, now, { bossRelicStock: getRunModifierTotals(state).bossShopRelicStock, extraRelicStock: getRunModifierTotals(state).shopRelicStock, maxItemLevel: getStateLevel(state), relicRollState: state })
     }
   };
 }
@@ -1027,8 +1028,11 @@ function createPendingRelicReward(
 ) {
   const seed = `${node.id}:${now}:${rewardKind}:relic-choice`;
   const forcedBlight = rewardKind === "blight";
-  const choiceCount = Math.max(1, BASE_RELIC_CHOICE_COUNT + getMetaRelicChoiceBonus(state) + getRunModifierTotals(state).relicChoiceBonus + (options.choiceBonus || 0) - getHeatRelicChoicePenalty(state.profile.spireRun, rewardKind));
-  const rerollsRemaining = forcedBlight ? 0 : Math.max(0, (options.rerolls ?? BASE_RELIC_REROLLS) + Math.max(0, Math.floor(getRunModifierTotals(state).relicRerollBonus || 0)) - getHeatRelicRerollPenalty(state.profile.spireRun));
+  const modifiers = getRunModifierTotals(state);
+  const focusedChoiceBonus = (rewardKind === "elite" ? modifiers.eliteRelicChoiceBonus || 0 : 0)
+    + (rewardKind === "boss" ? modifiers.bossRelicChoiceBonus || 0 : 0);
+  const choiceCount = Math.max(1, BASE_RELIC_CHOICE_COUNT + getMetaRelicChoiceBonus(state) + modifiers.relicChoiceBonus + focusedChoiceBonus + (options.choiceBonus || 0) - getHeatRelicChoicePenalty(state.profile.spireRun, rewardKind));
+  const rerollsRemaining = forcedBlight ? 0 : Math.max(0, (options.rerolls ?? BASE_RELIC_REROLLS) + Math.max(0, Math.floor(modifiers.relicRerollBonus || 0)) - getHeatRelicRerollPenalty(state.profile.spireRun));
   return {
     ...state,
     profile: {
@@ -1042,7 +1046,7 @@ function createPendingRelicReward(
           rewardKind,
           selectedRelicId: null,
           seed,
-          skipMetaCurrency: forcedBlight ? 0 : (options.skipMetaCurrency ?? SKIP_META_COMMON) + Math.max(0, Math.floor(getRunModifierTotals(state).skipRelicMetaBonus || 0))
+          skipMetaCurrency: forcedBlight ? 0 : (options.skipMetaCurrency ?? SKIP_META_COMMON) + Math.max(0, Math.floor(modifiers.skipRelicMetaBonus || 0))
         }
       }
     }
@@ -1105,7 +1109,9 @@ export function skipPendingRelicReward(state: StudyState) {
     return state;
   }
   const metaCurrency = pending.skipMetaCurrency;
-  const withMeta = addMetaCurrency(state, metaCurrency);
+  const skipMaxLife = Math.max(0, Math.floor(getRunModifierTotals(state).skipRelicMaxLife || 0));
+  const withMaxLife = skipMaxLife > 0 ? addCentaurHeartReward(state, skipMaxLife) : state;
+  const withMeta = addMetaCurrency(withMaxLife, metaCurrency);
   return recordRoomRewardClaim(clearPendingRelicReward(withMeta), pending.nodeId, {
     ...state.profile.spireRun.roomRewardClaims[pending.nodeId],
     metaCurrency

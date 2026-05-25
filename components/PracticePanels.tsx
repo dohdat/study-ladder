@@ -371,9 +371,6 @@ function SystemDesignQuestionPanel(props: { answers: SystemDesignAnswerMap; onAn
       <Grid.Col span={{ base: SYSTEM_DESIGN_COLUMNS, md: SYSTEM_DESIGN_PROMPT_SPAN }}>
         <Paper withBorder p="md" bg={SYSTEM_DESIGN_PROMPT_BG}>
           <Title order={4}>{props.question.title}</Title>
-          <Group gap={6} mt="sm">
-            {props.question.focus.map((focus) => <Badge key={focus} size="sm" variant="outline">{focus}</Badge>)}
-          </Group>
           <Text mt="md">{props.question.prompt}</Text>
           <Text c="dimmed" size="sm" mt="sm">{props.question.scenario}</Text>
           <Divider my="md" />

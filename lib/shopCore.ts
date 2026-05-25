@@ -27,7 +27,7 @@ const COMMON_RARITY_COST = 8;
 const MAX_SHOP_DISCOUNT_PERCENT = 70;
 const MERCHANT_RELIC_RARITIES = ["common", "uncommon", "rare", "shop"] as const;
 const RELIC_SELL_VALUE_DIVISOR = 4;
-type ShopStockOptions = { extraRelicStock?: number; maxItemLevel?: number; relicRollState?: StudyState };
+type ShopStockOptions = { bossRelicStock?: number; extraRelicStock?: number; maxItemLevel?: number; relicRollState?: StudyState };
 
 const RARITY_COSTS = {
   common: COMMON_RARITY_COST,
@@ -164,8 +164,8 @@ function createShopEquipmentStock(question: Question, stats: CharacterStats, now
   return equipment;
 }
 
-function createShopRelic(question: Question, now: number, index: number, options: ShopStockOptions): ShopItem {
-  const relic = rollRelic(options.relicRollState || { profile: { relics: [] } } as unknown as StudyState, `${question.id}:${now}:shop-relic:${index}`, { includeShop: true, maxItemLevel: options.maxItemLevel, minRarity: [...MERCHANT_RELIC_RARITIES] });
+function createShopRelic(question: Question, now: number, index: number, options: ShopStockOptions, rarities: Relic["rarity"][] = [...MERCHANT_RELIC_RARITIES]): ShopItem {
+  const relic = rollRelic(options.relicRollState || { profile: { relics: [] } } as unknown as StudyState, `${question.id}:${now}:shop-relic:${index}:${rarities.join("-")}`, { includeShop: true, maxItemLevel: options.maxItemLevel, minRarity: rarities });
   return { cost: getScaledShopCost(getRelicCost(relic), options, RELIC_LEVEL_COST_MULTIPLIER), id: `shop-relic-${relic.id}-${now}-${index}`, kind: "relic", name: relic.name, relic };
 }
 
@@ -177,6 +177,16 @@ function createShopRelics(question: Question, now: number, options: ShopStockOpt
     const listing = createShopRelic(question, now, attempt, options);
     if (listing.kind === "relic" && !seenIds.has(listing.relic.id)) {
       seenIds.add(listing.relic.id);
+      relics.push({ ...listing, id: `shop-relic-${listing.relic.id}-${now}-${relics.length}` });
+    }
+  }
+  const bossStockCount = Math.max(0, Math.floor(options.bossRelicStock || 0));
+  let bossRelics = 0;
+  for (let attempt = 0; bossRelics < bossStockCount && attempt < bossStockCount * 12; attempt += 1) {
+    const listing = createShopRelic(question, now, stockCount + attempt, options, ["boss"]);
+    if (listing.kind === "relic" && !seenIds.has(listing.relic.id)) {
+      seenIds.add(listing.relic.id);
+      bossRelics += 1;
       relics.push({ ...listing, id: `shop-relic-${listing.relic.id}-${now}-${relics.length}` });
     }
   }
@@ -234,14 +244,15 @@ function applyConsumable(state: StudyState, item: Extract<ShopItem, { kind: "con
     state.profile.health = Math.min(maxHealth, state.profile.health + Math.max(1, Math.floor(maxHealth * item.amount / PERCENT_DIVISOR)));
     return;
   }
-  state.profile.activePotionEffects = [...(state.profile.activePotionEffects || []), getRandomPotionEffect(item, state.profile.spireRun.currentNodeId)];
+  const potionDurationBonus = Math.max(0, Math.floor(getRelicModifierTotals(state).potionDurationBonus || 0));
+  state.profile.activePotionEffects = [...(state.profile.activePotionEffects || []), getRandomPotionEffect(item, state.profile.spireRun.currentNodeId, potionDurationBonus)];
 }
 
-export function getRandomPotionEffect(item: Extract<ShopItem, { kind: "consumable" }>, sourceNodeId = ""): ActivePotionEffect {
+export function getRandomPotionEffect(item: Extract<ShopItem, { kind: "consumable" }>, sourceNodeId = "", durationBonus = 0): ActivePotionEffect {
   const roll = getShopSeedRoll(`${item.id}:effect`);
   const base = {
     id: `${item.id}-effect`,
-    roomsRemaining: RANDOM_POTION_DURATION_ROOMS,
+    roomsRemaining: RANDOM_POTION_DURATION_ROOMS + Math.max(0, Math.floor(durationBonus)),
     sourceNodeId
   };
   if (roll < 0.2) {

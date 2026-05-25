@@ -728,6 +728,28 @@ describe("studyCore", () => {
     expect(normal.effects).not.toContain("No-run bonus");
   });
 
+  it("applies no-hint relic damage only before a hint is used on the question", () => {
+    const question = questions[0];
+    let state = defaultState();
+    state.profile.coins = 100;
+    state.profile.relics = [{
+      description: "Rewards unaided solves.",
+      id: "unaided-thesis-test",
+      modifiers: [{ key: "noHintDamagePercent", value: 50 }],
+      name: "Unaided Thesis Test",
+      rarity: "unique",
+      source: "any"
+    }];
+
+    const boosted = getMonsterHit(state, question, 1000);
+    state = buyHint(state, question.id);
+    const hinted = getMonsterHit(state, question, 1000);
+
+    expect(boosted.damage).toBeGreaterThan(hinted.damage);
+    expect(boosted.effects).toContain("No-hint bonus");
+    expect(hinted.effects).not.toContain("No-hint bonus");
+  });
+
   it("stacks temporary wrong-answer relic damage inside the current room", () => {
     const question = questions[0];
     let state = defaultState();

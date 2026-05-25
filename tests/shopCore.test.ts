@@ -22,6 +22,14 @@ describe("shopCore", () => {
     expect(stock.filter((item) => item.kind === "relic").every((item) => !item.relic.wikiTierGroup || !["Satanic", "Satanic Set", "Heroic", "Unholy", "Angelic"].includes(item.relic.wikiTierGroup))).toBe(true);
   });
 
+  it("can add a boss relic listing without changing normal merchant stock", () => {
+    const state = defaultState();
+    const stock = createShopStock(questions[0], getEffectiveCharacterStats(state), 1000, { bossRelicStock: 1, relicRollState: state });
+
+    expect(stock.filter((item) => item.kind === "relic")).toHaveLength(6);
+    expect(stock.filter((item) => item.kind === "relic" && item.relic.rarity === "boss")).toHaveLength(1);
+  });
+
   it("refreshes shop stock only after a successful schedule result", () => {
     let state = defaultState();
     const starterStockIds = state.profile.shopStock.map((item) => item.id);
@@ -65,6 +73,25 @@ describe("shopCore", () => {
     expect(relic).toBeTruthy();
     state = buyShopItem(state, relic?.id || "", getMaxHealth(state));
     expect(state.profile.relics.some((item) => item.id === (relic?.kind === "relic" ? relic.relic.id : ""))).toBe(true);
+  });
+
+  it("extends random potion effects when a relic grants potion duration", () => {
+    let state = defaultState();
+    state.profile.coins = 500;
+    state.profile.relics = [{
+      description: "Test potion duration",
+      id: "test-potion-duration",
+      modifiers: [{ key: "potionDurationBonus", value: 2 }],
+      name: "Test Potion Duration",
+      rarity: "rare",
+      source: "any"
+    }];
+    state.profile.shopStock = createShopStock(questions[0], getEffectiveCharacterStats(state), 1000);
+    const randomPotion = state.profile.shopStock.find((item) => item.kind === "consumable" && item.type === "random");
+
+    state = buyShopItem(state, randomPotion?.id || "", getMaxHealth(state));
+
+    expect(state.profile.activePotionEffects[0].roomsRemaining).toBe(5);
   });
 
   it("allows one health potion purchase per shop even at full health", () => {

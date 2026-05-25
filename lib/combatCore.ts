@@ -98,7 +98,7 @@ export const getMonsterHit = (state: StudyState, question: Question, now = Date.
     + getElementalDamage(question, modifiers);
   const perHitDamage = applyTimeDefense(rawPerHitDamage, timeDefensePercent);
   const hitCount = activeHit.hitCount + extraAttack;
-  const relicDamage = getRelicDamageBonus(state, modifiers, options);
+  const relicDamage = getRelicDamageBonus(state, question, modifiers, options);
   const totalDamage = applyRelicDamageBonus(applyCombatPacing(perHitDamage * hitCount, currentHealth, maxHealth, question.difficulty, Boolean(activeSkill || executeProc)), relicDamage.bonusPercent);
   const lifeSteal = Math.floor(totalDamage * (modifiers.lifeStealPercent || 0) / 100);
   return {
@@ -113,13 +113,15 @@ export const getMonsterHit = (state: StudyState, question: Question, now = Date.
   };
 };
 
-function getRelicDamageBonus(state: StudyState, modifiers: ReturnType<typeof getRunModifierTotals>, options: MonsterHitOptions) {
+function getRelicDamageBonus(state: StudyState, question: Question, modifiers: ReturnType<typeof getRunModifierTotals>, options: MonsterHitOptions) {
+  const noHintBonus = getCard(state, question.id).hintsBought === 0 ? Math.max(0, modifiers.noHintDamagePercent || 0) : 0;
   const noRunBonus = options.usedRunCode === false ? Math.max(0, modifiers.noRunDamagePercent || 0) : 0;
   const timerBonus = Math.round(Math.max(0, Math.min(1, options.timeRemainingRatio || 0)) * Math.max(0, modifiers.timerDamagePercent || 0));
   const failStackBonus = Math.max(0, state.profile.spireRun.failDamageStacks || 0) * Math.max(0, modifiers.submitFailDamageStackPercent || 0);
   return {
-    bonusPercent: noRunBonus + timerBonus + failStackBonus,
+    bonusPercent: noHintBonus + noRunBonus + timerBonus + failStackBonus,
     effects: [
+      ...(noHintBonus ? ["No-hint bonus"] : []),
       ...(noRunBonus ? ["No-run bonus"] : []),
       ...(timerBonus ? ["Timer damage"] : []),
       ...(failStackBonus ? [`Failure stacks x${state.profile.spireRun.failDamageStacks}`] : [])

@@ -33,10 +33,11 @@ describe("relicCore", () => {
   it("uses the curated roguelike relic catalog instead of generated legacy relics", () => {
     const counts = RELIC_DEFINITIONS.reduce<Record<string, number>>((total, relic) => ({ ...total, [relic.rarity]: (total[relic.rarity] || 0) + 1 }), {});
 
-    expect(RELIC_DEFINITIONS).toHaveLength(117);
+    expect(RELIC_DEFINITIONS).toHaveLength(118);
     expect(counts).toMatchObject(ROGUELIKE_RELIC_RARITY_COUNTS);
     expect(RELIC_DEFINITIONS.some((relic) => relic.id === "burning-blood")).toBe(false);
     expect(RELIC_DEFINITIONS.some((relic) => relic.id === "no-run-blade")).toBe(true);
+    expect(RELIC_DEFINITIONS.some((relic) => relic.id === "unaided-thesis")).toBe(true);
     expect(RELIC_DEFINITIONS.some((relic) => relic.id === "glass-crown")).toBe(true);
     expect(RELIC_DEFINITIONS.some((relic) => relic.id === "cracked-lens")).toBe(true);
   });
@@ -45,6 +46,15 @@ describe("relicCore", () => {
     const packageKeys = RELIC_DEFINITIONS.map((relic) => (relic.modifiers || []).map((modifier) => modifier.key).sort().join("|"));
 
     expect(new Set(packageKeys).size).toBe(packageKeys.length);
+  });
+
+  it("keeps formerly duplicate-feeling relic groups on distinct utility hooks", () => {
+    expect(getRelicKeys("Trophy Hunter")).toContain("eliteRelicChoiceBonus");
+    expect(getRelicKeys("Boss Ledger")).toContain("bossRelicChoiceBonus");
+    expect(getRelicKeys("Blood Market")).toContain("bossShopRelicStock");
+    expect(getRelicKeys("Iron Choice")).toContain("skipRelicMaxLife");
+    expect(getRelicKeys("Alchemist's Menu")).toContain("potionDurationBonus");
+    expect(getRelicKeys("Small Bounty")).toContain("treasureRelicChancePercent");
   });
 
   it("keeps the wiki catalog aligned with the roguelike relic source notes", () => {
@@ -93,4 +103,10 @@ function getAverageRelicRarityScore(state: ReturnType<typeof defaultState>) {
     total += rarityScores[rarity] || 0;
   }
   return total / 180;
+}
+
+function getRelicKeys(name: string) {
+  const relic = RELIC_DEFINITIONS.find((item) => item.name === name);
+  expect(relic).toBeTruthy();
+  return (relic?.modifiers || []).map((modifier) => modifier.key);
 }
