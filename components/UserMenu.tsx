@@ -1348,7 +1348,7 @@ function getPactConditionEffectLines(condition: (typeof HEAT_CONDITION_DEFINITIO
     case "approvalProcess":
       return ["Relic reward rerolls are reduced by 1 per rank.", "At max rank, relic rewards lose 2 rerolls."];
     case "benefitsPackage":
-      return ["All monsters gain +80 rating per rank.", "Monster damage also rises from the heat total."];
+      return ["Monsters gain +1 unique trait per rank.", "All monsters also gain +80 rating per rank."];
     case "calisthenicsProgram":
       return ["Monsters gain +15% health per rank.", "At max rank, monsters have +30% health."];
     case "convenienceFee":

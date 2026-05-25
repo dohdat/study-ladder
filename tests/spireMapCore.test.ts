@@ -412,6 +412,43 @@ describe("spireMapCore", () => {
     expect(state.profile.spireRun.pendingRelicReward?.choices).toHaveLength(5);
   });
 
+  it("applies pact ranks to room question counts and relic reward limits", () => {
+    let normal = defaultState();
+    normal = { ...normal, profile: { ...normal.profile, spireRun: createSpireRun(1000) } };
+    let jury = defaultState();
+    jury.profile.spireRun.heatConditions.jurySummons = 2;
+    jury = { ...jury, profile: { ...jury.profile, spireRun: createSpireRun(1000, 1, "normal", jury.profile.spireRun.heatConditions) } };
+    const enemy = normal.profile.spireRun.nodes.find((node) => node.kind === "enemy") || normal.profile.spireRun.nodes[0];
+    normal = enterSpireNode(selectSpireNode({ ...normal, profile: { ...normal.profile, spireRun: { ...normal.profile.spireRun, availableNodeIds: [enemy.id] } } }, enemy.id), 1000);
+    jury = enterSpireNode(selectSpireNode({ ...jury, profile: { ...jury.profile, spireRun: { ...jury.profile.spireRun, availableNodeIds: [enemy.id] } } }, enemy.id), 1000);
+
+    expect(jury.profile.spireRun.roundQuestionIds.length).toBeGreaterThan(normal.profile.spireRun.roundQuestionIds.length);
+
+    let rewardLimited = defaultState();
+    rewardLimited.profile.spireRun.heatConditions.routineInspection = 2;
+    rewardLimited.profile.spireRun.heatConditions.approvalProcess = 1;
+    rewardLimited = { ...rewardLimited, profile: { ...rewardLimited.profile, spireRun: createSpireRun(1000, 1, "normal", rewardLimited.profile.spireRun.heatConditions) } };
+    let rewardNormal = defaultState();
+    rewardNormal = { ...rewardNormal, profile: { ...rewardNormal.profile, spireRun: createSpireRun(1000) } };
+    const treasure = rewardNormal.profile.spireRun.nodes.find((node) => node.kind === "treasure") || rewardNormal.profile.spireRun.nodes[0];
+    rewardNormal = advanceTreasureUntilRelic(rewardNormal, treasure, 1000);
+    rewardLimited = advanceTreasureUntilRelic(rewardLimited, treasure, 1000);
+
+    expect(rewardLimited.profile.spireRun.pendingRelicReward?.choices.length).toBeLessThan(rewardNormal.profile.spireRun.pendingRelicReward?.choices.length || 0);
+    expect(rewardLimited.profile.spireRun.pendingRelicReward?.rerollsRemaining).toBeLessThan(rewardNormal.profile.spireRun.pendingRelicReward?.rerollsRemaining || 0);
+
+    let bossCustoms = defaultState();
+    bossCustoms.profile.spireRun.heatConditions.underworldCustoms = 1;
+    bossCustoms = { ...bossCustoms, profile: { ...bossCustoms.profile, spireRun: createSpireRun(1000, 1, "normal", bossCustoms.profile.spireRun.heatConditions) } };
+    let bossNormal = defaultState();
+    bossNormal = { ...bossNormal, profile: { ...bossNormal.profile, spireRun: createSpireRun(1000) } };
+    const boss = bossNormal.profile.spireRun.nodes.find((node) => node.kind === "boss") || bossNormal.profile.spireRun.nodes[bossNormal.profile.spireRun.nodes.length - 1];
+    bossNormal = advanceSpireNode(selectSpireNode({ ...bossNormal, profile: { ...bossNormal.profile, spireRun: { ...bossNormal.profile.spireRun, availableNodeIds: [boss.id] } } }, boss.id), 2000);
+    bossCustoms = advanceSpireNode(selectSpireNode({ ...bossCustoms, profile: { ...bossCustoms.profile, spireRun: { ...bossCustoms.profile.spireRun, availableNodeIds: [boss.id] } } }, boss.id), 2000);
+
+    expect(bossCustoms.profile.spireRun.pendingRelicReward?.choices.length).toBeLessThan(bossNormal.profile.spireRun.pendingRelicReward?.choices.length || 0);
+  });
+
   it("uses focused relic choice bonuses only for matching reward rooms", () => {
     let state = defaultState();
     state.profile.relics = [{

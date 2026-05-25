@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge, Box, Group, Paper, Progress, Text, Tooltip } from "@mantine/core";
 type StaticImageData = string;
 
+import { getHeatRank } from "../lib/campaignCore";
 import { getCampaignMonsterMaxHealth, getMonsterCurrentBlock, getMonsterCurrentHealth, isMonsterEnraged } from "../lib/combatCore";
 import { ENEMY_DEBUFF_DEFINITIONS, formatEnemyDebuff, getEnemyDebuffDescription } from "../lib/enemyDebuffCore";
-import { getMonsterAttackType, getUniqueMonsterBonusDescription, getUniqueMonsterBonuses, getUniqueMonsterName } from "../lib/monsterCore";
+import { getMonsterAttackType, getUniqueMonsterBonusDescription, getUniqueMonsterBonusesWithExtra, getUniqueMonsterName } from "../lib/monsterCore";
 import { getCurrentSpireNode } from "../lib/spireMapCore";
 import { getCard } from "../lib/studyCore";
 import type { DamageType, Difficulty, EnemyDebuff, Question, SpireAct, StudyState } from "../types/study";
@@ -187,7 +188,7 @@ export function MonsterEncounter(props: { damagePop?: MonsterDamagePop | null; q
   const health = useAnimatedMonsterHealth({ currentHealth, damagePop: activeDamage, maxHealth });
   const monster = getMonsterDefinition(props.question, props.state);
   const uniqueName = getUniqueMonsterName(props.question);
-  const bonuses = getUniqueMonsterBonuses(props.question);
+  const bonuses = getUniqueMonsterBonusesWithExtra(props.question, getHeatRank(props.state.profile.spireRun, "benefitsPackage"));
   const attackType = getMonsterAttackType(props.question, bonuses);
   const enraged = isMonsterEnraged(props.state, props.question);
   const enemyDebuffs = getCard(props.state, props.question.id).enemyDebuffs || [];

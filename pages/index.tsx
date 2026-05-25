@@ -18,7 +18,7 @@ import { useMonacoAssets } from "../hooks/useMonacoAssets";
 import { useStudyTimeTracker } from "../hooks/useStudyBlocker";
 import { usePersistAchievements } from "../hooks/usePersistAchievements";
 import { useStudyNotifications } from "../hooks/useStudyNotifications";
-import { areHintsDisabledByHeat, isRunCodeDisabledByHeat } from "../lib/campaignCore";
+import { areHintsDisabledByHeat, getHeatRank, isRunCodeDisabledByHeat } from "../lib/campaignCore";
 import { beautifyCode } from "../lib/codeFormat";
 import { applyEnemyDebuffsToMonsterAttack, applyPassedCombatResult, getElapsedPressureRatio, getMonsterBlockGain, getTimedMonsterAttack, isMonsterEnraged } from "../lib/combatCore";
 import { getTimerDisplay } from "../lib/timerDisplay";
@@ -378,11 +378,11 @@ function applyElapsedCombatDamage(state: StudyState, question: Question, timeRem
 }
 
 function getElapsedMonsterAttack(state: StudyState, question: Question, timeRemainingMs: number, now: number) {
-  return applyEnemyDebuffsToMonsterAttack(state, question, getTimedMonsterAttack(question, timeRemainingMs, now, "elapsed", { enraged: isMonsterEnraged(state, question) }));
+  return applyEnemyDebuffsToMonsterAttack(state, question, getTimedMonsterAttack(question, timeRemainingMs, now, "elapsed", { enraged: isMonsterEnraged(state, question), uniqueBonusCount: getHeatRank(state.profile.spireRun, "benefitsPackage") }));
 }
 
 function getRetaliationMonsterAttack(state: StudyState, question: Question, timeRemainingMs: number, now: number) {
-  return applyEnemyDebuffsToMonsterAttack(state, question, getTimedMonsterAttack(question, timeRemainingMs, now, "retaliation", { enraged: isMonsterEnraged(state, question) }));
+  return applyEnemyDebuffsToMonsterAttack(state, question, getTimedMonsterAttack(question, timeRemainingMs, now, "retaliation", { enraged: isMonsterEnraged(state, question), uniqueBonusCount: getHeatRank(state.profile.spireRun, "benefitsPackage") }));
 }
 
 function getTimeDamageStatus(result: ReturnType<typeof applyElapsedCombatDamage>) {

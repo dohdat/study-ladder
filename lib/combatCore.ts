@@ -1,7 +1,7 @@
 import { questions } from "../data/questions";
 import { getEnemyDebuffStacks, tickEnemyDebuffs } from "./enemyDebuffCore";
-import { getSpireDifficultyModifiers } from "./campaignCore";
-import { getMonsterAttackProfile, getMonsterMaxHealth, getMonsterPlayerDamage, getMonsterWrongSubmitDebuffs, getUniqueMonsterBonuses } from "./monsterCore";
+import { getHeatBossMultiplier, getHeatEliteMultiplier, getHeatRank, getSpireDifficultyModifiers } from "./campaignCore";
+import { getMonsterAttackProfile, getMonsterMaxHealth, getMonsterPlayerDamage, getMonsterWrongSubmitDebuffs, getUniqueMonsterBonusesWithExtra } from "./monsterCore";
 import { tickPlayerDebuffsAfterSubmit, type PlayerDebuffApplication } from "./playerDebuffCore";
 import { getActiveWarriorSkill, getWarriorSkillRank } from "./skillCore";
 import {
@@ -77,6 +77,7 @@ export type MonsterHitResult = {
 export type TimedMonsterAttackMode = "elapsed" | "retaliation";
 export type TimedMonsterAttackOptions = {
   enraged?: boolean;
+  uniqueBonusCount?: number;
 };
 
 export const getMonsterCurrentHealth = (state: StudyState, question: Question) => {
@@ -98,7 +99,7 @@ export const getMonsterBlockGain = (state: StudyState, question: Question, now =
     return 0;
   }
   const nodeKind = getCurrentNodeKind(state);
-  const bonuses = getUniqueMonsterBonuses(question);
+  const bonuses = getUniqueMonsterBonusesWithExtra(question, getPactUniqueMonsterBonusCount(state));
   const defensiveBonus = bonuses.includes("Arcane Shield") || bonuses.includes("Stone Skin");
   const kindMultiplier = nodeKind === "boss" ? BOSS_BLOCK_MULTIPLIER : nodeKind === "elite" ? ELITE_BLOCK_MULTIPLIER : 1;
   const bonusMultiplier = defensiveBonus ? DEFENSIVE_BONUS_BLOCK_MULTIPLIER : 1;
@@ -128,8 +129,9 @@ export const getMonsterHit = (state: StudyState, question: Question, now = Date.
   const timeDefensePercent = Math.max(0, timeHardening.defensePercent - guardPenetration);
   const physicalDamage = executeProc ? Math.max(activeHit.perHitDamage, currentHealth) : activeHit.perHitDamage;
   const damageTypes = getPlayerHitDamageTypes(physicalDamage, modifiers);
-  const rawPerHitDamage = getMonsterPlayerDamage(question, physicalDamage, "physical")
-    + getElementalDamage(question, modifiers);
+  const uniqueBonusCount = getPactUniqueMonsterBonusCount(state);
+  const rawPerHitDamage = getMonsterPlayerDamage(question, physicalDamage, "physical", uniqueBonusCount)
+    + getElementalDamage(question, modifiers, uniqueBonusCount);
   const perHitDamage = applyTimeDefense(rawPerHitDamage, timeDefensePercent);
   const hitCount = activeHit.hitCount + extraAttack;
   const relicDamage = getRelicDamageBonus(state, question, modifiers, options);
@@ -224,8 +226,8 @@ function getTimeHardening(timePressureRatio = 0) {
 export function getTimedMonsterAttack(question: Question, timeRemainingMs: number, now = Date.now(), mode: TimedMonsterAttackMode = "elapsed", options: TimedMonsterAttackOptions = {}) {
   const pressureRatio = getElapsedPressureRatio(question, timeRemainingMs);
   const damageMultiplier = (mode === "retaliation" ? 1 : pressureRatio) * (1 + pressureRatio * MAX_TIME_MONSTER_DAMAGE_BONUS_PERCENT / PERCENT);
-  const baseAttack = getMonsterAttackProfile(question, getMonsterDamageRoll(question, now), now);
-  const debuffAttack = mode === "retaliation" ? { ...baseAttack, debuffs: getMonsterWrongSubmitDebuffs(question, now) } : baseAttack;
+  const baseAttack = getMonsterAttackProfile(question, getMonsterDamageRoll(question, now), now, options.uniqueBonusCount);
+  const debuffAttack = mode === "retaliation" ? { ...baseAttack, debuffs: getMonsterWrongSubmitDebuffs(question, now, options.uniqueBonusCount) } : baseAttack;
   const phasedAttack = options.enraged ? addMonsterAttackEffect(scaleMonsterAttack(debuffAttack, 1 + ENRAGE_DAMAGE_BONUS_PERCENT / PERCENT), "Enraged") : debuffAttack;
   return scaleMonsterAttack(phasedAttack, damageMultiplier);
 }
@@ -286,11 +288,11 @@ function getPlayerHitDamageTypes(physicalDamage: number, modifiers: ReturnType<t
   return damageTypes.length ? damageTypes : ["physical"];
 }
 
-function getElementalDamage(question: Question, modifiers: ReturnType<typeof getRunModifierTotals>) {
-  return getMonsterPlayerDamage(question, modifiers.fireDamage || 0, "fire")
-    + getMonsterPlayerDamage(question, modifiers.coldDamage || 0, "cold")
-    + getMonsterPlayerDamage(question, modifiers.lightningDamage || 0, "lightning")
-    + getMonsterPlayerDamage(question, modifiers.poisonDamage || 0, "poison");
+function getElementalDamage(question: Question, modifiers: ReturnType<typeof getRunModifierTotals>, uniqueBonusCount: number) {
+  return getMonsterPlayerDamage(question, modifiers.fireDamage || 0, "fire", uniqueBonusCount)
+    + getMonsterPlayerDamage(question, modifiers.coldDamage || 0, "cold", uniqueBonusCount)
+    + getMonsterPlayerDamage(question, modifiers.lightningDamage || 0, "lightning", uniqueBonusCount)
+    + getMonsterPlayerDamage(question, modifiers.poisonDamage || 0, "poison", uniqueBonusCount);
 }
 
 export const applyPassedCombatResult = (state: StudyState, questionId: string, draft: string, now = Date.now(), options: MonsterHitOptions = {}) => {
@@ -386,7 +388,7 @@ export function getCampaignMonsterMaxHealth(state: StudyState, question: Questio
   const nodeKind = getCurrentNodeKind(state);
   const modifiers = getRunModifierTotals(state);
   const eliteReduction = nodeKind === "elite" ? Math.max(0, modifiers.eliteStartHealthReductionPercent || 0) : 0;
-  return Math.round(getMonsterMaxHealth(question) * getSpireDifficultyModifiers(state.profile.spireRun).monsterHealthMultiplier * (1 - Math.min(80, eliteReduction) / PERCENT));
+  return Math.round(getMonsterMaxHealth(question, getPactUniqueMonsterBonusCount(state)) * getSpireDifficultyModifiers(state.profile.spireRun).monsterHealthMultiplier * getNodeHeatMonsterMultiplier(state) * (1 - Math.min(80, eliteReduction) / PERCENT));
 }
 
 function getMonsterBlockChance(state: StudyState, question: Question) {
@@ -397,7 +399,7 @@ function getMonsterBlockChance(state: StudyState, question: Question) {
   if (nodeKind === "elite") {
     return ELITE_BLOCK_CHANCE;
   }
-  const bonuses = getUniqueMonsterBonuses(question);
+  const bonuses = getUniqueMonsterBonusesWithExtra(question, getPactUniqueMonsterBonusCount(state));
   if (bonuses.includes("Arcane Shield") || bonuses.includes("Stone Skin")) {
     return DEFENSIVE_BONUS_BLOCK_CHANCE;
   }
@@ -406,6 +408,21 @@ function getMonsterBlockChance(state: StudyState, question: Question) {
 
 function getCurrentNodeKind(state: StudyState) {
   return state.profile.spireRun.nodes.find((node) => node.id === state.profile.spireRun.currentNodeId)?.kind;
+}
+
+export function getPactUniqueMonsterBonusCount(state: StudyState) {
+  return getHeatRank(state.profile.spireRun, "benefitsPackage");
+}
+
+function getNodeHeatMonsterMultiplier(state: StudyState) {
+  const nodeKind = getCurrentNodeKind(state);
+  if (nodeKind === "boss") {
+    return getHeatBossMultiplier(state.profile.spireRun);
+  }
+  if (nodeKind === "elite") {
+    return getHeatEliteMultiplier(state.profile.spireRun);
+  }
+  return 1;
 }
 
 function applyPartialRewards(next: StudyState, question: Question | undefined, rewardState: StudyState, now: number) {

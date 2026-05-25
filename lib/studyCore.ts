@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { questions } from "../data/questions";
-import { areHintsDisabledByHeat, getHeatHealingMultiplier, getHeatTimerPenaltyPercent, getSpireDifficultyModifiers, isRunCodeDisabledByHeat } from "./campaignCore";
+import { areHintsDisabledByHeat, getHeatBossMultiplier, getHeatEliteMultiplier, getHeatHealingMultiplier, getHeatRank, getHeatTimerPenaltyPercent, getSpireDifficultyModifiers, isRunCodeDisabledByHeat } from "./campaignCore";
 import { addEnemyDebuffs, cloneEnemyDebuffs, normalizeEnemyDebuffs, tickEnemyDebuffs } from "./enemyDebuffCore";
 import { createDropItem, EQUIPMENT_SLOTS, getActiveSetBonusesForItems, SLOT_LABELS } from "./itemCore";
 import { applyEloResult, DEFAULT_PLAYER_RATING, getEstimatedRating } from "./ratingCore";
@@ -10,7 +10,7 @@ import { applyElementalResistance, getResistancesFromModifiers } from "./resista
 import { getWarriorSkillBonuses, normalizeWarriorSkillRanks } from "./skillCore";
 import { createShopStock, normalizeShopStock } from "./shopCore";
 import { DEFAULT_SPIRE_MIN_RATING, createSpireRun, getSpireRatings, normalizeSpireMinRating, normalizeSpireRun } from "./spireMapCore";
-import { getMonsterMaxHealth, getUniqueMonsterBonuses } from "./monsterCore";
+import { getMonsterMaxHealth, getUniqueMonsterBonusesWithExtra } from "./monsterCore";
 import { addPlayerDebuffs, clonePlayerDebuffs, getPlayerDebuffStacks, normalizePlayerDebuffs, tickPlayerDebuffsAfterSubmit, type PlayerDebuffApplication } from "./playerDebuffCore";
 import type { ActivePotionEffect, CardState, CharacterStatKey, CharacterStats, CodingCompanyProfile, DamageType, EquipmentSlot, InventoryItem, InventoryItemPosition, ItemModifierKey, Question, StudyState } from "../types/study";
 
@@ -885,7 +885,7 @@ export const getHealthLoss = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, 
   const constrictedDamage = getPlayerDebuffStacks(state.profile.playerDebuffs, "constricted");
   const incomingDebuffPercent = getPlayerDebuffStacks(state.profile.playerDebuffs, "vulnerable") ? VULNERABLE_INCOMING_DAMAGE_PERCENT : 0;
   const incomingDamageMultiplier = 1 + ((modifiers.incomingDamagePercent || 0) + incomingDebuffPercent) / MODIFIER_PERCENT_BASE;
-  const scaledAmount = (amount + constrictedDamage) * difficultyModifiers.monsterDamageMultiplier * Math.max(0.1, incomingDamageMultiplier);
+  const scaledAmount = (amount + constrictedDamage) * difficultyModifiers.monsterDamageMultiplier * getNodeHeatMonsterMultiplier(state) * Math.max(0.1, incomingDamageMultiplier);
   const frailPenalty = getPlayerDebuffStacks(state.profile.playerDebuffs, "frail") ? FRAIL_MITIGATION_REDUCTION_PERCENT : 0;
   const reducedEnemyDamagePercent = (modifiers.reducedEnemyDamagePercent || 0) - frailPenalty;
   const reducedEnemyDamage = scaledAmount * (1 - Math.min(75, reducedEnemyDamagePercent) / MODIFIER_PERCENT_BASE);
@@ -915,7 +915,7 @@ export const getAttackDamage = (question: Question, state: StudyState) => {
   const modifiers = getRunModifierTotals(state);
   const skills = getWarriorSkillBonusTotals(state);
   const baseDamage = question.difficulty * DAMAGE_PER_DIFFICULTY + stats.strength * DAMAGE_PER_STRENGTH + (modifiers.physicalDamage || 0);
-  const eliteBonus = getUniqueMonsterBonuses(question).length ? modifiers.bonusDamageVsElitesPercent || 0 : 0;
+  const eliteBonus = getUniqueMonsterBonusesWithExtra(question, getPactUniqueMonsterBonusCount(state)).length ? modifiers.bonusDamageVsElitesPercent || 0 : 0;
   const healthRatio = state.profile.health / Math.max(1, getMaxHealth(state));
   const lowHealthBonus = healthRatio <= 0.35 ? modifiers.bonusDamageWhileLowHealthPercent || 0 : 0;
   const fullHealthBonus = healthRatio >= 1 ? modifiers.bonusDamageWhileFullHealthPercent || 0 : 0;
@@ -1184,7 +1184,22 @@ function getMonsterHealthForCard(state: StudyState, questionId: string) {
     return Math.max(0, stored || 0);
   }
   const question = questions.find((row) => row.id === questionId);
-  return question ? Math.round(getMonsterMaxHealth(question) * getSpireDifficultyModifiers(state.profile.spireRun).monsterHealthMultiplier) : 0;
+  return question ? Math.round(getMonsterMaxHealth(question, getPactUniqueMonsterBonusCount(state)) * getSpireDifficultyModifiers(state.profile.spireRun).monsterHealthMultiplier * getNodeHeatMonsterMultiplier(state)) : 0;
+}
+
+function getPactUniqueMonsterBonusCount(state: StudyState) {
+  return getHeatRank(state.profile.spireRun, "benefitsPackage");
+}
+
+function getNodeHeatMonsterMultiplier(state: StudyState) {
+  const nodeKind = state.profile.spireRun.nodes.find((node) => node.id === state.profile.spireRun.currentNodeId)?.kind;
+  if (nodeKind === "boss") {
+    return getHeatBossMultiplier(state.profile.spireRun);
+  }
+  if (nodeKind === "elite") {
+    return getHeatEliteMultiplier(state.profile.spireRun);
+  }
+  return 1;
 }
 
 function filterResistedPlayerDebuffs(state: StudyState, questionId: string | undefined, now: number, debuffs: PlayerDebuffApplication[]) {

@@ -162,8 +162,12 @@ export function getUniqueMonsterName(question: Question) {
 }
 
 export function getUniqueMonsterBonuses(question: Question) {
+  return getUniqueMonsterBonusesWithExtra(question, 0);
+}
+
+export function getUniqueMonsterBonusesWithExtra(question: Question, extraBonusCount = 0) {
   const seed = getMonsterSeed(question);
-  const count = getUniqueMonsterBonusCount(question);
+  const count = getUniqueMonsterBonusCount(question, extraBonusCount);
   const bonuses: string[] = [];
   for (let index = 0; index < count; index += 1) {
     bonuses.push(pickUniqueBonus(bonuses, `${seed}:bonus:${index}`));
@@ -171,18 +175,19 @@ export function getUniqueMonsterBonuses(question: Question) {
   return bonuses;
 }
 
-export function getUniqueMonsterBonusCount(question: Question) {
+export function getUniqueMonsterBonusCount(question: Question, extraBonusCount = 0) {
   const bonusChance = getUniqueMonsterBonusChance(question);
   if (getSeededRoll(`${getMonsterSeed(question)}:bonus-chance`) >= bonusChance) {
-    return 0;
+    return Math.min(UNIQUE_MONSTER_BONUSES.length, Math.max(0, Math.floor(extraBonusCount || 0)));
   }
+  const extraCount = Math.max(0, Math.floor(extraBonusCount || 0));
   if (question.difficulty >= HELL_DIFFICULTY_MIN || question.rating >= HELL_RATING_MIN) {
-    return HELL_UNIQUE_BONUSES;
+    return Math.min(UNIQUE_MONSTER_BONUSES.length, HELL_UNIQUE_BONUSES + extraCount);
   }
   if (question.difficulty >= NIGHTMARE_DIFFICULTY_MIN || question.rating >= NIGHTMARE_RATING_MIN) {
-    return NIGHTMARE_UNIQUE_BONUSES;
+    return Math.min(UNIQUE_MONSTER_BONUSES.length, NIGHTMARE_UNIQUE_BONUSES + extraCount);
   }
-  return NORMAL_UNIQUE_BONUSES;
+  return Math.min(UNIQUE_MONSTER_BONUSES.length, NORMAL_UNIQUE_BONUSES + extraCount);
 }
 
 function getUniqueMonsterBonusChance(question: Question) {
@@ -194,14 +199,14 @@ export function getUniqueMonsterBonusDescription(bonus: string) {
   return UNIQUE_MONSTER_BONUS_DESCRIPTIONS[bonus as (typeof UNIQUE_MONSTER_BONUSES)[number]] || "Unique monster trait.";
 }
 
-export function getMonsterMaxHealth(question: Question) {
-  const bonuses = getUniqueMonsterBonuses(question);
+export function getMonsterMaxHealth(question: Question, extraBonusCount = 0) {
+  const bonuses = getUniqueMonsterBonusesWithExtra(question, extraBonusCount);
   const bonusHealth = bonuses.includes("Stone Skin") || bonuses.includes("Arcane Shield") ? HEALTH_PER_DIFFICULTY : 0;
   return BASE_HEALTH + question.difficulty * HEALTH_PER_DIFFICULTY + Math.round((question.rating - RATING_MIN) / HEALTH_RATING_DIVISOR) + bonusHealth;
 }
 
-export function getMonsterAttackProfile(question: Question, baseDamage: number, now = Date.now()) {
-  const bonuses = getUniqueMonsterBonuses(question);
+export function getMonsterAttackProfile(question: Question, baseDamage: number, now = Date.now(), extraBonusCount = 0) {
+  const bonuses = getUniqueMonsterBonusesWithExtra(question, extraBonusCount);
   const element = getMonsterAttackType(question, bonuses);
   const hitCount = (bonuses.includes("Multi-Shot") ? MULTI_SHOT_HIT_COUNT : DEFAULT_HIT_COUNT) + (bonuses.includes("Extra Fast") ? EXTRA_FAST_HIT_COUNT_BONUS : 0);
   const perHitDamage = Math.max(DEFAULT_HIT_COUNT, baseDamage + getBonusDamage(bonuses, question, now));
@@ -217,8 +222,8 @@ export function getMonsterAttackProfile(question: Question, baseDamage: number, 
   };
 }
 
-export function getMonsterPlayerDamage(question: Question, damage: number, _damageType: DamageType = "physical") {
-  const bonuses = getUniqueMonsterBonuses(question);
+export function getMonsterPlayerDamage(question: Question, damage: number, _damageType: DamageType = "physical", extraBonusCount = 0) {
+  const bonuses = getUniqueMonsterBonusesWithExtra(question, extraBonusCount);
   const reduction = bonuses.reduce((total, bonus) => total + getDamageReduction(bonus), 0);
   if (damage <= 0) {
     return 0;
@@ -226,8 +231,8 @@ export function getMonsterPlayerDamage(question: Question, damage: number, _dama
   return Math.max(DEFAULT_HIT_COUNT, Math.round(damage * (1 - Math.min(reduction, TELEPORTING_DAMAGE_REDUCTION))));
 }
 
-export function getMonsterWrongSubmitDebuffs(question: Question, now = Date.now()): PlayerDebuffApplication[] {
-  const bonuses = getUniqueMonsterBonuses(question);
+export function getMonsterWrongSubmitDebuffs(question: Question, now = Date.now(), extraBonusCount = 0): PlayerDebuffApplication[] {
+  const bonuses = getUniqueMonsterBonusesWithExtra(question, extraBonusCount);
   const debuff = bonuses.map(getDebuffForBonus).find(Boolean) || getFallbackWrongSubmitDebuff(question, now);
   if (!debuff) {
     return [];

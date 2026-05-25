@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getMonsterAttackProfile, getMonsterMaxHealth, getMonsterPlayerDamage, getMonsterWrongSubmitDebuffs, getUniqueMonsterBonusCount, getUniqueMonsterBonuses, getUniqueMonsterName, UNIQUE_MONSTER_BONUSES } from "../lib/monsterCore";
+import { getMonsterAttackProfile, getMonsterMaxHealth, getMonsterPlayerDamage, getMonsterWrongSubmitDebuffs, getUniqueMonsterBonusCount, getUniqueMonsterBonuses, getUniqueMonsterBonusesWithExtra, getUniqueMonsterName, UNIQUE_MONSTER_BONUSES } from "../lib/monsterCore";
 import { DAMAGE_TYPES, ELEMENTAL_DAMAGE_TYPES } from "../lib/resistanceCore";
 import type { Difficulty, Question } from "../types/study";
 
@@ -18,6 +18,15 @@ describe("monsterCore", () => {
     expect(bonuses).toHaveLength(3);
     expect(new Set(bonuses).size).toBe(bonuses.length);
     expect(bonuses.every((bonus) => UNIQUE_MONSTER_BONUSES.includes(bonus as (typeof UNIQUE_MONSTER_BONUSES)[number]))).toBe(true);
+  });
+
+  it("lets pact ranks add unique monster traits to combat rolls", () => {
+    const question = findQuestion((bonuses) => bonuses.length === 0, 1, 1200);
+    const boostedBonuses = getUniqueMonsterBonusesWithExtra(question, 2);
+
+    expect(getUniqueMonsterBonusCount(question)).toBe(0);
+    expect(boostedBonuses).toHaveLength(2);
+    expect(getMonsterAttackProfile(question, 5, 1000, 2).bonuses).toEqual(boostedBonuses);
   });
 
   it("generates stable prefix suffix appellation names", () => {

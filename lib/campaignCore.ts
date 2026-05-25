@@ -24,7 +24,7 @@ export const HEAT_CONDITION_DEFINITIONS: HeatConditionDefinition[] = [
   { description: "Combat rooms add more questions.", heatPerRank: 1, id: "jurySummons", label: "Jury Summons", maxRank: 3 },
   { description: "Bosses gain health, damage, and rating.", heatPerRank: 1, id: "extremeMeasures", label: "Extreme Measures", maxRank: 4 },
   { description: "+15% monster health per rank.", heatPerRank: 1, id: "calisthenicsProgram", label: "Calisthenics Program", maxRank: 2 },
-  { description: "Monsters roll stronger unique traits.", heatPerRank: 2, id: "benefitsPackage", label: "Benefits Package", maxRank: 2 },
+  { description: "Monsters gain extra unique traits and rating.", heatPerRank: 2, id: "benefitsPackage", label: "Benefits Package", maxRank: 2 },
   { description: "Elites gain health, damage, and rating.", heatPerRank: 2, id: "middleManagement", label: "Middle Management", maxRank: 1 },
   { description: "Boss relic rewards show fewer choices.", heatPerRank: 2, id: "underworldCustoms", label: "Underworld Customs", maxRank: 1 },
   { description: "Monsters hit harder and rooms move faster.", heatPerRank: 3, id: "forcedOvertime", label: "Forced Overtime", maxRank: 2 },

@@ -7,6 +7,7 @@ import { MODIFIER_FORMATTERS } from "../lib/modifierFormat";
 import { getEnemyDebuffStacks } from "../lib/enemyDebuffCore";
 import { getPlayerDebuffStacks } from "../lib/playerDebuffCore";
 import { getEstimatedRating } from "../lib/ratingCore";
+import { getShopItemCost } from "../lib/shopCore";
 import { WARRIOR_SKILLS, activateWarriorSkill, canUseActiveWarriorSkill, getAvailableWarriorSkillPoints, getWarriorSkillTooltipBreakdown, resetWarriorSkillPoints, spendWarriorSkillPoint } from "../lib/skillCore";
 import {
   EXPERIENCE_PER_LEVEL,
@@ -84,7 +85,7 @@ import {
   unequipItem,
   spendStatPoint
 } from "../lib/studyCore";
-import type { InventoryItem, ItemModifierKey, Relic } from "../types/study";
+import type { InventoryItem, ItemModifierKey, Relic, SpireNodeKind, StudyState } from "../types/study";
 
 const ITEM_VISIBLE_MOD_CAPS = { common: 0, epic: 8, legendary: 12, rare: 6, uncommon: 2 };
 
@@ -99,6 +100,29 @@ const testRelic = (key: ItemModifierKey, value: number): Relic => ({
 
 function getVisibleItemModCount(item: InventoryItem) {
   return Object.values(item.stats).filter(Boolean).length + (item.modifiers || []).length + (item.wikiStats || []).length;
+}
+
+function withCurrentNode(state: StudyState, kind: SpireNodeKind) {
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      spireRun: {
+        ...state.profile.spireRun,
+        currentNodeId: "test-node",
+        nodes: [{
+          column: 0,
+          id: "test-node",
+          kind,
+          nextIds: [],
+          rating: 1500,
+          tierIndex: 0,
+          x: 0,
+          y: 0
+        }]
+      }
+    }
+  };
 }
 
 describe("studyCore", () => {
@@ -353,6 +377,50 @@ describe("studyCore", () => {
     expect(getHealthLoss(heated, 10, "fire")).toBeGreaterThan(getHealthLoss(normal, 10, "fire"));
     expect(applyHealingReceived(heated, 20)).toBeLessThan(applyHealingReceived(normal, 20));
     expect(getModifiedQuestionTimeLimitMs(heated, question)).toBeLessThan(getModifiedQuestionTimeLimitMs(normal, question));
+  });
+
+  it("applies pact condition ranks to live combat and shop math", () => {
+    const question = { ...questions.find((row) => row.difficulty === 5)!, id: "pact-runtime-check", rating: 2600 };
+    const normal = withCurrentNode(defaultState(), "enemy");
+    const boss = withCurrentNode(defaultState(), "boss");
+    const elite = withCurrentNode(defaultState(), "elite");
+
+    const hardLabor = withCurrentNode(defaultState(), "enemy");
+    hardLabor.profile.spireRun.heatConditions.hardLabor = 1;
+    const heightenedSecurity = withCurrentNode(defaultState(), "enemy");
+    heightenedSecurity.profile.spireRun.heatConditions.heightenedSecurity = 1;
+    const forcedOvertime = withCurrentNode(defaultState(), "enemy");
+    forcedOvertime.profile.spireRun.heatConditions.forcedOvertime = 1;
+    expect(getHealthLoss(hardLabor, 10, "physical")).toBeGreaterThan(getHealthLoss(normal, 10, "physical"));
+    expect(getHealthLoss(heightenedSecurity, 10, "physical")).toBeGreaterThan(getHealthLoss(normal, 10, "physical"));
+    expect(getHealthLoss(forcedOvertime, 10, "physical")).toBeGreaterThan(getHealthLoss(normal, 10, "physical"));
+    expect(getModifiedQuestionTimeLimitMs(forcedOvertime, question)).toBeLessThan(getModifiedQuestionTimeLimitMs(normal, question));
+
+    const lastingConsequences = defaultState();
+    lastingConsequences.profile.spireRun.heatConditions.lastingConsequences = 1;
+    expect(applyHealingReceived(lastingConsequences, 20)).toBeLessThan(applyHealingReceived(normal, 20));
+
+    const convenienceFee = defaultState();
+    convenienceFee.profile.spireRun.heatConditions.convenienceFee = 1;
+    const listing = { amount: 1, cost: 50, id: "test-potion", kind: "consumable" as const, name: "Test Potion", type: "health" as const };
+    expect(getShopItemCost(convenienceFee, listing)).toBeGreaterThan(getShopItemCost(normal, listing));
+
+    const calisthenics = withCurrentNode(defaultState(), "enemy");
+    calisthenics.profile.spireRun.heatConditions.calisthenicsProgram = 1;
+    const damageControl = withCurrentNode(defaultState(), "enemy");
+    damageControl.profile.spireRun.heatConditions.damageControl = 1;
+    expect(getCampaignMonsterMaxHealth(calisthenics, question)).toBeGreaterThan(getCampaignMonsterMaxHealth(normal, question));
+    expect(getCampaignMonsterMaxHealth(damageControl, question)).toBeGreaterThan(getCampaignMonsterMaxHealth(normal, question));
+
+    const extremeMeasures = withCurrentNode(defaultState(), "boss");
+    extremeMeasures.profile.spireRun.heatConditions.extremeMeasures = 1;
+    expect(getCampaignMonsterMaxHealth(extremeMeasures, question)).toBeGreaterThan(getCampaignMonsterMaxHealth(boss, question));
+    expect(getHealthLoss(extremeMeasures, 10, "physical")).toBeGreaterThan(getHealthLoss(boss, 10, "physical"));
+
+    const middleManagement = withCurrentNode(defaultState(), "elite");
+    middleManagement.profile.spireRun.heatConditions.middleManagement = 1;
+    expect(getCampaignMonsterMaxHealth(middleManagement, question)).toBeGreaterThan(getCampaignMonsterMaxHealth(elite, question));
+    expect(getHealthLoss(middleManagement, 10, "physical")).toBeGreaterThan(getHealthLoss(elite, 10, "physical"));
   });
 
   it("picks unseen rating-fit questions and supports next-question navigation", () => {
