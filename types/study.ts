@@ -53,7 +53,12 @@ export type CardState = {
   lastResult: "pass" | "fail" | null;
   lastAttemptAt?: number;
   masteredAt?: number;
+  relicCombatStartHealed?: boolean;
+  relicFirstHpLossPrevented?: boolean;
+  enemyDebuffs?: EnemyDebuff[];
+  monsterBlock?: number;
   monsterHealth?: number;
+  playerBlock?: number;
   relicFirstHitBlocked?: boolean;
   relicReviveUsed?: boolean;
   solutionRevealedAt?: number;
@@ -140,32 +145,56 @@ export type ItemModifierKey =
   | "bonusDamageWhileFullHealthPercent"
   | "bonusDamageWhileLowHealthPercent"
   | "bonusXpPercent"
+  | "bossEntryHeal"
+  | "blockBreakDamagePercent"
+  | "blockedEnemyDamagePercent"
   | "coldResistPercent"
   | "coldDamage"
+  | "combatClearMeta"
+  | "combatStartBlock"
+  | "combatStartHeal"
   | "criticalChancePercent"
   | "criticalDamagePercent"
   | "damageReduction"
+  | "damageVsArraysPercent"
+  | "damageVsBfsPercent"
+  | "damageVsDfsPercent"
+  | "damageVsDynamicProgrammingPercent"
+  | "damageVsGraphsPercent"
+  | "damageVsHashMapPercent"
+  | "damageVsStringsPercent"
+  | "damageVsTreesPercent"
+  | "debuffResistPercent"
   | "dodgeChancePercent"
   | "eliteDropBonusPercent"
+  | "eliteStartHealthReductionPercent"
   | "eliteRelicChoiceBonus"
+  | "enemyVulnerableSubmits"
+  | "enemyWeakSubmits"
   | "enhancedDamagePercent"
   | "executeChancePercent"
   | "extraAttackChancePercent"
+  | "firstSubmitDamagePercent"
   | "fireResistPercent"
   | "fireDamage"
   | "freeHintPerRoom"
   | "goldFindPercent"
+  | "goldGainHeal"
   | "healthRegen"
+  | "hexConfusedImmune"
   | "incomingDamagePercent"
   | "increasedHealingReceivedPercent"
   | "increasedLootDropChancePercent"
   | "increasedRareDropChancePercent"
+  | "lowHealthClearHeal"
   | "lifeOnKill"
   | "lifeStealPercent"
   | "lightningResistPercent"
   | "lightningDamage"
   | "magicFindPercent"
   | "maxLife"
+  | "minimumSubmitDamage"
+  | "monsterDefeatHeal"
   | "noHintDamagePercent"
   | "noRunDamagePercent"
   | "parryChancePercent"
@@ -173,6 +202,7 @@ export type ItemModifierKey =
   | "physicalResistPercent"
   | "poisonDamage"
   | "poisonResistPercent"
+  | "preventFirstHpLoss"
   | "potionDurationBonus"
   | "reducedEnemyArmorPercent"
   | "reducedEnemyDamagePercent"
@@ -184,13 +214,17 @@ export type ItemModifierKey =
   | "shopDiscountPercent"
   | "shopPriceIncreasePercent"
   | "shopRelicStock"
+  | "smallHitToOneThreshold"
   | "skipRelicMaxLife"
   | "skipRelicMetaBonus"
   | "submitFailDamageStackPercent"
+  | "fifthSubmitDamagePercent"
+  | "thornsDamage"
   | "timerDamagePercent"
   | "timerPenaltyPercent"
   | "timerPauseSeconds"
   | "treasureRelicChancePercent"
+  | "vulnerableConstrictedImmune"
   | "resistancePenetrationPercent";
 
 export type ItemModifier = {
@@ -338,6 +372,23 @@ export type ActivePotionEffect = {
   stats: Partial<CharacterStats>;
 };
 
+export type PlayerDebuffId = "confused" | "constricted" | "frail" | "hex" | "parasite" | "slimed" | "vulnerable" | "weak";
+
+export type PlayerDebuff = {
+  id: PlayerDebuffId;
+  permanent?: boolean;
+  remainingSubmits?: number;
+  stacks: number;
+};
+
+export type EnemyDebuffId = "vulnerable" | "weak";
+
+export type EnemyDebuff = {
+  id: EnemyDebuffId;
+  remainingSubmits: number;
+  stacks: number;
+};
+
 export type ShopItem =
   | {
       amount: number;
@@ -423,6 +474,7 @@ export type StudyState = {
     skillRanks: Partial<Record<WarriorSkillId, number>>;
     activeSkill: ActiveWarriorSkillId | null;
     activePotionEffects: ActivePotionEffect[];
+    playerDebuffs: PlayerDebuff[];
     inventory: InventoryItem[];
     inventorySlots: Record<string, InventoryItemPosition>;
     equipment: Record<EquipmentSlot, string | null>;

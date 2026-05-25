@@ -2,12 +2,14 @@ import { Box, Group, Paper, Text, Tooltip } from "@mantine/core";
 import type { ReactNode } from "react";
 
 import playerWarriorAvatarArt from "../assets/hero_siege_inventory/player-warrior-avatar.png";
-import type { ActivePotionEffect, ActiveWarriorSkillId, StudyState } from "../types/study";
+import type { ActivePotionEffect, ActiveWarriorSkillId, PlayerDebuff, StudyState } from "../types/study";
 import { CoinIcon } from "./CoinIcon";
 import { ImpactEffects, type CombatImpactVisual } from "./MonsterEncounter";
 import { RelicIcon } from "./RelicIcon";
 import { getRelicRarityColor } from "../lib/heroSiegeQuality";
 import { formatModifier } from "../lib/modifierFormat";
+import { PLAYER_DEBUFF_DEFINITIONS, formatPlayerDebuff, getPlayerDebuffDescription } from "../lib/playerDebuffCore";
+import { getCard } from "../lib/studyCore";
 import type { Relic } from "../types/study";
 
 const PERCENT_MAX = 100;
@@ -31,6 +33,7 @@ const PLAYER_PANEL_SHADOW = "inset 0 0 0 1px rgba(115, 107, 92, 0.14), 0 10px 24
 const NAME_COLOR = "#e95aff";
 const HERO_GOLD = "#f1dfad";
 const HEALTH_FILL = "linear-gradient(180deg, #ff5d5d, #b30017 72%, #5b0209)";
+const BLOCK_FILL = "linear-gradient(180deg, #8fd3ff, #2773c8 72%, #123466)";
 const RELIC_TOOLTIP_BG = "linear-gradient(180deg, rgba(50, 8, 15, 0.98), rgba(16, 5, 8, 0.98))";
 const RELIC_TOOLTIP_BORDER = "1px solid rgba(231, 25, 104, 0.9)";
 const RELIC_TOOLTIP_SHADOW = "0 14px 36px rgba(0, 0, 0, 0.72), inset 0 0 0 1px rgba(255, 255, 255, 0.04)";
@@ -48,6 +51,7 @@ export function PlayerStatus(props: {
 }) {
   const healthValue = (props.health / props.maxHealth) * PERCENT_MAX;
   const ratingColor = getRatingColor(props.rating);
+  const playerBlock = props.state.currentId ? Math.max(0, Math.floor(getCard(props.state, props.state.currentId).playerBlock || 0)) : 0;
 
   return (
     <Paper
@@ -72,7 +76,7 @@ export function PlayerStatus(props: {
         textAlign: "left"
         }}
     >
-      <AvatarIllustration impact={props.playerImpact} />
+      <AvatarIllustration debuffs={props.state.profile.playerDebuffs} impact={props.playerImpact} />
       <Box style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
         <Group justify="space-between" gap="xs" wrap="nowrap" mb={5}>
           <Box>
@@ -88,11 +92,91 @@ export function PlayerStatus(props: {
         </Group>
         <StackedResourceBars>
           <HudBar fill={HEALTH_FILL} value={healthValue} text={`${props.health} / ${props.maxHealth}`} />
+          {playerBlock > 0 && <HudBar fill={BLOCK_FILL} value={Math.min(PERCENT_MAX, playerBlock * 10)} text={`${playerBlock} Block`} />}
         </StackedResourceBars>
+        {props.state.profile.playerDebuffs.length > 0 && <PlayerDebuffStrip debuffs={props.state.profile.playerDebuffs} />}
         {props.state.profile.activePotionEffects.length > 0 && <ActiveEffectStrip effects={props.state.profile.activePotionEffects} />}
         {props.state.profile.relics.length > 0 && <RelicStrip relics={props.state.profile.relics} />}
       </Box>
     </Paper>
+  );
+}
+
+function PlayerDebuffStrip(props: { debuffs: PlayerDebuff[] }) {
+  const visible = props.debuffs.slice(0, ACTIVE_EFFECT_VISIBLE_COUNT);
+  const remaining = props.debuffs.length - visible.length;
+  return (
+    <Box
+      mt={6}
+      onClick={(event) => event.stopPropagation()}
+      style={{
+        alignItems: "center",
+        display: "flex",
+        gap: 5,
+        maxWidth: "100%",
+        overflow: "hidden"
+      }}
+    >
+      <Text
+        size="9px"
+        fw={900}
+        c="gray.3"
+        lh={1.25}
+        style={{ flex: "0 0 auto", textShadow: "0 1px 0 #000", textTransform: "uppercase" }}
+      >
+        Debuffs
+      </Text>
+      {visible.map((debuff) => (
+        <PlayerDebuffPill key={debuff.id} debuff={debuff} />
+      ))}
+      {remaining > 0 && <Text size="10px" fw={900} c="gray.3">+{remaining}</Text>}
+    </Box>
+  );
+}
+
+function PlayerDebuffPill(props: { debuff: PlayerDebuff }) {
+  const definition = PLAYER_DEBUFF_DEFINITIONS[props.debuff.id];
+  return (
+    <Tooltip
+      label={getPlayerDebuffDescription(props.debuff)}
+      position="bottom-start"
+      offset={10}
+      withArrow
+      multiline
+      zIndex={3000}
+      styles={{
+        tooltip: {
+          background: RELIC_TOOLTIP_BG,
+          border: `1px solid ${definition.color}`,
+          borderRadius: 2,
+          boxShadow: RELIC_TOOLTIP_SHADOW,
+          color: "#f8eed4",
+          maxWidth: 320,
+          padding: "9px 11px"
+        },
+        arrow: {
+          borderColor: definition.color
+        }
+      }}
+    >
+      <Box
+        style={{
+          background: `linear-gradient(180deg, ${definition.color}38, rgba(4, 4, 5, 0.78))`,
+          border: `1px solid ${definition.color}9a`,
+          boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.75), 0 2px 3px rgba(0, 0, 0, 0.55)",
+          display: "flex",
+          flex: "0 1 auto",
+          gap: 5,
+          maxWidth: 142,
+          minWidth: 0,
+          padding: "2px 6px"
+        }}
+      >
+        <Text size="9px" fw={900} c={definition.color} lh={1.25}>BAD</Text>
+        <Text size="9px" fw={900} c="#f8eed4" lh={1.25} truncate>{formatPlayerDebuff(props.debuff)}</Text>
+        {!props.debuff.permanent && <Text size="9px" fw={900} c="gray.3" lh={1.25}>{props.debuff.remainingSubmits}s</Text>}
+      </Box>
+    </Tooltip>
   );
 }
 
@@ -311,8 +395,8 @@ function getRatingColor(rating: number) {
   return "green";
 }
 
-function AvatarIllustration(props: { impact?: CombatImpactVisual | null }) {
-  const statusColor = getDominantStatusImpactColor(props.impact?.statusEffects || []);
+function AvatarIllustration(props: { debuffs: PlayerDebuff[]; impact?: CombatImpactVisual | null }) {
+  const statusColor = getDominantStatusImpactColor(props.impact?.statusEffects || []) || props.debuffs.map((debuff) => PLAYER_DEBUFF_DEFINITIONS[debuff.id].color)[0];
   return (
     <Box
       aria-hidden="true"
@@ -414,11 +498,29 @@ function getStatusImpactColor(status: string) {
   if (/poison/i.test(status)) {
     return "#7cff7c";
   }
-  if (/cursed/i.test(status)) {
+  if (/weak/i.test(status)) {
+    return "#c084fc";
+  }
+  if (/vulnerable|enraged|extra strong/i.test(status)) {
+    return "#ff4d4d";
+  }
+  if (/frail/i.test(status)) {
+    return "#73c7ff";
+  }
+  if (/hex|cursed/i.test(status)) {
     return "#ff4d8d";
   }
-  if (/enraged|extra strong/i.test(status)) {
-    return "#ff4d4d";
+  if (/slimed/i.test(status)) {
+    return "#7cff7c";
+  }
+  if (/confused/i.test(status)) {
+    return "#f0df5f";
+  }
+  if (/parasite/i.test(status)) {
+    return "#b56bff";
+  }
+  if (/cursed/i.test(status)) {
+    return "#ff4d8d";
   }
   return "#d7b56d";
 }

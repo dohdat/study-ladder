@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getMonsterAttackProfile, getMonsterMaxHealth, getMonsterPlayerDamage, getUniqueMonsterBonusCount, getUniqueMonsterBonuses, getUniqueMonsterName, UNIQUE_MONSTER_BONUSES } from "../lib/monsterCore";
+import { getMonsterAttackProfile, getMonsterMaxHealth, getMonsterPlayerDamage, getMonsterWrongSubmitDebuffs, getUniqueMonsterBonusCount, getUniqueMonsterBonuses, getUniqueMonsterName, UNIQUE_MONSTER_BONUSES } from "../lib/monsterCore";
 import { DAMAGE_TYPES, ELEMENTAL_DAMAGE_TYPES } from "../lib/resistanceCore";
 import type { Difficulty, Question } from "../types/study";
 
@@ -46,6 +46,25 @@ describe("monsterCore", () => {
     expect(getMonsterAttackProfile(stoneSkin, 5, 1000).damage).toBeGreaterThan(0);
   });
 
+  it("lets cursed and spectral enemies apply Hexed and Confused", () => {
+    const cursed = findQuestion((bonuses) => bonuses.length === 1 && bonuses.includes("Cursed"), 1, 1200);
+    const spectral = findQuestion((bonuses) => bonuses.length === 1 && bonuses.includes("Spectral Hit"), 1, 1200);
+
+    expect(getMonsterWrongSubmitDebuffs(cursed, 1000).map((debuff) => debuff.id)).toContain("hex");
+    expect(getMonsterWrongSubmitDebuffs(spectral, 1000).map((debuff) => debuff.id)).toContain("confused");
+  });
+
+  it("can roll Hexed and Confused from high-difficulty fallback debuffs", () => {
+    const rolledDebuffs = new Set(
+      Array.from({ length: 800 }, (_unused, index) => getMonsterWrongSubmitDebuffs({ ...makeQuestion(5, 3200), id: `fallback-debuff-${index}` }, 1000 + index))
+        .flat()
+        .map((debuff) => debuff.id)
+    );
+
+    expect(rolledDebuffs).toContain("hex");
+    expect(rolledDebuffs).toContain("confused");
+  });
+
   it("keeps enemy traits from countering player damage types", () => {
     const arcaneShield = findQuestion((bonuses) => bonuses.includes("Arcane Shield"));
     const fireEnchanted = findQuestion((bonuses) => bonuses.includes("Fire Enchanted"));
@@ -74,9 +93,9 @@ function countElementalAttacks(difficulty: Difficulty, rating: number) {
   }).filter((element) => element !== "physical").length;
 }
 
-function findQuestion(predicate: (bonuses: string[]) => boolean) {
+function findQuestion(predicate: (bonuses: string[]) => boolean, difficulty: Difficulty = 5, rating = 3200) {
   for (let index = 0; index < 1000; index += 1) {
-    const question = { ...makeQuestion(5, 3200), id: `monster-fixture-${index}` };
+    const question = { ...makeQuestion(difficulty, rating), id: `monster-fixture-${difficulty}-${rating}-${index}` };
     if (predicate(getUniqueMonsterBonuses(question))) {
       return question;
     }

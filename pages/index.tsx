@@ -20,15 +20,16 @@ import { usePersistAchievements } from "../hooks/usePersistAchievements";
 import { useStudyNotifications } from "../hooks/useStudyNotifications";
 import { areHintsDisabledByHeat, isRunCodeDisabledByHeat } from "../lib/campaignCore";
 import { beautifyCode } from "../lib/codeFormat";
-import { applyPassedCombatResult, getElapsedPressureRatio, getTimedMonsterAttack, isMonsterEnraged } from "../lib/combatCore";
+import { applyEnemyDebuffsToMonsterAttack, applyPassedCombatResult, getElapsedPressureRatio, getMonsterBlockGain, getTimedMonsterAttack, isMonsterEnraged } from "../lib/combatCore";
 import { getTimerDisplay } from "../lib/timerDisplay";
 import { chooseNextSpireQuestion, completeSpireQuestion, getCurrentRoundQuestion, getCurrentSpireNode, isCombatNode as isSpireCombatNode, retargetCurrentSpireRoomQuestions } from "../lib/spireMapCore";
 import {
   HINT_COST, applyHealthPenalty, applyIncomingDamage, applyScheduleResult, buyHint, canBuyHint, cloneState, defaultState, getCard,
-  getHintCost, getIncomingDamageEffect, getMaxHealth, getMetaStartingGoldBonus, getModifiedQuestionTimeLimitMs, getRunModifierTotals, isQuestionInRecommendedRange, markQuestionRunCode, normalizeStudyState, setCard, setSpireMinimumRating
+  applyCombatStartRelics, getHintCost, getIncomingDamageEffect, getModifiedQuestionTimeLimitMs, getRunModifierTotals, isQuestionInRecommendedRange, markQuestionRunCode, normalizeStudyState, restartStudyRun, setCard
 } from "../lib/studyCore";
 import { CODEX_QUESTION_VARIANT_CHUNK, CODEX_QUESTION_VARIANT_DONE, CODEX_QUESTION_VARIANT_ERROR, createHintPrompt, requestCodexQuestionVariant } from "../lib/hintPrompt";
 import { createLocalHint } from "../lib/localHint";
+import { formatPlayerDebuff } from "../lib/playerDebuffCore";
 import { createInitialQuestionDraft, isFrontendChallenge, parseFrontendDraft } from "../lib/frontendChallenge";
 import { RUNNER_FRAME, STATUS_COLOR, type StatusTone } from "../lib/practiceStatus";
 import { createQuestionVariantPrompt, createQuestionVariantRepairPrompt, createQuestionVariantResult } from "../lib/questionVariant";
@@ -42,6 +43,10 @@ const DAMAGE_POP_TIMEOUT_MS = 840;
 const PLAYER_IMPACT_TIMEOUT_MS = 2200;
 const COMBAT_ADVANCE_DELAY_MS = 680;
 const QUESTION_VARIANT_RETRY_MS = 5000;
+const QUESTION_VARIANT_STUCK_TIMEOUT_MS = 45000;
+const QUESTION_VARIANT_MAX_RETRIES = 1;
+const QUESTION_VARIANT_CACHE_KEY = "study-ladder-question-variants-v1";
+const QUESTION_VARIANT_CACHE_LIMIT = 80;
 
 type TestRunnerMessage = { type: "run-result"; runId: string; ok: boolean; error?: string; results: RunResult[]; runtimeMs?: number };
 type CodeRunMessage = { type: "code-run-result"; runId: string; ok: boolean; error?: string; output: string[]; results?: RunResult[]; runtimeMs?: number };
@@ -265,25 +270,26 @@ function handleRunMessage(message: TestRunnerMessage, params: Parameters<typeof 
   }
   if (!message.ok) {
     const now = Date.now();
-    const attack = getTimedMonsterAttack(question, params.timeRemainingMs, now, "retaliation", { enraged: isMonsterEnraged(params.state, question) });
+    const attack = getRetaliationMonsterAttack(params.state, question, params.timeRemainingMs, now);
+    const blockGain = getMonsterBlockGain(params.state, question, now);
     const healthLoss = getIncomingDamageEffect(params.state, attack.damage, attack.manaDamage, question.id, attack.element).healthLoss;
     if (healthLoss > 0) {
       params.showPlayerImpact(createPlayerImpact(question, attack, healthLoss, now));
     }
     params.showHealthLoss(healthLoss, attack.hitCount);
-    params.setState((previous) => applyHealthPenalty(previous, attack.damage, attack.manaDamage, question.id, params.code, now, attack.element));
+    params.setState((previous) => applyHealthPenalty(previous, attack.damage, attack.manaDamage, question.id, params.code, now, attack.element, attack.debuffs, blockGain));
     if (isFrontendChallenge(question)) {
       params.setResults([]);
       params.setConsoleRunResult({ ok: false, output: [], results: message.results, runtimeMs: message.runtimeMs });
       params.setTone("fail");
-      params.setStatus(getFailStatus(attack));
+      params.setStatus(getFailStatus(attack, blockGain));
       return;
     }
     const submitResult = createHiddenSubmitResult(params.state, message.results, message.runtimeMs);
     params.setResults([]);
     params.setConsoleRunResult(submitResult);
     params.setTone("fail");
-    params.setStatus(getFailStatus(attack));
+    params.setStatus(getFailStatus(attack, blockGain));
     return;
   }
   completePassedSubmit(params, question);
@@ -372,7 +378,11 @@ function applyElapsedCombatDamage(state: StudyState, question: Question, timeRem
 }
 
 function getElapsedMonsterAttack(state: StudyState, question: Question, timeRemainingMs: number, now: number) {
-  return getTimedMonsterAttack(question, timeRemainingMs, now, "elapsed", { enraged: isMonsterEnraged(state, question) });
+  return applyEnemyDebuffsToMonsterAttack(state, question, getTimedMonsterAttack(question, timeRemainingMs, now, "elapsed", { enraged: isMonsterEnraged(state, question) }));
+}
+
+function getRetaliationMonsterAttack(state: StudyState, question: Question, timeRemainingMs: number, now: number) {
+  return applyEnemyDebuffsToMonsterAttack(state, question, getTimedMonsterAttack(question, timeRemainingMs, now, "retaliation", { enraged: isMonsterEnraged(state, question) }));
 }
 
 function getTimeDamageStatus(result: ReturnType<typeof applyElapsedCombatDamage>) {
@@ -402,11 +412,13 @@ function formatHitStatus(hit: NonNullable<ReturnType<typeof applyPassedCombatRes
   return hit.critical ? `${skill}critical hit${hitCount} for ${hit.damage}.${effects}${restored}` : `${skill}hit${hitCount} for ${hit.damage}.${effects}${restored}`;
 }
 
-function getFailStatus(attack: ReturnType<typeof getTimedMonsterAttack>) {
+function getFailStatus(attack: ReturnType<typeof getTimedMonsterAttack>, blockGain = 0) {
   const prefix = attack.hitCount > 1 ? `Multi-Shot hit ${attack.hitCount} times` : "Monster hit";
   const element = attack.element ? ` ${attack.element[0].toUpperCase()}${attack.element.slice(1)}` : "";
   const effects = attack.effects?.length ? ` ${attack.effects.join(", ")}.` : "";
-  return `${prefix} for ${attack.damage}${element} damage.${effects} Wrong Answer`;
+  const appliedDebuffs = attack.debuffs?.length ? ` Applied ${attack.debuffs.map(formatPlayerDebuff).join(", ")}.` : "";
+  const block = blockGain > 0 ? ` Enemy gained ${blockGain} Block.` : "";
+  return `${prefix} for ${attack.damage}${element} damage.${effects}${appliedDebuffs}${block} Wrong Answer`;
 }
 
 function clearRunTimer(runTimer: React.MutableRefObject<number | null>) {
@@ -596,6 +608,7 @@ function useStartQuestion(params: Parameters<typeof usePracticeActions>[0]) {
     }
     params.runnerFrame.current?.contentWindow?.postMessage({ type: "runner-ping" }, "*");
     params.setQuestionFinished(false);
+    params.setState((previous) => applyCombatStartRelics(previous, params.currentQuestion!.id));
     params.setSessionStarted(true);
     params.setTone("default");
     params.setStatus("Starting fullscreen guard.");
@@ -762,9 +775,10 @@ function useFailAndAdvance(params: {
       return;
     }
     const now = Date.now();
-    const attack = getTimedMonsterAttack(currentQuestion, timeRemainingMs ?? getModifiedQuestionTimeLimitMs(state, currentQuestion), now, "retaliation", { enraged: isMonsterEnraged(state, currentQuestion) });
+    const attack = getRetaliationMonsterAttack(state, currentQuestion, timeRemainingMs ?? getModifiedQuestionTimeLimitMs(state, currentQuestion), now);
+    const blockGain = getMonsterBlockGain(state, currentQuestion, now);
     const healthLoss = getIncomingDamageEffect(state, attack.damage, attack.manaDamage, currentQuestion.id, attack.element).healthLoss;
-    const scheduled = applyScheduleResult(state, currentQuestion.id, false, draft, now, attack.damage, attack.manaDamage, attack.element);
+    const scheduled = applyScheduleResult(state, currentQuestion.id, false, draft, now, attack.damage, attack.manaDamage, attack.element, attack.debuffs, blockGain);
     const picked = chooseNextSpireQuestion(scheduled, currentQuestion);
     const nextState = { ...scheduled, currentId: picked.id };
     activeRunId.current = null;
@@ -777,7 +791,7 @@ function useFailAndAdvance(params: {
     setResults([]);
     setConsoleRunResult(null);
     setTone("fail");
-    setStatus(`${message} ${getFailStatus(attack)} Next question loaded.`);
+    setStatus(`${message} ${getFailStatus(attack, blockGain)} Next question loaded.`);
     setSessionStarted(false);
     setState(nextState);
     setCurrentQuestion(picked);
@@ -814,10 +828,12 @@ function useQuestionDisplayVariant(params: {
   sessionStarted: boolean;
   state: StudyState;
 }) {
-  const cache = useRef(new Map<string, Question>());
+  const cache = useRef(loadPersistedQuestionVariants());
+  const failureCounts = useRef(new Map<string, number>());
   const inFlight = useRef(new Set<string>());
   const retryTimers = useRef(new Map<string, number>());
   const streamTextByQuestionId = useRef(new Map<string, string>());
+  const timeoutTimers = useRef(new Map<string, number>());
   const sessionStartedRef = useRef(params.sessionStarted);
   const [displayQuestion, setDisplayQuestion] = useState<Question | null>(null);
   const [revision, setRevision] = useState(0);
@@ -830,6 +846,31 @@ function useQuestionDisplayVariant(params: {
     if (cache.current.has(question.id) || inFlight.current.has(question.id)) {
       return;
     }
+    const clearQuestionTimers = () => {
+      const retryTimer = retryTimers.current.get(question.id);
+      if (retryTimer) {
+        window.clearTimeout(retryTimer);
+        retryTimers.current.delete(question.id);
+      }
+      const timeoutTimer = timeoutTimers.current.get(question.id);
+      if (timeoutTimer) {
+        window.clearTimeout(timeoutTimer);
+        timeoutTimers.current.delete(question.id);
+      }
+    };
+    const useOriginalQuestion = (message: string) => {
+      clearQuestionTimers();
+      inFlight.current.delete(question.id);
+      cache.current.set(question.id, question);
+      streamTextByQuestionId.current.set(question.id, message);
+      setRevision((current) => current + 1);
+      setDisplayQuestion((current) => {
+        if (sessionStartedRef.current || current?.id !== question.id) {
+          return current;
+        }
+        return question;
+      });
+    };
     const retryTimer = retryTimers.current.get(question.id);
     if (retryTimer) {
       window.clearTimeout(retryTimer);
@@ -839,6 +880,19 @@ function useQuestionDisplayVariant(params: {
     streamTextByQuestionId.current.set(question.id, "Codex CLI request started. Waiting for first token...");
     setRevision((current) => current + 1);
     const scheduleRetry = (message: string) => {
+      const failures = failureCounts.current.get(question.id) || 0;
+      if (failures >= QUESTION_VARIANT_MAX_RETRIES) {
+        failureCounts.current.delete(question.id);
+        useOriginalQuestion("Codex is unavailable. Starting the original question.");
+        return;
+      }
+      failureCounts.current.set(question.id, failures + 1);
+      const timeoutTimer = timeoutTimers.current.get(question.id);
+      if (timeoutTimer) {
+        window.clearTimeout(timeoutTimer);
+        timeoutTimers.current.delete(question.id);
+      }
+      inFlight.current.delete(question.id);
       streamTextByQuestionId.current.set(question.id, message);
       const nextRetry = window.setTimeout(() => {
         retryTimers.current.delete(question.id);
@@ -848,8 +902,20 @@ function useQuestionDisplayVariant(params: {
       retryTimers.current.set(question.id, nextRetry);
       setRevision((current) => current + 1);
     };
+    const stuckTimer = window.setTimeout(() => {
+      scheduleRetry(`Codex CLI retrying in ${Math.round(QUESTION_VARIANT_RETRY_MS / SECOND_MS)}s: connection stalled`);
+    }, QUESTION_VARIANT_STUCK_TIMEOUT_MS);
+    timeoutTimers.current.set(question.id, stuckTimer);
     requestCodexQuestionVariant(question.id, createQuestionVariantPrompt(question))
       .then(async (response) => {
+        const timeoutTimer = timeoutTimers.current.get(question.id);
+        if (timeoutTimer) {
+          window.clearTimeout(timeoutTimer);
+          timeoutTimers.current.delete(question.id);
+        }
+        if (!inFlight.current.has(question.id)) {
+          return;
+        }
         if (!response.ok || !response.text) {
           scheduleRetry(`Codex CLI retrying in ${Math.round(QUESTION_VARIANT_RETRY_MS / SECOND_MS)}s: ${response.error || "empty rewrite response"}`);
           return;
@@ -864,7 +930,9 @@ function useQuestionDisplayVariant(params: {
           window.clearTimeout(queuedRetry);
           retryTimers.current.delete(question.id);
         }
+        failureCounts.current.delete(question.id);
         cache.current.set(question.id, variantResult.question);
+        persistQuestionVariant(variantResult.question);
         setRevision((current) => current + 1);
         setDisplayQuestion((current) => {
           if (sessionStartedRef.current || current?.id !== question.id) {
@@ -874,18 +942,30 @@ function useQuestionDisplayVariant(params: {
         });
       })
       .finally(() => {
-        inFlight.current.delete(question.id);
+        const timeoutTimer = timeoutTimers.current.get(question.id);
+        if (timeoutTimer) {
+          window.clearTimeout(timeoutTimer);
+          timeoutTimers.current.delete(question.id);
+        }
+        if (!retryTimers.current.has(question.id)) {
+          inFlight.current.delete(question.id);
+        }
         setRevision((current) => current + 1);
       });
   }, []);
 
   useEffect(() => {
     const timers = retryTimers.current;
+    const timeouts = timeoutTimers.current;
     return () => {
       for (const timer of timers.values()) {
         window.clearTimeout(timer);
       }
       timers.clear();
+      for (const timeout of timeouts.values()) {
+        window.clearTimeout(timeout);
+      }
+      timeouts.clear();
     };
   }, []);
 
@@ -927,7 +1007,7 @@ function useQuestionDisplayVariant(params: {
   }, [params.currentQuestion?.id]);
 
   useEffect(() => {
-    if (!params.hydrated || !params.currentQuestion || params.state.mode !== "leetcode") {
+    if (!params.hydrated || !params.currentQuestion || params.state.mode !== "leetcode" || hasBeatenQuestionVersion(params.state, params.currentQuestion)) {
       return;
     }
     requestVariant(params.currentQuestion);
@@ -938,7 +1018,7 @@ function useQuestionDisplayVariant(params: {
       return;
     }
     const nextQuestion = chooseNextSpireQuestion(params.state, params.currentQuestion);
-    if (nextQuestion.id !== params.currentQuestion.id) {
+    if (nextQuestion.id !== params.currentQuestion.id && !hasBeatenQuestionVersion(params.state, nextQuestion)) {
       requestVariant(nextQuestion);
     }
   }, [params.currentQuestion, params.hydrated, params.state, requestVariant]);
@@ -947,15 +1027,73 @@ function useQuestionDisplayVariant(params: {
     return { loading: false, question: null, ready: false, streamText: "" };
   }
   const cached = cache.current.get(params.currentQuestion.id);
+  const beatenVersion = hasBeatenQuestionVersion(params.state, params.currentQuestion);
   const loading = inFlight.current.has(params.currentQuestion.id) || retryTimers.current.has(params.currentQuestion.id);
   return {
     hasVariant: Boolean(cached),
-    loading,
+    loading: beatenVersion ? false : loading,
     question: cached || (displayQuestion?.id === params.currentQuestion.id ? displayQuestion : params.currentQuestion),
-    ready: Boolean(cached),
+    ready: true,
     revision,
     streamText: streamTextByQuestionId.current.get(params.currentQuestion.id) || ""
   };
+}
+
+function hasBeatenQuestionVersion(state: StudyState, question: Question) {
+  return getCard(state, question.id).correct > 0;
+}
+
+function loadPersistedQuestionVariants() {
+  const stored = getStoredQuestionVariantMap();
+  if (!stored) {
+    return new Map<string, Question>();
+  }
+  return new Map(Object.entries(stored).filter((entry): entry is [string, Question] => isPersistedQuestionVariant(entry[0], entry[1])));
+}
+
+function persistQuestionVariant(question: Question) {
+  if (!isPersistedQuestionVariant(question.id, question)) {
+    return;
+  }
+  const persisted = getStoredQuestionVariantMap() || {};
+  const entries = [
+    ...Object.entries(persisted).filter((entry): entry is [string, Question] => isPersistedQuestionVariant(entry[0], entry[1]) && entry[0] !== question.id),
+    [question.id, question] as [string, Question]
+  ];
+  const trimmedEntries = entries.slice(Math.max(0, entries.length - QUESTION_VARIANT_CACHE_LIMIT));
+  try {
+    globalThis.localStorage?.setItem(QUESTION_VARIANT_CACHE_KEY, JSON.stringify(Object.fromEntries(trimmedEntries)));
+  } catch {
+    // Ignore storage quota/private-mode failures. The in-memory cache still works for this session.
+  }
+}
+
+function getStoredQuestionVariantMap() {
+  try {
+    const raw = globalThis.localStorage?.getItem(QUESTION_VARIANT_CACHE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function isPersistedQuestionVariant(id: string, value: unknown): value is Question {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const question = value as Partial<Question>;
+  return question.id === id
+    && typeof question.title === "string"
+    && typeof question.prompt === "string"
+    && typeof question.functionName === "string"
+    && typeof question.starter === "string"
+    && Array.isArray(question.constraints)
+    && Array.isArray(question.examples)
+    && Array.isArray(question.tests);
 }
 
 async function parseOrRepairQuestionVariant(
@@ -1078,6 +1216,7 @@ function createPlayerImpact(question: Question, attack: ReturnType<typeof getTim
 function getAttackStatusEffects(attack: ReturnType<typeof getTimedMonsterAttack>) {
   return Array.from(new Set([
     ...(attack.element && attack.element !== "physical" ? [formatDamageStatus(attack.element)] : []),
+    ...(attack.debuffs || []).map(formatPlayerDebuff),
     ...(attack.effects || []),
     ...(attack.bonuses || []).filter(isVisibleAttackStatus)
   ])).slice(0, 4);
@@ -1169,29 +1308,7 @@ export default function Home() {
   const questionTimeLimitMs = activeQuestion ? getModifiedQuestionTimeLimitMs(state, activeQuestion) : 0;
   const timer = useQuestionTimer({ code, currentQuestion: activeQuestion, failAndAdvance, sessionStarted, mode: state.mode, setConsoleRunResult, setResults, setRunning, setState, setStatus: setRunStatus, setTone: setRunTone, activeRunId, runTimer, questionTimeLimitMs });
   const actions = usePracticeActions({ code, currentQuestion: activeQuestion, questionVariantReady: questionVariant.ready, failAndAdvance, runnerReady, setCode, setCurrentQuestion, setQuestionFinished: timer.setQuestionFinished, setConsoleRunResult, setResults, setRunnerReady, setRunning, setSessionStarted, setState, setStatus: setRunStatus, setTone: setRunTone, state, activeRunId, runTimer, runnerFrame, clearHint: hints.clearHint, startHint: hints.startHint, showHealthLoss, showPlayerImpact, showRewards, showMonsterDamage, timeRemainingMs: timer.timeRemainingMs });
-  const resetAfterDeath = useCallback(() => {
-    let freshState = defaultState();
-    freshState.cards = state.cards;
-    freshState.totalCorrect = state.totalCorrect;
-    freshState.profile.trackedAchievementIds = state.profile.trackedAchievementIds;
-    freshState.profile.unlockedAchievementIds = state.profile.unlockedAchievementIds;
-    freshState.profile.codingTags = state.profile.codingTags;
-    freshState.profile.codingTagWeights = state.profile.codingTagWeights;
-    freshState.profile.codingMinRating = state.profile.codingMinRating;
-    freshState.profile.codingProfiles = state.profile.codingProfiles;
-    freshState.profile.activeCodingProfileId = state.profile.activeCodingProfileId;
-    freshState.profile.metaProgress = {
-      ...state.profile.metaProgress,
-      upgrades: { ...state.profile.metaProgress.upgrades }
-    };
-    freshState.profile.spireRun = {
-      ...freshState.profile.spireRun,
-      heatConditions: { ...state.profile.spireRun.heatConditions },
-      heatSetupOpen: true
-    };
-    freshState = setSpireMinimumRating(freshState, state.profile.spireMinRating);
-    freshState.profile.coins = getMetaStartingGoldBonus(freshState);
-    freshState.profile.health = getMaxHealth(freshState);
+  const applyRestartedRunState = useCallback((freshState: StudyState, status: string) => {
     const picked = getCurrentRoundQuestion(freshState, null);
     activeRunId.current = null;
     clearRunTimer(runTimer);
@@ -1199,14 +1316,23 @@ export default function Home() {
     setResults([]);
     setConsoleRunResult(null);
     setSessionStarted(false);
+    timer.setQuestionFinished(false);
     setRewardNotifications([]);
+    setMonsterDamagePop(null);
+    setPlayerImpact(null);
     setState({ ...freshState, currentId: picked.id });
     setCurrentQuestion(picked);
     setCode(createInitialQuestionDraft(picked));
     setRunTone("default");
-    setRunStatus("Run ended. Preserved question progress and prepared the next attempt.");
+    setRunStatus(status);
     hints.clearHint();
-  }, [hints, runTimer, state.cards, state.profile.activeCodingProfileId, state.profile.codingMinRating, state.profile.codingProfiles, state.profile.codingTagWeights, state.profile.codingTags, state.profile.metaProgress, state.profile.spireMinRating, state.profile.spireRun.heatConditions, state.profile.trackedAchievementIds, state.profile.unlockedAchievementIds, state.totalCorrect]);
+  }, [hints, runTimer, timer]);
+  const resetAfterDeath = useCallback(() => {
+    applyRestartedRunState(restartStudyRun(state), "Run ended. Preserved question progress and prepared the next attempt.");
+  }, [applyRestartedRunState, state]);
+  const restartRunFromSettings = useCallback(() => {
+    applyRestartedRunState(restartStudyRun(state), "Run restarted. Choose a room to begin.");
+  }, [applyRestartedRunState, state]);
   const failQuestionForFocusLoss = useCallback(() => {
     activeRunId.current = null;
     clearRunTimer(runTimer);
@@ -1248,6 +1374,7 @@ export default function Home() {
             hidePlayerStatus={mapOpen}
             maxHealth={headerStats.maxHealth}
             modeValue={state.mode}
+            onRestartRun={restartRunFromSettings}
             playerImpact={playerImpact}
             rating={headerStats.estimatedRating}
             state={state}

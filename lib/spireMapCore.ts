@@ -18,7 +18,7 @@ import { createDropItem, SLOT_STAT_BIAS } from "./itemCore";
 import { getUniqueMonsterBonusCount } from "./monsterCore";
 import { getPomEligibleRelics, grantRelic, rollRelic, upgradeRelicRarity } from "./relicCore";
 import { createShopStock } from "./shopCore";
-import { getCodingQuestionWeight, getMaxHealth, getMetaRelicChoiceBonus, getMetaStartingGoldBonus, getMetaStartingRelicCount, getRunModifierTotals } from "./studyCore";
+import { applyHealingReceived, getCodingQuestionWeight, getMaxHealth, getMetaRelicChoiceBonus, getMetaStartingGoldBonus, getMetaStartingRelicCount, getRunModifierTotals } from "./studyCore";
 import type { Difficulty, HeatConditionId, HeatConditionRanks, InventoryItem, ItemModifier, ItemRarity, Question, Relic, RelicRarity, SpireAct, SpireCombatRewardKind, SpireDifficulty, SpireMapNode, SpireNodeKind, SpireRun, StudyState, UnknownEncounterKind } from "../types/study";
 
 const SPIRE_ACT_COUNT = 4;
@@ -41,6 +41,7 @@ const FLOOR_FOUR_INDEX = 3;
 const FLOOR_FIVE_INDEX = 4;
 const FLOOR_SIX_INDEX = 5;
 const FLOOR_SEVEN_INDEX = 6;
+const MIN_POM_REWARD_FLOOR_INDEX = FLOOR_SEVEN_INDEX;
 const GUARANTEED_TREASURE_MIN_FLOOR_INDEX = 7;
 const GUARANTEED_TREASURE_MAX_FLOOR_INDEX = 9;
 const FLOOR_FOURTEEN_INDEX = 13;
@@ -773,19 +774,20 @@ export function claimSpireNodeReward(state: StudyState, now = Date.now()) {
 }
 
 function applyEnemyRoomReward(state: StudyState, node: SpireMapNode, now: number) {
+  const rewardedState = applyCombatClearRelicRewards(state);
   const rewardKind = getCombatRewardKind(node);
   if (rewardKind === "insight") {
-    const metaCurrency = getRoomMetaCurrency(state, node, now);
-    return recordRoomRewardClaim(addMetaCurrency(state, metaCurrency), node.id, { metaCurrency });
+    const metaCurrency = getRoomMetaCurrency(rewardedState, node, now);
+    return recordRoomRewardClaim(addMetaCurrency(rewardedState, metaCurrency), node.id, { metaCurrency });
   }
   if (rewardKind === "heart") {
-    return recordRoomRewardClaim(addCentaurHeartReward(state), node.id, { maxHealth: CENTAUR_HEART_MAX_HEALTH });
+    return recordRoomRewardClaim(addCentaurHeartReward(rewardedState), node.id, { maxHealth: CENTAUR_HEART_MAX_HEALTH });
   }
   if (rewardKind === "pom") {
-    return applyPomReward(state, node, now);
+    return applyPomReward(rewardedState, node, now);
   }
-  const gold = getRoomGold(state, node, "enemy", now);
-  return recordRoomRewardClaim(addRoomGold(state, gold), node.id, { gold });
+  const gold = getRoomGold(rewardedState, node, "enemy", now);
+  return recordRoomRewardClaim(addRoomGold(rewardedState, gold), node.id, { gold });
 }
 
 function applyPomReward(state: StudyState, node: SpireMapNode, now: number) {
@@ -820,9 +822,11 @@ function addCentaurHeartReward(state: StudyState, amount = CENTAUR_HEART_MAX_HEA
 }
 
 function applyEliteRoomReward(state: StudyState, node: SpireMapNode, now: number) {
-  const withGold = grantRoomGold(state, node, "elite", now);
+  const rewardedState = applyCombatClearRelicRewards(state);
+  const eliteChoiceBonus = getRoll(`${node.id}:${now}:elite-drop-bonus`) < Math.max(0, getRunModifierTotals(rewardedState).eliteDropBonusPercent || 0) / 100 ? 1 : 0;
+  const withGold = grantRoomGold(rewardedState, node, "elite", now);
   const withRelicChoice = createPendingRelicReward(withGold, node, now, "elite", {
-    choiceBonus: ELITE_RELIC_CHOICE_BONUS,
+    choiceBonus: ELITE_RELIC_CHOICE_BONUS + eliteChoiceBonus,
     minRarity: ["common", "uncommon", "rare", "unique"],
     skipMetaCurrency: SKIP_META_ELITE
   });
@@ -830,7 +834,8 @@ function applyEliteRoomReward(state: StudyState, node: SpireMapNode, now: number
 }
 
 function applyBossRoomReward(state: StudyState, node: SpireMapNode, now: number) {
-  const withGold = grantRoomGold(state, node, "boss", now);
+  const rewardedState = applyCombatClearRelicRewards(state);
+  const withGold = grantRoomGold(rewardedState, node, "boss", now);
   const withRelicChoice = createPendingRelicReward(withGold, node, now, "boss", {
     choiceBonus: BOSS_RELIC_CHOICE_BONUS,
     minRarity: ["boss"],
@@ -984,7 +989,8 @@ function rollRoomGold(node: SpireMapNode, kind: SpireNodeKind, now: number) {
 }
 
 function getRoomGold(state: StudyState, node: SpireMapNode, kind: SpireNodeKind, now: number) {
-  return Math.round(rollRoomGold(node, kind, now) * getSpireDifficultyModifiers(state.profile.spireRun).rewardMultiplier);
+  const goldFind = Math.max(0, getRunModifierTotals(state).goldFindPercent || 0);
+  return Math.round(rollRoomGold(node, kind, now) * getSpireDifficultyModifiers(state.profile.spireRun).rewardMultiplier * (1 + goldFind / 100));
 }
 
 function getRoomMetaCurrency(state: StudyState, node: SpireMapNode, now: number) {
@@ -994,11 +1000,35 @@ function getRoomMetaCurrency(state: StudyState, node: SpireMapNode, now: number)
 }
 
 function addRoomGold(state: StudyState, gold: number) {
+  const modifiers = getRunModifierTotals(state);
+  const heal = gold > 0 ? Math.max(0, Math.floor(modifiers.goldGainHeal || 0)) : 0;
+  const health = heal > 0 ? Math.min(getMaxHealth(state), state.profile.health + applyHealingReceived(state, heal)) : state.profile.health;
   return {
     ...state,
     profile: {
       ...state.profile,
-      coins: state.profile.coins + gold
+      coins: state.profile.coins + gold,
+      health
+    }
+  };
+}
+
+function applyCombatClearRelicRewards(state: StudyState) {
+  const modifiers = getRunModifierTotals(state);
+  const heal = Math.max(0, Math.floor((modifiers.lifeOnKill || 0) + (modifiers.healthRegen || 0) + (modifiers.monsterDefeatHeal || 0)));
+  const meta = Math.max(0, Math.floor(modifiers.combatClearMeta || 0));
+  if (heal <= 0 && meta <= 0) {
+    return state;
+  }
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      health: heal > 0 ? Math.min(getMaxHealth(state), state.profile.health + applyHealingReceived(state, heal)) : state.profile.health,
+      metaProgress: {
+        ...state.profile.metaProgress,
+        currency: state.profile.metaProgress.currency + meta
+      }
     }
   };
 }
@@ -1402,19 +1432,34 @@ export function enterSpireNode(state: StudyState, now = Date.now()) {
   const revealedState = node.kind === "unknown" ? revealUnknownSpireNode(state, node, now) : state;
   const enteredNode = getCurrentSpireNode(revealedState);
   const enteredState = enteredNode?.kind === "merchant" ? applyMerchantRoomReward(revealedState, enteredNode, now) : revealedState;
+  const healedState = enteredNode?.kind === "boss" ? applyBossEntryHeal(enteredState) : enteredState;
   return {
-    ...enteredState,
+    ...healedState,
     currentId: null,
     profile: {
-      ...enteredState.profile,
+      ...healedState.profile,
       spireRun: {
-        ...enteredState.profile.spireRun,
+        ...healedState.profile.spireRun,
         mapOpen: false,
-        roundQuestionIds: isCombatNode(enteredNode) ? pickRoundQuestions(enteredState, enteredNode, state.profile.spireRun.mapSeed + now, state.profile.spireRun.roundQuestionIds, getRoundQuestionCount(enteredState.profile.spireRun, enteredNode, now)) : [],
+        roundQuestionIds: isCombatNode(enteredNode) ? pickRoundQuestions(healedState, enteredNode, state.profile.spireRun.mapSeed + now, state.profile.spireRun.roundQuestionIds, getRoundQuestionCount(healedState.profile.spireRun, enteredNode, now)) : [],
         roundSolvedIds: [],
         runCodeQuestionIds: [],
         tierIndex: enteredNode?.tierIndex ?? node.tierIndex
       }
+    }
+  };
+}
+
+function applyBossEntryHeal(state: StudyState) {
+  const heal = Math.max(0, Math.floor(getRunModifierTotals(state).bossEntryHeal || 0));
+  if (heal <= 0) {
+    return state;
+  }
+  return {
+    ...state,
+    profile: {
+      ...state.profile,
+      health: Math.min(getMaxHealth(state), state.profile.health + heal)
     }
   };
 }
@@ -1580,6 +1625,7 @@ function completeVictoriousRun(state: StudyState, now: number): StudyState {
     profile: {
       ...state.profile,
       activePotionEffects: [],
+      playerDebuffs: [],
       inventory: [],
       inventorySlots: {},
       metaProgress,
@@ -1633,7 +1679,7 @@ function ensurePomCombatReward(nodes: SpireMapNode[], seed: number) {
   if (nodes.some((node) => isRewardedCombatNode(node) && node.rewardKind === "pom")) {
     return nodes;
   }
-  const candidates = nodes.filter(isRewardedCombatNode);
+  const candidates = nodes.filter(isPomEligibleCombatNode);
   if (!candidates.length) {
     return nodes;
   }
@@ -1645,6 +1691,10 @@ function isRewardedCombatNode(node: Pick<SpireMapNode, "kind">) {
   return node.kind === "enemy";
 }
 
+function isPomEligibleCombatNode(node: Pick<SpireMapNode, "kind" | "tierIndex">) {
+  return isRewardedCombatNode(node) && node.tierIndex >= MIN_POM_REWARD_FLOOR_INDEX;
+}
+
 function isValidCombatRewardKind(kind: SpireCombatRewardKind | undefined): kind is SpireCombatRewardKind {
   return kind === "gold" || kind === "heart" || kind === "insight" || kind === "pom";
 }
@@ -1654,9 +1704,12 @@ function getCombatRewardKind(node: SpireMapNode): SpireCombatRewardKind {
 }
 
 function rollCombatRewardKind(seed: number, node: Pick<SpireMapNode, "id" | "tierIndex">): SpireCombatRewardKind {
-  const roll = getRoll(`${seed}:${node.id}:combat-reward`) * COMBAT_REWARD_WEIGHTS.reduce((sum, reward) => sum + reward.weight, 0);
+  const weights = node.tierIndex >= MIN_POM_REWARD_FLOOR_INDEX
+    ? COMBAT_REWARD_WEIGHTS
+    : COMBAT_REWARD_WEIGHTS.filter((reward) => reward.kind !== "pom");
+  const roll = getRoll(`${seed}:${node.id}:combat-reward`) * weights.reduce((sum, reward) => sum + reward.weight, 0);
   let cursor = 0;
-  for (const reward of COMBAT_REWARD_WEIGHTS) {
+  for (const reward of weights) {
     cursor += reward.weight;
     if (roll <= cursor) {
       return reward.kind;

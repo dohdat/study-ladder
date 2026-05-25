@@ -2,6 +2,8 @@ node_modules/
 .next/
 out/
 dist-unpacked/
+dist-unpacked.crx
+dist-unpacked.pem
 .vite-dev.log
 .vite-dev.err.log
 coverage/

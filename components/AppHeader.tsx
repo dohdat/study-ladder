@@ -51,6 +51,7 @@ export function AppHeader(props: {
   hidePlayerStatus?: boolean;
   maxHealth: number;
   modeValue: string;
+  onRestartRun?: () => void;
   playerImpact?: CombatImpactVisual | null;
   rating: number;
   state: StudyState;
@@ -99,7 +100,7 @@ export function AppHeader(props: {
           setState={props.setState}
           state={props.state}
         />
-        <UserMenu activeSection={activeSection} canRetargetActiveRoom={props.canRetargetActiveRoom} setActiveSection={setActiveSection} state={props.state} setState={props.setState} />
+        <UserMenu activeSection={activeSection} canRetargetActiveRoom={props.canRetargetActiveRoom} onRestartRun={props.onRestartRun} setActiveSection={setActiveSection} state={props.state} setState={props.setState} />
       </Group>
     </Group>
   );

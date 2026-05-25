@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
-import { applyPassedCombatResult, getCampaignMonsterMaxHealth, getMonsterCurrentHealth, getMonsterHit, getTimedMonsterAttack } from "../lib/combatCore";
+import { applyEnemyDebuffsToMonsterAttack, applyPassedCombatResult, getCampaignMonsterMaxHealth, getMonsterBlockGain, getMonsterCurrentBlock, getMonsterCurrentHealth, getMonsterHit, getTimedMonsterAttack } from "../lib/combatCore";
 import { createDropItem, ITEM_BASE_NAME_COUNT } from "../lib/itemCore";
 import { MODIFIER_FORMATTERS } from "../lib/modifierFormat";
+import { getEnemyDebuffStacks } from "../lib/enemyDebuffCore";
+import { getPlayerDebuffStacks } from "../lib/playerDebuffCore";
 import { getEstimatedRating } from "../lib/ratingCore";
 import { WARRIOR_SKILLS, activateWarriorSkill, canUseActiveWarriorSkill, getAvailableWarriorSkillPoints, getWarriorSkillTooltipBreakdown, resetWarriorSkillPoints, spendWarriorSkillPoint } from "../lib/skillCore";
 import {
@@ -11,9 +13,11 @@ import {
   DEFAULT_ITEM_MODIFIERS,
   HEALTH_LOSS_PER_FAIL,
   HINT_COST,
+  HINT_MAX_COST,
   MAX_CHARACTER_LEVEL,
   MAX_HEALTH,
   MODIFIER_KEYS,
+  applyCombatStartRelics,
   applyCodingCompanyProfile,
   clearCodingCompanyProfile,
   applyIncomingDamage,
@@ -72,6 +76,7 @@ import {
   normalizeStudyState,
   pickQuestion,
   purchaseMetaUpgrade,
+  restartStudyRun,
   sellItem,
   setCard,
   equipItem,
@@ -213,6 +218,53 @@ describe("studyCore", () => {
     state.profile.metaProgress.upgrades.starterRelics = 3;
 
     expect(getMetaStartingRelicCount(state)).toBe(3);
+  });
+
+  it("restarts the current run while preserving long-term progress and settings", () => {
+    const state = defaultState();
+    const question = questions[0];
+    state.mode = "system";
+    state.totalCorrect = 12;
+    state.profile.activeCodingProfileId = "roblox";
+    state.profile.codingProfiles = [{ id: "roblox", name: "Roblox", codingTags: ["DFS"], codingTagWeights: { DFS: 100 }, codingMinRating: 1800 }];
+    state.profile.codingTags = ["DFS"];
+    state.profile.codingTagWeights = { DFS: 100 };
+    state.profile.codingMinRating = 1800;
+    state.profile.godMode = true;
+    state.profile.coins = 999;
+    state.profile.health = 3;
+    state.profile.relics = [testRelic("blockFirstHit", 1)];
+    state.profile.skillRanks = { bash: 3 };
+    state.profile.metaProgress.currency = 40;
+    state.profile.metaProgress.upgrades.coinPurse = 2;
+    state.profile.trackedAchievementIds = ["first-blood"];
+    state.profile.unlockedAchievementIds = ["first-blood"];
+    state.profile.spireMinRating = 1900;
+    state.profile.spireRun.completedNodeIds = ["old-node"];
+    state.profile.spireRun.heatConditions.hardLabor = 2;
+    state.profile.spireRun.heatConditions.noHints = 1;
+    setCard(state, question.id, { ...defaultCard(), correct: 1, attempts: 2 });
+
+    const restarted = restartStudyRun(state, 12345);
+
+    expect(restarted.mode).toBe("system");
+    expect(restarted.totalCorrect).toBe(12);
+    expect(restarted.profile.godMode).toBe(true);
+    expect(restarted.profile.relics).toEqual([]);
+    expect(restarted.profile.skillRanks).toEqual({});
+    expect(restarted.profile.metaProgress).toEqual(state.profile.metaProgress);
+    expect(restarted.profile.codingProfiles).toEqual(state.profile.codingProfiles);
+    expect(restarted.profile.spireMinRating).toBe(1900);
+    expect(restarted.profile.spireRun.mapSeed).toBe(12345);
+    expect(restarted.profile.spireRun.completedNodeIds).toEqual([]);
+    expect(restarted.profile.spireRun.heatConditions.hardLabor).toBe(2);
+    expect(restarted.profile.spireRun.heatConditions.noHints).toBe(1);
+    expect(restarted.profile.spireRun.heatSetupOpen).toBe(true);
+    expect(restarted.profile.coins).toBe(getMetaStartingGoldBonus(restarted));
+    expect(restarted.profile.health).toBe(getMaxHealth(restarted));
+    expect(getCard(restarted, question.id).correct).toBe(1);
+    expect(restarted.profile.trackedAchievementIds).toEqual(["first-blood"]);
+    expect(restarted.profile.unlockedAchievementIds).toEqual(["first-blood"]);
   });
 
   it("blocks meta upgrade purchases when insight is missing or the rank is maxed", () => {
@@ -418,6 +470,18 @@ describe("studyCore", () => {
     expect(getCard(state, question.id).masteredAt).toBe(1000);
   });
 
+  it("heals when gold is gained for Bloody Idol-style relics", () => {
+    const question = questions[0];
+    let state = defaultState();
+    state.profile.health = 30;
+    state.profile.relics = [testRelic("goldGainHeal", 4)];
+
+    state = applyScheduleResult(state, question.id, true, "draft", 1000);
+
+    expect(state.profile.coins).toBe(getCoinReward(question, state));
+    expect(state.profile.health).toBe(34);
+  });
+
   it("applies failed results without spaced-repetition scheduling", () => {
     const question = questions[0];
     let state = defaultState();
@@ -562,6 +626,31 @@ describe("studyCore", () => {
     expect(getCriticalChance(state)).toBe(getCriticalChance(defaultState()));
     expect(getHealthLoss(state)).toBe(getHealthLoss(defaultState()));
     expect(getElementalResistances(state).fire).toBe(0);
+  });
+
+  it("applies popular-tag relic damage only to matching question tags", () => {
+    const tagRelics: Array<{ key: ItemModifierKey; tag: string; value: number }> = [
+      { key: "damageVsArraysPercent", tag: "Arrays", value: 30 },
+      { key: "damageVsStringsPercent", tag: "Strings", value: 30 },
+      { key: "damageVsHashMapPercent", tag: "Hash Map", value: 30 },
+      { key: "damageVsDfsPercent", tag: "DFS", value: 35 },
+      { key: "damageVsBfsPercent", tag: "BFS", value: 35 },
+      { key: "damageVsTreesPercent", tag: "Trees", value: 35 },
+      { key: "damageVsGraphsPercent", tag: "Graphs", value: 35 },
+      { key: "damageVsDynamicProgrammingPercent", tag: "Dynamic Programming", value: 40 }
+    ];
+
+    for (const relic of tagRelics) {
+      const matching = questions.find((question) => question.topics.includes(relic.tag));
+      const nonMatching = questions.find((question) => !question.topics.includes(relic.tag));
+      const state = defaultState();
+      state.profile.relics = [testRelic(relic.key, relic.value)];
+
+      expect(matching).toBeTruthy();
+      expect(nonMatching).toBeTruthy();
+      expect(getAttackDamage(matching!, state)).toBeGreaterThan(getAttackDamage(matching!, defaultState()));
+      expect(getAttackDamage(nonMatching!, state)).toBe(getAttackDamage(nonMatching!, defaultState()));
+    }
   });
 
   it("resets legacy skill ranks and active skill state", () => {
@@ -771,6 +860,226 @@ describe("studyCore", () => {
     expect(state.profile.spireRun.failDamageStacks).toBe(2);
     expect(boosted.damage).toBeGreaterThan(normal.damage);
     expect(boosted.effects).toContain("Failure stacks x2");
+  });
+
+  it("applies wrong-submit debuffs after the current hit resolves", () => {
+    const question = questions[0];
+    let state = defaultState();
+
+    state = applyHealthPenalty(state, 10, 0, question.id, "bad", 1000, "physical", [{ id: "vulnerable", remainingSubmits: 2, stacks: 2 }]);
+
+    expect(getPlayerDebuffStacks(state.profile.playerDebuffs, "vulnerable")).toBe(2);
+    expect(getHealthLoss(state, 10, "physical")).toBeGreaterThan(getHealthLoss(defaultState(), 10, "physical"));
+  });
+
+  it("lets weak reduce submit damage and tick down on a correct submit", () => {
+    const question = questions[0];
+    let state = defaultState();
+    const normalDamage = getAttackDamage(question, state);
+    state.profile.playerDebuffs = [{ id: "weak", remainingSubmits: 1, stacks: 2 }];
+
+    const weakDamage = getAttackDamage(question, state);
+    const result = applyPassedCombatResult(state, question.id, "draft", 1000);
+
+    expect(weakDamage).toBeLessThan(normalDamage);
+    expect(getPlayerDebuffStacks(result.state.profile.playerDebuffs, "weak")).toBe(0);
+  });
+
+  it("uses hex to make support actions more costly", () => {
+    const question = questions[0];
+    const state = defaultState();
+    state.profile.playerDebuffs = [{ id: "hex", remainingSubmits: 2, stacks: 1 }];
+    state.profile.coins = 100;
+
+    const runMarked = markQuestionRunCode(state, question.id);
+
+    expect(getHintCost(state, question.id)).toBe(HINT_COST + 10);
+    expect(getPlayerDebuffStacks(runMarked.profile.playerDebuffs, "slimed")).toBe(1);
+  });
+
+  it("uses confused to make hint costs less predictable", () => {
+    const question = questions[0];
+    const state = defaultState();
+    state.profile.playerDebuffs = [{ id: "confused", remainingSubmits: 2, stacks: 1 }];
+
+    const rolledCosts = Array.from({ length: 8 }, (_unused, attempts) => {
+      setCard(state, question.id, { ...defaultCard(), attempts });
+      return getHintCost(state, question.id);
+    });
+
+    expect(new Set(rolledCosts).size).toBeGreaterThan(1);
+    expect(rolledCosts.every((cost) => cost >= HINT_COST && cost <= HINT_MAX_COST)).toBe(true);
+  });
+
+  it("lets Ginger and Turnip-style relics block their matching enemy debuffs", () => {
+    const question = questions[0];
+    let state = defaultState();
+    state.profile.relics = [testRelic("hexConfusedImmune", 1), testRelic("vulnerableConstrictedImmune", 1)];
+
+    state = applyHealthPenalty(state, 10, 0, question.id, "bad", 1000, "physical", [
+      { id: "hex", remainingSubmits: 2, stacks: 1 },
+      { id: "confused", remainingSubmits: 2, stacks: 1 },
+      { id: "vulnerable", remainingSubmits: 2, stacks: 2 },
+      { id: "constricted", remainingSubmits: 2, stacks: 4 },
+      { id: "frail", remainingSubmits: 2, stacks: 2 }
+    ]);
+
+    expect(getPlayerDebuffStacks(state.profile.playerDebuffs, "hex")).toBe(0);
+    expect(getPlayerDebuffStacks(state.profile.playerDebuffs, "confused")).toBe(0);
+    expect(getPlayerDebuffStacks(state.profile.playerDebuffs, "vulnerable")).toBe(0);
+    expect(getPlayerDebuffStacks(state.profile.playerDebuffs, "constricted")).toBe(0);
+    expect(getPlayerDebuffStacks(state.profile.playerDebuffs, "frail")).toBe(2);
+  });
+
+  it("lets monster block absorb correct-submit damage before health", () => {
+    const question = questions[0];
+    const state = defaultState();
+    const maxHealth = getCampaignMonsterMaxHealth(state, question);
+    setCard(state, question.id, { ...defaultCard(), monsterBlock: 999, monsterHealth: maxHealth });
+
+    const result = applyPassedCombatResult(state, question.id, "draft", 1000);
+
+    expect(result.hit?.blockedDamage).toBeGreaterThan(0);
+    expect(getMonsterCurrentHealth(result.state, question)).toBe(maxHealth);
+    expect(getMonsterCurrentBlock(result.state, question)).toBeLessThan(999);
+  });
+
+  it("lets The Boot-style relics force a minimum health hit after block", () => {
+    const question = questions[0];
+    const state = defaultState();
+    const maxHealth = getCampaignMonsterMaxHealth(state, question);
+    state.profile.relics = [testRelic("minimumSubmitDamage", 12)];
+    setCard(state, question.id, { ...defaultCard(), monsterBlock: 999, monsterHealth: maxHealth });
+
+    const result = applyPassedCombatResult(state, question.id, "draft", 1000);
+
+    expect(result.hit?.effects).toContain("Minimum hit 12");
+    expect(getMonsterCurrentHealth(result.state, question)).toBe(maxHealth - 12);
+  });
+
+  it("lets Fossilized Helix-style relics prevent the first HP loss each combat", () => {
+    const question = questions[0];
+    const state = defaultState();
+    state.profile.relics = [testRelic("preventFirstHpLoss", 1)];
+
+    const first = applyIncomingDamage(state, 20, 0, question.id, "physical");
+    const second = applyIncomingDamage(first.state, 20, 0, question.id, "physical");
+
+    expect(first.healthLoss).toBe(0);
+    expect(first.state.profile.health).toBe(state.profile.health);
+    expect(second.healthLoss).toBeGreaterThan(0);
+  });
+
+  it("lets Torii-style relics reduce small HP losses to 1", () => {
+    const question = questions[0];
+    const state = defaultState();
+    state.profile.relics = [testRelic("smallHitToOneThreshold", 5)];
+
+    const effect = getIncomingDamageEffect(state, 5, 0, question.id, "physical");
+
+    expect(effect.healthLoss).toBe(1);
+  });
+
+  it("heals once at combat start for Blood Vial-style relics", () => {
+    const question = questions[0];
+    let state = defaultState();
+    state.profile.health = 30;
+    state.profile.relics = [testRelic("combatStartHeal", 6)];
+
+    state = applyCombatStartRelics(state, question.id);
+    const afterFirstStart = state.profile.health;
+    state = applyCombatStartRelics(state, question.id);
+
+    expect(afterFirstStart).toBe(36);
+    expect(state.profile.health).toBe(afterFirstStart);
+  });
+
+  it("grants room-start Block and spends it before HP is lost", () => {
+    const question = questions[0];
+    let state = defaultState();
+    state.profile.relics = [testRelic("combatStartBlock", 10)];
+
+    state = applyCombatStartRelics(state, question.id);
+    state = applyCombatStartRelics(state, question.id);
+    const expectedHealthLoss = getHealthLoss(state, 13, "physical");
+    const expectedBlockLoss = Math.min(10, expectedHealthLoss);
+    const preview = getIncomingDamageEffect(state, 13, 0, question.id, "physical");
+    const applied = applyIncomingDamage(state, 13, 0, question.id, "physical");
+
+    expect(getCard(state, question.id).playerBlock).toBe(10);
+    expect(preview.playerBlockLoss).toBe(expectedBlockLoss);
+    expect(preview.healthLoss).toBe(Math.max(0, expectedHealthLoss - expectedBlockLoss));
+    expect(applied.state.profile.health).toBe(state.profile.health - preview.healthLoss);
+    expect(getCard(applied.state, question.id).playerBlock).toBe(10 - expectedBlockLoss);
+  });
+
+  it("applies enemy Vulnerable and Weak from combat-start relics", () => {
+    const question = questions[0];
+    let state = defaultState();
+    state.profile.relics = [testRelic("enemyVulnerableSubmits", 2), testRelic("enemyWeakSubmits", 2)];
+
+    state = applyCombatStartRelics(state, question.id);
+
+    expect(getEnemyDebuffStacks(getCard(state, question.id).enemyDebuffs, "vulnerable")).toBe(1);
+    expect(getEnemyDebuffStacks(getCard(state, question.id).enemyDebuffs, "weak")).toBe(1);
+
+    const normalHit = getMonsterHit(defaultState(), question, 1000);
+    const vulnerableHit = getMonsterHit(state, question, 1000);
+    const normalAttack = getTimedMonsterAttack(question, 0, 1000, "retaliation");
+    const weakAttack = applyEnemyDebuffsToMonsterAttack(state, question, normalAttack);
+
+    expect(vulnerableHit.damage).toBeGreaterThan(normalHit.damage);
+    expect(weakAttack.damage).toBeLessThan(normalAttack.damage);
+    expect(vulnerableHit.effects).toContain("Vulnerable");
+    expect(weakAttack.effects).toContain("Weak");
+  });
+
+  it("ticks enemy Vulnerable after player hits and enemy Weak after enemy attacks", () => {
+    const question = questions.find((candidate) => candidate.difficulty === 5) || questions[0];
+    let state = defaultState();
+    state.profile.relics = [testRelic("enemyVulnerableSubmits", 2), testRelic("enemyWeakSubmits", 2)];
+    state = applyCombatStartRelics(state, question.id);
+
+    const afterHit = applyPassedCombatResult(state, question.id, "draft", 1000).state;
+    const afterEnemyAttack = applyIncomingDamage(afterHit, 10, 0, question.id, "physical").state;
+
+    expect(getCard(afterHit, question.id).enemyDebuffs?.find((debuff) => debuff.id === "vulnerable")?.remainingSubmits).toBe(1);
+    expect(getCard(afterHit, question.id).enemyDebuffs?.find((debuff) => debuff.id === "weak")?.remainingSubmits).toBe(2);
+    expect(getCard(afterEnemyAttack, question.id).enemyDebuffs?.find((debuff) => debuff.id === "weak")?.remainingSubmits).toBe(1);
+  });
+
+  it("heals after clearing while wounded for Meat on the Bone-style relics", () => {
+    const question = questions[0];
+    const state = defaultState();
+    state.profile.health = Math.max(1, Math.floor(getMaxHealth(state) / 2) - 5);
+    const startingHealth = state.profile.health;
+    state.profile.relics = [testRelic("lowHealthClearHeal", 14)];
+
+    const result = applyScheduleResult(state, question.id, true, "draft", 1000);
+
+    expect(result.profile.health).toBe(Math.min(getMaxHealth(result), startingHealth + 14));
+  });
+
+  it("rolls monster block more often for bosses than normal fights", () => {
+    const question = questions[0];
+    const normal = defaultState();
+    const boss = defaultState();
+    boss.profile.spireRun.currentNodeId = "boss-node";
+    boss.profile.spireRun.nodes = [{
+      column: 0,
+      id: "boss-node",
+      kind: "boss",
+      nextIds: [],
+      rating: question.rating,
+      tierIndex: 0,
+      x: 0,
+      y: 0
+    }];
+
+    const normalBlocks = Array.from({ length: 80 }, (_, index) => getMonsterBlockGain(normal, question, 1000 + index)).filter(Boolean).length;
+    const bossBlocks = Array.from({ length: 80 }, (_, index) => getMonsterBlockGain(boss, question, 1000 + index)).filter(Boolean).length;
+
+    expect(bossBlocks).toBeGreaterThan(normalBlocks);
   });
 
   it("keeps monster fights in a reasonable correct-submission window", () => {

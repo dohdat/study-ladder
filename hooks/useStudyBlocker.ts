@@ -12,6 +12,7 @@ export type StudyBlockerSettings = {
   dailyMinutes: number;
   distractingSites: string[];
   enabled: boolean;
+  pausedUntil: number;
 };
 
 export type StudyBlockerProgress = {
@@ -28,7 +29,8 @@ type BlockerStateResponse = {
 const FALLBACK_SETTINGS: StudyBlockerSettings = {
   dailyMinutes: 30,
   distractingSites: ["reddit.com", "facebook.com", "youtube.com", "x.com", "twitter.com", "instagram.com", "tiktok.com", "netflix.com"],
-  enabled: true
+  enabled: true,
+  pausedUntil: 0
 };
 
 const FALLBACK_PROGRESS: StudyBlockerProgress = {

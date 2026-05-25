@@ -491,6 +491,17 @@ describe("spireMapCore", () => {
     expect(new Set(enemyRewards).size).toBeGreaterThan(1);
   });
 
+  it("does not place Pom of Power on early combat floors", () => {
+    const state = defaultState();
+    state.profile.spireRun = createSpireRun(1000);
+    const earlyEnemyRewards = state.profile.spireRun.nodes
+      .filter((node) => node.kind === "enemy" && node.tierIndex < 6)
+      .map((node) => node.rewardKind);
+
+    expect(earlyEnemyRewards.length).toBeGreaterThan(0);
+    expect(earlyEnemyRewards).not.toContain("pom");
+  });
+
   it.each(["gold", "heart", "insight", "pom"] satisfies SpireCombatRewardKind[])("applies enemy %s room rewards", (rewardKind) => {
     let state = defaultState();
     state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
@@ -525,6 +536,35 @@ describe("spireMapCore", () => {
       expect(state.profile.relics[0].rarity).toBe("uncommon");
       expect(state.profile.relics[0].modifiers?.[0].value).toBeGreaterThan(10);
     }
+  });
+
+  it("applies relic effects on Spire combat rewards, not only regular question rewards", () => {
+    let baseline = defaultState();
+    baseline = { ...baseline, profile: { ...baseline.profile, health: 20, spireRun: createSpireRun(1000) } };
+    const enemy = baseline.profile.spireRun.nodes.find((node) => node.kind === "enemy") || baseline.profile.spireRun.nodes[0];
+    baseline.profile.spireRun.nodes = baseline.profile.spireRun.nodes.map((node) => node.id === enemy.id ? { ...node, rewardKind: "gold" } : node);
+    baseline.profile.spireRun.availableNodeIds = [enemy.id];
+    baseline = selectSpireNode(baseline, enemy.id);
+
+    let boosted: StudyState = {
+      ...baseline,
+      profile: {
+        ...baseline.profile,
+        relics: [
+          { description: "Gold", id: "gold-find-test", modifiers: [{ key: "goldFindPercent" as const, value: 50 }], name: "Gold Find Test", rarity: "common" as const, source: "any" as const },
+          { description: "Heal", id: "gold-heal-test", modifiers: [{ key: "goldGainHeal" as const, value: 2 }], name: "Gold Heal Test", rarity: "event" as const, source: "any" as const },
+          { description: "Regen", id: "health-regen-test", modifiers: [{ key: "healthRegen" as const, value: 3 }], name: "Health Regen Test", rarity: "uncommon" as const, source: "any" as const },
+          { description: "Insight", id: "combat-clear-meta-test", modifiers: [{ key: "combatClearMeta" as const, value: 1 }], name: "Insight Test", rarity: "event" as const, source: "any" as const }
+        ]
+      }
+    };
+
+    baseline = advanceSpireNode(baseline, 1000);
+    boosted = advanceSpireNode(boosted, 1000);
+
+    expect(boosted.profile.coins).toBeGreaterThan(baseline.profile.coins);
+    expect(boosted.profile.health).toBe(25);
+    expect(boosted.profile.metaProgress.currency).toBe(baseline.profile.metaProgress.currency + 1);
   });
 
   it("grants elite gold and offers upgraded relic choices", () => {

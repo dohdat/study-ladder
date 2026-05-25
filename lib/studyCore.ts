@@ -1,6 +1,7 @@
 /* eslint-disable max-lines */
 import { questions } from "../data/questions";
 import { areHintsDisabledByHeat, getHeatHealingMultiplier, getHeatTimerPenaltyPercent, getSpireDifficultyModifiers, isRunCodeDisabledByHeat } from "./campaignCore";
+import { addEnemyDebuffs, cloneEnemyDebuffs, normalizeEnemyDebuffs, tickEnemyDebuffs } from "./enemyDebuffCore";
 import { createDropItem, EQUIPMENT_SLOTS, getActiveSetBonusesForItems, SLOT_LABELS } from "./itemCore";
 import { applyEloResult, DEFAULT_PLAYER_RATING, getEstimatedRating } from "./ratingCore";
 import { getRelicModifierTotals, normalizeRelics } from "./relicCore";
@@ -9,7 +10,8 @@ import { applyElementalResistance, getResistancesFromModifiers } from "./resista
 import { getWarriorSkillBonuses, normalizeWarriorSkillRanks } from "./skillCore";
 import { createShopStock, normalizeShopStock } from "./shopCore";
 import { DEFAULT_SPIRE_MIN_RATING, createSpireRun, getSpireRatings, normalizeSpireMinRating, normalizeSpireRun } from "./spireMapCore";
-import { getUniqueMonsterBonuses } from "./monsterCore";
+import { getMonsterMaxHealth, getUniqueMonsterBonuses } from "./monsterCore";
+import { addPlayerDebuffs, clonePlayerDebuffs, getPlayerDebuffStacks, normalizePlayerDebuffs, tickPlayerDebuffsAfterSubmit, type PlayerDebuffApplication } from "./playerDebuffCore";
 import type { ActivePotionEffect, CardState, CharacterStatKey, CharacterStats, CodingCompanyProfile, DamageType, EquipmentSlot, InventoryItem, InventoryItemPosition, ItemModifierKey, Question, StudyState } from "../types/study";
 
 const MS_PER_MINUTE = 60000;
@@ -65,6 +67,27 @@ const META_REVEAL_SUBMIT_TESTS_PER_RANK = 1;
 const CODING_MIN_RATING_FLOOR = 0;
 const CODING_TAG_WEIGHT_TOTAL = 100;
 const CODING_PROFILE_NAME_MAX_LENGTH = 48;
+const WEAK_DAMAGE_REDUCTION_PERCENT = 25;
+const VULNERABLE_INCOMING_DAMAGE_PERCENT = 35;
+const FRAIL_HEALING_REDUCTION_PERCENT = 35;
+const FRAIL_MITIGATION_REDUCTION_PERCENT = 25;
+const SLIMED_TIMER_PENALTY_SECONDS = 10;
+const HEX_HINT_COST_PENALTY = 10;
+const CONFUSED_DAMAGE_MIN_PERCENT = 70;
+const CONFUSED_DAMAGE_RANGE_PERCENT = 60;
+const CONFUSED_HINT_COST_STEP = 5;
+const CONFUSED_HINT_COST_ROLLS = 4;
+const PARASITE_REWARD_REDUCTION_PERCENT = 20;
+const TAG_DAMAGE_MODIFIERS: Array<{ key: ItemModifierKey; tag: string }> = [
+  { key: "damageVsArraysPercent", tag: "Arrays" },
+  { key: "damageVsBfsPercent", tag: "BFS" },
+  { key: "damageVsDfsPercent", tag: "DFS" },
+  { key: "damageVsDynamicProgrammingPercent", tag: "Dynamic Programming" },
+  { key: "damageVsGraphsPercent", tag: "Graphs" },
+  { key: "damageVsHashMapPercent", tag: "Hash Map" },
+  { key: "damageVsStringsPercent", tag: "Strings" },
+  { key: "damageVsTreesPercent", tag: "Trees" }
+];
 export const MODIFIER_KEYS: ItemModifierKey[] = ALL_MODIFIER_KEYS;
 
 export const HINT_COST = 10;
@@ -94,7 +117,8 @@ export const getModifiedQuestionTimeLimitMs = (state: StudyState, question: Ques
   const modifiers = getRunModifierTotals(state);
   const timerPauseSeconds = Math.max(0, Math.floor(modifiers.timerPauseSeconds || 0));
   const timerPenalty = Math.min(80, Math.max(0, (modifiers.timerPenaltyPercent || 0) + getHeatTimerPenaltyPercent(state.profile.spireRun)));
-  return Math.max(MS_PER_MINUTE, Math.round(getQuestionTimeLimitMs(question) * (1 - timerPenalty / PERCENT)) + timerPauseSeconds * MS_PER_SECOND);
+  const slimedPenaltySeconds = getPlayerDebuffStacks(state.profile.playerDebuffs, "slimed") * SLIMED_TIMER_PENALTY_SECONDS;
+  return Math.max(MS_PER_MINUTE, Math.round(getQuestionTimeLimitMs(question) * (1 - timerPenalty / PERCENT)) + (timerPauseSeconds - slimedPenaltySeconds) * MS_PER_SECOND);
 };
 
 export const defaultState = (): StudyState => {
@@ -130,6 +154,7 @@ function createDefaultStateBase(): StudyState {
       skillRanks: {},
       activeSkill: null,
       activePotionEffects: [],
+      playerDebuffs: [],
       inventory: [],
       inventorySlots: {},
       equipment: defaultEquipment(),
@@ -145,16 +170,16 @@ function createDefaultStateBase(): StudyState {
   };
 }
 
-export const defaultCard = (): CardState => ({ dueAt: 0, intervalDays: 0, ease: 2.4, reps: 0, attempts: 0, correct: 0, failedSubmissions: 0, hintsBought: 0, lastResult: null, relicFirstHitBlocked: false, relicReviveUsed: false });
+export const defaultCard = (): CardState => ({ dueAt: 0, intervalDays: 0, ease: 2.4, reps: 0, attempts: 0, correct: 0, enemyDebuffs: [], failedSubmissions: 0, hintsBought: 0, lastResult: null, monsterBlock: 0, playerBlock: 0, relicCombatStartHealed: false, relicFirstHitBlocked: false, relicFirstHpLossPrevented: false, relicReviveUsed: false });
 
 export const cloneState = (state: StudyState): StudyState => ({
   ...state,
   profile: cloneProfile(state),
-  cards: Object.fromEntries(Object.entries(state.cards).map(([id, card]) => [id, { ...card }]))
+  cards: Object.fromEntries(Object.entries(state.cards).map(([id, card]) => [id, cloneCardState(card)]))
 });
 
 function cloneProfile(state: StudyState): StudyState["profile"] {
-  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, activePotionEffects: cloneActivePotionEffects(state.profile.activePotionEffects), activeCodingProfileId: normalizeActiveCodingProfileId(state.profile.activeCodingProfileId, state.profile.codingProfiles), codingMinRating: normalizeCodingMinRating(state.profile.codingMinRating), codingProfiles: normalizeCodingCompanyProfiles(state.profile.codingProfiles), codingTags: [...(state.profile.codingTags || [])], codingTagWeights: { ...(state.profile.codingTagWeights || {}) }, equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), inventorySlots: cloneInventorySlots(state.profile.inventorySlots), metaProgress: { ...state.profile.metaProgress, upgrades: { ...state.profile.metaProgress.upgrades } }, relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, spireRun: { ...state.profile.spireRun, availableNodeIds: [...state.profile.spireRun.availableNodeIds], completedNodeIds: [...state.profile.spireRun.completedNodeIds], nodes: state.profile.spireRun.nodes.map((node) => ({ ...node, nextIds: [...node.nextIds] })), pendingRelicReward: cloneRelicRewardChoice(state.profile.spireRun.pendingRelicReward), roomRewardClaims: cloneRoomRewardClaims(state.profile.spireRun.roomRewardClaims), roundQuestionIds: [...state.profile.spireRun.roundQuestionIds], roundSolvedIds: [...state.profile.spireRun.roundSolvedIds], runCodeQuestionIds: [...state.profile.spireRun.runCodeQuestionIds], unknownEncounterMisses: { ...state.profile.spireRun.unknownEncounterMisses } }, stats: { ...state.profile.stats }, trackedAchievementIds: [...state.profile.trackedAchievementIds], unlockedAchievementIds: [...state.profile.unlockedAchievementIds] };
+  return { ...state.profile, activeSkill: state.profile.activeSkill ?? null, activePotionEffects: cloneActivePotionEffects(state.profile.activePotionEffects), activeCodingProfileId: normalizeActiveCodingProfileId(state.profile.activeCodingProfileId, state.profile.codingProfiles), codingMinRating: normalizeCodingMinRating(state.profile.codingMinRating), codingProfiles: normalizeCodingCompanyProfiles(state.profile.codingProfiles), codingTags: [...(state.profile.codingTags || [])], codingTagWeights: { ...(state.profile.codingTagWeights || {}) }, equipment: { ...state.profile.equipment }, inventory: state.profile.inventory.map(cloneInventoryItem), inventorySlots: cloneInventorySlots(state.profile.inventorySlots), metaProgress: { ...state.profile.metaProgress, upgrades: { ...state.profile.metaProgress.upgrades } }, playerDebuffs: clonePlayerDebuffs(state.profile.playerDebuffs), relics: state.profile.relics.map((relic) => ({ ...relic, modifiers: relic.modifiers?.map((modifier) => ({ ...modifier })) })), shopStock: state.profile.shopStock.map((item) => ({ ...item })), skillRanks: { ...state.profile.skillRanks }, spireRun: { ...state.profile.spireRun, availableNodeIds: [...state.profile.spireRun.availableNodeIds], completedNodeIds: [...state.profile.spireRun.completedNodeIds], nodes: state.profile.spireRun.nodes.map((node) => ({ ...node, nextIds: [...node.nextIds] })), pendingRelicReward: cloneRelicRewardChoice(state.profile.spireRun.pendingRelicReward), roomRewardClaims: cloneRoomRewardClaims(state.profile.spireRun.roomRewardClaims), roundQuestionIds: [...state.profile.spireRun.roundQuestionIds], roundSolvedIds: [...state.profile.spireRun.roundSolvedIds], runCodeQuestionIds: [...state.profile.spireRun.runCodeQuestionIds], unknownEncounterMisses: { ...state.profile.spireRun.unknownEncounterMisses } }, stats: { ...state.profile.stats }, trackedAchievementIds: [...state.profile.trackedAchievementIds], unlockedAchievementIds: [...state.profile.unlockedAchievementIds] };
 }
 
 function cloneRelicRewardChoice(choice: StudyState["profile"]["spireRun"]["pendingRelicReward"]) {
@@ -170,6 +195,10 @@ function cloneRoomRewardClaims(claims: StudyState["profile"]["spireRun"]["roomRe
 
 function cloneActivePotionEffects(effects: ActivePotionEffect[] | undefined) {
   return (effects || []).map((effect) => ({ ...effect, modifiers: effect.modifiers.map((modifier) => ({ ...modifier })), stats: { ...effect.stats } }));
+}
+
+function cloneCardState(card: CardState): CardState {
+  return { ...card, enemyDebuffs: cloneEnemyDebuffs(card.enemyDebuffs) };
 }
 
 function cloneInventoryItem(item: InventoryItem) {
@@ -212,6 +241,7 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
       skillRanks: normalizeWarriorSkillRanks(profile.skillRanks),
       activeSkill: profile.activeSkill ?? null,
       activePotionEffects: normalizeActivePotionEffects(profile.activePotionEffects),
+      playerDebuffs: normalizePlayerDebuffs(profile.playerDebuffs),
       inventory,
       inventorySlots: {},
       equipment: defaultEquipment(),
@@ -243,6 +273,28 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
   };
   return stocked;
 };
+
+export function restartStudyRun(state: StudyState, now = Date.now()): StudyState {
+  const spireMinRating = normalizeSpireMinRating(state.profile.spireMinRating);
+  const next = defaultState();
+  next.mode = state.mode;
+  next.cards = { ...state.cards };
+  next.totalCorrect = state.totalCorrect;
+  next.profile.activeCodingProfileId = state.profile.activeCodingProfileId;
+  next.profile.codingMinRating = state.profile.codingMinRating;
+  next.profile.codingProfiles = state.profile.codingProfiles.map((profile) => ({ ...profile, codingTags: [...profile.codingTags], codingTagWeights: { ...profile.codingTagWeights } }));
+  next.profile.codingTags = [...state.profile.codingTags];
+  next.profile.codingTagWeights = { ...state.profile.codingTagWeights };
+  next.profile.godMode = state.profile.godMode;
+  next.profile.metaProgress = { ...state.profile.metaProgress, upgrades: { ...state.profile.metaProgress.upgrades } };
+  next.profile.spireMinRating = spireMinRating;
+  next.profile.spireRun = createSpireRun(now, 1, "normal", state.profile.spireRun.heatConditions, true, spireMinRating);
+  next.profile.trackedAchievementIds = [...state.profile.trackedAchievementIds];
+  next.profile.unlockedAchievementIds = [...state.profile.unlockedAchievementIds];
+  next.profile.coins = getMetaStartingGoldBonus(next);
+  next.profile.health = getMaxHealth(next);
+  return next;
+}
 
 function scrubAccidentalDeathInsight(state: StudyState): StudyState {
   const meta = state.profile.metaProgress;
@@ -531,7 +583,7 @@ function normalizePartialStats(stats: Partial<CharacterStats> | undefined) {
 }
 
 function normalizeCards(cards: StudyState["cards"] | undefined) {
-  return Object.fromEntries(Object.entries(cards || {}).map(([id, card]) => [id, { ...defaultCard(), ...card, failedSubmissions: Math.max(0, card.failedSubmissions || 0), hintsBought: Math.max(0, card.hintsBought || 0), relicFirstHitBlocked: Boolean(card.relicFirstHitBlocked), relicReviveUsed: Boolean(card.relicReviveUsed), solutionRevealedAt: Math.max(0, card.solutionRevealedAt || 0) || undefined }]));
+  return Object.fromEntries(Object.entries(cards || {}).map(([id, card]) => [id, { ...defaultCard(), ...card, enemyDebuffs: normalizeEnemyDebuffs(card.enemyDebuffs), failedSubmissions: Math.max(0, card.failedSubmissions || 0), hintsBought: Math.max(0, card.hintsBought || 0), monsterBlock: Math.max(0, Math.floor(card.monsterBlock || 0)), playerBlock: Math.max(0, Math.floor(card.playerBlock || 0)), relicCombatStartHealed: Boolean(card.relicCombatStartHealed), relicFirstHitBlocked: Boolean(card.relicFirstHitBlocked), relicFirstHpLossPrevented: Boolean(card.relicFirstHpLossPrevented), relicReviveUsed: Boolean(card.relicReviveUsed), solutionRevealedAt: Math.max(0, card.solutionRevealedAt || 0) || undefined }]));
 }
 
 export const getCard = (state: StudyState, questionId: string): CardState => {
@@ -576,10 +628,14 @@ export const markQuestionRunCode = (state: StudyState, questionId: string): Stud
   if (!questionId || isRunCodeDisabledByHeat(state.profile.spireRun) || state.profile.spireRun.runCodeQuestionIds.includes(questionId)) {
     return state;
   }
+  const playerDebuffs = getPlayerDebuffStacks(state.profile.playerDebuffs, "hex")
+    ? addPlayerDebuffs(state.profile.playerDebuffs, [{ id: "slimed", remainingSubmits: 1, stacks: 1 }])
+    : state.profile.playerDebuffs;
   return {
     ...state,
     profile: {
       ...state.profile,
+      playerDebuffs,
       spireRun: {
         ...state.profile.spireRun,
         runCodeQuestionIds: [...state.profile.spireRun.runCodeQuestionIds, questionId]
@@ -826,9 +882,13 @@ export const getHealthLoss = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, 
   const modifiers = getRunModifierTotals(state);
   const skills = getWarriorSkillBonusTotals(state);
   const difficultyModifiers = getSpireDifficultyModifiers(state.profile.spireRun);
-  const incomingDamageMultiplier = 1 + (modifiers.incomingDamagePercent || 0) / MODIFIER_PERCENT_BASE;
-  const scaledAmount = amount * difficultyModifiers.monsterDamageMultiplier * Math.max(0.1, incomingDamageMultiplier);
-  const reducedEnemyDamage = scaledAmount * (1 - Math.min(75, Math.max(0, modifiers.reducedEnemyDamagePercent || 0)) / MODIFIER_PERCENT_BASE);
+  const constrictedDamage = getPlayerDebuffStacks(state.profile.playerDebuffs, "constricted");
+  const incomingDebuffPercent = getPlayerDebuffStacks(state.profile.playerDebuffs, "vulnerable") ? VULNERABLE_INCOMING_DAMAGE_PERCENT : 0;
+  const incomingDamageMultiplier = 1 + ((modifiers.incomingDamagePercent || 0) + incomingDebuffPercent) / MODIFIER_PERCENT_BASE;
+  const scaledAmount = (amount + constrictedDamage) * difficultyModifiers.monsterDamageMultiplier * Math.max(0.1, incomingDamageMultiplier);
+  const frailPenalty = getPlayerDebuffStacks(state.profile.playerDebuffs, "frail") ? FRAIL_MITIGATION_REDUCTION_PERCENT : 0;
+  const reducedEnemyDamagePercent = Math.max(0, (modifiers.reducedEnemyDamagePercent || 0) - frailPenalty);
+  const reducedEnemyDamage = scaledAmount * (1 - Math.min(75, reducedEnemyDamagePercent) / MODIFIER_PERCENT_BASE);
   const physicalResistedAmount = element === "physical"
     ? applyPercentReduction(reducedEnemyDamage, modifiers.physicalResistPercent)
     : reducedEnemyDamage;
@@ -859,8 +919,17 @@ export const getAttackDamage = (question: Question, state: StudyState) => {
   const healthRatio = state.profile.health / Math.max(1, getMaxHealth(state));
   const lowHealthBonus = healthRatio <= 0.35 ? modifiers.bonusDamageWhileLowHealthPercent || 0 : 0;
   const fullHealthBonus = healthRatio >= 1 ? modifiers.bonusDamageWhileFullHealthPercent || 0 : 0;
-  return applyPercentBonus(baseDamage, modifiers.enhancedDamagePercent + skills.enhancedDamagePercent + eliteBonus + lowHealthBonus + fullHealthBonus);
+  const tagBonus = getQuestionTagDamageBonus(question, modifiers);
+  const weakPenalty = getPlayerDebuffStacks(state.profile.playerDebuffs, "weak") ? -WEAK_DAMAGE_REDUCTION_PERCENT : 0;
+  const confusedStacks = getPlayerDebuffStacks(state.profile.playerDebuffs, "confused");
+  const confusedPercent = confusedStacks ? CONFUSED_DAMAGE_MIN_PERCENT + Math.round(getSeededRoll(`${question.id}:${getCard(state, question.id).attempts}:confused`) * CONFUSED_DAMAGE_RANGE_PERCENT) - PERCENT : 0;
+  return applyPercentBonus(baseDamage, modifiers.enhancedDamagePercent + skills.enhancedDamagePercent + eliteBonus + lowHealthBonus + fullHealthBonus + tagBonus + weakPenalty + confusedPercent);
 };
+
+function getQuestionTagDamageBonus(question: Question, modifiers: Record<ItemModifierKey, number>) {
+  const tags = new Set(question.topics);
+  return TAG_DAMAGE_MODIFIERS.reduce((total, modifier) => total + (tags.has(modifier.tag) ? modifiers[modifier.key] || 0 : 0), 0);
+}
 
 export const getCriticalChance = (state: StudyState) => {
   const modifiers = getRunModifierTotals(state);
@@ -875,7 +944,8 @@ export const getCriticalDamageMultiplier = (state: StudyState) => {
 
 export const getHealingMultiplier = (state: StudyState) => {
   const modifiers = getRunModifierTotals(state);
-  return Math.max(0.05, (1 + (modifiers.increasedHealingReceivedPercent || 0) / MODIFIER_PERCENT_BASE) * getHeatHealingMultiplier(state.profile.spireRun));
+  const frailPenalty = getPlayerDebuffStacks(state.profile.playerDebuffs, "frail") ? FRAIL_HEALING_REDUCTION_PERCENT : 0;
+  return Math.max(0.05, (1 + ((modifiers.increasedHealingReceivedPercent || 0) - frailPenalty) / MODIFIER_PERCENT_BASE) * getHeatHealingMultiplier(state.profile.spireRun));
 };
 
 export const applyHealingReceived = (state: StudyState, amount: number) => Math.max(0, Math.round(amount * getHealingMultiplier(state)));
@@ -889,7 +959,8 @@ export const getCoinReward = (question: Question, state?: StudyState) => {
   const modifiers = getRunModifierTotals(state);
   const skills = getWarriorSkillBonusTotals(state);
   const difficultyReward = getSpireDifficultyModifiers(state.profile.spireRun).rewardMultiplier;
-  return applyPercentBonus(Math.round(baseReward * difficultyReward * (1 + (stats.perception - FIRST_STAT_LEVEL) * GOLD_BONUS_PER_PERCEPTION)), modifiers.goldFindPercent + skills.goldFindPercent);
+  const parasitePenalty = getPlayerDebuffStacks(state.profile.playerDebuffs, "parasite") ? -PARASITE_REWARD_REDUCTION_PERCENT : 0;
+  return applyPercentBonus(Math.round(baseReward * difficultyReward * (1 + (stats.perception - FIRST_STAT_LEVEL) * GOLD_BONUS_PER_PERCEPTION)), modifiers.goldFindPercent + skills.goldFindPercent + parasitePenalty);
 };
 
 export const getExperienceReward = (question: Question, state?: StudyState) => {
@@ -997,13 +1068,8 @@ export const sellItem = (state: StudyState, itemId: string): StudyState => {
     return state;
   }
   const next = discardItem(state, itemId);
-  return {
-    ...next,
-    profile: {
-      ...next.profile,
-      coins: next.profile.coins + getItemSellValue(item)
-    }
-  };
+  addGoldAndApplyRelicHealing(next, getItemSellValue(item));
+  return next;
 };
 
 export const bulkSellItems = (state: StudyState, itemIds: string[]): StudyState => {
@@ -1018,11 +1084,12 @@ export const bulkSellItems = (state: StudyState, itemIds: string[]): StudyState 
   }
   const soldIds = new Set(soldItems.map((item) => item.id));
   const next = cloneState(state);
-  next.profile.coins += soldItems.reduce((sum, item) => sum + getItemSellValue(item), 0);
+  const goldGained = soldItems.reduce((sum, item) => sum + getItemSellValue(item), 0);
   next.profile.inventory = next.profile.inventory.filter((item) => !soldIds.has(item.id));
   for (const itemId of soldIds) {
     delete next.profile.inventorySlots[itemId];
   }
+  addGoldAndApplyRelicHealing(next, goldGained);
   return next;
 };
 
@@ -1078,29 +1145,85 @@ function getSeededRoll(seed: string) {
   return (hash >>> 0) / HASH_DIVISOR;
 }
 
-export const applyHealthPenalty = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, manaDamage = 0, questionId?: string, draft?: string, now = Date.now(), element?: DamageType | null): StudyState => {
+export const applyHealthPenalty = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, manaDamage = 0, questionId?: string, draft?: string, now = Date.now(), element?: DamageType | null, debuffs: PlayerDebuffApplication[] = [], monsterBlockGain = 0): StudyState => {
   const next = cloneState(state);
-  applyIncomingDamageToState(next, state, amount, manaDamage, questionId, element);
+  const effect = applyIncomingDamageToState(next, state, amount, manaDamage, questionId, element);
   if (questionId) {
     applyFailedRating(next, questionId, draft, now);
+    applyThornsDamage(next, state, questionId, effect.healthLoss);
+    applyMonsterBlockGain(next, questionId, monsterBlockGain);
   }
+  next.profile.playerDebuffs = tickPlayerDebuffsAfterSubmit(next.profile.playerDebuffs);
+  next.profile.playerDebuffs = addPlayerDebuffs(next.profile.playerDebuffs, filterResistedPlayerDebuffs(state, questionId, now, debuffs));
   return next;
 };
 
+function applyMonsterBlockGain(next: StudyState, questionId: string, amount: number) {
+  const blockGain = Math.max(0, Math.floor(amount || 0));
+  if (!blockGain) {
+    return;
+  }
+  const card = { ...getCard(next, questionId) };
+  card.monsterBlock = Math.max(0, Math.floor(card.monsterBlock || 0)) + blockGain;
+  setCard(next, questionId, card);
+}
+
+function applyThornsDamage(next: StudyState, sourceState: StudyState, questionId: string, healthLoss: number) {
+  const thornsDamage = Math.max(0, Math.floor(getRunModifierTotals(sourceState).thornsDamage || 0));
+  if (!questionId || healthLoss <= 0 || thornsDamage <= 0) {
+    return;
+  }
+  const card = { ...getCard(next, questionId) };
+  card.monsterHealth = Math.max(0, getMonsterHealthForCard(sourceState, questionId) - thornsDamage);
+  setCard(next, questionId, card);
+}
+
+function getMonsterHealthForCard(state: StudyState, questionId: string) {
+  const stored = getCard(state, questionId).monsterHealth;
+  if (Number.isFinite(stored)) {
+    return Math.max(0, stored || 0);
+  }
+  const question = questions.find((row) => row.id === questionId);
+  return question ? Math.round(getMonsterMaxHealth(question) * getSpireDifficultyModifiers(state.profile.spireRun).monsterHealthMultiplier) : 0;
+}
+
+function filterResistedPlayerDebuffs(state: StudyState, questionId: string | undefined, now: number, debuffs: PlayerDebuffApplication[]) {
+  const modifiers = getRunModifierTotals(state);
+  const blockedIds = new Set([
+    ...((modifiers.hexConfusedImmune || 0) > 0 ? ["hex", "confused"] : []),
+    ...((modifiers.vulnerableConstrictedImmune || 0) > 0 ? ["vulnerable", "constricted"] : [])
+  ]);
+  const eligibleDebuffs = debuffs.filter((debuff) => !blockedIds.has(debuff.id));
+  const resistPercent = Math.min(100, Math.max(0, getRunModifierTotals(state).debuffResistPercent || 0));
+  if (!eligibleDebuffs.length || resistPercent <= 0) {
+    return eligibleDebuffs;
+  }
+  return eligibleDebuffs.filter((debuff) => getSeededRoll(`${questionId || "global"}:${now}:${debuff.id}:debuff-resist`) * PERCENT >= resistPercent);
+}
+
 export const getIncomingDamageEffect = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, manaDamage = 0, questionId?: string, element?: DamageType | null) => {
-  const healthLoss = getHealthLoss(state, amount, element);
+  const rawHealthLoss = getHealthLoss(state, amount, element);
   const manaLoss = 0;
   const card = questionId ? getCard(state, questionId) : null;
   const modifiers = getRunModifierTotals(state);
+  const prevented = Boolean(card && !card.relicFirstHpLossPrevented && (modifiers.preventFirstHpLoss || 0) > 0 && rawHealthLoss > 0);
+  if (prevented) {
+    return { blocked: false, healthLoss: 0, manaLoss: 0, playerBlockLoss: 0, prevented, revived: false, reviveHealth: 0 };
+  }
+  const smallHitThreshold = Math.max(0, Math.floor(modifiers.smallHitToOneThreshold || 0));
+  const healthLoss = rawHealthLoss > 1 && smallHitThreshold > 0 && rawHealthLoss <= smallHitThreshold ? 1 : rawHealthLoss;
   const blocked = Boolean(card && !card.relicFirstHitBlocked && (modifiers.blockFirstHit || 0) > 0 && (healthLoss > 0 || manaLoss > 0));
   if (blocked) {
-    return { blocked, healthLoss: 0, manaLoss: 0, revived: false, reviveHealth: 0 };
+    return { blocked, healthLoss: 0, manaLoss: 0, playerBlockLoss: 0, prevented: false, revived: false, reviveHealth: 0 };
   }
+  const playerBlock = Math.max(0, Math.floor(card?.playerBlock || 0));
+  const playerBlockLoss = Math.min(playerBlock, healthLoss);
+  const finalHealthLoss = Math.max(0, healthLoss - playerBlockLoss);
   const revivePercent = Math.max(0, modifiers.revivePercent || 0);
-  const reviveHealth = card && !card.relicReviveUsed && revivePercent > 0 && healthLoss >= state.profile.health
+  const reviveHealth = card && !card.relicReviveUsed && revivePercent > 0 && finalHealthLoss >= state.profile.health
     ? Math.max(1, Math.round(getMaxHealth(state) * Math.min(FULL_PERCENT, revivePercent) / FULL_PERCENT))
     : 0;
-  return { blocked, healthLoss, manaLoss, revived: reviveHealth > 0, reviveHealth };
+  return { blocked, healthLoss: finalHealthLoss, manaLoss, playerBlockLoss, prevented: false, revived: reviveHealth > 0, reviveHealth };
 };
 
 export const applyIncomingDamage = (state: StudyState, amount = HEALTH_LOSS_PER_FAIL, manaDamage = 0, questionId?: string, element?: DamageType | null) => {
@@ -1111,13 +1234,20 @@ export const applyIncomingDamage = (state: StudyState, amount = HEALTH_LOSS_PER_
 
 function applyIncomingDamageToState(next: StudyState, sourceState: StudyState, amount = HEALTH_LOSS_PER_FAIL, manaDamage = 0, questionId?: string, element?: DamageType | null) {
   const effect = getIncomingDamageEffect(sourceState, amount, manaDamage, questionId, element);
-  if (questionId && (effect.blocked || effect.revived)) {
+  if (questionId && (effect.blocked || effect.prevented || effect.revived || effect.playerBlockLoss > 0)) {
     const card = { ...getCard(next, questionId) };
     card.relicFirstHitBlocked = card.relicFirstHitBlocked || effect.blocked;
+    card.relicFirstHpLossPrevented = card.relicFirstHpLossPrevented || effect.prevented;
     card.relicReviveUsed = card.relicReviveUsed || effect.revived;
+    card.playerBlock = Math.max(0, Math.floor(card.playerBlock || 0) - effect.playerBlockLoss);
     setCard(next, questionId, card);
   }
-  if (effect.blocked) {
+  if (questionId && (amount > 0 || manaDamage > 0)) {
+    const card = { ...getCard(next, questionId) };
+    card.enemyDebuffs = tickEnemyDebuffs(card.enemyDebuffs, ["weak"]);
+    setCard(next, questionId, card);
+  }
+  if (effect.blocked || effect.prevented) {
     return effect;
   }
   next.profile.health = effect.revived ? effect.reviveHealth : Math.max(0, next.profile.health - effect.healthLoss);
@@ -1131,13 +1261,53 @@ export const getHintCost = (state: StudyState, questionId?: string) => {
   }
   const cardHintsBought = questionId ? getCard(state, questionId).hintsBought : 0;
   const freeHints = Math.max(0, Math.floor(getRunModifierTotals(state).freeHintPerRoom || 0));
+  const hexPenalty = getPlayerDebuffStacks(state.profile.playerDebuffs, "hex") * HEX_HINT_COST_PENALTY;
+  const confusedPenalty = getConfusedHintCostPenalty(state, questionId, cardHintsBought);
   if (questionId && cardHintsBought < freeHints) {
-    return 0;
+    return Math.min(HINT_MAX_COST, hexPenalty + confusedPenalty);
   }
-  return Math.min(HINT_MAX_COST, HINT_COST + cardHintsBought * HINT_COST_INCREMENT);
+  return Math.min(HINT_MAX_COST, HINT_COST + hexPenalty + confusedPenalty + cardHintsBought * HINT_COST_INCREMENT);
 };
 
+function getConfusedHintCostPenalty(state: StudyState, questionId: string | undefined, cardHintsBought: number) {
+  const confusedStacks = getPlayerDebuffStacks(state.profile.playerDebuffs, "confused");
+  if (!questionId || confusedStacks <= 0) {
+    return 0;
+  }
+  const card = getCard(state, questionId);
+  const rollCount = Math.min(CONFUSED_HINT_COST_ROLLS + confusedStacks - 1, CONFUSED_HINT_COST_ROLLS + 2);
+  return Math.floor(getSeededRoll(`${questionId}:${card.attempts}:${cardHintsBought}:confused-hint-cost`) * rollCount) * CONFUSED_HINT_COST_STEP;
+}
+
 export const canBuyHint = (state: StudyState, questionId?: string) => !areHintsDisabledByHeat(state.profile.spireRun) && state.profile.coins >= getHintCost(state, questionId);
+
+export function applyCombatStartRelics(state: StudyState, questionId: string): StudyState {
+  const block = Math.max(0, Math.floor(getRunModifierTotals(state).combatStartBlock || 0));
+  const heal = Math.max(0, Math.floor(getRunModifierTotals(state).combatStartHeal || 0));
+  const enemyVulnerableSubmits = Math.max(0, Math.floor(getRunModifierTotals(state).enemyVulnerableSubmits || 0));
+  const enemyWeakSubmits = Math.max(0, Math.floor(getRunModifierTotals(state).enemyWeakSubmits || 0));
+  if (!questionId || (block <= 0 && heal <= 0 && enemyVulnerableSubmits <= 0 && enemyWeakSubmits <= 0)) {
+    return state;
+  }
+  const card = getCard(state, questionId);
+  if (card.relicCombatStartHealed) {
+    return state;
+  }
+  const next = cloneState(state);
+  const nextCard = { ...getCard(next, questionId), relicCombatStartHealed: true };
+  if (heal > 0) {
+    next.profile.health = Math.min(getMaxHealth(next), next.profile.health + applyHealingReceived(next, heal));
+  }
+  if (block > 0) {
+    nextCard.playerBlock = Math.max(0, Math.floor(nextCard.playerBlock || 0)) + block;
+  }
+  nextCard.enemyDebuffs = addEnemyDebuffs(nextCard.enemyDebuffs, [
+    ...(enemyVulnerableSubmits ? [{ id: "vulnerable" as const, remainingSubmits: enemyVulnerableSubmits, stacks: 1 }] : []),
+    ...(enemyWeakSubmits ? [{ id: "weak" as const, remainingSubmits: enemyWeakSubmits, stacks: 1 }] : [])
+  ]);
+  setCard(next, questionId, nextCard);
+  return next;
+}
 
 export const buyHint = (state: StudyState, questionId?: string) => {
   if (!canBuyHint(state, questionId)) {
@@ -1251,7 +1421,7 @@ export const getTopicStats = (state: StudyState) => {
   });
 };
 
-export const applyScheduleResult = (state: StudyState, questionId: string, passed: boolean, draft: string, now = Date.now(), failureDamage = HEALTH_LOSS_PER_FAIL, failureManaDamage = 0, failureElement?: DamageType | null) => {
+export const applyScheduleResult = (state: StudyState, questionId: string, passed: boolean, draft: string, now = Date.now(), failureDamage = HEALTH_LOSS_PER_FAIL, failureManaDamage = 0, failureElement?: DamageType | null, failureDebuffs: PlayerDebuffApplication[] = [], failureMonsterBlockGain = 0) => {
   const next = cloneState(state);
   const card = { ...getCard(next, questionId) };
   const wasMastered = isMasteredCard(card);
@@ -1265,7 +1435,7 @@ export const applyScheduleResult = (state: StudyState, questionId: string, passe
   if (passed) {
     applyPassedSchedule(next, card, questionId, state, wasMastered, now);
   } else {
-    applyFailedSchedule(next, card, questionId, state, now, failureDamage, failureManaDamage, failureElement);
+    applyFailedSchedule(next, card, questionId, state, now, failureDamage, failureManaDamage, failureElement, failureDebuffs, failureMonsterBlockGain);
   }
 
   setCard(next, questionId, card);
@@ -1289,19 +1459,44 @@ function applyPassedSchedule(next: StudyState, card: CardState, questionId: stri
   if (!wasMastered && isMasteredCard(card)) {
     card.masteredAt = now;
   }
+  card.playerBlock = 0;
+  next.profile.playerDebuffs = tickPlayerDebuffsAfterSubmit(next.profile.playerDebuffs);
 }
 
 function applyQuestionRewards(next: StudyState, question: Question | undefined) {
   if (!question) {
     return;
   }
-  next.profile.coins += getCoinReward(question, next);
+  addGoldAndApplyRelicHealing(next, getCoinReward(question, next));
   next.profile.experience += getExperienceReward(question, next);
   const leveled = grantPendingStatPoints(next);
   next.profile.statPoints = leveled.profile.statPoints;
   next.profile.statPointsAwardedLevel = leveled.profile.statPointsAwardedLevel;
   const modifiers = getRunModifierTotals(next);
-  next.profile.health = Math.min(getMaxHealth(next), next.profile.health + applyHealingReceived(next, (modifiers.lifeOnKill || 0) + getWarriorSkillBonusTotals(next).lifeOnKill));
+  next.profile.health = Math.min(getMaxHealth(next), next.profile.health + applyHealingReceived(next, (modifiers.lifeOnKill || 0) + (modifiers.healthRegen || 0) + (modifiers.monsterDefeatHeal || 0) + getWarriorSkillBonusTotals(next).lifeOnKill));
+  next.profile.metaProgress.currency += Math.max(0, Math.floor(modifiers.combatClearMeta || 0));
+  applyLowHealthClearHeal(next, modifiers.lowHealthClearHeal || 0);
+}
+
+function addGoldAndApplyRelicHealing(next: StudyState, amount: number) {
+  const gold = Math.max(0, Math.floor(amount || 0));
+  if (gold <= 0) {
+    return;
+  }
+  next.profile.coins += gold;
+  const healPerGoldGain = Math.max(0, Math.floor(getRunModifierTotals(next).goldGainHeal || 0));
+  if (healPerGoldGain > 0) {
+    next.profile.health = Math.min(getMaxHealth(next), next.profile.health + applyHealingReceived(next, healPerGoldGain));
+  }
+}
+
+function applyLowHealthClearHeal(next: StudyState, amount: number) {
+  const heal = Math.max(0, Math.floor(amount || 0));
+  const maxHealth = getMaxHealth(next);
+  if (heal <= 0 || next.profile.health <= 0 || next.profile.health > maxHealth / 2) {
+    return;
+  }
+  next.profile.health = Math.min(maxHealth, next.profile.health + applyHealingReceived(next, heal));
 }
 
 function applyQuestionDrop(next: StudyState, question: Question | undefined, state: StudyState, now: number) {
@@ -1320,12 +1515,20 @@ function applyShopRefresh(next: StudyState, question: Question | undefined, now:
   next.profile.shopLastRefreshedAt = now;
 }
 
-function applyFailedSchedule(next: StudyState, card: CardState, questionId: string, state: StudyState, now: number, failureDamage: number, failureManaDamage: number, failureElement?: DamageType | null) {
-  applyIncomingDamageToState(next, state, failureDamage, failureManaDamage, questionId, failureElement);
+function applyFailedSchedule(next: StudyState, card: CardState, questionId: string, state: StudyState, now: number, failureDamage: number, failureManaDamage: number, failureElement?: DamageType | null, failureDebuffs: PlayerDebuffApplication[] = [], failureMonsterBlockGain = 0) {
+  const effect = applyIncomingDamageToState(next, state, failureDamage, failureManaDamage, questionId, failureElement);
   applyRelicFailureStack(next, questionId);
   const damageCard = getCard(next, questionId);
+  card.playerBlock = damageCard.playerBlock;
   card.relicFirstHitBlocked = damageCard.relicFirstHitBlocked;
+  card.relicFirstHpLossPrevented = damageCard.relicFirstHpLossPrevented;
   card.relicReviveUsed = damageCard.relicReviveUsed;
+  next.profile.playerDebuffs = tickPlayerDebuffsAfterSubmit(next.profile.playerDebuffs);
+  next.profile.playerDebuffs = addPlayerDebuffs(next.profile.playerDebuffs, filterResistedPlayerDebuffs(state, questionId, now, failureDebuffs));
+  applyThornsDamage(next, state, questionId, effect.healthLoss);
+  const thornsCard = getCard(next, questionId);
+  card.monsterHealth = thornsCard.monsterHealth;
+  card.monsterBlock = Math.max(0, Math.floor(card.monsterBlock || 0)) + Math.max(0, Math.floor(failureMonsterBlockGain || 0));
   next.streak = 0;
   card.failedSubmissions += 1;
   card.intervalDays = 0;

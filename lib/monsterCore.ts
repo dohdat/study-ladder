@@ -1,5 +1,6 @@
 import { ELEMENTAL_DAMAGE_TYPES } from "./resistanceCore";
-import type { DamageType, ElementalDamageType, Question } from "../types/study";
+import type { DamageType, ElementalDamageType, PlayerDebuffId, Question } from "../types/study";
+import type { PlayerDebuffApplication } from "./playerDebuffCore";
 
 const HASH_OFFSET = 2166136261;
 const HASH_PRIME = 16777619;
@@ -225,8 +226,66 @@ export function getMonsterPlayerDamage(question: Question, damage: number, _dama
   return Math.max(DEFAULT_HIT_COUNT, Math.round(damage * (1 - Math.min(reduction, TELEPORTING_DAMAGE_REDUCTION))));
 }
 
+export function getMonsterWrongSubmitDebuffs(question: Question, now = Date.now()): PlayerDebuffApplication[] {
+  const bonuses = getUniqueMonsterBonuses(question);
+  const debuff = bonuses.map(getDebuffForBonus).find(Boolean) || getFallbackWrongSubmitDebuff(question, now);
+  if (!debuff) {
+    return [];
+  }
+  if (debuff === "constricted") {
+    return [{ id: debuff, remainingSubmits: 2, stacks: question.difficulty + 1 }];
+  }
+  if (debuff === "parasite") {
+    return getSeededRoll(`${getMonsterSeed(question)}:${now}:parasite`) < 0.22 ? [{ id: debuff, permanent: true, stacks: 1 }] : [];
+  }
+  return [{ id: debuff, remainingSubmits: debuff === "slimed" ? 1 : 2, stacks: debuff === "vulnerable" || debuff === "weak" || debuff === "frail" ? 2 : 1 }];
+}
+
 function getBonusDamage(bonuses: string[], question: Question, now: number) {
   return bonuses.reduce((damage, bonus) => damage + getBonusDamageAmount(bonus, question, now), 0);
+}
+
+function getDebuffForBonus(bonus: string): PlayerDebuffId | null {
+  if (bonus === "Aura Enchanted") {
+    return "weak";
+  }
+  if (bonus === "Cold Enchanted") {
+    return "frail";
+  }
+  if (bonus === "Cursed") {
+    return "hex";
+  }
+  if (bonus === "Extra Fast" || bonus === "Multi-Shot") {
+    return "constricted";
+  }
+  if (bonus === "Extra Strong" || bonus === "Fire Enchanted") {
+    return "vulnerable";
+  }
+  if (bonus === "Lightning Enchanted" || bonus === "Spectral Hit") {
+    return "confused";
+  }
+  if (bonus === "Arcane Shield" || bonus === "Stone Skin") {
+    return "slimed";
+  }
+  if (bonus === "Teleporting") {
+    return "hex";
+  }
+  return null;
+}
+
+function getFallbackWrongSubmitDebuff(question: Question, now: number): PlayerDebuffId | null {
+  const chance = Math.min(0.75, 0.28 + question.difficulty * 0.08);
+  if (getSeededRoll(`${getMonsterSeed(question)}:${now}:wrong-submit-debuff`) >= chance) {
+    return null;
+  }
+  const pools: Record<Question["difficulty"], PlayerDebuffId[]> = {
+    1: ["weak", "slimed"],
+    2: ["weak", "vulnerable", "frail"],
+    3: ["vulnerable", "frail", "hex", "constricted"],
+    4: ["vulnerable", "frail", "hex", "constricted", "confused"],
+    5: ["vulnerable", "frail", "hex", "constricted", "confused", "parasite"]
+  };
+  return pickSeeded(pools[question.difficulty], `${getMonsterSeed(question)}:${now}:wrong-submit-debuff-kind`);
 }
 
 function getBonusDamageAmount(bonus: string, question: Question, now: number) {

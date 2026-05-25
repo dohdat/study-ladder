@@ -409,7 +409,8 @@ function getDefaultBlockerSettings() {
   return {
     dailyMinutes: DEFAULT_DAILY_MINUTES,
     distractingSites: DEFAULT_DISTRACTING_SITES,
-    enabled: DEFAULT_BLOCKER_ENABLED
+    enabled: DEFAULT_BLOCKER_ENABLED,
+    pausedUntil: 0
   };
 }
 
@@ -429,7 +430,8 @@ function normalizeSettings(settings) {
   return {
     dailyMinutes: Number.isFinite(dailyMinutes) ? Math.max(0, Math.round(dailyMinutes)) : fallback.dailyMinutes,
     distractingSites,
-    enabled: settings.enabled !== false
+    enabled: true,
+    pausedUntil: Number.isFinite(Number(settings.pausedUntil)) ? Math.max(0, Math.floor(Number(settings.pausedUntil))) : fallback.pausedUntil
   };
 }
 
@@ -478,7 +480,7 @@ function addStudyTime(ms, sendResponse) {
 }
 
 function shouldRedirectUrl(url, settings, progress) {
-  if (!settings.enabled || settings.dailyMinutes <= 0 || progress.studiedMs >= settings.dailyMinutes * MS_PER_MINUTE) {
+  if (!settings.enabled || settings.pausedUntil > Date.now() || settings.dailyMinutes <= 0 || progress.studiedMs >= settings.dailyMinutes * MS_PER_MINUTE) {
     return false;
   }
   let parsed;

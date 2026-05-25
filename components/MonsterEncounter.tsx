@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge, Box, Group, Paper, Progress, Text, Tooltip } from "@mantine/core";
 type StaticImageData = string;
 
-import { getCampaignMonsterMaxHealth, getMonsterCurrentHealth, isMonsterEnraged } from "../lib/combatCore";
+import { getCampaignMonsterMaxHealth, getMonsterCurrentBlock, getMonsterCurrentHealth, isMonsterEnraged } from "../lib/combatCore";
+import { ENEMY_DEBUFF_DEFINITIONS, formatEnemyDebuff, getEnemyDebuffDescription } from "../lib/enemyDebuffCore";
 import { getMonsterAttackType, getUniqueMonsterBonusDescription, getUniqueMonsterBonuses, getUniqueMonsterName } from "../lib/monsterCore";
 import { getCurrentSpireNode } from "../lib/spireMapCore";
-import type { DamageType, Difficulty, Question, SpireAct, StudyState } from "../types/study";
+import { getCard } from "../lib/studyCore";
+import type { DamageType, Difficulty, EnemyDebuff, Question, SpireAct, StudyState } from "../types/study";
 import batArt from "../assets/hero_siege_monsters/bat.png";
 import bigEntArt from "../assets/hero_siege_monsters/big-ent.png";
 import bogMushroomArt from "../assets/hero_siege_monsters/bog-mushroom.png";
@@ -180,6 +182,7 @@ export const MONSTER_WIKI_ENTRIES: MonsterWikiEntry[] = Object.entries(MONSTERS)
 export function MonsterEncounter(props: { damagePop?: MonsterDamagePop | null; question: Question; state: StudyState }) {
   const maxHealth = getCampaignMonsterMaxHealth(props.state, props.question);
   const currentHealth = getMonsterCurrentHealth(props.state, props.question);
+  const block = getMonsterCurrentBlock(props.state, props.question);
   const activeDamage = props.damagePop?.questionId === props.question.id ? props.damagePop : null;
   const health = useAnimatedMonsterHealth({ currentHealth, damagePop: activeDamage, maxHealth });
   const monster = getMonsterDefinition(props.question, props.state);
@@ -187,10 +190,11 @@ export function MonsterEncounter(props: { damagePop?: MonsterDamagePop | null; q
   const bonuses = getUniqueMonsterBonuses(props.question);
   const attackType = getMonsterAttackType(props.question, bonuses);
   const enraged = isMonsterEnraged(props.state, props.question);
+  const enemyDebuffs = getCard(props.state, props.question.id).enemyDebuffs || [];
   return (
     <Paper withBorder p="xs" mt="md" bg="dark.7" style={{ overflow: "visible" }}>
       <Group gap="sm" wrap="nowrap" align="center" style={{ overflow: "visible" }}>
-        <MonsterAvatar damagePop={activeDamage} monster={monster} statuses={getEnemyPortraitStatuses(bonuses, attackType, enraged)} />
+        <MonsterAvatar damagePop={activeDamage} monster={monster} statuses={getEnemyPortraitStatuses(bonuses, attackType, enraged, enemyDebuffs)} />
         <Box flex={1} style={{ overflow: "visible" }}>
           <Group justify="space-between" gap="xs" mb={4}>
             <Box>
@@ -202,10 +206,13 @@ export function MonsterEncounter(props: { damagePop?: MonsterDamagePop | null; q
             <Text size="10px" c="dimmed" fw={900} tt="uppercase">Enemy Attack</Text>
             <Badge size="xs" variant="filled" color={getDamageTypeBadgeColor(attackType)}>{formatDamageType(attackType)}</Badge>
           </Group>
-          <UniqueBonusBadges bonuses={bonuses} enraged={enraged} />
+          <UniqueBonusBadges bonuses={bonuses} enemyDebuffs={enemyDebuffs} enraged={enraged} />
           <Group justify="space-between" gap="xs" mb={4}>
             <Text size="xs" c="dimmed" fw={700}>Enemy Health</Text>
-            <Text size="xs" fw={700}>{Math.round(health)}/{maxHealth}</Text>
+            <Group gap={6} wrap="nowrap">
+              {block > 0 && <Badge size="xs" color="blue" variant="filled">{block} Block</Badge>}
+              <Text size="xs" fw={700}>{Math.round(health)}/{maxHealth}</Text>
+            </Group>
           </Group>
           <Progress value={(health / maxHealth) * PERCENT_MAX} color="red" size="sm" styles={{ section: { transition: "width 620ms cubic-bezier(0.2, 0.9, 0.22, 1)" } }} />
         </Box>
@@ -257,18 +264,31 @@ function useAnimatedMonsterHealth(params: { currentHealth: number; damagePop: Mo
   return health;
 }
 
-function UniqueBonusBadges(props: { bonuses: string[]; enraged: boolean }) {
-  if (!props.bonuses.length && !props.enraged) {
+function UniqueBonusBadges(props: { bonuses: string[]; enemyDebuffs: EnemyDebuff[]; enraged: boolean }) {
+  if (!props.bonuses.length && !props.enemyDebuffs.length && !props.enraged) {
     return null;
   }
   const effects = [...(props.enraged ? ["Enraged"] : []), ...props.bonuses];
   return (
     <Group gap={4} mb={6} style={{ overflow: "visible" }}>
       <Text size="10px" c="dimmed" fw={900} tt="uppercase">Enemy Effects</Text>
+      {props.enemyDebuffs.map((debuff) => (
+        <EnemyDebuffBadge key={debuff.id} debuff={debuff} />
+      ))}
       {effects.map((bonus) => (
         <UniqueBonusBadge key={bonus} bonus={bonus} />
       ))}
     </Group>
+  );
+}
+
+function EnemyDebuffBadge(props: { debuff: EnemyDebuff }) {
+  return (
+    <Tooltip label={getEnemyDebuffDescription(props.debuff)} multiline withArrow withinPortal={false}>
+      <Box component="span" style={{ display: "inline-flex" }} tabIndex={0}>
+        <Badge size="xs" variant="filled" style={{ background: ENEMY_DEBUFF_DEFINITIONS[props.debuff.id].color, color: "#160d0b", cursor: "help" }}>{formatEnemyDebuff(props.debuff)}</Badge>
+      </Box>
+    </Tooltip>
   );
 }
 
@@ -321,6 +341,12 @@ function getStatusColor(status: string) {
   if (/cursed/i.test(status)) {
     return "#ff4d8d";
   }
+  if (/vulnerable/i.test(status)) {
+    return ENEMY_DEBUFF_DEFINITIONS.vulnerable.color;
+  }
+  if (/weak/i.test(status)) {
+    return ENEMY_DEBUFF_DEFINITIONS.weak.color;
+  }
   if (/enraged|strong/i.test(status)) {
     return "#ff4d4d";
   }
@@ -346,8 +372,12 @@ function getDamageStatusColor(type: DamageType) {
   return "#d7b56d";
 }
 
-function getEnemyPortraitStatuses(bonuses: string[], attackType: DamageType, enraged: boolean): PortraitStatus[] {
+function getEnemyPortraitStatuses(bonuses: string[], attackType: DamageType, enraged: boolean, enemyDebuffs: EnemyDebuff[]): PortraitStatus[] {
   return [
+    ...enemyDebuffs.map((debuff) => ({
+      color: ENEMY_DEBUFF_DEFINITIONS[debuff.id].color,
+      description: getEnemyDebuffDescription(debuff)
+    })),
     ...(attackType !== "physical" ? [{
       color: getDamageStatusColor(attackType),
       description: `Enemy attacks deal ${formatDamageType(attackType)} damage.`

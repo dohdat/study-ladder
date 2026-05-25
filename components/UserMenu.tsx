@@ -19,7 +19,7 @@ import {
   Tooltip,
   Title
 } from "@mantine/core";
-import { IconBook, IconSettings, IconSparkles, IconTrophy, IconUser } from "@tabler/icons-react";
+import { IconBook, IconSearch, IconSettings, IconSparkles, IconTrophy, IconUser } from "@tabler/icons-react";
 
 import { AchievementsPanel } from "./AchievementsPanel";
 import { CoinAmount } from "./CoinIcon";
@@ -110,6 +110,8 @@ const DAILY_MINUTES_MIN = 0;
 const DAILY_MINUTES_MAX = 720;
 const DAILY_MINUTES_STEP = 5;
 const SITE_TEXTAREA_MIN_ROWS = 4;
+const REDIRECT_PAUSE_MINUTES = 30;
+const REDIRECT_PAUSE_MS = REDIRECT_PAUSE_MINUTES * 60000;
 const STAT_SHEET_BG = "radial-gradient(circle at 50% 18%, rgba(95, 31, 31, 0.72), rgba(32, 11, 10, 0.98) 46%, #080504 100%)";
 const STAT_SHEET_BORDER = "2px solid #8a1744";
 const STAT_FRAME_BG = "linear-gradient(180deg, rgba(45, 12, 15, 0.94), rgba(8, 6, 8, 0.98))";
@@ -171,7 +173,7 @@ export const USER_MENU_SHORTCUTS: ReadonlyArray<{ key: string; section: UserMenu
   section: item.id
 }));
 
-export function UserMenu(props: { activeSection: UserMenuSection | null; canRetargetActiveRoom?: boolean; setActiveSection: (section: UserMenuSection | null) => void; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
+export function UserMenu(props: { activeSection: UserMenuSection | null; canRetargetActiveRoom?: boolean; onRestartRun?: () => void; setActiveSection: (section: UserMenuSection | null) => void; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   const modalTitle = USER_MENU_ITEMS.find((item) => item.id === props.activeSection)?.label || "User";
   const [menuOpened, setMenuOpened] = useState(false);
   useEffect(() => {
@@ -219,7 +221,14 @@ export function UserMenu(props: { activeSection: UserMenuSection | null; canReta
         }}
         transitionProps={{ duration: MODAL_TRANSITION_DURATION }}
       >
-        <UserModalContent canRetargetActiveRoom={props.canRetargetActiveRoom} section={props.activeSection} state={props.state} setState={props.setState} />
+        <UserModalContent
+          canRetargetActiveRoom={props.canRetargetActiveRoom}
+          closeModal={() => props.setActiveSection(null)}
+          onRestartRun={props.onRestartRun}
+          section={props.activeSection}
+          state={props.state}
+          setState={props.setState}
+        />
       </Modal>
     </>
   );
@@ -235,7 +244,7 @@ function getModalSize(section: UserMenuSection | null) {
   return "lg";
 }
 
-function UserModalContent(props: { canRetargetActiveRoom?: boolean; section: UserMenuSection | null; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
+function UserModalContent(props: { canRetargetActiveRoom?: boolean; closeModal: () => void; onRestartRun?: () => void; section: UserMenuSection | null; state: StudyState; setState: React.Dispatch<React.SetStateAction<StudyState>> }) {
   if (props.section === "achievements") {
     return <AchievementsPanel state={props.state} setState={props.setState} />;
   }
@@ -243,7 +252,7 @@ function UserModalContent(props: { canRetargetActiveRoom?: boolean; section: Use
     return <WikiPanel />;
   }
   if (props.section === "settings") {
-    return <SettingsPanel canRetargetActiveRoom={props.canRetargetActiveRoom} state={props.state} setState={props.setState} />;
+    return <SettingsPanel canRetargetActiveRoom={props.canRetargetActiveRoom} closeModal={props.closeModal} onRestartRun={props.onRestartRun} state={props.state} setState={props.setState} />;
   }
   return <ProfilePanel state={props.state} setState={props.setState} />;
 }
@@ -668,18 +677,25 @@ function getResistanceColor(label: string) {
 
 function RelicWiki() {
   const [page, setPage] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedRarity, setSelectedRarity] = useState<RelicRarityFilter>("all");
-  const selectedRelics = useMemo(() => (selectedRarity === "all" ? WIKI_RELICS : WIKI_RELICS.filter((relic) => relic.rarity === selectedRarity)), [selectedRarity]);
+  const selectedRelics = useMemo(() => {
+    const rarityRelics = selectedRarity === "all" ? WIKI_RELICS : WIKI_RELICS.filter((relic) => relic.rarity === selectedRarity);
+    return filterWikiRelics(rarityRelics, searchQuery);
+  }, [searchQuery, selectedRarity]);
   const pageCount = getPageCount(selectedRelics.length, WIKI_RELIC_PAGE_SIZE);
   const safePage = clampPage(page, pageCount);
-  const visibleRelics = getPageItems(selectedRelics, safePage, WIKI_RELIC_PAGE_SIZE);
+  const visibleRelics = getPageItems([...selectedRelics], safePage, WIKI_RELIC_PAGE_SIZE);
   const rarityLabel = selectedRarity === "all" ? "all rarities" : getRelicRarityLabel(selectedRarity);
+  const trimmedSearchQuery = searchQuery.trim();
   return (
     <Stack gap="md">
       <Group justify="space-between" align="flex-start">
         <Box>
           <Title order={4}>Relic Catalog</Title>
-          <Text size="sm" c="dimmed">{selectedRelics.length} relics in {rarityLabel}.</Text>
+          <Text size="sm" c="dimmed">
+            {selectedRelics.length} relics in {rarityLabel}{trimmedSearchQuery ? ` matching "${trimmedSearchQuery}"` : ""}.
+          </Text>
           <Group gap={6} mt={8}>
             {WIKI_RELIC_RARITY_FILTERS.map((filter) => (
               <RelicRarityFilterButton
@@ -697,13 +713,89 @@ function RelicWiki() {
         </Box>
         <WikiPagination page={safePage} pageCount={pageCount} onPageChange={setPage} total={selectedRelics.length} />
       </Group>
-      <SimpleGrid cols={{ base: 1, sm: 2 }}>
-        {visibleRelics.map((relic) => (
-          <RelicWikiCard key={`${relic.id}-${relic.rarity}`} relic={relic} />
-        ))}
-      </SimpleGrid>
+      <Group justify="space-between" gap="sm" wrap="nowrap">
+        <TextInput
+          aria-label="Search relics"
+          leftSection={<IconSearch size={14} />}
+          placeholder="Search relics by name, effect, rarity"
+          value={searchQuery}
+          onChange={(event) => {
+            setSearchQuery(event.currentTarget.value);
+            setPage(0);
+          }}
+          styles={{
+            input: {
+              background: "rgba(0, 0, 0, 0.36)",
+              border: "1px solid rgba(210, 168, 84, 0.44)",
+              borderRadius: 4,
+              color: "#f1dfad",
+              fontSize: 12,
+              fontWeight: 800,
+              height: 32,
+              minHeight: 32
+            },
+            section: { color: "#d8c181" }
+          }}
+          style={{ flex: "1 1 360px", maxWidth: 520 }}
+        />
+        {trimmedSearchQuery && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearchQuery("");
+              setPage(0);
+            }}
+            style={{
+              background: "rgba(0, 0, 0, 0.35)",
+              border: "1px solid rgba(255, 255, 255, 0.18)",
+              borderRadius: 4,
+              color: "#f1dfad",
+              cursor: "pointer",
+              flex: "0 0 auto",
+              fontSize: 11,
+              fontWeight: 900,
+              height: 32,
+              letterSpacing: 0,
+              padding: "0 10px",
+              textTransform: "uppercase"
+            }}
+          >
+            Clear
+          </button>
+        )}
+      </Group>
+      {visibleRelics.length ? (
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          {visibleRelics.map((relic) => (
+            <RelicWikiCard key={`${relic.id}-${relic.rarity}`} relic={relic} />
+          ))}
+        </SimpleGrid>
+      ) : (
+        <Box p="md" style={{ background: "var(--mantine-color-dark-7)", border: MODAL_BORDER, borderRadius: 6 }}>
+          <Text size="sm" fw={800} c="dimmed">No relics match this search.</Text>
+        </Box>
+      )}
     </Stack>
   );
+}
+
+function filterWikiRelics(relics: readonly Relic[], query: string) {
+  const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!tokens.length) {
+    return relics;
+  }
+  return relics.filter((relic) => {
+    const haystack = [
+      relic.name,
+      relic.description,
+      relic.rarity,
+      relic.source,
+      getRelicRarityLabel(relic.rarity),
+      formatRelicModifiers(relic),
+      ...(relic.wikiStats || [])
+    ].join(" ").toLowerCase();
+    return tokens.every((token) => haystack.includes(token));
+  });
 }
 
 function RelicRarityFilterButton(props: { active: boolean; count: number; onClick: () => void; rarity: RelicRarityFilter }) {
@@ -1292,20 +1384,41 @@ function getPactConditionEffectLines(condition: (typeof HEAT_CONDITION_DEFINITIO
   }
 }
 
-function SettingsPanel(props: { canRetargetActiveRoom?: boolean; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
+function SettingsPanel(props: { canRetargetActiveRoom?: boolean; closeModal: () => void; onRestartRun?: () => void; setState: React.Dispatch<React.SetStateAction<StudyState>>; state: StudyState }) {
   const { settings, updateSettings } = useStudyBlockerSettings();
   const siteText = settings.distractingSites.join("\n");
+  const [siteDraft, setSiteDraft] = useState(siteText);
+  const [siteDraftFocused, setSiteDraftFocused] = useState(false);
+  const redirectPaused = settings.pausedUntil > Date.now();
+  const pausedMinutesRemaining = redirectPaused ? Math.max(1, Math.ceil((settings.pausedUntil - Date.now()) / 60000)) : 0;
+  useEffect(() => {
+    if (!siteDraftFocused) {
+      setSiteDraft(siteText);
+    }
+  }, [siteDraftFocused, siteText]);
   return (
     <Stack gap="md">
       <Group justify="space-between">
         <Text size="sm" fw={700}>Practice Mode</Text>
         <Badge variant="light">{props.state.mode === "leetcode" ? "Coding" : "System Design"}</Badge>
       </Group>
-      <Switch
-        checked={settings.enabled}
-        label="Redirect distracting websites until daily study is complete"
-        onChange={(event) => updateSettings({ ...settings, enabled: event.currentTarget.checked })}
-      />
+      <Box>
+        <Group justify="space-between" align="center" wrap="nowrap">
+          <Box>
+            <Text size="sm" fw={700}>Distracting site redirects</Text>
+            <Text size="xs" c="dimmed">
+              {redirectPaused ? `Paused for ${pausedMinutesRemaining} more min.` : "Active until daily study is complete."}
+            </Text>
+          </Box>
+          <HeroSiegeButton
+            height={28}
+            minWidth={142}
+            onClick={() => updateSettings({ ...settings, enabled: true, pausedUntil: redirectPaused ? 0 : Date.now() + REDIRECT_PAUSE_MS })}
+          >
+            {redirectPaused ? "Resume Now" : `Pause ${REDIRECT_PAUSE_MINUTES} Min`}
+          </HeroSiegeButton>
+        </Group>
+      </Box>
       <Switch
         checked={props.state.profile.godMode}
         color="yellow"
@@ -1337,14 +1450,33 @@ function SettingsPanel(props: { canRetargetActiveRoom?: boolean; setState: React
         minRows={SITE_TEXTAREA_MIN_ROWS}
         label="Distracting sites"
         description="One domain per line, for example reddit.com or youtube.com."
-        value={siteText}
-        onChange={(event) => updateSettings({ ...settings, distractingSites: normalizeDistractingSites(event.currentTarget.value) })}
+        value={siteDraft}
+        onBlur={() => {
+          setSiteDraftFocused(false);
+          setSiteDraft(normalizeDistractingSites(siteDraft).join("\n"));
+        }}
+        onChange={(event) => {
+          const nextDraft = event.currentTarget.value;
+          setSiteDraft(nextDraft);
+          updateSettings({ ...settings, distractingSites: normalizeDistractingSites(nextDraft) });
+        }}
+        onFocus={() => setSiteDraftFocused(true)}
       />
       <Group gap="xs">
         <IconSparkles size={ICON_SIZE} />
         <Text size="sm" c="dimmed">When unfinished, those sites open Study Ladder instead.</Text>
       </Group>
       <Group justify="flex-end">
+        <HeroSiegeButton
+          onClick={() => {
+            if (window.confirm("Restart the current run? This clears current run relics, map, gold, health bonuses, skills, and room progress, but keeps question progress, achievements, meta upgrades, heat settings, and practice settings.")) {
+              props.onRestartRun?.();
+              props.closeModal();
+            }
+          }}
+        >
+          Restart Run
+        </HeroSiegeButton>
         <HeroSiegeButton
           onClick={() => {
             if (window.confirm("Reset all run progress, relics, skills, map, and settings for this game state?")) {

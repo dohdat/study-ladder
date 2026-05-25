@@ -133,6 +133,8 @@ const MODIFIER_DETAILS: Partial<Record<ItemModifierKey, { color: string; label: 
   armor: modifierDetail("armor", "#73c7ff"),
   armorPenetrationPercent: modifierDetail("armorPenetrationPercent", "#6f6ff6"),
   blockChancePercent: modifierDetail("blockChancePercent", "#73c7ff"),
+  bossEntryHeal: modifierDetail("bossEntryHeal", "#7cff7c"),
+  blockBreakDamagePercent: modifierDetail("blockBreakDamagePercent", "#6f6ff6"),
   bonusDamageVsElitesPercent: modifierDetail("bonusDamageVsElitesPercent", "#6f6ff6"),
   bonusDamageWhileFullHealthPercent: modifierDetail("bonusDamageWhileFullHealthPercent", "#6f6ff6"),
   bonusDamageWhileLowHealthPercent: modifierDetail("bonusDamageWhileLowHealthPercent", "#6f6ff6"),
@@ -142,11 +144,13 @@ const MODIFIER_DETAILS: Partial<Record<ItemModifierKey, { color: string; label: 
   criticalChancePercent: modifierDetail("criticalChancePercent", "#6f6ff6"),
   criticalDamagePercent: modifierDetail("criticalDamagePercent", "#6f6ff6"),
   damageReduction: modifierDetail("damageReduction", "#6f6ff6"),
+  debuffResistPercent: modifierDetail("debuffResistPercent", "#ff4d8d"),
   dodgeChancePercent: modifierDetail("dodgeChancePercent", "#73c7ff"),
   eliteDropBonusPercent: modifierDetail("eliteDropBonusPercent", "#d6a94b"),
   enhancedDamagePercent: modifierDetail("enhancedDamagePercent", "#6f6ff6"),
   executeChancePercent: modifierDetail("executeChancePercent", "#6f6ff6"),
   extraAttackChancePercent: modifierDetail("extraAttackChancePercent", "#6f6ff6"),
+  firstSubmitDamagePercent: modifierDetail("firstSubmitDamagePercent", "#f0df5f"),
   fireDamage: modifierDetail("fireDamage", "#ff8a3d"),
   fireResistPercent: modifierDetail("fireResistPercent", "#ff8a3d"),
   goldFindPercent: modifierDetail("goldFindPercent", "#d6a94b"),
@@ -154,12 +158,14 @@ const MODIFIER_DETAILS: Partial<Record<ItemModifierKey, { color: string; label: 
   increasedHealingReceivedPercent: modifierDetail("increasedHealingReceivedPercent", "#7cff7c"),
   increasedLootDropChancePercent: modifierDetail("increasedLootDropChancePercent", "#d6a94b"),
   increasedRareDropChancePercent: modifierDetail("increasedRareDropChancePercent", "#d6a94b"),
+  lowHealthClearHeal: modifierDetail("lowHealthClearHeal", "#7cff7c"),
   lifeOnKill: modifierDetail("lifeOnKill", "#7cff7c"),
   lifeStealPercent: modifierDetail("lifeStealPercent", "#7cff7c"),
   lightningDamage: modifierDetail("lightningDamage", "#f0df5f"),
   lightningResistPercent: modifierDetail("lightningResistPercent", "#f0df5f"),
   magicFindPercent: modifierDetail("magicFindPercent", "#d6a94b"),
   maxLife: modifierDetail("maxLife", "#7cff7c"),
+  minimumSubmitDamage: modifierDetail("minimumSubmitDamage", "#f0df5f"),
   parryChancePercent: modifierDetail("parryChancePercent", "#73c7ff"),
   physicalDamage: modifierDetail("physicalDamage", "#6f6ff6"),
   physicalResistPercent: modifierDetail("physicalResistPercent", "#73c7ff"),
@@ -167,7 +173,9 @@ const MODIFIER_DETAILS: Partial<Record<ItemModifierKey, { color: string; label: 
   poisonResistPercent: modifierDetail("poisonResistPercent", "#7cff7c"),
   reducedEnemyArmorPercent: modifierDetail("reducedEnemyArmorPercent", "#6f6ff6"),
   reducedEnemyDamagePercent: modifierDetail("reducedEnemyDamagePercent", "#73c7ff"),
-  resistancePenetrationPercent: modifierDetail("resistancePenetrationPercent", "#6f6ff6")
+  resistancePenetrationPercent: modifierDetail("resistancePenetrationPercent", "#6f6ff6"),
+  fifthSubmitDamagePercent: modifierDetail("fifthSubmitDamagePercent", "#f0df5f"),
+  thornsDamage: modifierDetail("thornsDamage", "#ff4d4d")
 };
 
 type EquipmentSpriteLayout = { asset: StaticImageData; height: number; iconSize: number; label: string; left: number; top: number; width: number };
