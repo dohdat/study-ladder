@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { type PointerEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActionIcon,
   Badge,
   Box,
   Button,
@@ -13,16 +14,18 @@ import {
   ScrollArea,
   Tabs,
   Text,
+  Textarea,
   ThemeIcon,
   Tooltip,
   Title
 } from "@mantine/core";
-import { IconArrowRight, IconBulb, IconCheck, IconCode, IconEye, IconLock, IconPlayerPlay, IconRefresh, IconTerminal2, IconWand, IconX } from "@tabler/icons-react";
+import { IconArrowRight, IconBulb, IconCheck, IconCircle, IconCode, IconDiamond, IconEraser, IconEye, IconHandStop, IconLock, IconMinus, IconPencil, IconPlayerPlay, IconPointer, IconRefresh, IconSquare, IconTerminal2, IconTypography, IconWand, IconX } from "@tabler/icons-react";
 import MonacoEditor, { type OnMount } from "@monaco-editor/react";
 
 import { HeroSiegeButton } from "./HeroSiegeUi";
 import { HighlightedCode } from "./HighlightedCode";
 import { MonsterEncounter, type MonsterDamagePop } from "./MonsterEncounter";
+import { frontendSystemDesignQuestions, type SystemDesignQuestion, type SystemDesignSection } from "../data/systemDesignQuestions";
 import { FRONTEND_APP_FILE, FRONTEND_CSS_FILE, type FrontendFileName, createInitialQuestionDraft, isFrontendChallenge, parseFrontendDraft, serializeFrontendDraft } from "../lib/frontendChallenge";
 import {
   CODEX_EXAMPLE_EXPLANATION_CHUNK,
@@ -32,6 +35,7 @@ import {
   createSolutionRevealPrompt,
   requestCodexExampleExplanation,
   requestCodexSolutionReveal,
+  requestCodexSystemDesignScore,
   type CodexExampleExplanationStreamMessage
 } from "../lib/hintPrompt";
 import { difficultyLabels, getVisibleQuestionTopics } from "../lib/studyCore";
@@ -83,6 +87,22 @@ const FIRST_CASE_INDEX = 0;
 const ARG_INDEX_OFFSET = 1;
 const FUNCTION_SIGNATURE_GROUP = 1;
 const EXAMPLE_EXPLANATION_MIN_HEIGHT = 42;
+const SYSTEM_DESIGN_COLUMNS = 12;
+const SYSTEM_DESIGN_PROMPT_SPAN = 3;
+const SYSTEM_DESIGN_DETAIL_SPAN = 9;
+const SYSTEM_DESIGN_SECTION_GAP = 12;
+const SYSTEM_DESIGN_PROMPT_BG = "#1f1f1f";
+const SYSTEM_DESIGN_SECTION_BG = "#252525";
+const SYSTEM_DESIGN_TIMER_INTERVAL_MS = 1000;
+const SYSTEM_DESIGN_CANVAS_WIDTH = 1500;
+const SYSTEM_DESIGN_CANVAS_HEIGHT = 900;
+const SYSTEM_DESIGN_CANVAS_LINE_WIDTH = 3;
+const SYSTEM_DESIGN_CANVAS_BG = "#111827";
+const SYSTEM_DESIGN_CANVAS_BORDER = "1px solid rgba(255, 255, 255, 0.18)";
+const SYSTEM_DESIGN_CANVAS_STROKE = "#e5e7eb";
+const SYSTEM_DESIGN_CANVAS_TEXT_SIZE = 24;
+const SYSTEM_DESIGN_CANVAS_ERASER_WIDTH = 22;
+const SYSTEM_DESIGN_TIMER_PAD = 2;
 
 type HintSegment = {
   content: string;
@@ -91,6 +111,15 @@ type HintSegment = {
 
 type QuestionExample = Question["examples"][number];
 type ExampleExplanationState = Record<string, { error: string; loading: boolean; text: string }>;
+type SystemDesignAnswerMap = Record<string, string>;
+type SystemDesignScoreState = Record<string, { error: string; loading: boolean; score: number | null; text: string }>;
+type SystemDesignTimerMap = Record<string, { remainingSeconds: number; running: boolean }>;
+type SystemDesignCanvasPoint = { x: number; y: number };
+type SystemDesignCanvasTool = "select" | "hand" | "pen" | "rect" | "diamond" | "ellipse" | "arrow" | "line" | "eraser" | "text";
+type SystemDesignCanvasElement =
+  | { id: string; kind: "stroke"; points: SystemDesignCanvasPoint[]; tool: "eraser" | "pen" }
+  | { end: SystemDesignCanvasPoint; id: string; kind: "shape"; start: SystemDesignCanvasPoint; tool: "arrow" | "diamond" | "ellipse" | "line" | "rect" }
+  | { id: string; kind: "text"; point: SystemDesignCanvasPoint; text: string };
 type PreviewEvent = { time: number; value: string };
 type PreviewTodo = { completed: boolean; id: string; text: string };
 type PreviewTab = { id: string; title: string };
@@ -142,12 +171,7 @@ export function PracticeArea(props: {
   state: StudyState;
 }) {
   if (props.mode === "system") {
-    return (
-      <Card withBorder>
-        <Title order={3}>System Design</Title>
-        <Text c="dimmed" mt="xs">Track placeholder is ready. LeetCode cards are active first.</Text>
-      </Card>
-    );
+    return <SystemDesignPractice />;
   }
   if (!props.currentQuestion) {
     return null;
@@ -170,6 +194,703 @@ export function PracticeArea(props: {
       </Grid.Col>
     </Grid>
   );
+}
+
+function SystemDesignPractice() {
+  const [activeId, setActiveId] = useState("");
+  const [answersByQuestion, setAnswersByQuestion] = useState<Record<string, SystemDesignAnswerMap>>({});
+  const [scoresByQuestion, setScoresByQuestion] = useState<SystemDesignScoreState>({});
+  const [sectionTimers, setSectionTimers] = useState<SystemDesignTimerMap>({});
+  const [sectionIndexByQuestion, setSectionIndexByQuestion] = useState<Record<string, number>>({});
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const activeQuestion = frontendSystemDesignQuestions.find((question) => question.id === activeId) || null;
+  const activeSectionIndex = activeQuestion ? sectionIndexByQuestion[activeQuestion.id] || 0 : 0;
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setSectionTimers((current) => tickSystemDesignTimers(current, activeQuestion, activeSectionIndex, setSectionIndexByQuestion));
+    }, SYSTEM_DESIGN_TIMER_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [activeQuestion, activeSectionIndex]);
+  const resetQuestionAttempt = (questionId: string) => {
+    setAnswersByQuestion((current) => ({ ...current, [questionId]: {} }));
+    setScoresByQuestion((current) => ({ ...current, [questionId]: { error: "", loading: false, score: null, text: "" } }));
+    setSectionIndexByQuestion((current) => ({ ...current, [questionId]: 0 }));
+    setSectionTimers((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${questionId}:`))));
+  };
+  const startSectionTimer = (questionId: string, sectionId: string) => {
+    const timerKey = getSystemDesignTimerKey(questionId, sectionId);
+    const defaultSeconds = getSystemDesignSectionSeconds(sectionId);
+    setSectionTimers((current) => {
+      const existing = current[timerKey] || { remainingSeconds: defaultSeconds, running: false };
+      return {
+        ...current,
+        [timerKey]: {
+          remainingSeconds: existing.remainingSeconds > 0 ? existing.remainingSeconds : defaultSeconds,
+          running: true
+        }
+      };
+    });
+  };
+  const startQuestion = () => {
+    const question = frontendSystemDesignQuestions[questionIndex % frontendSystemDesignQuestions.length];
+    if (!question) {
+      return;
+    }
+    setActiveId(question.id);
+    resetQuestionAttempt(question.id);
+    startSectionTimer(question.id, getSystemDesignAnswerSections(question)[0]?.id || "requirements");
+  };
+  const activeAnswers = activeQuestion ? answersByQuestion[activeQuestion.id] || {} : {};
+  const activeScore = activeQuestion ? scoresByQuestion[activeQuestion.id] || { error: "", loading: false, score: null, text: "" } : { error: "", loading: false, score: null, text: "" };
+  const canMoveNextSystemQuestion = Boolean(activeQuestion && activeScore.text && !activeScore.loading);
+  const moveToNextSystemQuestion = () => {
+    if (!activeQuestion || !canMoveNextSystemQuestion) {
+      return;
+    }
+    const nextIndex = (questionIndex + 1) % frontendSystemDesignQuestions.length;
+    const nextQuestion = frontendSystemDesignQuestions[nextIndex];
+    if (!nextQuestion) {
+      return;
+    }
+    setQuestionIndex(nextIndex);
+    setActiveId(nextQuestion.id);
+    resetQuestionAttempt(nextQuestion.id);
+    startSectionTimer(nextQuestion.id, getSystemDesignAnswerSections(nextQuestion)[0]?.id || "requirements");
+  };
+  const updateAnswer = (key: string, value: string) => {
+    if (!activeQuestion) {
+      return;
+    }
+    setAnswersByQuestion((current) => ({
+      ...current,
+      [activeQuestion.id]: {
+        ...(current[activeQuestion.id] || {}),
+        [key]: value
+      }
+    }));
+  };
+  const submitForScore = () => {
+    if (!activeQuestion) {
+      return;
+    }
+    const prompt = createSystemDesignScorePrompt(activeQuestion, activeAnswers);
+    setScoresByQuestion((current) => ({
+      ...current,
+      [activeQuestion.id]: { error: "", loading: true, score: null, text: "" }
+    }));
+    requestCodexSystemDesignScore(activeQuestion.id, prompt).then((response) => {
+      setScoresByQuestion((current) => ({
+        ...current,
+        [activeQuestion.id]: {
+          error: response.ok ? "" : response.error || "Codex could not score this answer.",
+          loading: false,
+          score: response.text ? extractSystemDesignScore(response.text) : null,
+          text: response.text || ""
+        }
+      }));
+    });
+  };
+  const updateSectionTimer = (sectionId: string, action: "pause" | "reset" | "start") => {
+    if (!activeQuestion) {
+      return;
+    }
+    const timerKey = getSystemDesignTimerKey(activeQuestion.id, sectionId);
+    const defaultSeconds = getSystemDesignSectionSeconds(sectionId);
+    setSectionTimers((current) => {
+      const timer = current[timerKey] || { remainingSeconds: defaultSeconds, running: false };
+      if (action === "reset") {
+        return { ...current, [timerKey]: { remainingSeconds: defaultSeconds, running: false } };
+      }
+      return { ...current, [timerKey]: { ...timer, running: action === "start" } };
+    });
+  };
+  const updateSectionIndex = (index: number) => {
+    if (!activeQuestion) {
+      return;
+    }
+    const sectionCount = getSystemDesignAnswerSections(activeQuestion).length;
+    const nextIndex = Math.max(0, Math.min(sectionCount - 1, index));
+    setSectionIndexByQuestion((current) => ({
+      ...current,
+      [activeQuestion.id]: nextIndex
+    }));
+    startSectionTimer(activeQuestion.id, getSystemDesignAnswerSections(activeQuestion)[nextIndex]?.id || "requirements");
+  };
+  return (
+    <Card withBorder>
+      <Group justify="space-between" align="flex-start" mb="md">
+        <Box>
+          <Group gap={6}>
+            <Badge variant="light">RADIO</Badge>
+            <Badge color="yellow" variant="light">20 min</Badge>
+            <Badge color="blue" variant="light">Frontend system design</Badge>
+          </Group>
+          <Title order={3} mt="xs">System Design Practice</Title>
+          <Text c="dimmed" size="sm">Start one prompt at a time. No question list is shown during the attempt.</Text>
+        </Box>
+        {!activeQuestion && (
+          <HeroSiegeButton leftSection={<IconPlayerPlay size={ICON_SM} />} minWidth={128} onClick={startQuestion}>Start</HeroSiegeButton>
+        )}
+        {canMoveNextSystemQuestion && (
+          <HeroSiegeButton leftSection={<IconArrowRight size={ICON_SM} />} minWidth={128} onClick={moveToNextSystemQuestion}>Next question</HeroSiegeButton>
+        )}
+      </Group>
+      {activeQuestion ? (
+        <SystemDesignQuestionPanel
+          answers={activeAnswers}
+          onAnswerChange={updateAnswer}
+          onSubmit={submitForScore}
+          onSectionIndexChange={updateSectionIndex}
+          onTimerChange={updateSectionTimer}
+          question={activeQuestion}
+          sectionIndex={activeSectionIndex}
+          scoreState={activeScore}
+          timers={sectionTimers}
+        />
+      ) : <SystemDesignStartPanel />}
+    </Card>
+  );
+}
+
+function SystemDesignStartPanel() {
+  return (
+    <Paper withBorder p="md" bg={SYSTEM_DESIGN_PROMPT_BG}>
+      <Title order={4}>Ready</Title>
+      <Text c="dimmed" mt="xs">Click Start to begin one 20-minute frontend system design prompt.</Text>
+    </Paper>
+  );
+}
+
+function SystemDesignQuestionPanel(props: { answers: SystemDesignAnswerMap; onAnswerChange?: (key: string, value: string) => void; onSectionIndexChange?: (index: number) => void; onSubmit?: () => void; onTimerChange?: (sectionId: string, action: "pause" | "reset" | "start") => void; question: SystemDesignQuestion; sectionIndex: number; scoreState: SystemDesignScoreState[string]; timers: SystemDesignTimerMap }) {
+  const hasAnswer = Object.values(props.answers).some((answer) => answer.trim());
+  const sections = getSystemDesignAnswerSections(props.question);
+  const sectionIndex = Math.max(0, Math.min(sections.length - 1, props.sectionIndex));
+  const section = sections[sectionIndex];
+  return (
+    <Grid columns={SYSTEM_DESIGN_COLUMNS} gutter="md" align="flex-start">
+      <Grid.Col span={{ base: SYSTEM_DESIGN_COLUMNS, md: SYSTEM_DESIGN_PROMPT_SPAN }}>
+        <Paper withBorder p="md" bg={SYSTEM_DESIGN_PROMPT_BG}>
+          <Title order={4}>{props.question.title}</Title>
+          <Group gap={6} mt="sm">
+            {props.question.focus.map((focus) => <Badge key={focus} size="sm" variant="outline">{focus}</Badge>)}
+          </Group>
+          <Text mt="md">{props.question.prompt}</Text>
+          <Text c="dimmed" size="sm" mt="sm">{props.question.scenario}</Text>
+          <Divider my="md" />
+          <Title order={5}>20-minute flow</Title>
+          <List mt="xs" size="sm">
+            <List.Item>2 min: clarify users, scope, and non-goals.</List.Item>
+            <List.Item>5 min: draw components, data flow, and state ownership.</List.Item>
+            <List.Item>5 min: define API/interface contracts and failure states.</List.Item>
+            <List.Item>6 min: optimization and deep-dive tradeoffs.</List.Item>
+            <List.Item>2 min: summarize risks and measurement plan.</List.Item>
+          </List>
+          <Divider my="md" />
+          <HeroSiegeButton
+            disabled={!hasAnswer || props.scoreState.loading || Boolean(props.scoreState.text)}
+            leftSection={<IconWand size={ICON_SM} />}
+            loading={props.scoreState.loading}
+            onClick={props.onSubmit}
+          >
+            {props.scoreState.text ? "Scored" : "Submit for score"}
+          </HeroSiegeButton>
+          <SystemDesignScoreResult scoreState={props.scoreState} />
+        </Paper>
+      </Grid.Col>
+      <Grid.Col span={{ base: SYSTEM_DESIGN_COLUMNS, md: SYSTEM_DESIGN_DETAIL_SPAN }}>
+        <Box style={{ display: "grid", gap: SYSTEM_DESIGN_SECTION_GAP }}>
+          <SystemDesignAnswerSection
+            answers={props.answers}
+            onAnswerChange={props.onAnswerChange}
+            onSectionIndexChange={props.onSectionIndexChange}
+            onTimerChange={props.onTimerChange}
+            questionId={props.question.id}
+            section={section}
+            sectionCount={sections.length}
+            sectionIndex={sectionIndex}
+            timers={props.timers}
+          />
+        </Box>
+      </Grid.Col>
+    </Grid>
+  );
+}
+
+function SystemDesignAnswerSection(props: { answers: SystemDesignAnswerMap; onAnswerChange?: (key: string, value: string) => void; onSectionIndexChange?: (index: number) => void; onTimerChange?: (sectionId: string, action: "pause" | "reset" | "start") => void; questionId: string; section: SystemDesignSection; sectionCount: number; sectionIndex: number; timers: SystemDesignTimerMap }) {
+  const section = props.section;
+  return (
+    <Box style={{ display: "grid", gap: SYSTEM_DESIGN_SECTION_GAP }}>
+      <Paper key={section.id} withBorder p="md" bg={SYSTEM_DESIGN_SECTION_BG}>
+        <SystemDesignSectionHeader onTimerChange={props.onTimerChange} questionId={props.questionId} section={section} sectionCount={props.sectionCount} sectionIndex={props.sectionIndex} timer={props.timers[getSystemDesignTimerKey(props.questionId, section.id)]} />
+        {section.id === "architecture" && <SystemDesignArchitectureCanvas />}
+        <Box mt="sm" style={{ display: "grid", gap: SYSTEM_DESIGN_SECTION_GAP }}>
+          {section.id === "architecture" ? (
+            <SystemDesignDiagramRequirements items={section.items} />
+          ) : section.items.map((item, index) => {
+            const answerKey = getSystemDesignAnswerKey(section, index);
+            const prompt = formatSystemDesignAnswerQuestion(item);
+            return (
+              <Box key={answerKey}>
+                <Text size="sm" fw={700}>{prompt}</Text>
+                <Textarea
+                  autosize
+                  minRows={3}
+                  mt={6}
+                  onChange={(event) => props.onAnswerChange?.(answerKey, event.currentTarget.value)}
+                  placeholder="Type your answer for this part..."
+                  value={props.answers[answerKey] || ""}
+                />
+              </Box>
+            );
+          })}
+        </Box>
+        <Group justify="space-between" mt="md">
+          <HeroSiegeButton disabled={props.sectionIndex === 0} minWidth={92} onClick={() => props.onSectionIndexChange?.(props.sectionIndex - 1)}>Previous</HeroSiegeButton>
+          <HeroSiegeButton disabled={props.sectionIndex >= props.sectionCount - 1} minWidth={92} onClick={() => props.onSectionIndexChange?.(props.sectionIndex + 1)}>Next</HeroSiegeButton>
+        </Group>
+      </Paper>
+    </Box>
+  );
+}
+
+function SystemDesignDiagramRequirements(props: { items: string[] }) {
+  return (
+    <Paper withBorder p="sm" bg="dark.7">
+      <Text size="sm" fw={800}>Diagram checklist</Text>
+      <List mt="xs" size="sm" spacing={4}>
+        {props.items.map((item) => <List.Item key={item}>{item}</List.Item>)}
+      </List>
+    </Paper>
+  );
+}
+
+function SystemDesignSectionHeader(props: { onTimerChange?: (sectionId: string, action: "pause" | "reset" | "start") => void; questionId: string; section: SystemDesignSection; sectionCount: number; sectionIndex: number; timer?: SystemDesignTimerMap[string] }) {
+  const defaultSeconds = getSystemDesignSectionSeconds(props.section.id);
+  const timer = props.timer || { remainingSeconds: defaultSeconds, running: false };
+  return (
+    <Group justify="space-between" align="center" gap="sm">
+      <Box>
+        <Title order={5}>{props.section.title}</Title>
+        <Text size="xs" c="dimmed">Section {props.sectionIndex + 1} of {props.sectionCount} · {Math.round(defaultSeconds / 60)} min</Text>
+      </Box>
+      <Group gap={6}>
+        <Badge color={timer.remainingSeconds === 0 ? "red" : timer.running ? "green" : "gray"} variant="light">{formatSectionTimer(timer.remainingSeconds)}</Badge>
+        <HeroSiegeButton height={30} minWidth={58} onClick={() => props.onTimerChange?.(props.section.id, timer.running ? "pause" : "start")}>
+          {timer.running ? "Pause" : "Resume"}
+        </HeroSiegeButton>
+        <HeroSiegeButton height={30} minWidth={52} onClick={() => props.onTimerChange?.(props.section.id, "reset")}>Reset</HeroSiegeButton>
+      </Group>
+    </Group>
+  );
+}
+
+function SystemDesignArchitectureCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const activeElementRef = useRef<SystemDesignCanvasElement | null>(null);
+  const [activeTool, setActiveTool] = useState<SystemDesignCanvasTool>("pen");
+  const [elements, setElements] = useState<SystemDesignCanvasElement[]>([]);
+  const [draftElement, setDraftElement] = useState<SystemDesignCanvasElement | null>(null);
+
+  const redrawCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) {
+      return;
+    }
+    drawSystemDesignCanvas(context, [...elements, ...(draftElement ? [draftElement] : [])]);
+  }, [draftElement, elements]);
+
+  useEffect(() => {
+    redrawCanvas();
+  }, [redrawCanvas]);
+
+  const updateActiveElement = useCallback((element: SystemDesignCanvasElement | null) => {
+    activeElementRef.current = element;
+    setDraftElement(element);
+  }, []);
+
+  const draw = useCallback((event: PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    const activeElement = activeElementRef.current;
+    if (!canvas || !activeElement) {
+      return;
+    }
+    const point = getCanvasPoint(canvas, event);
+    const nextElement = activeElement.kind === "stroke"
+      ? { ...activeElement, points: [...activeElement.points, point] }
+      : activeElement.kind === "shape"
+        ? { ...activeElement, end: point }
+        : activeElement;
+    updateActiveElement(nextElement);
+  }, [updateActiveElement]);
+
+  const startDrawing = useCallback((event: PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || activeTool === "select" || activeTool === "hand") {
+      return;
+    }
+    const point = getCanvasPoint(canvas, event);
+    if (activeTool === "text") {
+      const text = window.prompt("Text label");
+      if (text?.trim()) {
+        setElements((current) => [...current, { id: createSystemDesignCanvasElementId(), kind: "text", point, text: text.trim() }]);
+      }
+      return;
+    }
+    canvas.setPointerCapture(event.pointerId);
+    const element: SystemDesignCanvasElement = activeTool === "pen" || activeTool === "eraser"
+      ? { id: createSystemDesignCanvasElementId(), kind: "stroke", points: [point], tool: activeTool }
+      : { end: point, id: createSystemDesignCanvasElementId(), kind: "shape", start: point, tool: activeTool };
+    updateActiveElement(element);
+  }, [activeTool, updateActiveElement]);
+
+  const stopDrawing = useCallback((event: PointerEvent<HTMLCanvasElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const activeElement = activeElementRef.current;
+    if (activeElement) {
+      setElements((current) => [...current, activeElement]);
+    }
+    updateActiveElement(null);
+  }, [updateActiveElement]);
+
+  const clearCanvas = useCallback(() => {
+    setElements([]);
+    updateActiveElement(null);
+    drawSystemDesignCanvas(canvasRef.current?.getContext("2d") || null, []);
+  }, [updateActiveElement]);
+
+  const cursor = getSystemDesignCanvasCursor(activeTool);
+  const toolbarItems: { icon: ReactNode; label: string; tool: SystemDesignCanvasTool }[] = [
+    { icon: <IconPointer size={ICON_SM} />, label: "Select", tool: "select" },
+    { icon: <IconHandStop size={ICON_SM} />, label: "Hand", tool: "hand" },
+    { icon: <IconPencil size={ICON_SM} />, label: "Draw", tool: "pen" },
+    { icon: <IconSquare size={ICON_SM} />, label: "Rectangle", tool: "rect" },
+    { icon: <IconDiamond size={ICON_SM} />, label: "Diamond", tool: "diamond" },
+    { icon: <IconCircle size={ICON_SM} />, label: "Circle", tool: "ellipse" },
+    { icon: <IconArrowRight size={ICON_SM} />, label: "Arrow", tool: "arrow" },
+    { icon: <IconMinus size={ICON_SM} />, label: "Line", tool: "line" },
+    { icon: <IconEraser size={ICON_SM} />, label: "Eraser", tool: "eraser" },
+    { icon: <IconTypography size={ICON_SM} />, label: "Text", tool: "text" }
+  ];
+
+  const toolButtons = toolbarItems.map((item, index) => {
+    const selected = activeTool === item.tool;
+    return (
+      <Tooltip key={item.tool} label={`${item.label} ${index + 1}`} withArrow>
+        <ActionIcon
+          aria-label={item.label}
+          color={selected ? "violet" : "gray"}
+          onClick={() => setActiveTool(item.tool)}
+          size={36}
+          variant={selected ? "filled" : "subtle"}
+        >
+          {item.icon}
+        </ActionIcon>
+      </Tooltip>
+    );
+  });
+
+  return (
+    <Box mt="sm">
+      <Group justify="space-between" align="center" mb="xs">
+        <Text size="sm" fw={700}>Component diagram</Text>
+        <HeroSiegeButton height={30} minWidth={52} onClick={clearCanvas}>Clear</HeroSiegeButton>
+      </Group>
+      <Paper withBorder bg="#151515" p={6} mb="xs" style={{ display: "inline-flex", gap: 4 }}>
+        {toolButtons}
+      </Paper>
+      <Box style={{ background: SYSTEM_DESIGN_CANVAS_BG, border: SYSTEM_DESIGN_CANVAS_BORDER, borderRadius: RUN_BLOCK_RADIUS, overflow: "hidden", touchAction: "none" }}>
+        <canvas
+          ref={canvasRef}
+          aria-label="Architecture component drawing canvas"
+          height={SYSTEM_DESIGN_CANVAS_HEIGHT}
+          onPointerCancel={stopDrawing}
+          onPointerDown={startDrawing}
+          onPointerLeave={() => {
+            updateActiveElement(null);
+          }}
+          onPointerMove={draw}
+          onPointerUp={stopDrawing}
+          style={{ background: SYSTEM_DESIGN_CANVAS_BG, cursor, display: "block", height: "auto", maxWidth: "100%", width: "100%" }}
+          width={SYSTEM_DESIGN_CANVAS_WIDTH}
+        />
+      </Box>
+    </Box>
+  );
+}
+
+function createSystemDesignCanvasElementId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function getSystemDesignCanvasCursor(tool: SystemDesignCanvasTool) {
+  if (tool === "text") {
+    return "text";
+  }
+  if (tool === "eraser") {
+    return "cell";
+  }
+  if (tool === "hand") {
+    return "grab";
+  }
+  if (tool === "select") {
+    return "default";
+  }
+  return "crosshair";
+}
+
+function drawSystemDesignCanvas(context: CanvasRenderingContext2D | null, elements: SystemDesignCanvasElement[]) {
+  if (!context) {
+    return;
+  }
+  context.clearRect(0, 0, SYSTEM_DESIGN_CANVAS_WIDTH, SYSTEM_DESIGN_CANVAS_HEIGHT);
+  elements.forEach((element) => drawSystemDesignCanvasElement(context, element));
+}
+
+function drawSystemDesignCanvasElement(context: CanvasRenderingContext2D, element: SystemDesignCanvasElement) {
+  context.save();
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.strokeStyle = element.kind === "stroke" && element.tool === "eraser" ? SYSTEM_DESIGN_CANVAS_BG : SYSTEM_DESIGN_CANVAS_STROKE;
+  context.fillStyle = SYSTEM_DESIGN_CANVAS_STROKE;
+  context.lineWidth = element.kind === "stroke" && element.tool === "eraser" ? SYSTEM_DESIGN_CANVAS_ERASER_WIDTH : SYSTEM_DESIGN_CANVAS_LINE_WIDTH;
+  if (element.kind === "stroke") {
+    drawSystemDesignStroke(context, element.points);
+  } else if (element.kind === "shape") {
+    drawSystemDesignShape(context, element);
+  } else {
+    context.font = `700 ${SYSTEM_DESIGN_CANVAS_TEXT_SIZE}px sans-serif`;
+    context.fillText(element.text, element.point.x, element.point.y);
+  }
+  context.restore();
+}
+
+function drawSystemDesignStroke(context: CanvasRenderingContext2D, points: SystemDesignCanvasPoint[]) {
+  if (!points.length) {
+    return;
+  }
+  context.beginPath();
+  context.moveTo(points[0].x, points[0].y);
+  points.slice(1).forEach((point) => context.lineTo(point.x, point.y));
+  context.stroke();
+}
+
+function drawSystemDesignShape(context: CanvasRenderingContext2D, element: Extract<SystemDesignCanvasElement, { kind: "shape" }>) {
+  const left = Math.min(element.start.x, element.end.x);
+  const top = Math.min(element.start.y, element.end.y);
+  const width = Math.abs(element.end.x - element.start.x);
+  const height = Math.abs(element.end.y - element.start.y);
+  context.beginPath();
+  if (element.tool === "rect") {
+    context.rect(left, top, width, height);
+    context.stroke();
+    return;
+  }
+  if (element.tool === "ellipse") {
+    context.ellipse(left + width / 2, top + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
+    context.stroke();
+    return;
+  }
+  if (element.tool === "diamond") {
+    context.moveTo(left + width / 2, top);
+    context.lineTo(left + width, top + height / 2);
+    context.lineTo(left + width / 2, top + height);
+    context.lineTo(left, top + height / 2);
+    context.closePath();
+    context.stroke();
+    return;
+  }
+  context.moveTo(element.start.x, element.start.y);
+  context.lineTo(element.end.x, element.end.y);
+  context.stroke();
+  if (element.tool === "arrow") {
+    drawSystemDesignArrowHead(context, element.start, element.end);
+  }
+}
+
+function drawSystemDesignArrowHead(context: CanvasRenderingContext2D, start: SystemDesignCanvasPoint, end: SystemDesignCanvasPoint) {
+  const angle = Math.atan2(end.y - start.y, end.x - start.x);
+  const length = 18;
+  context.beginPath();
+  context.moveTo(end.x, end.y);
+  context.lineTo(end.x - length * Math.cos(angle - Math.PI / 6), end.y - length * Math.sin(angle - Math.PI / 6));
+  context.moveTo(end.x, end.y);
+  context.lineTo(end.x - length * Math.cos(angle + Math.PI / 6), end.y - length * Math.sin(angle + Math.PI / 6));
+  context.stroke();
+}
+
+function SystemDesignList(props: { title: string; items: string[] }) {
+  return (
+    <Paper withBorder p="md" bg={SYSTEM_DESIGN_SECTION_BG}>
+      <Title order={5}>{props.title}</Title>
+      <List mt="xs" size="sm" spacing={4}>
+        {props.items.map((item) => <List.Item key={item}>{item}</List.Item>)}
+      </List>
+    </Paper>
+  );
+}
+
+function SystemDesignScoreResult(props: { scoreState: SystemDesignScoreState[string] }) {
+  if (props.scoreState.loading) {
+    return <Text size="sm" c="dimmed" mt="sm">Codex is scoring your system design answer...</Text>;
+  }
+  if (props.scoreState.error) {
+    return <Text size="sm" c="red.3" mt="sm">{props.scoreState.error}</Text>;
+  }
+  if (!props.scoreState.text) {
+    return null;
+  }
+  return (
+    <Paper withBorder p="sm" mt="md" bg="dark.7">
+      <Group justify="space-between" align="center" mb="xs">
+        <Text size="sm" fw={800}>Codex score</Text>
+        {props.scoreState.score !== null && <Badge color={getSystemDesignScoreColor(props.scoreState.score)}>{props.scoreState.score}/100</Badge>}
+      </Group>
+      <HintContent content={props.scoreState.text} />
+    </Paper>
+  );
+}
+
+function getSystemDesignAnswerSections(question: SystemDesignQuestion): SystemDesignSection[] {
+  return [
+    ...question.radio,
+    { id: "optimization-focus", title: "Optimization Focus", items: question.optimizations },
+    { id: "deep-dive-prompts", title: "Deep Dive Prompts", items: question.deepDive }
+  ];
+}
+
+function getSystemDesignAnswerKey(section: SystemDesignSection, index: number) {
+  return `${section.id}:${index}`;
+}
+
+function getSystemDesignTimerKey(questionId: string, sectionId: string) {
+  return `${questionId}:${sectionId}`;
+}
+
+function getSystemDesignSectionSeconds(sectionId: string) {
+  const minutesBySection: Record<string, number> = {
+    architecture: 5,
+    data: 3,
+    "deep-dive-prompts": 2,
+    interface: 3,
+    "optimization-focus": 2,
+    optimizations: 3,
+    requirements: 2
+  };
+  return (minutesBySection[sectionId] || 3) * 60;
+}
+
+function tickSystemDesignTimers(current: SystemDesignTimerMap, activeQuestion: SystemDesignQuestion | null, activeSectionIndex: number, setSectionIndexByQuestion: React.Dispatch<React.SetStateAction<Record<string, number>>>) {
+  let changed = false;
+  const next: SystemDesignTimerMap = {};
+  for (const [key, value] of Object.entries(current)) {
+    if (!value.running || value.remainingSeconds <= 0) {
+      next[key] = value.running && value.remainingSeconds <= 0 ? { ...value, running: false } : value;
+      changed ||= next[key] !== value;
+      continue;
+    }
+    next[key] = { remainingSeconds: value.remainingSeconds - 1, running: value.remainingSeconds > 1 };
+    changed = true;
+  }
+
+  if (activeQuestion) {
+    const sections = getSystemDesignAnswerSections(activeQuestion);
+    const activeSection = sections[activeSectionIndex];
+    const activeKey = activeSection ? getSystemDesignTimerKey(activeQuestion.id, activeSection.id) : "";
+    const activeTimer = activeKey ? next[activeKey] : null;
+    if (activeTimer?.remainingSeconds === 0 && activeSectionIndex < sections.length - 1) {
+      const nextSection = sections[activeSectionIndex + 1];
+      const nextKey = getSystemDesignTimerKey(activeQuestion.id, nextSection.id);
+      const defaultSeconds = getSystemDesignSectionSeconds(nextSection.id);
+      next[activeKey] = { ...activeTimer, running: false };
+      next[nextKey] = {
+        remainingSeconds: next[nextKey]?.remainingSeconds && next[nextKey].remainingSeconds > 0 ? next[nextKey].remainingSeconds : defaultSeconds,
+        running: true
+      };
+      setSectionIndexByQuestion((currentIndexes) => ({ ...currentIndexes, [activeQuestion.id]: activeSectionIndex + 1 }));
+      changed = true;
+    }
+  }
+
+  return changed ? next : current;
+}
+
+function formatSectionTimer(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}:${String(remainingSeconds).padStart(SYSTEM_DESIGN_TIMER_PAD, "0")}`;
+}
+
+function getCanvasPoint(canvas: HTMLCanvasElement, event: React.PointerEvent<HTMLCanvasElement>) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    x: (event.clientX - rect.left) * scaleX,
+    y: (event.clientY - rect.top) * scaleY
+  };
+}
+
+function createSystemDesignScorePrompt(question: SystemDesignQuestion, answers: SystemDesignAnswerMap) {
+  const answerSections = getSystemDesignAnswerSections(question)
+    .map((section) => {
+      const lines = [
+        ...(section.id === "architecture" ? section.items.map((item) => `Diagram requirement: ${formatSystemDesignAnswerQuestion(item)}`) : section.items.map((item, index) => {
+        const answer = answers[getSystemDesignAnswerKey(section, index)]?.trim() || "(blank)";
+        return `Question: ${formatSystemDesignAnswerQuestion(item)}\nAnswer: ${answer}`;
+        }))
+      ];
+      return `## ${section.title}\n${lines.join("\n\n")}`;
+    })
+    .join("\n\n");
+  return [
+    "Score this frontend system design interview answer.",
+    "Return Markdown with exactly this format:",
+    "Score: N/100",
+    "Strengths:",
+    "- ...",
+    "- ...",
+    "Missing:",
+    "- ...",
+    "- ...",
+    "Next drill:",
+    "- ...",
+    "",
+    "Grade harshly but fairly. Focus most on optimization depth, failure handling, frontend state ownership, data flow, and measurement.",
+    "Do not solve the system design for me. Only evaluate the submitted answers.",
+    "",
+    `Prompt: ${question.title}`,
+    `Scenario: ${question.scenario}`,
+    `Duration: ${question.durationMinutes} minutes`,
+    `Rubric: ${question.rubric.join(" | ")}`,
+    "",
+    "Submitted answers:",
+    answerSections
+  ].join("\n");
+}
+
+function extractSystemDesignScore(text: string) {
+  const match = text.match(/score\s*:\s*(\d{1,3})\s*\/\s*100/i) || text.match(/\b(\d{1,3})\s*\/\s*100\b/);
+  if (!match?.[FUNCTION_SIGNATURE_GROUP]) {
+    return null;
+  }
+  return Math.max(0, Math.min(100, Number(match[FUNCTION_SIGNATURE_GROUP])));
+}
+
+function formatSystemDesignAnswerQuestion(item: string) {
+  return item.trim();
+}
+
+function getSystemDesignScoreColor(score: number) {
+  if (score >= 80) {
+    return "green";
+  }
+  if (score >= 60) {
+    return "yellow";
+  }
+  return "red";
 }
 
 function ProblemCard(props: { canMoveNext: boolean; currentQuestion: Question; chooseQuestion: (preferNext: boolean) => void; damagePop?: MonsterDamagePop | null; questionVariantReady: boolean; sessionStarted: boolean; state: StudyState }) {

@@ -16,6 +16,7 @@ const HINT_TOTAL_TIMEOUT_MS = 12000;
 const QUESTION_VARIANT_TOTAL_TIMEOUT_MS = 60000;
 const EXAMPLE_EXPLANATION_TOTAL_TIMEOUT_MS = 45000;
 const SOLUTION_REVEAL_TOTAL_TIMEOUT_MS = 75000;
+const SYSTEM_DESIGN_SCORE_TOTAL_TIMEOUT_MS = 90000;
 const SESSION_REQUEST_TIMEOUT_MS = 20000;
 const TURN_TIMEOUT_MS = 120000;
 const STDERR_LIMIT = 8000;
@@ -33,7 +34,8 @@ const DEVELOPER_INSTRUCTIONS = [
   "Hint code must be incomplete, not a runnable implementation.",
   "When asked for a question variant, return valid JSON only and preserve the original function contract.",
   "When asked to explain an example, explain only that example's output calculation without implementation code.",
-  "When asked to reveal a solution, return the requested Markdown sections and one complete JavaScript function."
+  "When asked to reveal a solution, return the requested Markdown sections and one complete JavaScript function.",
+  "When asked to score a system-design answer, return the requested score format only."
 ].join("\n");
 
 let pendingInput = Buffer.alloc(BUFFER_START);
@@ -113,6 +115,13 @@ function handleNativeMessage(payload) {
     return;
   }
 
+  if (message?.type === "system-design-score" && typeof message.prompt === "string") {
+    codexQueue = codexQueue.then(() => runSystemDesignScoreRequest(message.requestId, message.prompt)).catch((error) => {
+      sendNativeMessage({ type: "codex-system-design-score-error", requestId: message.requestId, error: getErrorMessage(error) });
+    });
+    return;
+  }
+
   if (message?.type !== "hint" || typeof message.prompt !== "string") {
     sendNativeMessage({ type: "codex-hint-error", error: "Native host received an invalid hint request." });
     return;
@@ -178,6 +187,19 @@ async function runSolutionRevealRequest(requestId, prompt) {
   } catch (error) {
     resetCodexConnection();
     sendNativeMessage({ type: "codex-solution-reveal-error", requestId, error: getErrorMessage(error) });
+  } finally {
+    requestTimeout.cancel();
+  }
+}
+
+async function runSystemDesignScoreRequest(requestId, prompt) {
+  const requestTimeout = createTimeout(SYSTEM_DESIGN_SCORE_TOTAL_TIMEOUT_MS, "Timed out waiting for Codex system design score.");
+  try {
+    const text = await Promise.race([runCodexTurn(prompt, { requestId, streamType: "system-design-score" }), requestTimeout.promise]);
+    sendNativeMessage({ type: "codex-system-design-score-done", requestId, text });
+  } catch (error) {
+    resetCodexConnection();
+    sendNativeMessage({ type: "codex-system-design-score-error", requestId, error: getErrorMessage(error) });
   } finally {
     requestTimeout.cancel();
   }

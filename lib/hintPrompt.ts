@@ -5,6 +5,7 @@ const OPEN_CODEX_HINT_TYPE = "open-codex-hint";
 const OPEN_CODEX_QUESTION_VARIANT_TYPE = "open-codex-question-variant";
 const OPEN_CODEX_EXAMPLE_EXPLANATION_TYPE = "open-codex-example-explanation";
 const OPEN_CODEX_SOLUTION_REVEAL_TYPE = "open-codex-solution-reveal";
+const OPEN_CODEX_SYSTEM_DESIGN_SCORE_TYPE = "open-codex-system-design-score";
 const WARM_CODEX_HINT_TYPE = "warm-codex-hint";
 
 export const CODEX_HINT_CHUNK = "codex-hint-chunk";
@@ -49,6 +50,12 @@ type CodexSolutionRevealRequest = {
   questionId: string;
 };
 
+type CodexSystemDesignScoreRequest = {
+  type: typeof OPEN_CODEX_SYSTEM_DESIGN_SCORE_TYPE;
+  prompt: string;
+  questionId: string;
+};
+
 type CodexWarmRequest = {
   type: typeof WARM_CODEX_HINT_TYPE;
 };
@@ -70,7 +77,7 @@ type ChromeRuntime = {
   lastError?: {
     message?: string;
   };
-  sendMessage?: (message: CodexHintRequest | CodexQuestionVariantRequest | CodexExampleExplanationRequest | CodexSolutionRevealRequest | CodexWarmRequest, callback: (response?: CodexMessageResponse) => void) => void;
+  sendMessage?: (message: CodexHintRequest | CodexQuestionVariantRequest | CodexExampleExplanationRequest | CodexSolutionRevealRequest | CodexSystemDesignScoreRequest | CodexWarmRequest, callback: (response?: CodexMessageResponse) => void) => void;
 };
 
 export function createHintPrompt(question: Question, code: string) {
@@ -153,11 +160,15 @@ export function requestCodexSolutionReveal(questionId: string, prompt: string) {
   return sendCodexHintMessage({ type: OPEN_CODEX_SOLUTION_REVEAL_TYPE, prompt, questionId });
 }
 
+export function requestCodexSystemDesignScore(questionId: string, prompt: string) {
+  return sendCodexHintMessage({ type: OPEN_CODEX_SYSTEM_DESIGN_SCORE_TYPE, prompt, questionId });
+}
+
 export function warmCodexHint() {
   return sendCodexHintMessage({ type: WARM_CODEX_HINT_TYPE });
 }
 
-function sendCodexHintMessage(message: CodexHintRequest | CodexQuestionVariantRequest | CodexExampleExplanationRequest | CodexSolutionRevealRequest | CodexWarmRequest): Promise<CodexMessageResponse> {
+function sendCodexHintMessage(message: CodexHintRequest | CodexQuestionVariantRequest | CodexExampleExplanationRequest | CodexSolutionRevealRequest | CodexSystemDesignScoreRequest | CodexWarmRequest): Promise<CodexMessageResponse> {
   const runtime = (globalThis as typeof globalThis & { chrome?: { runtime?: ChromeRuntime } }).chrome?.runtime;
   if (!runtime?.sendMessage) {
     return Promise.resolve({ ok: false, error: "Chrome runtime is not available." });

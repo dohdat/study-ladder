@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { questions } from "../data/questions";
-import { createExampleExplanationPrompt, createHintPrompt, createSolutionRevealPrompt, requestCodexExampleExplanation, requestCodexHint, requestCodexQuestionVariant, requestCodexSolutionReveal, warmCodexHint } from "../lib/hintPrompt";
+import { createExampleExplanationPrompt, createHintPrompt, createSolutionRevealPrompt, requestCodexExampleExplanation, requestCodexHint, requestCodexQuestionVariant, requestCodexSolutionReveal, requestCodexSystemDesignScore, warmCodexHint } from "../lib/hintPrompt";
 
 const LONG_CODE_LENGTH = 1900;
 const TRUNCATED_PROMPT_LENGTH = 900;
@@ -103,6 +103,14 @@ describe("hintPrompt", () => {
 
     await expect(requestCodexSolutionReveal("question-1", "reveal")).resolves.toEqual({ ok: true, text: "## Approach" });
     expect(sendMessage).toHaveBeenCalledWith({ prompt: "reveal", questionId: "question-1", type: "open-codex-solution-reveal" }, expect.any(Function));
+  });
+
+  it("sends system design score requests through the Chrome runtime", async () => {
+    const sendMessage = vi.fn((_message, callback) => callback({ ok: true, text: "Score: 82/100" }));
+    setChromeRuntime({ sendMessage });
+
+    await expect(requestCodexSystemDesignScore("system-1", "score me")).resolves.toEqual({ ok: true, text: "Score: 82/100" });
+    expect(sendMessage).toHaveBeenCalledWith({ prompt: "score me", questionId: "system-1", type: "open-codex-system-design-score" }, expect.any(Function));
   });
 
   it("uses Chrome runtime lastError when the background does not respond", async () => {

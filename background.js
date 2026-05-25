@@ -3,6 +3,7 @@ const HINT_REQUEST_TYPE = "open-codex-hint";
 const QUESTION_VARIANT_REQUEST_TYPE = "open-codex-question-variant";
 const EXAMPLE_EXPLANATION_REQUEST_TYPE = "open-codex-example-explanation";
 const SOLUTION_REVEAL_REQUEST_TYPE = "open-codex-solution-reveal";
+const SYSTEM_DESIGN_SCORE_REQUEST_TYPE = "open-codex-system-design-score";
 const WARM_REQUEST_TYPE = "warm-codex-hint";
 const GET_BLOCKER_STATE_TYPE = "study-blocker-get-state";
 const SAVE_BLOCKER_SETTINGS_TYPE = "study-blocker-save-settings";
@@ -15,6 +16,7 @@ const MS_PER_MINUTE = 60000;
 const QUESTION_VARIANT_TIMEOUT_MS = 75000;
 const EXAMPLE_EXPLANATION_TIMEOUT_MS = 45000;
 const SOLUTION_REVEAL_TIMEOUT_MS = 75000;
+const SYSTEM_DESIGN_SCORE_TIMEOUT_MS = 90000;
 const DEFAULT_DAILY_MINUTES = 30;
 const DEFAULT_DISTRACTING_SITES = [
   "reddit.com",
@@ -32,9 +34,11 @@ let hintRequestActive = false;
 let nextQuestionVariantRequestId = 1;
 let nextExampleExplanationRequestId = 1;
 let nextSolutionRevealRequestId = 1;
+let nextSystemDesignScoreRequestId = 1;
 const questionVariantRequests = new Map();
 const exampleExplanationRequests = new Map();
 const solutionRevealRequests = new Map();
+const systemDesignScoreRequests = new Map();
 
 function getStudyPageUrl() {
   return /^https?:\/\//.test(STUDY_PAGE) ? STUDY_PAGE : chrome.runtime.getURL(STUDY_PAGE);
@@ -65,6 +69,9 @@ function handleMessage(message, _sender, sendResponse) {
   }
   if (message.type === SOLUTION_REVEAL_REQUEST_TYPE) {
     return requestSolutionReveal(message, sendResponse);
+  }
+  if (message.type === SYSTEM_DESIGN_SCORE_REQUEST_TYPE) {
+    return requestSystemDesignScore(message, sendResponse);
   }
   if (message.type === GET_BLOCKER_STATE_TYPE) {
     return getBlockerState(sendResponse);
@@ -161,6 +168,32 @@ function requestSolutionReveal(message, sendResponse) {
   return true;
 }
 
+function requestSystemDesignScore(message, sendResponse) {
+  if (!message.prompt || !message.questionId) {
+    sendResponse({ ok: false, error: "System design score prompt is missing." });
+    return false;
+  }
+
+  const port = ensureHintPort();
+  if (!port) {
+    sendResponse({ ok: false, error: "Could not connect to Codex system design helper." });
+    return false;
+  }
+
+  const requestId = nextSystemDesignScoreRequestId;
+  nextSystemDesignScoreRequestId += 1;
+  const timeout = setTimeout(() => {
+    const request = systemDesignScoreRequests.get(requestId);
+    systemDesignScoreRequests.delete(requestId);
+    if (request) {
+      request.sendResponse({ ok: false, error: "Timed out waiting for Codex system design score." });
+    }
+  }, SYSTEM_DESIGN_SCORE_TIMEOUT_MS);
+  systemDesignScoreRequests.set(requestId, { sendResponse, timeout });
+  port.postMessage({ type: "system-design-score", prompt: message.prompt, questionId: message.questionId, requestId });
+  return true;
+}
+
 function requestExampleExplanation(message, sendResponse) {
   if (!message.prompt || !message.exampleKey) {
     sendResponse({ ok: false, error: "Example explanation prompt is missing." });
@@ -215,6 +248,10 @@ function ensureHintPort() {
       resolveSolutionRevealRequest(nativeMessage);
       return;
     }
+    if (nativeMessage.type === "codex-system-design-score-done" || nativeMessage.type === "codex-system-design-score-error") {
+      resolveSystemDesignScoreRequest(nativeMessage);
+      return;
+    }
     if (hintRequestActive) {
       relayHintMessage(nativeMessage);
     }
@@ -230,6 +267,7 @@ function ensureHintPort() {
     rejectPendingQuestionVariants(error || "Codex helper disconnected.");
     rejectPendingExampleExplanations(error || "Codex helper disconnected.");
     rejectPendingSolutionReveals(error || "Codex helper disconnected.");
+    rejectPendingSystemDesignScores(error || "Codex helper disconnected.");
     hintRequestActive = false;
     hintPort = null;
   }
@@ -267,6 +305,28 @@ function resolveSolutionRevealRequest(message) {
     return;
   }
   request.sendResponse({ ok: true, text: message.text || "" });
+}
+
+function resolveSystemDesignScoreRequest(message) {
+  const request = systemDesignScoreRequests.get(message.requestId);
+  if (!request) {
+    return;
+  }
+  systemDesignScoreRequests.delete(message.requestId);
+  clearTimeout(request.timeout);
+  if (message.type === "codex-system-design-score-error") {
+    request.sendResponse({ ok: false, error: message.error || "Codex system design scoring failed." });
+    return;
+  }
+  request.sendResponse({ ok: true, text: message.text || "" });
+}
+
+function rejectPendingSystemDesignScores(error) {
+  for (const [requestId, request] of systemDesignScoreRequests.entries()) {
+    clearTimeout(request.timeout);
+    request.sendResponse({ ok: false, error });
+    systemDesignScoreRequests.delete(requestId);
+  }
 }
 
 function rejectPendingSolutionReveals(error) {
