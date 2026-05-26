@@ -51,7 +51,7 @@ describe("hintPrompt", () => {
     expect(prompt).toContain("## Approach");
     expect(prompt).toContain("## Code");
     expect(prompt).toContain("## Complexity");
-    expect(prompt).toContain("## Compare with my code");
+    expect(prompt).not.toContain("## Compare with my code");
     expect(prompt).toContain("Do not include a 'Why it works' section.");
     expect(prompt).toContain(questions[0].functionName);
   });

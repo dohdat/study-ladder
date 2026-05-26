@@ -22,6 +22,7 @@ export type Question = {
   topics: string[];
   functionName: string;
   prompt: string;
+  solutionReveal?: string;
   constraints: string[];
   starter: string;
   frontend?: {

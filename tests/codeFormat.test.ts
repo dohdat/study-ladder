@@ -52,6 +52,17 @@ describe("beautifyCode", () => {
     ].join("\n"));
   });
 
+  it("adds missing empty constructor brackets", () => {
+    expect(beautifyCode("function test(){\nconst freq = new Map\nconst seen = new Set\nreturn freq\n}")).toBe([
+      "function test() {",
+      "  const freq = new Map();",
+      "  const seen = new Set();",
+      "  return freq;",
+      "}",
+      ""
+    ].join("\n"));
+  });
+
   it("adds missing closing braces", () => {
     expect(beautifyCode("function test() {\nif (ok) {\nreturn true")).toBe([
       "function test() {",

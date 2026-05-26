@@ -1,13 +1,35 @@
 "use strict";
 
-const serialize = (value) => {
+const serialize = (value, seen = new WeakSet()) => {
   if (typeof value === "undefined") {
     return "undefined";
   }
-  if (Number.isNaN(value)) {
+  if (typeof value === "number" && Number.isNaN(value)) {
     return "NaN";
   }
-  return JSON.stringify(value);
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (seen.has(value)) {
+    return "[Circular]";
+  }
+  seen.add(value);
+  if (value instanceof Map) {
+    const entries = [...value.entries()].map(([key, entryValue]) => `${serialize(key, seen)} => ${serialize(entryValue, seen)}`);
+    return `Map(${value.size}) {${entries.join(", ")}}`;
+  }
+  if (value instanceof Set) {
+    const entries = [...value.values()].map((entryValue) => serialize(entryValue, seen));
+    return `Set(${value.size}) {${entries.join(", ")}}`;
+  }
+  if (value instanceof Error) {
+    return `${value.name}: ${value.message}`;
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => serialize(item, seen)).join(", ")}]`;
+  }
+  const entries = Object.entries(value).map(([key, entryValue]) => `${key}: ${serialize(entryValue, seen)}`);
+  return `{${entries.join(", ")}}`;
 };
 
 const serializeLogPart = (value) => {

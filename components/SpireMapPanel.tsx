@@ -175,21 +175,35 @@ export function SpireMapPanel(props: { fillAvailableHeight?: boolean; setState: 
   const solved = props.state.profile.spireRun.roundSolvedIds.length;
   const target = props.state.profile.spireRun.roundQuestionIds.length;
   const mapOpen = props.state.profile.spireRun.mapOpen;
+  const runSetupOpen = isSpireRunSetupOpen(props.state);
   const selectedNodeIsReachable = mapOpen && Boolean(node && isReachableMapNode(props.state, node.id));
   const pendingRelicReward = props.state.profile.spireRun.pendingRelicReward;
   const mapBg = getActMapBackground(props.state.profile.spireRun.act);
   const reachableNodeIds = useMemo(() => new Set(props.state.profile.spireRun.availableNodeIds), [props.state.profile.spireRun.availableNodeIds]);
   const completedNodeIds = useMemo(() => new Set(props.state.profile.spireRun.completedNodeIds), [props.state.profile.spireRun.completedNodeIds]);
   const visualNodes = useMemo(() => props.state.profile.spireRun.nodes.map((mapNode) => ({ ...mapNode, position: getVisualNodePosition(mapNode) })), [props.state.profile.spireRun.nodes]);
+  const currentVisualNode = visualNodes.find((mapNode) => mapNode.id === props.state.profile.spireRun.currentNodeId);
   useEffect(() => {
     if (userMenuOpen) {
       setHighlightedKind(null);
     }
   }, [userMenuOpen]);
+  useEffect(() => {
+    if (!mapOpen || runSetupOpen) {
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      const scroller = mapDrag.scrollRef.current;
+      if (scroller) {
+        scroller.scrollTop = getMapScrollTopForNodeRow(scroller, currentVisualNode?.position.y);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [currentVisualNode?.position.y, mapDrag.scrollRef, mapOpen, runSetupOpen]);
   return (
     <Paper withBorder p="sm" style={{ background: "var(--mantine-color-dark-7)", ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
       <Box style={{ minWidth: 0, ...(mapOpen && props.fillAvailableHeight ? { ...FLEX_FILL_STYLE, display: "flex", flexDirection: "column" } : {}) }}>
-        {mapOpen && isSpireRunSetupOpen(props.state) ? (
+        {mapOpen && runSetupOpen ? (
           <RunSetupScreen fillAvailableHeight={props.fillAvailableHeight} setState={props.setState} state={props.state} />
         ) : mapOpen ? (
           <Box style={{ background: mapBg, border: "1px solid var(--mantine-color-dark-4)", height: props.fillAvailableHeight ? undefined : EXPANDED_MAP_HEIGHT, overflow: "hidden", position: "relative", ...(props.fillAvailableHeight ? FLEX_FILL_STYLE : {}) }}>
@@ -269,6 +283,12 @@ function useUserMenuOpen() {
 
 function isReachableMapNode(state: StudyState, nodeId: string) {
   return state.profile.godMode || state.profile.spireRun.availableNodeIds.includes(nodeId);
+}
+
+function getMapScrollTopForNodeRow(scroller: HTMLDivElement, yPercent = 100) {
+  const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+  const nodeTop = (clamp(yPercent, NODE_VISUAL_MIN, NODE_VISUAL_MAX) / 100) * scroller.scrollHeight;
+  return clamp(nodeTop - scroller.clientHeight / 2, 0, maxScrollTop);
 }
 
 function useDebouncedLegendHighlight(onHighlight: (kind: SpireNodeKind | null) => void) {

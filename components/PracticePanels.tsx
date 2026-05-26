@@ -38,6 +38,7 @@ import {
   requestCodexSystemDesignScore,
   type CodexExampleExplanationStreamMessage
 } from "../lib/hintPrompt";
+import { createLocalSolutionReveal } from "../lib/localSolutionReveal";
 import { difficultyLabels, getVisibleQuestionTopics } from "../lib/studyCore";
 import { RUNNER_FRAME } from "../lib/practiceStatus";
 import type { ActiveWarriorSkillId, ConsoleRunResult, Question, RunResult, StudyState } from "../types/study";
@@ -1421,7 +1422,7 @@ function SolutionRevealPanel(props: { code: string; currentQuestion: Question; m
     setLoading(false);
     setError("");
     setSolutionText("");
-  }, [props.currentQuestion.id]);
+  }, [props.currentQuestion.id, props.currentQuestion.solutionReveal]);
 
   const revealSolution = useCallback(() => {
     if (!confirming) {
@@ -1431,6 +1432,13 @@ function SolutionRevealPanel(props: { code: string; currentQuestion: Question; m
     setLoading(true);
     setError("");
     props.markSolutionRevealed();
+    const instantSolution = (props.currentQuestion.solutionReveal || createLocalSolutionReveal(props.currentQuestion, props.code)).trim();
+    if (instantSolution && !solutionText) {
+      setSolutionText(instantSolution);
+      setConfirming(false);
+      setLoading(false);
+      return;
+    }
     requestCodexSolutionReveal(props.currentQuestion.id, createSolutionRevealPrompt(props.currentQuestion, props.code)).then((response) => {
       setLoading(false);
       if (!response.ok || !response.text) {
@@ -1439,7 +1447,7 @@ function SolutionRevealPanel(props: { code: string; currentQuestion: Question; m
       }
       setSolutionText(response.text);
     });
-  }, [confirming, props]);
+  }, [confirming, props, solutionText]);
 
   const sections = parseSolutionSections(solutionText);
   return (
@@ -1468,12 +1476,10 @@ function SolutionRevealPanel(props: { code: string; currentQuestion: Question; m
             <Tabs.Tab value="approach">Approach</Tabs.Tab>
             <Tabs.Tab value="code">Code</Tabs.Tab>
             <Tabs.Tab value="complexity">Complexity</Tabs.Tab>
-            <Tabs.Tab value="compare">Compare</Tabs.Tab>
           </Tabs.List>
           <Tabs.Panel value="approach" pt="sm"><HintContent content={sections.approach} /></Tabs.Panel>
           <Tabs.Panel value="code" pt="sm"><HighlightedCode code={extractSolutionCode(sections.code)} /></Tabs.Panel>
           <Tabs.Panel value="complexity" pt="sm"><HintContent content={sections.complexity} /></Tabs.Panel>
-          <Tabs.Panel value="compare" pt="sm"><HintContent content={sections.compare} /></Tabs.Panel>
         </Tabs>
       )}
     </Paper>
@@ -1484,8 +1490,7 @@ function parseSolutionSections(markdown: string) {
   const sections = {
     approach: "",
     code: "",
-    complexity: "",
-    compare: ""
+    complexity: ""
   };
   let current: keyof typeof sections = "approach";
   for (const line of markdown.split("\n")) {
@@ -1503,7 +1508,6 @@ function parseSolutionSections(markdown: string) {
       continue;
     }
     if (normalized === "compare with my code") {
-      current = "compare";
       continue;
     }
     sections[current] = `${sections[current]}${line}\n`;
@@ -1511,8 +1515,7 @@ function parseSolutionSections(markdown: string) {
   return {
     approach: sections.approach.trim() || markdown.trim(),
     code: sections.code.trim() || markdown.trim(),
-    complexity: sections.complexity.trim() || "Complexity was not provided.",
-    compare: sections.compare.trim() || "No comparison was provided."
+    complexity: sections.complexity.trim() || "Complexity was not provided."
   };
 }
 

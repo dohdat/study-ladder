@@ -11,6 +11,7 @@ const MAX_EXAMPLE_FIELD_LENGTH = 240;
 const MAX_FRONTEND_CHECKS = 6;
 const MIN_FRONTEND_CHECKS = 3;
 const MAX_FRONTEND_FILE_LENGTH = 5000;
+const MAX_SOLUTION_REVEAL_LENGTH = 6000;
 const MAX_WIREFRAME_LINES = 10;
 const MAX_WIREFRAME_LINE_LENGTH = 80;
 const RATING_TOLERANCE = 150;
@@ -21,6 +22,7 @@ const HARD_ALGORITHM_PATTERN = /\b(subset|knapsack|reachable|combination|combina
 const EXTRA_FEASIBILITY_PATTERN = /\b(leaving at least one|leave at least one|at least one .*remain|no valid deletion|invalid because .*remain)\b/i;
 const DISTINCT_OBJECTIVE_PATTERN = /\b(smallest|minimize|minimum)[^.]{0,90}\b(distinct|values|value count)\b/i;
 const SECONDARY_REMOVAL_OBJECTIVE_PATTERN = /\b(smallest|minimize|minimum|maximum|maximize)[^.]{0,90}\b(removed|deletion|deletions|remaining|remainder|residue)\b/i;
+const LOW_RATING_SHAPE_LABELS: Record<string, string> = { array: "flat array", object: "object", scalar: "scalar value" };
 
 export type QuestionVariantPayload = {
   constraints: string[];
@@ -31,6 +33,7 @@ export type QuestionVariantPayload = {
   }>;
   estimatedRating: number;
   prompt: string;
+  solutionReveal?: string;
   tests: TestCase[];
   title: string;
   frontend?: {
@@ -54,7 +57,8 @@ export function createQuestionVariantPrompt(question: Question) {
   }
   const lowRatingRules = question.rating <= LOW_RATING_MAX ? [
     "- This is a low-rated question: do not add subset-selection, knapsack, dynamic programming, or multiple optimization objectives.",
-    "- For low-rated scalar/array-return questions, do not change the answer into an object with multiple fields.",
+    `- This low-rated question's original answer shape is ${LOW_RATING_SHAPE_LABELS[getReturnShape(question.tests)]}; preserve that answer shape exactly.`,
+    "- Do not turn a count/boolean/string answer into returning the actual chosen values, indices, elements, or a multi-field object.",
     "- Do not add extra feasibility rules such as requiring at least one element to remain unless the original prompt already has that rule."
   ] : [];
   return [
@@ -63,13 +67,15 @@ export function createQuestionVariantPrompt(question: Question) {
     "",
     "Rules:",
     "- Preserve the exact function name and argument list. Do not add, remove, or reorder parameters.",
-    "- You MAY change the return semantics and output shape to make the task feel different.",
-    "- Keep the same core algorithmic family and difficulty, but require a different final thing than the stock prompt.",
+    "- Keep the same return shape as the original prompt unless the original rating is above 1500 and the shape change is clearly still within the rating band.",
+    "- Keep the same core algorithmic family and difficulty. Make only a small playable twist, not a harder reconstruction problem.",
     `- Keep the estimated difficulty rating between ${question.rating - RATING_TOLERANCE} and ${question.rating + RATING_TOLERANCE}. Do not make the task easier or harder than that band.`,
     "- Set estimatedRating to your best LeetCode-style rating estimate for the changed task.",
     "- Generate new tests for your changed semantics. These tests will grade the answer, not the original expected outputs.",
+    "- Also generate solutionReveal: Markdown with exactly these headings: ## Approach, ## Code, ## Complexity.",
+    "- solutionReveal Code must contain one complete JavaScript function matching the required function name and arguments.",
     "- Do not only rename variables, change numbers, or change the story. The implementation goal must be slightly different.",
-    "- Good variations: return pair values instead of indices, return a count instead of a boolean, return a repaired/normalized result, add a tie-break rule, or ask for the earliest/widest/cheapest valid choice.",
+    "- Good variations: adjust an edge behavior, return a same-shape count/boolean/string/array result, or add one simple tie-break rule that does not require a second algorithm.",
     "- Prefer a simple return value: number, boolean, string, or flat array. Use a tiny object only if the original answer was already object-shaped or the question is above 1500 rating.",
     ...lowRatingRules,
     "- Keep prompt text concise: 1 or 2 sentences, under 45 words.",
@@ -82,7 +88,7 @@ export function createQuestionVariantPrompt(question: Question) {
     "- Do not mention that this is a variant, remix, hidden test, LeetCode, or NeetCode.",
     "",
     "JSON schema:",
-    "{\"title\":\"string\",\"estimatedRating\":1300,\"prompt\":\"string\",\"constraints\":[\"string\"],\"examples\":[{\"input\":\"string\",\"output\":\"string\",\"explanation\":\"string\"}],\"tests\":[{\"name\":\"string\",\"args\":[...],\"expected\":...}]}",
+    "{\"title\":\"string\",\"estimatedRating\":1300,\"prompt\":\"string\",\"constraints\":[\"string\"],\"examples\":[{\"input\":\"string\",\"output\":\"string\",\"explanation\":\"string\"}],\"tests\":[{\"name\":\"string\",\"args\":[...],\"expected\":...}],\"solutionReveal\":\"## Approach\\n- ...\\n## Code\\n```js\\nfunction name(args) { }\\n```\\n## Complexity\\n...\"}",
     "",
     `Original title: ${question.title}`,
     `Original rating: ${question.rating}`,
@@ -101,7 +107,8 @@ export function createQuestionVariantRepairPrompt(question: Question, draft: str
   }
   const lowRatingRules = question.rating <= LOW_RATING_MAX ? [
     "- low-rated questions must not add subset-selection, knapsack, DP, multiple optimization objectives, or extra feasibility rules.",
-    "- low-rated scalar/array-return questions must not return a multi-field object."
+    `- low-rated questions must preserve the original answer shape: ${LOW_RATING_SHAPE_LABELS[getReturnShape(question.tests)]}.`,
+    "- low-rated scalar questions must not return chosen values, indices, elements, arrays, or multi-field objects."
   ] : [];
   return [
     "Repair this question-variant draft into valid JSON.",
@@ -109,12 +116,13 @@ export function createQuestionVariantRepairPrompt(question: Question, draft: str
     "Do not invent a different task unless needed to satisfy the schema.",
     "",
     "Required JSON schema:",
-    "{\"title\":\"string\",\"estimatedRating\":1300,\"prompt\":\"string\",\"constraints\":[\"string\"],\"examples\":[{\"input\":\"string\",\"output\":\"string\",\"explanation\":\"string\"}],\"tests\":[{\"name\":\"string\",\"args\":[...],\"expected\":...}]}",
+    "{\"title\":\"string\",\"estimatedRating\":1300,\"prompt\":\"string\",\"constraints\":[\"string\"],\"examples\":[{\"input\":\"string\",\"output\":\"string\",\"explanation\":\"string\"}],\"tests\":[{\"name\":\"string\",\"args\":[...],\"expected\":...}],\"solutionReveal\":\"## Approach\\n- ...\\n## Code\\n```js\\nfunction name(args) { }\\n```\\n## Complexity\\n...\"}",
     "",
     "Hard requirements:",
     `- estimatedRating must be between ${question.rating - RATING_TOLERANCE} and ${question.rating + RATING_TOLERANCE}.`,
     "- tests must contain at least 5 usable cases.",
     "- every test must use args, not inputArgs or arguments.",
+    "- solutionReveal must be included and must have ## Approach, ## Code, and ## Complexity sections.",
     "- prompt must be concise and under 360 characters.",
     "- preserve the exact function name and argument list from the original question.",
     ...lowRatingRules,
@@ -146,6 +154,7 @@ export function createQuestionVariantResult(question: Question, text: string): Q
     examples: payload.examples,
     frontend: payload.frontend || question.frontend,
     prompt: payload.prompt,
+    solutionReveal: payload.solutionReveal || question.solutionReveal,
     tests: payload.tests,
     title: payload.title
   } };
@@ -181,6 +190,8 @@ function parseVariantPayload(question: Question, text: string): QuestionVariantP
   const examples = normalizeExamples(record.examples);
   const estimatedRating = normalizeEstimatedRating(record);
   const tests = normalizeTests(record.tests);
+  const solutionRecord = record as Partial<QuestionVariantPayload> & { revealSolution?: unknown; solution?: unknown };
+  const solutionReveal = normalizeSolutionReveal(solutionRecord.solutionReveal ?? solutionRecord.solution ?? solutionRecord.revealSolution);
   if (!title) {
     lastParseError = "Codex did not provide a usable title.";
     return null;
@@ -209,12 +220,16 @@ function parseVariantPayload(question: Question, text: string): QuestionVariantP
     lastParseError = `Codex provided only ${tests.length} usable tests.`;
     return null;
   }
+  if (!solutionReveal) {
+    lastParseError = "Codex did not provide a usable solution reveal.";
+    return null;
+  }
   const driftReason = getDifficultyDriftReason(question, prompt, constraints, examples, tests);
   if (driftReason) {
     lastParseError = driftReason;
     return null;
   }
-  return { constraints, estimatedRating, examples, prompt, tests, title };
+  return { constraints, estimatedRating, examples, prompt, solutionReveal, tests, title };
 }
 
 function createFrontendQuestionVariantPrompt(question: Question) {
@@ -392,6 +407,27 @@ function normalizeExamples(value: unknown): QuestionVariantPayload["examples"] {
     .slice(0, MAX_EXAMPLES);
 }
 
+function normalizeSolutionReveal(value: unknown) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  const text = value.trim();
+  if (!text || text.length > MAX_SOLUTION_REVEAL_LENGTH) {
+    return "";
+  }
+  const normalizedHeadings = new Set(
+    [...text.matchAll(/^##\s+(.+)$/gim)].map((match) => match[1].trim().toLowerCase())
+  );
+  const requiredHeadings = ["approach", "code", "complexity"];
+  if (!requiredHeadings.every((heading) => normalizedHeadings.has(heading))) {
+    return "";
+  }
+  if (!/```(?:javascript|js)?[\s\S]*?function\s+\w+\s*\(/i.test(text)) {
+    return "";
+  }
+  return text;
+}
+
 function normalizeEstimatedRating(record: Partial<QuestionVariantPayload> & Record<string, unknown>) {
   const value = record.estimatedRating ?? record.estimated_rating ?? record.rating ?? record.difficultyRating;
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -413,6 +449,9 @@ function getDifficultyDriftReason(question: Question, prompt: string, constraint
     return "";
   }
   const combinedText = [prompt, ...constraints, ...examples.flatMap((example) => [example.input, example.output, example.explanation || ""])].join(" ");
+  if (getReturnShape(question.tests) !== getReturnShape(tests)) {
+    return "Codex changed the answer shape for a low-rated question.";
+  }
   if (HARD_ALGORITHM_PATTERN.test(combinedText)) {
     return "Codex made the low-rated question require a harder algorithm.";
   }

@@ -45,7 +45,7 @@ const COMBAT_ADVANCE_DELAY_MS = 680;
 const QUESTION_VARIANT_RETRY_MS = 5000;
 const QUESTION_VARIANT_STUCK_TIMEOUT_MS = 45000;
 const QUESTION_VARIANT_MAX_RETRIES = 1;
-const QUESTION_VARIANT_CACHE_KEY = "study-ladder-question-variants-v1";
+const QUESTION_VARIANT_CACHE_KEY = "study-ladder-question-variants-v3";
 const QUESTION_VARIANT_CACHE_LIMIT = 80;
 
 type TestRunnerMessage = { type: "run-result"; runId: string; ok: boolean; error?: string; results: RunResult[]; runtimeMs?: number };

@@ -30,6 +30,10 @@ const getInlineClosedLine = (line: string) => {
   return `${line}${closers.reverse().join("")}`;
 };
 
+const completeConstructorCall = (line: string) => {
+  return line.replace(/\bnew\s+([A-Z][\w.$]*)(?=\s*(?:[;,)}\]]|$))/g, "new $1()");
+};
+
 const shouldAddSemicolon = (line: string) => {
   const trimmed = line.trim();
   if (isAlreadyTerminated(trimmed)) {
@@ -68,7 +72,7 @@ export const beautifyCode = (source: string) => {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const closedLine = restoreForHeaderSemicolons(getInlineClosedLine(line));
+      const closedLine = completeConstructorCall(restoreForHeaderSemicolons(getInlineClosedLine(line)));
       if (closedLine.startsWith("}") || closedLine.startsWith("]") || closedLine.startsWith(")")) {
         indent = Math.max(0, indent - 1);
       }
