@@ -18,7 +18,7 @@ import { createDropItem, SLOT_STAT_BIAS } from "./itemCore";
 import { getUniqueMonsterBonusCount } from "./monsterCore";
 import { getPomEligibleRelics, grantRelic, rollRelic, upgradeRelicRarity } from "./relicCore";
 import { createShopStock } from "./shopCore";
-import { applyHealingReceived, getCodingQuestionWeight, getMaxHealth, getMetaRelicChoiceBonus, getMetaStartingGoldBonus, getMetaStartingRelicCount, getRunModifierTotals } from "./studyCore";
+import { applyHealingReceived, getCodingQuestionWeight, getMaxHealth, getMetaRelicChoiceBonus, getMetaStartingGoldBonus, getMetaStartingRelicCount, getRunModifierTotals, resetQuestionCombatState } from "./studyCore";
 import type { Difficulty, HeatConditionId, HeatConditionRanks, InventoryItem, ItemModifier, ItemRarity, Question, Relic, RelicRarity, SpireAct, SpireCombatRewardKind, SpireDifficulty, SpireMapNode, SpireNodeKind, SpireRun, StudyState, UnknownEncounterKind } from "../types/study";
 
 const SPIRE_ACT_COUNT = 4;
@@ -1476,15 +1476,17 @@ export function enterSpireNode(state: StudyState, now = Date.now()) {
   const enteredNode = getCurrentSpireNode(revealedState);
   const enteredState = enteredNode?.kind === "merchant" ? applyMerchantRoomReward(revealedState, enteredNode, now) : revealedState;
   const healedState = enteredNode?.kind === "boss" ? applyBossEntryHeal(enteredState) : enteredState;
+  const roundQuestionIds = isCombatNode(enteredNode) ? pickRoundQuestions(healedState, enteredNode, state.profile.spireRun.mapSeed + now, state.profile.spireRun.roundQuestionIds, getRoundQuestionCount(healedState.profile.spireRun, enteredNode, now)) : [];
+  const readyState = resetQuestionCombatState(healedState, roundQuestionIds);
   return {
-    ...healedState,
+    ...readyState,
     currentId: null,
     profile: {
-      ...healedState.profile,
+      ...readyState.profile,
       spireRun: {
-        ...healedState.profile.spireRun,
+        ...readyState.profile.spireRun,
         mapOpen: false,
-        roundQuestionIds: isCombatNode(enteredNode) ? pickRoundQuestions(healedState, enteredNode, state.profile.spireRun.mapSeed + now, state.profile.spireRun.roundQuestionIds, getRoundQuestionCount(healedState.profile.spireRun, enteredNode, now)) : [],
+        roundQuestionIds,
         roundSolvedIds: [],
         runCodeQuestionIds: [],
         tierIndex: enteredNode?.tierIndex ?? node.tierIndex
@@ -1518,13 +1520,14 @@ export function retargetCurrentSpireRoomQuestions(state: StudyState, now = Date.
   if (!roundQuestionIds.length || areStringArraysEqual(roundQuestionIds, state.profile.spireRun.roundQuestionIds)) {
     return state;
   }
+  const readyState = resetQuestionCombatState(state, roundQuestionIds);
   return {
-    ...state,
+    ...readyState,
     currentId: roundQuestionIds[0],
     profile: {
-      ...state.profile,
+      ...readyState.profile,
       spireRun: {
-        ...state.profile.spireRun,
+        ...readyState.profile.spireRun,
         roundQuestionIds,
         roundSolvedIds: [],
         runCodeQuestionIds: []

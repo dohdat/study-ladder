@@ -173,6 +173,39 @@ function createDefaultStateBase(): StudyState {
 
 export const defaultCard = (): CardState => ({ dueAt: 0, intervalDays: 0, ease: 2.4, reps: 0, attempts: 0, correct: 0, enemyDebuffs: [], failedSubmissions: 0, hintsBought: 0, lastResult: null, monsterBlock: 0, playerBlock: 0, relicCombatStartHealed: false, relicFirstHitBlocked: false, relicFirstHpLossPrevented: false, relicReviveUsed: false });
 
+export function resetCardCombatState(card: CardState): CardState {
+  const next = {
+    ...card,
+    enemyDebuffs: [],
+    monsterBlock: 0,
+    playerBlock: 0,
+    relicCombatStartHealed: false,
+    relicFirstHitBlocked: false,
+    relicFirstHpLossPrevented: false,
+    relicReviveUsed: false
+  };
+  delete next.monsterHealth;
+  return next;
+}
+
+function resetCardsCombatState(cards: StudyState["cards"]) {
+  return Object.fromEntries(Object.entries(cards).map(([id, card]) => [id, resetCardCombatState(card)]));
+}
+
+export function resetQuestionCombatState(state: StudyState, questionIds: string[]): StudyState {
+  const ids = Array.from(new Set(questionIds.filter(Boolean)));
+  if (!ids.length || !ids.some((id) => state.cards[id])) {
+    return state;
+  }
+  const next = cloneState(state);
+  for (const id of ids) {
+    if (next.cards[id]) {
+      setCard(next, id, resetCardCombatState(next.cards[id]));
+    }
+  }
+  return next;
+}
+
 export const cloneState = (state: StudyState): StudyState => ({
   ...state,
   profile: cloneProfile(state),
@@ -284,7 +317,7 @@ export function restartStudyRun(state: StudyState, now = Date.now(), options: Re
   const spireMinRating = normalizeSpireMinRating(state.profile.spireMinRating);
   const next = defaultState();
   next.mode = state.mode;
-  next.cards = { ...state.cards };
+  next.cards = resetCardsCombatState(state.cards);
   next.totalCorrect = state.totalCorrect;
   next.profile.activeCodingProfileId = state.profile.activeCodingProfileId;
   next.profile.codingMinRating = state.profile.codingMinRating;

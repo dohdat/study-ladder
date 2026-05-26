@@ -293,7 +293,7 @@ describe("studyCore", () => {
     state.profile.spireRun.completedNodeIds = ["old-node"];
     state.profile.spireRun.heatConditions.hardLabor = 2;
     state.profile.spireRun.heatConditions.noHints = 1;
-    setCard(state, question.id, { ...defaultCard(), correct: 1, attempts: 2 });
+    setCard(state, question.id, { ...defaultCard(), correct: 1, attempts: 2, enemyDebuffs: [{ id: "vulnerable", remainingSubmits: 2, stacks: 1 }], monsterBlock: 9, monsterHealth: 5, playerBlock: 4, relicCombatStartHealed: true, relicFirstHitBlocked: true, relicFirstHpLossPrevented: true, relicReviveUsed: true });
 
     const restarted = restartStudyRun(state, 12345);
 
@@ -313,6 +313,15 @@ describe("studyCore", () => {
     expect(restarted.profile.coins).toBe(getMetaStartingGoldBonus(restarted));
     expect(restarted.profile.health).toBe(getMaxHealth(restarted));
     expect(getCard(restarted, question.id).correct).toBe(1);
+    expect(getCard(restarted, question.id).attempts).toBe(2);
+    expect(getCard(restarted, question.id).enemyDebuffs).toEqual([]);
+    expect(getCard(restarted, question.id).monsterBlock).toBe(0);
+    expect(getCard(restarted, question.id).monsterHealth).toBeUndefined();
+    expect(getCard(restarted, question.id).playerBlock).toBe(0);
+    expect(getCard(restarted, question.id).relicCombatStartHealed).toBe(false);
+    expect(getCard(restarted, question.id).relicFirstHitBlocked).toBe(false);
+    expect(getCard(restarted, question.id).relicFirstHpLossPrevented).toBe(false);
+    expect(getCard(restarted, question.id).relicReviveUsed).toBe(false);
     expect(restarted.profile.trackedAchievementIds).toEqual(["first-blood"]);
     expect(restarted.profile.unlockedAchievementIds).toEqual(["first-blood"]);
   });

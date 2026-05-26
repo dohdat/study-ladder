@@ -74,6 +74,7 @@ describe("questionVariant", () => {
       title: "First Repeated Event Code"
     });
     expect(variant?.prompt).not.toBe(original.prompt);
+    expect(variant?.examples).toHaveLength(3);
   });
 
   it("applies frontend checks and starter files for frontend variants", () => {
@@ -171,6 +172,7 @@ describe("questionVariant", () => {
 
     expect(result.error).toBeUndefined();
     expect(result.question?.tests).toHaveLength(5);
+    expect(result.question?.examples).toHaveLength(3);
   });
 
   it("builds a repair prompt for invalid Codex drafts", () => {

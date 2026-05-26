@@ -1,4 +1,5 @@
 import type { Question } from "../types/study";
+import { ensureMinimumVisibleExamples } from "../lib/exampleTestCases";
 
 const curatedQuestions: Question[] = [
   {
@@ -4996,7 +4997,13 @@ const GENERATED_FAMILIES: GeneratedFamily[] = [
 const externalRatedQuestions = EXTERNAL_RATED_QUESTION_SEEDS.map(createExternalRatedQuestion);
 const generatedQuestions = createGeneratedQuestions();
 
-export const questions: Question[] = [...curatedQuestions, ...externalRatedQuestions, ...generatedQuestions];
+export const questions: Question[] = ensureMinimumCodingExamples([...curatedQuestions, ...externalRatedQuestions, ...generatedQuestions]);
+
+function ensureMinimumCodingExamples(bank: Question[]): Question[] {
+  return bank.map((question) => {
+    return question.frontend ? question : ensureMinimumVisibleExamples(question);
+  });
+}
 
 function createExternalRatedQuestion(seed: ExternalRatedQuestionSeed): Question {
   return {

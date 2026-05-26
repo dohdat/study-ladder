@@ -23,6 +23,7 @@ import { registerCodeTemplateCompletions, setNextCodeTemplateContextWord } from 
 import { beautifyCode } from "../lib/codeFormat";
 import { applyEnemyDebuffsToMonsterAttack, applyPassedCombatResult, getElapsedPressureRatio, getMonsterBlockGain, getTimedMonsterAttack, isMonsterEnraged } from "../lib/combatCore";
 import { getTimerDisplay } from "../lib/timerDisplay";
+import { ensureMinimumVisibleExamples, getVisibleRunCodeTests } from "../lib/exampleTestCases";
 import { chooseNextSpireQuestion, completeSpireQuestion, getCurrentRoundQuestion, getCurrentSpireNode, isCombatNode as isSpireCombatNode, retargetCurrentSpireRoomQuestions } from "../lib/spireMapCore";
 import {
   HINT_COST, applyHealthPenalty, applyIncomingDamage, applyScheduleResult, buyHint, canBuyHint, cloneState, defaultState, getCard,
@@ -774,7 +775,7 @@ function startConsoleRun(runId: string, formattedCode: string, params: Parameter
     runId,
     code: formattedCode,
     functionName: params.currentQuestion?.functionName,
-    tests: params.currentQuestion?.tests.slice(0, VISIBLE_RUN_CASE_COUNT)
+    tests: params.currentQuestion ? getVisibleRunCodeTests(params.currentQuestion, VISIBLE_RUN_CASE_COUNT) : []
   }, "*");
 }
 
@@ -1100,7 +1101,9 @@ function loadPersistedQuestionVariants() {
   if (!stored) {
     return new Map<string, Question>();
   }
-  return new Map(Object.entries(stored).filter((entry): entry is [string, Question] => isPersistedQuestionVariant(entry[0], entry[1])));
+  return new Map(Object.entries(stored)
+    .filter((entry): entry is [string, Question] => isPersistedQuestionVariant(entry[0], entry[1]))
+    .map(([id, question]) => [id, ensureMinimumVisibleExamples(question)]));
 }
 
 function persistQuestionVariant(question: Question) {

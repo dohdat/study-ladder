@@ -4,7 +4,7 @@ import { questions } from "../data/questions";
 import { buyShopItem } from "../lib/shopCore";
 import { RELIC_DEFINITIONS } from "../lib/relicCore";
 import { advanceSpireNode, attuneRestSiteRelic, canEditSpireHeat, choosePendingRelicReward, claimCurrentSpireRoomReward, completeSpireQuestion, createSpireRun, enterSpireNode, getCurrentSpireNode, isSpireHeatSetupOpen, isSpireRunSetupOpen, leaveSpireRoom, normalizeSpireRun, retargetCurrentSpireRoomQuestions, selectPendingRelicReward, selectSpireNode, setSpireHeatConditionRank, skipPendingRelicReward, smithSpireNode, SPIRE_RATINGS, startSpireHeatRun, upgradeCurrentSpireRoomItem } from "../lib/spireMapCore";
-import { EXPERIENCE_PER_LEVEL, defaultState, getMaxHealth, getMaxMana } from "../lib/studyCore";
+import { EXPERIENCE_PER_LEVEL, defaultCard, defaultState, getCard, getMaxHealth, getMaxMana, setCard } from "../lib/studyCore";
 import type { SpireCombatRewardKind, SpireMapNode, SpireNodeKind, StudyState } from "../types/study";
 
 const FLOOR_ONE = 1500;
@@ -281,6 +281,29 @@ describe("spireMapCore", () => {
     expect(state.profile.spireRun.mapOpen).toBe(false);
     expect(state.profile.spireRun.roundQuestionIds.length).toBeGreaterThanOrEqual(2);
     expect(state.profile.spireRun.roundQuestionIds.length).toBeLessThanOrEqual(3);
+  });
+
+  it("resets stale enemy combat state when entering a combat room", () => {
+    let preview = defaultState();
+    preview = { ...preview, profile: { ...preview.profile, spireRun: createSpireRun(1000) } };
+    const nodeId = preview.profile.spireRun.availableNodeIds[0];
+    preview = enterSpireNode(selectSpireNode(preview, nodeId), 1000);
+    const staleQuestionId = preview.profile.spireRun.roundQuestionIds[0];
+
+    let state = defaultState();
+    state = { ...state, profile: { ...state.profile, spireRun: createSpireRun(1000) } };
+    setCard(state, staleQuestionId, { ...defaultCard(), correct: 1, enemyDebuffs: [{ id: "weak", remainingSubmits: 2, stacks: 1 }], monsterBlock: 8, monsterHealth: 5, playerBlock: 3, relicCombatStartHealed: true });
+
+    state = enterSpireNode(selectSpireNode(state, nodeId), 1000);
+    const card = getCard(state, staleQuestionId);
+
+    expect(state.profile.spireRun.roundQuestionIds).toContain(staleQuestionId);
+    expect(card.correct).toBe(1);
+    expect(card.enemyDebuffs).toEqual([]);
+    expect(card.monsterBlock).toBe(0);
+    expect(card.monsterHealth).toBeUndefined();
+    expect(card.playerBlock).toBe(0);
+    expect(card.relicCombatStartHealed).toBe(false);
   });
 
   it("keeps the active room when a saved run is normalized after refresh", () => {

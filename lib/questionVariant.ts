@@ -1,4 +1,5 @@
 import type { FrontendCheck, Question, TestCase } from "../types/study";
+import { ensureMinimumVisibleExamples } from "./exampleTestCases";
 import { FRONTEND_APP_FILE, FRONTEND_CSS_FILE } from "./frontendChallenge";
 
 const MAX_PROMPT_TESTS = 10;
@@ -84,6 +85,7 @@ export function createQuestionVariantPrompt(question: Question) {
     "- Constraints must be short requirement bullets, not solution steps.",
     "- Keep each example input/output on one short line. Avoid long JSON objects in examples.",
     "- Keep all test args compatible with the original function arguments.",
+    "- Include exactly 3 examples so the visible Run Code cases match the prompt examples.",
     "- Include 8 to 10 tests with unique names and edge cases: empty/min input, duplicates, negatives/zero where relevant, ties, no-solution, boundary order, and misleading near misses.",
     "- Do not mention that this is a variant, remix, hidden test, LeetCode, or NeetCode.",
     "",
@@ -122,6 +124,7 @@ export function createQuestionVariantRepairPrompt(question: Question, draft: str
     `- estimatedRating must be between ${question.rating - RATING_TOLERANCE} and ${question.rating + RATING_TOLERANCE}.`,
     "- tests must contain at least 5 usable cases.",
     "- every test must use args, not inputArgs or arguments.",
+    "- examples must contain exactly 3 visible examples.",
     "- solutionReveal must be included and must have ## Approach, ## Code, and ## Complexity sections.",
     "- prompt must be concise and under 360 characters.",
     "- preserve the exact function name and argument list from the original question.",
@@ -148,7 +151,7 @@ export function createQuestionVariantResult(question: Question, text: string): Q
   if (!payload) {
     return { error: getLastParseError(), question: null };
   }
-  return { question: {
+  const variant = {
     ...question,
     constraints: payload.constraints,
     examples: payload.examples,
@@ -157,7 +160,8 @@ export function createQuestionVariantResult(question: Question, text: string): Q
     solutionReveal: payload.solutionReveal || question.solutionReveal,
     tests: payload.tests,
     title: payload.title
-  } };
+  };
+  return { question: ensureMinimumVisibleExamples(variant) };
 }
 
 let lastParseError = "";
@@ -246,6 +250,7 @@ function createFrontendQuestionVariantPrompt(question: Question) {
     "- Use only these check types: exists, count, clickText, clickCount, inputText.",
     "- Use stable class selectors such as .filter-button or .item-card. Do not use data-testid.",
     "- Include 3 to 5 checks covering initial render and at least one interaction when the prompt is interactive.",
+    "- Include exactly 3 examples.",
     "- Include starter files only. App.tsx must not solve the challenge; it should render a TODO placeholder and may include static seed data constants.",
     "- styles.css may include light scaffolding styles, but must not hide required elements or fake passing checks.",
     "- Keep prompt text concise: 1 or 2 sentences, under 45 words.",
@@ -278,6 +283,7 @@ function createFrontendQuestionVariantRepairPrompt(question: Question, draft: st
     "Hard requirements:",
     `- estimatedRating must be between ${question.rating - RATING_TOLERANCE} and ${question.rating + RATING_TOLERANCE}.`,
     "- frontend.checks must include at least 3 usable checks.",
+    "- examples must contain exactly 3 visible examples.",
     "- App.tsx must be starter code, not a completed solution.",
     "- preserve React + TypeScript frontend challenge format.",
     "",

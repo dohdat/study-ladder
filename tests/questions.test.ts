@@ -107,6 +107,15 @@ describe("question bank", () => {
     expect(underCovered).toEqual([]);
   });
 
+  it("keeps every runnable question covered by at least three visible examples", () => {
+    const missingExamples = questions
+      .filter((question) => !question.frontend)
+      .filter((question) => question.examples.length < 3)
+      .map((question) => `${question.id}: ${question.examples.length}`);
+
+    expect(missingExamples).toEqual([]);
+  });
+
   it("keeps runner test cases unique per question", () => {
     const duplicateCases = questions
       .flatMap((question) => {
