@@ -922,6 +922,7 @@ const MIRROR_UPGRADE_ICONS: Record<string, string> = {
   coinPurse: midasHandArt,
   crushingInsight: razorwireArt,
   deathDefiance: guardianAngelArt,
+  deathGoldKeep: treasureSenseArt,
   eliteHunter: kingsCrownArt,
   fatedPersuasion: casinoDiceArt,
   fatedTreasury: fortuneCardArt,

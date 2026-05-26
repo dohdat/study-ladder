@@ -54,6 +54,7 @@ import {
   getManaReward,
   getMaxHealth,
   getMaxMana,
+  getMetaDeathGoldKeepCap,
   getMetaStartingGoldBonus,
   getMetaStartingRelicCount,
   getMetaUpgradeCost,
@@ -314,6 +315,29 @@ describe("studyCore", () => {
     expect(getCard(restarted, question.id).correct).toBe(1);
     expect(restarted.profile.trackedAchievementIds).toEqual(["first-blood"]);
     expect(restarted.profile.unlockedAchievementIds).toEqual(["first-blood"]);
+  });
+
+  it("keeps capped gold after death through the mirror upgrade", () => {
+    const state = defaultState();
+    state.profile.coins = 90;
+    state.profile.metaProgress.upgrades.coinPurse = 2;
+    state.profile.metaProgress.upgrades.deathGoldKeep = 2;
+
+    const restarted = restartStudyRun(state, 12345, { retainGoldAfterDeath: true });
+
+    expect(getMetaDeathGoldKeepCap(restarted)).toBe(50);
+    expect(restarted.profile.coins).toBe(getMetaStartingGoldBonus(restarted) + 50);
+  });
+
+  it("does not keep death gold on manual restart", () => {
+    const state = defaultState();
+    state.profile.coins = 90;
+    state.profile.metaProgress.upgrades.coinPurse = 2;
+    state.profile.metaProgress.upgrades.deathGoldKeep = 2;
+
+    const restarted = restartStudyRun(state, 12345);
+
+    expect(restarted.profile.coins).toBe(getMetaStartingGoldBonus(restarted));
   });
 
   it("blocks meta upgrade purchases when insight is missing or the rank is maxed", () => {

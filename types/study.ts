@@ -424,6 +424,7 @@ export type MetaProgress = {
     cleanExecution: number;
     crushingInsight: number;
     deathDefiance: number;
+    deathGoldKeep: number;
     eliteHunter: number;
     fatedPersuasion: number;
     fatedTreasury: number;

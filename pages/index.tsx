@@ -1328,7 +1328,7 @@ export default function Home() {
     hints.clearHint();
   }, [hints, runTimer, timer]);
   const resetAfterDeath = useCallback(() => {
-    applyRestartedRunState(restartStudyRun(state), "Run ended. Preserved question progress and prepared the next attempt.");
+    applyRestartedRunState(restartStudyRun(state, Date.now(), { retainGoldAfterDeath: true }), "Run ended. Preserved question progress and prepared the next attempt.");
   }, [applyRestartedRunState, state]);
   const restartRunFromSettings = useCallback(() => {
     applyRestartedRunState(restartStudyRun(state), "Run restarted. Choose a room to begin.");

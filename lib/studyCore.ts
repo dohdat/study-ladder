@@ -60,6 +60,7 @@ const DEFAULT_VISIBLE_TOPIC_COUNT = 1;
 const FULL_PERCENT = 100;
 const META_TOUGH_START_HEALTH = 5;
 const META_COIN_PURSE_GOLD = 15;
+const META_DEATH_GOLD_KEEP_PER_RANK = 25;
 const META_STARTER_RELICS_PER_RANK = 1;
 const META_RELIC_CHOICE_BONUS_CAP = 2;
 const META_RELIC_LUCK_PERCENT = 6;
@@ -274,7 +275,12 @@ export const normalizeStudyState = (stored: Partial<StudyState> | null | undefin
   return stocked;
 };
 
-export function restartStudyRun(state: StudyState, now = Date.now()): StudyState {
+export type RestartStudyRunOptions = {
+  retainGoldAfterDeath?: boolean;
+};
+
+export function restartStudyRun(state: StudyState, now = Date.now(), options: RestartStudyRunOptions = {}): StudyState {
+  const previousRunCoins = Math.max(0, Math.floor(state.profile.coins || 0));
   const spireMinRating = normalizeSpireMinRating(state.profile.spireMinRating);
   const next = defaultState();
   next.mode = state.mode;
@@ -291,7 +297,7 @@ export function restartStudyRun(state: StudyState, now = Date.now()): StudyState
   next.profile.spireRun = createSpireRun(now, 1, "normal", state.profile.spireRun.heatConditions, true, spireMinRating);
   next.profile.trackedAchievementIds = [...state.profile.trackedAchievementIds];
   next.profile.unlockedAchievementIds = [...state.profile.unlockedAchievementIds];
-  next.profile.coins = getMetaStartingGoldBonus(next);
+  next.profile.coins = getMetaStartingGoldBonus(next) + getRetainedDeathGold(next, previousRunCoins, options.retainGoldAfterDeath);
   next.profile.health = getMaxHealth(next);
   return next;
 }
@@ -742,6 +748,15 @@ export const getMaxHealth = (state: StudyState) => {
 
 export const getMetaStartingGoldBonus = (state: StudyState) => Math.max(0, state.profile.metaProgress.upgrades.coinPurse || 0) * META_COIN_PURSE_GOLD;
 
+export const getMetaDeathGoldKeepCap = (state: StudyState) => Math.max(0, state.profile.metaProgress.upgrades.deathGoldKeep || 0) * META_DEATH_GOLD_KEEP_PER_RANK;
+
+function getRetainedDeathGold(state: StudyState, previousRunCoins: number, retainGoldAfterDeath = false) {
+  if (!retainGoldAfterDeath) {
+    return 0;
+  }
+  return Math.min(Math.max(0, Math.floor(previousRunCoins || 0)), getMetaDeathGoldKeepCap(state));
+}
+
 export const getMetaMaxHealthBonus = (state: StudyState) => Math.max(0, state.profile.metaProgress.upgrades.toughStart || 0) * META_TOUGH_START_HEALTH;
 
 export const getMetaStartingRelicCount = (state: StudyState) => Math.max(0, state.profile.metaProgress.upgrades.starterRelics || 0) * META_STARTER_RELICS_PER_RANK;
@@ -786,6 +801,7 @@ export type MetaUpgradeDefinition = {
 export const META_UPGRADE_DEFINITIONS: MetaUpgradeDefinition[] = [
   { baseCost: 8, costStep: 6, description: `Start each run with +${META_TOUGH_START_HEALTH} max health per rank.`, id: "toughStart", label: "Thick Skin", maxRank: 10, unlockAchievementCount: 0 },
   { baseCost: 6, costStep: 5, description: `Start each run with +${META_COIN_PURSE_GOLD} gold per rank.`, id: "coinPurse", label: "Deep Pockets", maxRank: 8, unlockAchievementCount: 0 },
+  { baseCost: 8, costStep: 6, description: `After death, keep up to ${META_DEATH_GOLD_KEEP_PER_RANK} gold per rank for the next run.`, id: "deathGoldKeep", label: "Grave Purse", maxRank: 5, unlockAchievementCount: 0 },
   { baseCost: 12, costStep: 8, description: "+5% damage per rank. A simple permanent power path.", id: "shadowTraining", label: "Shadow Training", maxRank: 6, modifiers: [{ key: "enhancedDamagePercent", valuePerRank: 5 }], unlockAchievementCount: 0 },
   { baseCost: 18, costStep: 10, description: "+3% critical chance per rank.", id: "lethalPrecision", label: "Lethal Precision", maxRank: 5, modifiers: [{ key: "criticalChancePercent", valuePerRank: 3 }], unlockAchievementCount: 1 },
   { baseCost: 18, costStep: 9, description: "+4% reduced incoming enemy damage per rank.", id: "ironResolve", label: "Iron Resolve", maxRank: 5, modifiers: [{ key: "reducedEnemyDamagePercent", valuePerRank: 4 }], unlockAchievementCount: 2 },
