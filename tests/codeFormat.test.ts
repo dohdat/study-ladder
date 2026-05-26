@@ -63,6 +63,49 @@ describe("beautifyCode", () => {
     ].join("\n"));
   });
 
+  it("keeps inline object literals from affecting block indentation", () => {
+    expect(beautifyCode(`function hasBalancedVowels(text) {
+const values = { a: 1, e: 2, i: 3, o: 4, u: 5 };
+const n = text.length;
+const half = Math.floor(n / 2);
+
+let leftSum = 0;
+let rightSum = 0;
+
+for (let i = 0; i < half; i++) {
+const c = text[i].toLowerCase();
+leftSum += values[c] || 0;
+}
+
+const rightStart = n % 2 === 0 ? half : half + 1;
+for (let i = rightStart; i < n; i++) {
+const c = text[i].toLowerCase();
+rightSum += values[c] || 0;
+}
+
+return leftSum === rightSum;
+}`)).toBe([
+      "function hasBalancedVowels(text) {",
+      "  const values = { a: 1, e: 2, i: 3, o: 4, u: 5 };",
+      "  const n = text.length;",
+      "  const half = Math.floor(n / 2);",
+      "  let leftSum = 0;",
+      "  let rightSum = 0;",
+      "  for (let i = 0; i < half; i++) {",
+      "    const c = text[i].toLowerCase();",
+      "    leftSum += values[c] || 0;",
+      "  }",
+      "  const rightStart = n % 2 === 0 ? half : half + 1;",
+      "  for (let i = rightStart; i < n; i++) {",
+      "    const c = text[i].toLowerCase();",
+      "    rightSum += values[c] || 0;",
+      "  }",
+      "  return leftSum === rightSum;",
+      "}",
+      ""
+    ].join("\n"));
+  });
+
   it("adds missing closing braces", () => {
     expect(beautifyCode("function test() {\nif (ok) {\nreturn true")).toBe([
       "function test() {",

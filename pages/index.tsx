@@ -10,6 +10,10 @@ import type { CombatImpactVisual, MonsterDamagePop } from "../components/Monster
 import { RewardNotifications, type RewardNotification } from "../components/RewardNotifications";
 import { SpireMapPanel } from "../components/SpireMapPanel";
 import { questions } from "../data/questions";
+import codingRoomAstralSanctuaryMusicUrl from "../assets/hero_siege/coding-room-astral-sanctuary.ogg";
+import codingRoomCatacombsMusicUrl from "../assets/hero_siege/coding-room-catacombs.ogg";
+import codingRoomSanctuaryMusicUrl from "../assets/hero_siege/coding-room-sanctuary.ogg";
+import codingRoomTownMusicUrl from "../assets/hero_siege/coding-room-town.ogg";
 import { useCodexHintStream } from "../hooks/useCodexHintStream";
 import { useActiveWarriorSkillAction } from "../hooks/useActiveWarriorSkillAction";
 import { useFullscreenGuard } from "../hooks/useFullscreenGuard";
@@ -50,6 +54,16 @@ const QUESTION_VARIANT_STUCK_TIMEOUT_MS = 45000;
 const QUESTION_VARIANT_MAX_RETRIES = 1;
 const QUESTION_VARIANT_CACHE_KEY = "study-ladder-question-variants-v3";
 const QUESTION_VARIANT_CACHE_LIMIT = 80;
+const CODING_ROOM_MUSIC_VOLUME = 0.1;
+const CODING_ROOM_MUSIC_CROSSFADE_MS = 2500;
+const CODING_ROOM_MUSIC_LOOP_GUARD_MS = 350;
+const CODING_ROOM_MUSIC_FADE_STEPS = 24;
+const CODING_ROOM_MUSIC_TRACKS = [
+  codingRoomCatacombsMusicUrl,
+  codingRoomSanctuaryMusicUrl,
+  codingRoomAstralSanctuaryMusicUrl,
+  codingRoomTownMusicUrl
+];
 
 type TestRunnerMessage = { type: "run-result"; runId: string; ok: boolean; error?: string; results: RunResult[]; runtimeMs?: number };
 type CodeRunMessage = { type: "code-run-result"; runId: string; ok: boolean; error?: string; output: string[]; results?: RunResult[]; runtimeMs?: number };
@@ -1302,6 +1316,150 @@ function isVisibleAttackStatus(status: string) {
   ].includes(status);
 }
 
+function CodingRoomMusic(props: { active: boolean }) {
+  const audioRefs = useRef<[HTMLAudioElement, HTMLAudioElement] | null>(null);
+  const activeAudioIndexRef = useRef(0);
+  const loopTimeoutRef = useRef<number | null>(null);
+  const fadeIntervalRef = useRef<number | null>(null);
+  const trackIndexRef = useRef(-1);
+  const wasActiveRef = useRef(false);
+
+  const clearMusicTimers = useCallback(() => {
+    if (loopTimeoutRef.current !== null) {
+      window.clearTimeout(loopTimeoutRef.current);
+      loopTimeoutRef.current = null;
+    }
+    if (fadeIntervalRef.current !== null) {
+      window.clearInterval(fadeIntervalRef.current);
+      fadeIntervalRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    const audios: [HTMLAudioElement, HTMLAudioElement] = [new Audio(), new Audio()];
+    audios.forEach((audio) => {
+      audio.loop = false;
+      audio.preload = "auto";
+      audio.volume = 0;
+    });
+    audioRefs.current = audios;
+    return () => {
+      clearMusicTimers();
+      audios.forEach((audio) => audio.pause());
+      audioRefs.current = null;
+    };
+  }, [clearMusicTimers]);
+
+  useEffect(() => {
+    const audios = audioRefs.current;
+    if (!audios) {
+      return undefined;
+    }
+    let cancelled = false;
+
+    const pauseAll = () => {
+      clearMusicTimers();
+      audios.forEach((audio) => {
+        audio.pause();
+        audio.volume = 0;
+      });
+    };
+
+    const scheduleCrossfade = (fromAudio: HTMLAudioElement, trackUrl: string) => {
+      if (cancelled) {
+        return;
+      }
+
+      const scheduleFromDuration = () => {
+        if (cancelled || !Number.isFinite(fromAudio.duration) || fromAudio.duration <= 0) {
+          return;
+        }
+
+        const delayMs = Math.max(
+          SECOND_MS,
+          fromAudio.duration * SECOND_MS - CODING_ROOM_MUSIC_CROSSFADE_MS - CODING_ROOM_MUSIC_LOOP_GUARD_MS
+        );
+        loopTimeoutRef.current = window.setTimeout(() => {
+          if (cancelled) {
+            return;
+          }
+
+          const nextIndex = activeAudioIndexRef.current === 0 ? 1 : 0;
+          const toAudio = audios[nextIndex];
+          toAudio.src = trackUrl;
+          toAudio.currentTime = 0;
+          toAudio.volume = 0;
+          toAudio.play().catch(() => undefined);
+
+          let step = 0;
+          fadeIntervalRef.current = window.setInterval(() => {
+            step += 1;
+            const ratio = Math.min(1, step / CODING_ROOM_MUSIC_FADE_STEPS);
+            fromAudio.volume = CODING_ROOM_MUSIC_VOLUME * (1 - ratio);
+            toAudio.volume = CODING_ROOM_MUSIC_VOLUME * ratio;
+
+            if (ratio >= 1) {
+              clearMusicTimers();
+              fromAudio.pause();
+              fromAudio.currentTime = 0;
+              activeAudioIndexRef.current = nextIndex;
+              scheduleCrossfade(toAudio, trackUrl);
+            }
+          }, CODING_ROOM_MUSIC_CROSSFADE_MS / CODING_ROOM_MUSIC_FADE_STEPS);
+        }, delayMs);
+      };
+
+      if (Number.isFinite(fromAudio.duration) && fromAudio.duration > 0) {
+        scheduleFromDuration();
+      } else {
+        fromAudio.addEventListener("loadedmetadata", scheduleFromDuration, { once: true });
+      }
+    };
+
+    const startTrack = () => {
+      const trackUrl = CODING_ROOM_MUSIC_TRACKS[trackIndexRef.current];
+      const audio = audios[activeAudioIndexRef.current];
+      clearMusicTimers();
+      audio.src = trackUrl;
+      audio.currentTime = 0;
+      audio.volume = CODING_ROOM_MUSIC_VOLUME;
+      audios[activeAudioIndexRef.current === 0 ? 1 : 0].pause();
+      audio.play().then(() => scheduleCrossfade(audio, trackUrl)).catch(() => {
+        window.addEventListener("pointerdown", startTrack, { once: true });
+        window.addEventListener("keydown", startTrack, { once: true });
+      });
+    };
+
+    const clearRetry = () => {
+      window.removeEventListener("pointerdown", startTrack);
+      window.removeEventListener("keydown", startTrack);
+    };
+
+    if (!props.active) {
+      pauseAll();
+      wasActiveRef.current = false;
+      clearRetry();
+      return () => {
+        cancelled = true;
+        clearRetry();
+      };
+    }
+
+    if (!wasActiveRef.current) {
+      trackIndexRef.current = (trackIndexRef.current + 1) % CODING_ROOM_MUSIC_TRACKS.length;
+      activeAudioIndexRef.current = 0;
+      startTrack();
+    }
+    wasActiveRef.current = true;
+    return () => {
+      cancelled = true;
+      clearRetry();
+    };
+  }, [clearMusicTimers, props.active]);
+
+  return null;
+}
+
 // eslint-disable-next-line max-lines-per-function, complexity
 export default function Home() {
   const [state, setState] = useState<StudyState>(() => defaultState());
@@ -1418,6 +1576,7 @@ export default function Home() {
 
   return (
     <>
+      <CodingRoomMusic active={showPractice && state.mode === "leetcode" && !isDead} />
       <RewardNotifications items={rewardNotifications} />
       <DeathResetModal opened={isDead} onReset={resetAfterDeath} />
       <Container fluid px="md" py="md" w={{ base: "100%", lg: "70%" }} style={mapOpen ? { height: "100vh", overflow: "hidden" } : undefined}>

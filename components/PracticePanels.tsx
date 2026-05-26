@@ -19,7 +19,7 @@ import {
   Tooltip,
   Title
 } from "@mantine/core";
-import { IconArrowRight, IconBulb, IconCheck, IconCircle, IconCode, IconDiamond, IconEraser, IconEye, IconHandStop, IconLock, IconMinus, IconPencil, IconPlayerPlay, IconPointer, IconRefresh, IconSquare, IconTerminal2, IconTypography, IconWand, IconX } from "@tabler/icons-react";
+import { IconArrowRight, IconBulb, IconCheck, IconCircle, IconCode, IconCopy, IconDiamond, IconEraser, IconEye, IconHandStop, IconLock, IconMinus, IconPencil, IconPlayerPlay, IconPointer, IconRefresh, IconSquare, IconTerminal2, IconTypography, IconWand, IconX } from "@tabler/icons-react";
 import MonacoEditor, { type OnMount } from "@monaco-editor/react";
 
 import { HeroSiegeButton } from "./HeroSiegeUi";
@@ -1185,7 +1185,7 @@ function EditorWorkspace(props: {
 }) {
   const editor = (
     <Box h="100%" pos="relative" style={{ minWidth: 0 }}>
-      <MonacoEditor height="100%" language={props.editorLanguage} path={props.editorPath} theme="vs-dark" value={props.editorValue} onChange={(value) => props.updateEditorDraft(value || "")} onMount={props.handleEditorMount} options={{ minimap: { enabled: false }, fontSize: EDITOR_FONT_SIZE, tabSize: TAB_SIZE, wordWrap: "on", scrollBeyondLastLine: false, automaticLayout: true, formatOnPaste: true, formatOnType: true, quickSuggestions: false, suggestOnTriggerCharacters: false, snippetSuggestions: "top", tabCompletion: "onlySnippets", parameterHints: { enabled: false }, readOnly: !props.sessionStarted, readOnlyMessage: EDITOR_READ_ONLY_MESSAGE }} />
+      <MonacoEditor height="100%" language={props.editorLanguage} path={props.editorPath} theme="vs-dark" value={props.editorValue} onChange={(value) => props.updateEditorDraft(value || "")} onMount={props.handleEditorMount} options={{ minimap: { enabled: false }, fontSize: EDITOR_FONT_SIZE, tabSize: TAB_SIZE, wordWrap: "on", scrollBeyondLastLine: false, automaticLayout: true, formatOnPaste: true, formatOnType: true, quickSuggestions: { comments: false, other: true, strings: false }, suggestOnTriggerCharacters: true, snippetSuggestions: "top", tabCompletion: "on", parameterHints: { enabled: true }, readOnly: !props.sessionStarted, readOnlyMessage: EDITOR_READ_ONLY_MESSAGE }} />
       {!props.sessionStarted && <LockedEditorOverlay questionVariantReady={props.questionVariantReady} />}
     </Box>
   );
@@ -1413,12 +1413,14 @@ function RunCasePanel(props: { code: string; currentQuestion: Question; markSolu
 
 function SolutionRevealPanel(props: { code: string; currentQuestion: Question; markSolutionRevealed: () => void }) {
   const [confirming, setConfirming] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [solutionText, setSolutionText] = useState("");
 
   useEffect(() => {
     setConfirming(false);
+    setCopiedCode(false);
     setLoading(false);
     setError("");
     setSolutionText("");
@@ -1450,6 +1452,20 @@ function SolutionRevealPanel(props: { code: string; currentQuestion: Question; m
   }, [confirming, props, solutionText]);
 
   const sections = parseSolutionSections(solutionText);
+  const solutionCode = extractSolutionCode(sections.code);
+  const copySolutionCode = useCallback(() => {
+    if (!navigator.clipboard) {
+      setError("Could not copy the solution code.");
+      return;
+    }
+    navigator.clipboard.writeText(solutionCode).then(() => {
+      setCopiedCode(true);
+      window.setTimeout(() => setCopiedCode(false), 1400);
+    }).catch(() => {
+      setError("Could not copy the solution code.");
+    });
+  }, [solutionCode]);
+
   return (
     <Paper withBorder mt="md" p="sm" bg="dark.7">
       <Group justify="space-between" gap="sm" mb={solutionText || error || loading ? "sm" : 0}>
@@ -1478,7 +1494,16 @@ function SolutionRevealPanel(props: { code: string; currentQuestion: Question; m
             <Tabs.Tab value="complexity">Complexity</Tabs.Tab>
           </Tabs.List>
           <Tabs.Panel value="approach" pt="sm"><HintContent content={sections.approach} /></Tabs.Panel>
-          <Tabs.Panel value="code" pt="sm"><HighlightedCode code={extractSolutionCode(sections.code)} /></Tabs.Panel>
+          <Tabs.Panel value="code" pt="sm">
+            <Group justify="flex-end" mb="xs">
+              <Tooltip label={copiedCode ? "Copied" : "Copy code"} withArrow>
+                <ActionIcon aria-label="Copy solution code" color={copiedCode ? "green" : "gray"} onClick={copySolutionCode} size="sm" variant="light">
+                  {copiedCode ? <IconCheck size={ICON_SM} /> : <IconCopy size={ICON_SM} />}
+                </ActionIcon>
+              </Tooltip>
+            </Group>
+            <HighlightedCode code={solutionCode} />
+          </Tabs.Panel>
           <Tabs.Panel value="complexity" pt="sm"><HintContent content={sections.complexity} /></Tabs.Panel>
         </Tabs>
       )}

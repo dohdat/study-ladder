@@ -130,40 +130,119 @@ export function getSlashTemplateCommandRange(model: { getLineContent: (lineNumbe
   };
 }
 
+const JAVASCRIPT_MEMBER_COMPLETIONS = [
+  { detail: "Array/String membership test.", insertText: "includes(${1:value})", label: "includes" },
+  { detail: "Find the first matching index.", insertText: "indexOf(${1:value})", label: "indexOf" },
+  { detail: "Add an item to the end of an array.", insertText: "push(${1:item})", label: "push" },
+  { detail: "Remove and return the last array item.", insertText: "pop()", label: "pop" },
+  { detail: "Remove and return the first array item.", insertText: "shift()", label: "shift" },
+  { detail: "Add an item to the front of an array.", insertText: "unshift(${1:item})", label: "unshift" },
+  { detail: "Return a portion of an array or string.", insertText: "slice(${1:start}, ${2:end})", label: "slice" },
+  { detail: "Change array contents in place.", insertText: "splice(${1:start}, ${2:deleteCount})", label: "splice" },
+  { detail: "Sort an array in place.", insertText: "sort((${1:a}, ${2:b}) => ${1:a} - ${2:b})", label: "sort" },
+  { detail: "Reverse an array in place.", insertText: "reverse()", label: "reverse" },
+  { detail: "Transform each array item.", insertText: "map((${1:item}) => ${2:item})", label: "map" },
+  { detail: "Keep matching array items.", insertText: "filter((${1:item}) => ${2:condition})", label: "filter" },
+  { detail: "Accumulate array items into one value.", insertText: "reduce((${1:acc}, ${2:item}) => ${3:acc}, ${4:initial})", label: "reduce" },
+  { detail: "Run code for each array item.", insertText: "forEach((${1:item}) => ${2:undefined})", label: "forEach" },
+  { detail: "Return the first matching array item.", insertText: "find((${1:item}) => ${2:condition})", label: "find" },
+  { detail: "Return the first matching array index.", insertText: "findIndex((${1:item}) => ${2:condition})", label: "findIndex" },
+  { detail: "Check whether any item matches.", insertText: "some((${1:item}) => ${2:condition})", label: "some" },
+  { detail: "Check whether every item matches.", insertText: "every((${1:item}) => ${2:condition})", label: "every" },
+  { detail: "Join array items into a string.", insertText: "join(${1:\",\"})", label: "join" },
+  { detail: "Check whether a Set or Map has a key/value.", insertText: "has(${1:key})", label: "has" },
+  { detail: "Add a value to a Set.", insertText: "add(${1:value})", label: "add" },
+  { detail: "Remove a key or value from a Set/Map.", insertText: "delete(${1:key})", label: "delete" },
+  { detail: "Read a Map value by key.", insertText: "get(${1:key})", label: "get" },
+  { detail: "Set a Map value by key.", insertText: "set(${1:key}, ${2:value})", label: "set" },
+  { detail: "Return iterable keys.", insertText: "keys()", label: "keys" },
+  { detail: "Return iterable values.", insertText: "values()", label: "values" },
+  { detail: "Return iterable entries.", insertText: "entries()", label: "entries" },
+  { detail: "Split a string into an array.", insertText: "split(${1:\"\"})", label: "split" },
+  { detail: "Trim whitespace from both ends of a string.", insertText: "trim()", label: "trim" },
+  { detail: "Convert a string to lowercase.", insertText: "toLowerCase()", label: "toLowerCase" },
+  { detail: "Convert a string to uppercase.", insertText: "toUpperCase()", label: "toUpperCase" },
+  { detail: "Check the beginning of a string.", insertText: "startsWith(${1:prefix})", label: "startsWith" },
+  { detail: "Check the end of a string.", insertText: "endsWith(${1:suffix})", label: "endsWith" },
+  { detail: "Return a character code.", insertText: "charCodeAt(${1:index})", label: "charCodeAt" },
+  { detail: "Array/String length or Set/Map size.", insertText: "length", label: "length", property: true },
+  { detail: "Set/Map item count.", insertText: "size", label: "size", property: true }
+];
+
+function getMemberAccessCompletionRange(model: { getLineContent: (lineNumber: number) => string }, position: { column: number; lineNumber: number }) {
+  const linePrefix = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
+  const match = /(?:\.|\?\.)([\w$]*)$/.exec(linePrefix);
+  if (!match) {
+    return null;
+  }
+  return {
+    endColumn: position.column,
+    endLineNumber: position.lineNumber,
+    startColumn: position.column - match[1].length,
+    startLineNumber: position.lineNumber
+  };
+}
+
 export function registerCodeTemplateCompletions(monaco: typeof Monaco) {
   const languages = ["javascript", "typescript"];
-  return languages.map((language) => monaco.languages.registerCompletionItemProvider(language, {
-    provideCompletionItems: (model, position) => {
-      const word = model.getWordUntilPosition(position);
-      const slashCommandRange = getSlashTemplateCommandRange(model, position);
-      const rightClickContextWord = consumeNextCodeTemplateContextWord();
-      const currentPrefix = word.word.toLowerCase();
-      const shouldReplacePrefix = currentPrefix.length > 0 && CODE_TEMPLATES.some((template) => template.label.startsWith(currentPrefix));
-      const contextWord = shouldReplacePrefix ? "" : rightClickContextWord || word.word;
-      const range = slashCommandRange || (shouldReplacePrefix ? {
-        endColumn: word.endColumn,
-        endLineNumber: position.lineNumber,
-        startColumn: word.startColumn,
-        startLineNumber: position.lineNumber
-      } : {
-        endColumn: position.column,
-        endLineNumber: position.lineNumber,
-        startColumn: position.column,
-        startLineNumber: position.lineNumber
-      });
-      return {
-        suggestions: CODE_TEMPLATES.map((template, index) => ({
-          detail: template.detail,
-          documentation: template.kind === "relic" ? "Larger algorithm template for common interview patterns." : "Small JavaScript building block.",
-          filterText: slashCommandRange ? `/${template.label}` : template.label,
-          insertText: applyCodeTemplateContext(template.insertText, contextWord),
-          insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-          kind: monaco.languages.CompletionItemKind.Snippet,
-          label: template.label,
-          range,
-          sortText: `${template.kind === "basic" ? "0" : "1"}-${String(index).padStart(2, "0")}-${template.label}`
-        }))
-      };
-    }
-  }));
+  return languages.flatMap((language) => [
+    monaco.languages.registerCompletionItemProvider(language, {
+      provideCompletionItems: (model, position) => {
+        const word = model.getWordUntilPosition(position);
+        const slashCommandRange = getSlashTemplateCommandRange(model, position);
+        if (!slashCommandRange && getMemberAccessCompletionRange(model, position)) {
+          return { suggestions: [] };
+        }
+        const rightClickContextWord = consumeNextCodeTemplateContextWord();
+        const currentPrefix = word.word.toLowerCase();
+        const shouldReplacePrefix = currentPrefix.length > 0 && CODE_TEMPLATES.some((template) => template.label.startsWith(currentPrefix));
+        const contextWord = shouldReplacePrefix ? "" : rightClickContextWord || word.word;
+        const range = slashCommandRange || (shouldReplacePrefix ? {
+          endColumn: word.endColumn,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          startLineNumber: position.lineNumber
+        } : {
+          endColumn: position.column,
+          endLineNumber: position.lineNumber,
+          startColumn: position.column,
+          startLineNumber: position.lineNumber
+        });
+        return {
+          suggestions: CODE_TEMPLATES.map((template, index) => ({
+            detail: template.detail,
+            documentation: template.kind === "relic" ? "Larger algorithm template for common interview patterns." : "Small JavaScript building block.",
+            filterText: slashCommandRange ? `/${template.label}` : template.label,
+            insertText: applyCodeTemplateContext(template.insertText, contextWord),
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            label: template.label,
+            range,
+            sortText: `${template.kind === "basic" ? "0" : "1"}-${String(index).padStart(2, "0")}-${template.label}`
+          }))
+        };
+      }
+    }),
+    monaco.languages.registerCompletionItemProvider(language, {
+      triggerCharacters: ["."],
+      provideCompletionItems: (model, position) => {
+        const range = getMemberAccessCompletionRange(model, position);
+        if (!range) {
+          return { suggestions: [] };
+        }
+        return {
+          suggestions: JAVASCRIPT_MEMBER_COMPLETIONS.map((completion, index) => ({
+            detail: completion.detail,
+            filterText: completion.label,
+            insertText: completion.insertText,
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            kind: completion.property ? monaco.languages.CompletionItemKind.Property : monaco.languages.CompletionItemKind.Method,
+            label: completion.label,
+            range,
+            sortText: `9-${String(index).padStart(2, "0")}-${completion.label}`
+          }))
+        };
+      }
+    })
+  ]);
 }

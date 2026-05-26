@@ -125,4 +125,48 @@ describe("codeTemplates", () => {
 
     expect(completions.suggestions.find((suggestion) => suggestion.label === "hashmap")?.filterText).toBe("/hashmap");
   });
+
+  it("does not show snippet templates during member access suggestions", () => {
+    const providers: Array<{ provideCompletionItems: (model: { getLineContent: (lineNumber: number) => string; getWordUntilPosition: () => { endColumn: number; word: string; startColumn: number } }, position: { column: number; lineNumber: number }) => { suggestions: Array<{ label: string }> } }> = [];
+    const monaco = {
+      languages: {
+        CompletionItemInsertTextRule: { InsertAsSnippet: 4 },
+        CompletionItemKind: { Snippet: 27 },
+        registerCompletionItemProvider: (_language: string, provider: (typeof providers)[number]) => {
+          providers.push(provider);
+          return { dispose: () => undefined };
+        }
+      }
+    };
+    registerCodeTemplateCompletions(monaco as never);
+
+    const completions = providers[0].provideCompletionItems({
+      getLineContent: () => "array.",
+      getWordUntilPosition: () => ({ endColumn: 7, word: "", startColumn: 7 })
+    }, { column: 7, lineNumber: 1 });
+
+    expect(completions.suggestions).toEqual([]);
+  });
+
+  it("adds common JavaScript member completions for untyped practice parameters", () => {
+    const providers: Array<{ provideCompletionItems: (model: { getLineContent: (lineNumber: number) => string }, position: { column: number; lineNumber: number }) => { suggestions: Array<{ insertText: string; label: string }> } }> = [];
+    const monaco = {
+      languages: {
+        CompletionItemInsertTextRule: { InsertAsSnippet: 4 },
+        CompletionItemKind: { Method: 1, Property: 2, Snippet: 27 },
+        registerCompletionItemProvider: (_language: string, provider: (typeof providers)[number]) => {
+          providers.push(provider);
+          return { dispose: () => undefined };
+        }
+      }
+    };
+    registerCodeTemplateCompletions(monaco as never);
+
+    const completions = providers[1].provideCompletionItems({
+      getLineContent: () => "nums.inc"
+    }, { column: 9, lineNumber: 1 });
+
+    expect(completions.suggestions.map((suggestion) => suggestion.label)).not.toContain("contains");
+    expect(completions.suggestions.map((suggestion) => suggestion.label)).toEqual(expect.arrayContaining(["includes", "push", "has", "length"]));
+  });
 });

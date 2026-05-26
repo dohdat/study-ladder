@@ -3,6 +3,7 @@ const isAlreadyTerminated = (line: string) => {
 };
 
 const FOR_HEADER_SEMICOLON = "__STUDY_LADDER_FOR_SEMICOLON__";
+const INLINE_OBJECT_LITERAL_PREFIX = "__STUDY_LADDER_INLINE_OBJECT_LITERAL_";
 
 const isControlStatement = (line: string) => {
   return /^(if|for|while|switch|function|class|else|try|catch|finally)\b/.test(line);
@@ -57,8 +58,23 @@ const restoreForHeaderSemicolons = (line: string) => {
   return line.replace(new RegExp(FOR_HEADER_SEMICOLON, "g"), ";");
 };
 
+const protectInlineObjectLiterals = (source: string) => {
+  const literals: string[] = [];
+  const protectedSource = source.replace(/\{[^{}\n]*:[^{}\n]*\}/g, (literal) => {
+    const key = `${INLINE_OBJECT_LITERAL_PREFIX}${literals.length}__`;
+    literals.push(literal);
+    return key;
+  });
+  return { literals, protectedSource };
+};
+
+const restoreInlineObjectLiterals = (line: string, literals: string[]) => {
+  return line.replace(new RegExp(`${INLINE_OBJECT_LITERAL_PREFIX}(\\d+)__`, "g"), (_match, index: string) => literals[Number(index)] || _match);
+};
+
 export const beautifyCode = (source: string) => {
-  const compact = protectForHeaderSemicolons(source)
+  const protectedInlineObjects = protectInlineObjectLiterals(protectForHeaderSemicolons(source));
+  const compact = protectedInlineObjects.protectedSource
     .replace(/\r\n/g, "\n")
     .replace(/[ \t]+$/gm, "")
     .replace(/[ \t]*([{};])[ \t]*/g, "$1\n")
@@ -74,7 +90,8 @@ export const beautifyCode = (source: string) => {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const closedLine = completeConstructorCall(restoreForHeaderSemicolons(getInlineClosedLine(line)));
+      const restoredLine = restoreInlineObjectLiterals(restoreForHeaderSemicolons(line), protectedInlineObjects.literals);
+      const closedLine = completeConstructorCall(getInlineClosedLine(restoredLine));
       if (closedLine.startsWith("}") || closedLine.startsWith("]") || closedLine.startsWith(")")) {
         indent = Math.max(0, indent - 1);
       }
