@@ -45,7 +45,7 @@ export const CODE_TEMPLATES: CodeTemplate[] = [
   },
   {
     detail: BASIC_DETAIL,
-    insertText: "for (let ${1:r} = 0; ${1:r} < ${2:rows}; ${1:r}++) {\n  for (let ${3:c} = 0; ${3:c} < ${4:cols}; ${3:c}++) {\n    ${0}\n  }\n}",
+    insertText: "const rows = ${1:grid}.length;\nconst cols = rows ? ${1:grid}[0].length : 0;\n\nfor (let ${2:r} = 0; ${2:r} < rows; ${2:r}++) {\n  for (let ${3:c} = 0; ${3:c} < cols; ${3:c}++) {\n    ${0}\n  }\n}",
     kind: "basic",
     label: "grid"
   },

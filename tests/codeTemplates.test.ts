@@ -22,6 +22,12 @@ describe("codeTemplates", () => {
     expect(dfs?.insertText).not.toContain("${0:return");
   });
 
+  it("defines safe row and column counts in the grid template", () => {
+    const grid = CODE_TEMPLATES.find((template) => template.label === "grid");
+    expect(grid?.insertText).toContain("const rows = ${1:grid}.length;");
+    expect(grid?.insertText).toContain("const cols = rows ? ${1:grid}[0].length : 0;");
+  });
+
   it("uses the word under the cursor as the default array placeholder", () => {
     const forLoop = CODE_TEMPLATES.find((template) => template.label === "fori");
     const hashmap = CODE_TEMPLATES.find((template) => template.label === "hashmap");
