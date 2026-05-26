@@ -4415,6 +4415,276 @@ const EXTERNAL_RATED_QUESTION_SEEDS: ExternalRatedQuestionSeed[] = [
     starterArgs: "values",
     title: "Reverse Even-Length Node Groups",
     topics: ["Linked Lists", "Arrays", "Simulation"]
+  },
+  {
+    cases: makeCases([["ababcbacadefegdehijhklij"], ["eccbbbbdec"], ["abc"], ["aaaa"], ["abac"], ["qiejxqfnqceocmy"], ["caedbdedda"], ["abab"], ["abcabc"], ["abccaddbeffe"]], "cuts closed character partitions"),
+    constraints: ["Each character must appear in exactly one returned partition.", "Return partition lengths in left-to-right order.", "Use the fewest cuts that keep each partition closed."],
+    difficulty: 3,
+    examples: [
+      { input: 's = "ababcbacadefegdehijhklij"', output: "[9,7,8]", explanation: "The last a/b/c occurrence closes the first part at index 8, and the same rule closes the next two parts." },
+      { input: 's = "eccbbbbdec"', output: "[10]", explanation: "The first e and final c force every character into one closed partition." }
+    ],
+    functionName: "partitionStringLabels",
+    id: "external-partition-labels-v2",
+    prompt: "Split the string into as many closed parts as possible, where every occurrence of a character stays inside one part. Return the part lengths.",
+    rating: 1443,
+    source: { dislikes: 444, likes: 11267, slug: "partition-labels" },
+    solver: (args) => partitionStringLabels(args[0] as string),
+    starterArgs: "s",
+    title: "Closed Character Partitions",
+    topics: ["Arrays", "Strings", "Greedy"]
+  },
+  {
+    cases: makeCases([["bank", "kanb"], ["attack", "defend"], ["kelb", "kelb"], ["abcd", "dcba"], ["aa", "aa"], ["ab", "ba"], ["abc", "acb"], ["ab", "ab"], ["abcd", "abdc"], ["aabb", "bbaa"]], "checks one swap equality"),
+    constraints: ["Only swap characters inside the first string.", "The strings have equal length.", "Zero swaps are allowed when the strings already match."],
+    difficulty: 2,
+    examples: [
+      { input: 's1 = "bank", s2 = "kanb"', output: "true", explanation: "Swapping b and k in the first string makes the two strings equal." },
+      { input: 's1 = "attack", s2 = "defend"', output: "false", explanation: "More than two positions differ, so one swap cannot repair the first string." }
+    ],
+    functionName: "canMatchAfterOneSwap",
+    id: "external-one-string-swap-equality",
+    prompt: "Return true if the first string can become the second string after at most one swap inside the first string.",
+    rating: 1301,
+    source: { dislikes: 87, likes: 1716, slug: "check-if-one-string-swap-can-make-strings-equal" },
+    solver: (args) => canMatchAfterOneSwap(args[0] as string, args[1] as string),
+    starterArgs: "s1, s2",
+    title: "One Swap String Match",
+    topics: ["Hash Map", "Strings", "Counting"]
+  },
+  {
+    cases: makeCases([[[[1, 3], [2, 3], [3, 6], [5, 6], [5, 7], [4, 5], [4, 8], [4, 9], [10, 4], [10, 9]]], [[[2, 3], [1, 3], [5, 4], [6, 4]]], [[[1, 2]]], [[[1, 2], [2, 3], [3, 4]]], [[[1, 2], [1, 3], [1, 4]]], [[[4, 1], [5, 1], [6, 1], [7, 2]]], [[[3, 1], [3, 2], [2, 1], [4, 2]]], [[[9, 10], [8, 10], [7, 8], [6, 8], [5, 6]]], [[[1, 5], [2, 5], [3, 6], [4, 6], [6, 7]]], [[[11, 12], [12, 13], [11, 13], [14, 11]]]], "groups players by losses"),
+    constraints: ["Each match is [winner, loser].", "Return [playersWithZeroLosses, playersWithOneLoss].", "Each returned list must be sorted ascending."],
+    difficulty: 2,
+    examples: [
+      { input: "matches = [[1,3],[2,3],[3,6],[5,6],[5,7],[4,5],[4,8],[4,9],[10,4],[10,9]]", output: "[[1,2,10],[4,5,7,8]]", explanation: "Players 1, 2, and 10 never lose; players 4, 5, 7, and 8 lose exactly once." },
+      { input: "matches = [[1,2]]", output: "[[1],[2]]", explanation: "The winner has zero losses, and the loser has one loss." }
+    ],
+    functionName: "playersByLossCount",
+    id: "external-zero-one-loss-players",
+    prompt: "Given match results, return the players who never lost and the players who lost exactly once.",
+    rating: 1316,
+    source: { dislikes: 160, likes: 2278, slug: "find-players-with-zero-or-one-losses" },
+    solver: (args) => playersByLossCount(args[0] as Array<[number, number]>),
+    starterArgs: "matches",
+    title: "Players by Loss Count",
+    topics: ["Hash Map", "Arrays", "Sorting"]
+  },
+  {
+    cases: makeCases([[[30, 20, 150, 100, 40]], [[60, 60, 60]], [[10, 50, 90, 30]], [[20, 40]], [[1, 2, 3, 4, 5]], [[15, 45, 30, 30, 75]], [[120, 180, 240]], [[5, 55, 65, 115]], [[30, 30, 30, 90]], [[11, 49, 21, 39, 31, 29]]], "counts divisible song pairs"),
+    constraints: ["Pair indices must be different.", "A valid pair has total duration divisible by 60.", "Return the number of valid pairs."],
+    difficulty: 3,
+    examples: [
+      { input: "time = [30,20,150,100,40]", output: "3", explanation: "The pairs (30,150), (20,100), and (20,40) have totals divisible by 60." },
+      { input: "time = [60,60,60]", output: "3", explanation: "Every pair has remainder 0 + 0, so all three pairs work." }
+    ],
+    functionName: "countSongPairsDivisibleBy60",
+    id: "external-song-pairs-divisible-60",
+    prompt: "Count pairs of songs whose combined duration is a multiple of 60 seconds.",
+    rating: 1377,
+    source: { dislikes: 183, likes: 4337, slug: "pairs-of-songs-with-total-durations-divisible-by-60" },
+    solver: (args) => countSongPairsDivisibleBy60(args[0] as number[]),
+    starterArgs: "time",
+    title: "Song Pairs Divisible by 60",
+    topics: ["Hash Map", "Arrays", "Counting"]
+  },
+  {
+    cases: makeCases([[[2, 5, 3, 4, 1]], [[2, 1, 3]], [[1, 2, 3, 4]], [[4, 3, 2, 1]], [[1, 1, 1]], [[3, 6, 7, 5, 1]], [[1, 3, 2, 4, 5]], [[5, 1, 4, 2, 3]], [[10, 20, 10, 30, 20, 50]], [[9, 8, 7, 1, 2, 3]]], "counts ordered teams"),
+    constraints: ["Choose exactly three indices i < j < k.", "A team is valid when ratings strictly increase or strictly decrease.", "Equal ratings cannot be part of a valid triple."],
+    difficulty: 3,
+    examples: [
+      { input: "ratings = [2,5,3,4,1]", output: "3", explanation: "The valid triples are increasing [2,3,4] and decreasing [5,3,1], [5,4,1]." },
+      { input: "ratings = [1,2,3,4]", output: "4", explanation: "Every choice of three indices is strictly increasing." }
+    ],
+    functionName: "countOrderedRatingTeams",
+    id: "external-count-number-of-teams",
+    prompt: "Count index triples that form a strictly increasing or strictly decreasing rating team.",
+    rating: 1344,
+    source: { dislikes: 237, likes: 3462, slug: "count-number-of-teams" },
+    solver: (args) => countOrderedRatingTeams(args[0] as number[]),
+    starterArgs: "ratings",
+    title: "Ordered Rating Teams",
+    topics: ["Dynamic Programming", "Arrays"]
+  },
+  {
+    cases: makeCases([[[1, 3, 6, 4, 1, 2], 2], [[1, 3, 6, 4, 1, 2], 3], [[1, 3, 6, 4, 1, 2], 0], [[1], 1], [[1, 2, 3, 4], 1], [[4, 3, 2, 1], 1], [[1, 5, 9], 3], [[1, 4, 2, 6, 3], 3], [[7, 6, 9, 6, 9, 6, 9, 7], 2], [[0, 2, 4, 6], 2]], "maximizes valid jumps"),
+    constraints: ["Start at index 0 and try to reach the last index.", "You may jump only to a later index.", "A jump is allowed when the absolute value difference is at most target."],
+    difficulty: 4,
+    examples: [
+      { input: "nums = [1,3,6,4,1,2], target = 2", output: "3", explanation: "One longest valid route is 0 -> 1 -> 3 -> 5." },
+      { input: "nums = [1,3,6,4,1,2], target = 0", output: "-1", explanation: "No later value matches closely enough to move away from index 0." }
+    ],
+    functionName: "maxValidForwardJumps",
+    id: "external-maximum-jumps-last-index",
+    prompt: "Return the maximum number of valid forward jumps needed to reach the last index, or -1 if it cannot be reached.",
+    rating: 1533,
+    source: { dislikes: 18, likes: 661, slug: "maximum-number-of-jumps-to-reach-the-last-index" },
+    solver: (args) => maxValidForwardJumps(args[0] as number[], args[1] as number),
+    starterArgs: "nums, target",
+    title: "Maximum Valid Forward Jumps",
+    topics: ["Dynamic Programming", "Arrays"]
+  },
+  {
+    cases: makeCases([[[[1, 0], [1, 1]]], [[[1, 0], [0, 1]]], [[[1, 1, 0], [0, 0, 1], [0, 0, 1]]], [[[1]]], [[[1, 1, 1]]], [[[1], [1], [0]]], [[[0, 0], [0, 0]]], [[[1, 0, 1], [0, 1, 0], [1, 0, 1]]], [[[1, 0, 0], [0, 1, 1], [0, 0, 1]]], [[[0, 1, 0], [1, 0, 1], [0, 1, 0]]]], "counts communicating servers"),
+    constraints: ["A 1 represents a server.", "Servers communicate when they share a row or column with another server.", "Return how many servers can communicate."],
+    difficulty: 3,
+    examples: [
+      { input: "grid = [[1,0],[1,1]]", output: "3", explanation: "All three servers share a row or column with at least one other server." },
+      { input: "grid = [[1,0],[0,1]]", output: "0", explanation: "The two servers are isolated in different rows and columns." }
+    ],
+    functionName: "countCommunicatingServers",
+    id: "external-count-servers-communicate",
+    prompt: "Count servers that can communicate with at least one other server in the same row or column.",
+    rating: 1375,
+    source: { dislikes: 109, likes: 1920, slug: "count-servers-that-communicate" },
+    solver: (args) => countCommunicatingServers(args[0] as number[][]),
+    starterArgs: "grid",
+    title: "Communicating Servers",
+    topics: ["Graphs", "BFS", "Grid"]
+  },
+  {
+    cases: makeCases([[[4, 2, 3, 0, 3, 1, 2], 5], [[4, 2, 3, 0, 3, 1, 2], 0], [[3, 0, 2, 1, 2], 2], [[0], 0], [[1, 1, 1, 1, 0], 0], [[2, 4, 2, 0, 1, 3], 0], [[1, 2, 0], 1], [[2, 0, 2], 2], [[5, 1, 2, 3, 4, 0], 0], [[1, 3, 0, 2, 4], 1]], "searches for a zero landing"),
+    constraints: ["From index i, you may jump to i + arr[i] or i - arr[i].", "You may not leave the array.", "Return true if any reachable index contains 0."],
+    difficulty: 3,
+    examples: [
+      { input: "arr = [4,2,3,0,3,1,2], start = 5", output: "true", explanation: "A reachable route lands on index 3, whose value is 0." },
+      { input: "arr = [3,0,2,1,2], start = 2", output: "false", explanation: "Every reachable jump cycle misses the only zero value." }
+    ],
+    functionName: "canJumpToZero",
+    id: "external-jump-game-iii",
+    prompt: "Starting from the given index, return whether repeated left/right value jumps can land on a zero.",
+    rating: 1397,
+    source: { dislikes: 120, likes: 4562, slug: "jump-game-iii" },
+    solver: (args) => canJumpToZero(args[0] as number[], args[1] as number),
+    starterArgs: "arr, start",
+    title: "Jump to a Zero",
+    topics: ["Graphs", "BFS", "Arrays"]
+  },
+  {
+    cases: makeCases([[[1, null, 0, 0, 1]], [[1, 0, 1, 0, 0, 0, 1]], [[1, 1, 0, 1, 1, 0, 1, 0]], [[0]], [[1]], [[0, 0, 0]], [[1, 0, 0]], [[1, 0, 1]], [[1, null, 1, 0, 0]], [[1, 1, 1, 0, null, 0, 1]]], "prunes zero-only branches"),
+    constraints: ["Input is a binary tree encoded as level-order values.", "Remove every subtree that does not contain a 1.", "Return the pruned tree as compact level-order values."],
+    difficulty: 3,
+    examples: [
+      { input: "root = [1,null,0,0,1]", output: "[1,null,0,null,1]", explanation: "The left zero leaf under the right child is removed, while the branch containing 1 remains." },
+      { input: "root = [0]", output: "[]", explanation: "The only subtree contains no 1, so the whole tree is pruned." }
+    ],
+    functionName: "pruneZeroOnlyTree",
+    id: "external-binary-tree-pruning-v2",
+    prompt: "Prune every binary-tree branch whose subtree contains no 1 and return the remaining level-order tree.",
+    rating: 1380,
+    source: { dislikes: 122, likes: 4678, slug: "binary-tree-pruning" },
+    solver: (args) => pruneZeroOnlyTree(args[0] as Array<number | null>),
+    starterArgs: "root",
+    title: "Prune Zero-Only Tree Branches",
+    topics: ["Trees", "DFS", "Binary Tree"]
+  },
+  {
+    cases: makeCases([[[8, 3, 10, 1, 6, null, 14, null, null, 4, 7, 13]], [[1, null, 2, null, 0, 3]], [[5]], [[2, 1, 3]], [[10, 5, 15, 1, null, null, 20]], [[0, null, 9]], [[7, 7, 7]], [[4, 2, 9, 1, 3, 8, 10]], [[-1, -5, 3]], [[6, 2, 8, 0, 4, 7, 9]]], "tracks ancestor gaps"),
+    constraints: ["Input is a binary tree encoded as level-order values.", "Compare each node only with its ancestors.", "Return the largest absolute difference found."],
+    difficulty: 3,
+    examples: [
+      { input: "root = [8,3,10,1,6,null,14,null,null,4,7,13]", output: "7", explanation: "The ancestor 8 and descendant 1 have the largest absolute difference." },
+      { input: "root = [5]", output: "0", explanation: "A single node has no ancestor pair to compare." }
+    ],
+    functionName: "maxAncestorValueDiff",
+    id: "external-max-ancestor-difference",
+    prompt: "Return the largest absolute value difference between any node and one of its ancestors.",
+    rating: 1446,
+    source: { dislikes: 171, likes: 5109, slug: "maximum-difference-between-node-and-ancestor" },
+    solver: (args) => maxAncestorValueDiff(args[0] as Array<number | null>),
+    starterArgs: "root",
+    title: "Maximum Ancestor Value Difference",
+    topics: ["Trees", "DFS", "Binary Tree"]
+  },
+  {
+    cases: makeCases([[[5, 1, 3], [1, 2, 3, 4, 5], 7], [[3, 1, 2], [8, 5, 8], 16], [[10], [1, 2, 3], 30], [[1, 2, 3], [10], 10], [[4, 6, 8], [2, 3, 5], 20], [[7, 7], [1, 2, 3], 14], [[9, 1, 5], [10, 2, 4], 20], [[2, 4, 6], [9, 1, 3, 5], 18], [[100, 1], [1, 100], 100], [[6, 2, 8, 4], [3, 7, 9], 36]], "counts successful spell pairs"),
+    constraints: ["A pair is successful when spell * potion >= success.", "Return one count for each spell in original order.", "Potion strengths may be sorted internally."],
+    difficulty: 3,
+    examples: [
+      { input: "spells = [5,1,3], potions = [1,2,3,4,5], success = 7", output: "[4,0,3]", explanation: "Spell 5 works with four potions, spell 1 with none, and spell 3 with three." },
+      { input: "spells = [10], potions = [1,2,3], success = 30", output: "[1]", explanation: "Only potion 3 reaches the required product." }
+    ],
+    functionName: "successfulSpellPotionPairs",
+    id: "external-successful-spell-potion-pairs",
+    prompt: "For each spell, count how many potions form a product at least as large as the success threshold.",
+    rating: 1477,
+    source: { dislikes: 106, likes: 3221, slug: "successful-pairs-of-spells-and-potions" },
+    solver: (args) => successfulSpellPotionPairs(args[0] as number[], args[1] as number[], args[2] as number),
+    starterArgs: "spells, potions, success",
+    title: "Successful Spell-Potion Pairs",
+    topics: ["Binary Search", "Arrays", "Sorting"]
+  },
+  {
+    cases: makeCases([[[5, 4, 9], 2], [[4, 3, 6, 7], 3], [[1], 1], [[10], 3], [[8, 8, 8], 1], [[8, 8, 8], 3], [[2, 4, 6], 2], [[100, 1], 1], [[9, 1, 1], 4], [[7, 5, 4, 2], 5]], "removes stones from largest piles"),
+    constraints: ["Repeat exactly k operations.", "Each operation chooses the current largest pile.", "Removing from a pile leaves ceil(pile / 2) stones in that pile."],
+    difficulty: 3,
+    examples: [
+      { input: "piles = [5,4,9], k = 2", output: "12", explanation: "Reduce 9 to 5, then reduce one 5 to 3, leaving piles that sum to 12." },
+      { input: "piles = [1], k = 1", output: "1", explanation: "Removing floor(1/2) stones leaves the single pile unchanged." }
+    ],
+    functionName: "minimumStonesAfterRemovals",
+    id: "external-remove-stones-minimize-total",
+    prompt: "After k removals from the largest available pile, return the minimum total stones left.",
+    rating: 1419,
+    source: { dislikes: 183, likes: 1972, slug: "remove-stones-to-minimize-the-total" },
+    solver: (args) => minimumStonesAfterRemovals(args[0] as number[], args[1] as number),
+    starterArgs: "piles, k",
+    title: "Minimum Stones After Removals",
+    topics: ["Heap", "Greedy", "Arrays"]
+  },
+  {
+    cases: makeCases([[[5, 4, 2, 1]], [[4, 2, 2, 3]], [[1, 100]], [[7, 1, 2, 9]], [[1, 2, 3, 4, 5, 6]], [[9, 8, 7, 6, 5, 4]], [[10, 1, 1, 10]], [[3, 3, 3, 3]], [[2, 9, 1, 8, 4, 7]], [[6, 1, 5, 2, 4, 3]]], "finds maximum twin sum"),
+    constraints: ["The input is the linked-list values in order.", "The list length is even.", "Twin nodes are mirrored from the front and back."],
+    difficulty: 3,
+    examples: [
+      { input: "values = [5,4,2,1]", output: "6", explanation: "The twin sums are 5 + 1 and 4 + 2, so the maximum is 6." },
+      { input: "values = [1,100]", output: "101", explanation: "The only twin pair contains both nodes." }
+    ],
+    functionName: "maximumLinkedTwinSum",
+    id: "external-maximum-twin-linked-list",
+    prompt: "Given linked-list values, return the largest twin sum between mirrored nodes.",
+    rating: 1318,
+    source: { dislikes: 125, likes: 3943, slug: "maximum-twin-sum-of-a-linked-list" },
+    solver: (args) => maximumLinkedTwinSum(args[0] as number[]),
+    starterArgs: "values",
+    title: "Maximum Linked Twin Sum",
+    topics: ["Linked Lists", "Two Pointers", "Stacks"]
+  },
+  {
+    cases: makeCases([["bcbbbcba"], ["aaaa"], ["abcabcabc"], ["a"], ["abbccc"], ["abaccc"], ["xyzzzyx"], ["aabbaa"], ["pwwkew"], ["zzzyzz"]], "limits each character to two copies"),
+    constraints: ["Return a substring length.", "Every character in the chosen substring may appear at most twice.", "The substring must be contiguous."],
+    difficulty: 3,
+    examples: [
+      { input: 's = "bcbbbcba"', output: "4", explanation: "The substring bcbb has b twice and all other characters at most twice." },
+      { input: 's = "aaaa"', output: "2", explanation: "Any longer substring would contain a three times." }
+    ],
+    functionName: "longestSubstringAtMostTwoEach",
+    id: "external-max-length-substring-two-occurrences",
+    prompt: "Return the length of the longest substring where no character appears more than twice.",
+    rating: 1329,
+    source: { dislikes: 23, likes: 261, slug: "maximum-length-substring-with-two-occurrences" },
+    solver: (args) => longestSubstringAtMostTwoEach(args[0] as string),
+    starterArgs: "s",
+    title: "Longest Substring With Two Copies",
+    topics: ["Sliding Window", "Strings", "Hash Map"]
+  },
+  {
+    cases: makeCases([["abcd", "bcdf", 3], ["abcd", "cdef", 3], ["abcd", "acde", 0], ["aaaa", "bbbb", 2], ["krrgw", "zjxss", 19], ["abc", "abc", 0], ["abc", "xyz", 100], ["abcdxyz", "bcdfxyy", 5], ["zzzz", "aaaa", 25], ["pxezla", "loewbi", 25]], "keeps replacement cost within budget"),
+    constraints: ["Cost at each index is the absolute character-code difference.", "Choose a contiguous substring.", "Total chosen cost must be at most maxCost."],
+    difficulty: 3,
+    examples: [
+      { input: 's = "abcd", t = "bcdf", maxCost = 3', output: "3", explanation: "Changing abc to bcd costs 1 + 1 + 1, which fits the budget." },
+      { input: 's = "abcd", t = "cdef", maxCost = 3', output: "1", explanation: "Any two adjacent changes cost 4, so only a one-character window fits." }
+    ],
+    functionName: "equalSubstringWithinBudget",
+    id: "external-equal-substrings-within-budget",
+    prompt: "Return the longest equal-length substring that can be changed from s to t without exceeding the cost budget.",
+    rating: 1497,
+    source: { dislikes: 151, likes: 1930, slug: "get-equal-substrings-within-budget" },
+    solver: (args) => equalSubstringWithinBudget(args[0] as string, args[1] as string, args[2] as number),
+    starterArgs: "s, t, maxCost",
+    title: "Equal Substring Within Budget",
+    topics: ["Sliding Window", "Strings", "Prefix Sum"]
   }
 ];
 
@@ -7820,6 +8090,230 @@ function reverseEvenLengthGroups(values: number[]) {
     groupSize += 1;
   }
   return result;
+}
+
+function partitionStringLabels(s: string) {
+  const last = new Map<string, number>();
+  [...s].forEach((char, index) => last.set(char, index));
+  const lengths: number[] = [];
+  let start = 0;
+  let end = 0;
+  for (let index = 0; index < s.length; index += 1) {
+    end = Math.max(end, last.get(s[index]) ?? index);
+    if (index === end) {
+      lengths.push(end - start + 1);
+      start = index + 1;
+    }
+  }
+  return lengths;
+}
+
+function canMatchAfterOneSwap(s1: string, s2: string) {
+  const different: number[] = [];
+  for (let index = 0; index < s1.length; index += 1) {
+    if (s1[index] !== s2[index]) {
+      different.push(index);
+    }
+  }
+  if (different.length === 0) {
+    return true;
+  }
+  if (different.length !== 2) {
+    return false;
+  }
+  const [left, right] = different;
+  return s1[left] === s2[right] && s1[right] === s2[left];
+}
+
+function playersByLossCount(matches: Array<[number, number]>) {
+  const losses = new Map<number, number>();
+  for (const [winner, loser] of matches) {
+    losses.set(winner, losses.get(winner) || 0);
+    losses.set(loser, (losses.get(loser) || 0) + 1);
+  }
+  const zeroLosses: number[] = [];
+  const oneLoss: number[] = [];
+  for (const [player, lossCount] of losses) {
+    if (lossCount === 0) {
+      zeroLosses.push(player);
+    } else if (lossCount === 1) {
+      oneLoss.push(player);
+    }
+  }
+  return [zeroLosses.sort((a, b) => a - b), oneLoss.sort((a, b) => a - b)];
+}
+
+function countSongPairsDivisibleBy60(time: number[]) {
+  const remainders = Array(60).fill(0);
+  let pairs = 0;
+  for (const duration of time) {
+    const remainder = duration % 60;
+    pairs += remainders[(60 - remainder) % 60];
+    remainders[remainder] += 1;
+  }
+  return pairs;
+}
+
+function countOrderedRatingTeams(ratings: number[]) {
+  let teams = 0;
+  for (let middle = 0; middle < ratings.length; middle += 1) {
+    let smallerLeft = 0;
+    let largerLeft = 0;
+    let smallerRight = 0;
+    let largerRight = 0;
+    for (let left = 0; left < middle; left += 1) {
+      if (ratings[left] < ratings[middle]) {
+        smallerLeft += 1;
+      } else if (ratings[left] > ratings[middle]) {
+        largerLeft += 1;
+      }
+    }
+    for (let right = middle + 1; right < ratings.length; right += 1) {
+      if (ratings[right] > ratings[middle]) {
+        largerRight += 1;
+      } else if (ratings[right] < ratings[middle]) {
+        smallerRight += 1;
+      }
+    }
+    teams += smallerLeft * largerRight + largerLeft * smallerRight;
+  }
+  return teams;
+}
+
+function maxValidForwardJumps(nums: number[], target: number) {
+  const best = Array(nums.length).fill(-Infinity);
+  best[0] = 0;
+  for (let index = 0; index < nums.length; index += 1) {
+    if (!Number.isFinite(best[index])) {
+      continue;
+    }
+    for (let next = index + 1; next < nums.length; next += 1) {
+      if (Math.abs(nums[next] - nums[index]) <= target) {
+        best[next] = Math.max(best[next], best[index] + 1);
+      }
+    }
+  }
+  return Number.isFinite(best[nums.length - 1]) ? best[nums.length - 1] : -1;
+}
+
+function countCommunicatingServers(grid: number[][]) {
+  const rowCounts = grid.map((row) => row.reduce((sum, value) => sum + value, 0));
+  const columnCounts = Array(grid[0]?.length || 0).fill(0);
+  for (const row of grid) {
+    row.forEach((value, column) => {
+      columnCounts[column] += value;
+    });
+  }
+  let total = 0;
+  for (let row = 0; row < grid.length; row += 1) {
+    for (let column = 0; column < grid[row].length; column += 1) {
+      if (grid[row][column] === 1 && (rowCounts[row] > 1 || columnCounts[column] > 1)) {
+        total += 1;
+      }
+    }
+  }
+  return total;
+}
+
+function canJumpToZero(arr: number[], start: number) {
+  const seen = new Set<number>();
+  const queue = [start];
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const index = queue[cursor];
+    if (index < 0 || index >= arr.length || seen.has(index)) {
+      continue;
+    }
+    if (arr[index] === 0) {
+      return true;
+    }
+    seen.add(index);
+    queue.push(index + arr[index], index - arr[index]);
+  }
+  return false;
+}
+
+function pruneZeroOnlyTree(values: Array<number | null>) {
+  function prune(node: TreeNode | null): TreeNode | null {
+    if (!node) {
+      return null;
+    }
+    node.left = prune(node.left || null);
+    node.right = prune(node.right || null);
+    return node.val === 1 || node.left || node.right ? node : null;
+  }
+  return serializeLevelOrder(prune(buildTreeFromLevelOrder(values)));
+}
+
+function maxAncestorValueDiff(values: Array<number | null>) {
+  const root = buildTreeFromLevelOrder(values);
+  if (!root) {
+    return 0;
+  }
+  function walk(node: TreeNode | null | undefined, low: number, high: number): number {
+    if (!node) {
+      return high - low;
+    }
+    return Math.max(
+      walk(node.left, Math.min(low, node.val), Math.max(high, node.val)),
+      walk(node.right, Math.min(low, node.val), Math.max(high, node.val))
+    );
+  }
+  return walk(root, root.val, root.val);
+}
+
+function successfulSpellPotionPairs(spells: number[], potions: number[], success: number) {
+  const sortedPotions = [...potions].sort((left, right) => left - right);
+  return spells.map((spell) => {
+    const needed = Math.ceil(success / spell);
+    return sortedPotions.length - lowerBound(sortedPotions, needed);
+  });
+}
+
+function minimumStonesAfterRemovals(piles: number[], k: number) {
+  const heap = [...piles];
+  for (let operation = 0; operation < k; operation += 1) {
+    heap.sort((left, right) => right - left);
+    heap[0] = Math.ceil(heap[0] / 2);
+  }
+  return heap.reduce((sum, pile) => sum + pile, 0);
+}
+
+function maximumLinkedTwinSum(values: number[]) {
+  let best = 0;
+  for (let index = 0; index < values.length / 2; index += 1) {
+    best = Math.max(best, values[index] + values[values.length - 1 - index]);
+  }
+  return best;
+}
+
+function longestSubstringAtMostTwoEach(s: string) {
+  const counts = new Map<string, number>();
+  let left = 0;
+  let best = 0;
+  for (let right = 0; right < s.length; right += 1) {
+    counts.set(s[right], (counts.get(s[right]) || 0) + 1);
+    while ((counts.get(s[right]) || 0) > 2) {
+      counts.set(s[left], (counts.get(s[left]) || 0) - 1);
+      left += 1;
+    }
+    best = Math.max(best, right - left + 1);
+  }
+  return best;
+}
+
+function equalSubstringWithinBudget(s: string, t: string, maxCost: number) {
+  let left = 0;
+  let cost = 0;
+  let best = 0;
+  for (let right = 0; right < s.length; right += 1) {
+    cost += Math.abs(s.charCodeAt(right) - t.charCodeAt(right));
+    while (cost > maxCost) {
+      cost -= Math.abs(s.charCodeAt(left) - t.charCodeAt(left));
+      left += 1;
+    }
+    best = Math.max(best, right - left + 1);
+  }
+  return best;
 }
 
 function lowerBound(nums: number[], target: number) {

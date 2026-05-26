@@ -10,7 +10,7 @@ describe("codeTemplates", () => {
 
   it("includes basic snippets and algorithm relic snippets", () => {
     expect(CODE_TEMPLATES.filter((template) => template.kind === "basic").map((template) => template.label)).toEqual(expect.arrayContaining(["fori", "hashmap", "set", "sortasc", "forentries", "grid", "dirs4"]));
-    expect(CODE_TEMPLATES.filter((template) => template.kind === "relic").map((template) => template.label)).toEqual(expect.arrayContaining(["dfs", "bfs", "binarysearch"]));
+    expect(CODE_TEMPLATES.filter((template) => template.kind === "relic").map((template) => template.label)).toEqual(expect.arrayContaining(["dfs", "bfs", "binarysearch", "twopointers", "slidingwindow"]));
     expect(CODE_TEMPLATES.map((template) => template.label)).not.toContain("unionfind");
     expect(CODE_TEMPLATES.map((template) => template.label)).not.toContain("forof");
     expect(CODE_TEMPLATES.map((template) => template.label)).not.toEqual(expect.arrayContaining(["sortdesc", "forrev", "guard"]));
@@ -31,9 +31,21 @@ describe("codeTemplates", () => {
   it("uses the word under the cursor as the default array placeholder", () => {
     const forLoop = CODE_TEMPLATES.find((template) => template.label === "fori");
     const hashmap = CODE_TEMPLATES.find((template) => template.label === "hashmap");
+    const twoPointers = CODE_TEMPLATES.find((template) => template.label === "twopointers");
 
     expect(applyCodeTemplateContext(forLoop?.insertText || "", "nums")).toContain("${2:nums}.length");
     expect(applyCodeTemplateContext(hashmap?.insertText || "", "nums")).toContain("of ${3:nums}");
+    expect(applyCodeTemplateContext(twoPointers?.insertText || "", "nums")).toContain("${1:nums}.length");
+  });
+
+  it("keeps the two pointers and sliding window templates fill-in-the-blank oriented", () => {
+    const twoPointers = CODE_TEMPLATES.find((template) => template.label === "twopointers");
+    const slidingWindow = CODE_TEMPLATES.find((template) => template.label === "slidingwindow");
+
+    expect(twoPointers?.insertText).toContain("${3:condition}");
+    expect(twoPointers?.insertText).toContain("${4:moveLeft}");
+    expect(slidingWindow?.insertText).toContain("${4:// add ${1:arr}[right] to the window}");
+    expect(slidingWindow?.insertText).toContain("${6:// remove ${1:arr}[left] from the window}");
   });
 
   it("uses the captured right-click word when suggestions run at another cursor position", () => {

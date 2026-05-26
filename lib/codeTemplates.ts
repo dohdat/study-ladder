@@ -57,6 +57,18 @@ export const CODE_TEMPLATES: CodeTemplate[] = [
   },
   {
     detail: RELIC_DETAIL,
+    insertText: "let left = 0;\nlet right = ${1:arr}.length - 1;\n\nwhile (${2:left < right}) {\n  if (${3:condition}) {\n    ${0}\n  } else if (${4:moveLeft}) {\n    left++;\n  } else {\n    right--;\n  }\n}",
+    kind: "relic",
+    label: "twopointers"
+  },
+  {
+    detail: RELIC_DETAIL,
+    insertText: "let left = 0;\nlet ${2:windowValue} = ${3:0};\n\nfor (let right = 0; right < ${1:arr}.length; right++) {\n  ${4:// add ${1:arr}[right] to the window}\n\n  while (${5:windowInvalid}) {\n    ${6:// remove ${1:arr}[left] from the window}\n    left++;\n  }\n\n  ${0:// update answer}\n}",
+    kind: "relic",
+    label: "slidingwindow"
+  },
+  {
+    detail: RELIC_DETAIL,
     insertText: "const dfs = (node) => {\n  if (!node) return ${1:0};\n  const left = dfs(node.left);\n  const right = dfs(node.right);\n  return ${2:Math.max(left, right) + 1};\n};\n${0}",
     kind: "relic",
     label: "dfs"
@@ -87,6 +99,7 @@ export function applyCodeTemplateContext(insertText: string, contextWord: string
     return insertText;
   }
   return insertText
+    .replaceAll("${1:arr}", `\${1:${safeWord}}`)
     .replaceAll("${2:arr}", `\${2:${safeWord}}`)
     .replaceAll("${3:arr}", `\${3:${safeWord}}`);
 }
