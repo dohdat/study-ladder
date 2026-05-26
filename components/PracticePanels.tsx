@@ -1185,7 +1185,7 @@ function EditorWorkspace(props: {
 }) {
   const editor = (
     <Box h="100%" pos="relative" style={{ minWidth: 0 }}>
-      <MonacoEditor height="100%" language={props.editorLanguage} path={props.editorPath} theme="vs-dark" value={props.editorValue} onChange={(value) => props.updateEditorDraft(value || "")} onMount={props.handleEditorMount} options={{ minimap: { enabled: false }, fontSize: EDITOR_FONT_SIZE, tabSize: TAB_SIZE, wordWrap: "on", scrollBeyondLastLine: false, automaticLayout: true, formatOnPaste: true, formatOnType: true, quickSuggestions: false, suggestOnTriggerCharacters: false, parameterHints: { enabled: false }, readOnly: !props.sessionStarted, readOnlyMessage: EDITOR_READ_ONLY_MESSAGE }} />
+      <MonacoEditor height="100%" language={props.editorLanguage} path={props.editorPath} theme="vs-dark" value={props.editorValue} onChange={(value) => props.updateEditorDraft(value || "")} onMount={props.handleEditorMount} options={{ minimap: { enabled: false }, fontSize: EDITOR_FONT_SIZE, tabSize: TAB_SIZE, wordWrap: "on", scrollBeyondLastLine: false, automaticLayout: true, formatOnPaste: true, formatOnType: true, quickSuggestions: false, suggestOnTriggerCharacters: false, snippetSuggestions: "top", tabCompletion: "onlySnippets", parameterHints: { enabled: false }, readOnly: !props.sessionStarted, readOnlyMessage: EDITOR_READ_ONLY_MESSAGE }} />
       {!props.sessionStarted && <LockedEditorOverlay questionVariantReady={props.questionVariantReady} />}
     </Box>
   );

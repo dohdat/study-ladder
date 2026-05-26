@@ -62,7 +62,9 @@ export const beautifyCode = (source: string) => {
     .replace(/\r\n/g, "\n")
     .replace(/[ \t]+$/gm, "")
     .replace(/[ \t]*([{};])[ \t]*/g, "$1\n")
+    .replace(/}\n;/g, "};")
     .replace(/\)\{/g, ") {")
+    .replace(/\s*=>\s*\{/g, " => {")
     .replace(/\s*(\belse\b)\s*/g, " else ")
     .replace(/\n{3,}/g, "\n\n");
 

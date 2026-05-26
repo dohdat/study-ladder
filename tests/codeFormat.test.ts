@@ -73,4 +73,18 @@ describe("beautifyCode", () => {
       ""
     ].join("\n"));
   });
+
+  it("keeps arrow function assignment semicolons on the closing brace line", () => {
+    expect(beautifyCode("function solve(arr) {\nconst dfs = (node) => {\nif (!node) return 0;\nconst left = dfs(node.left);\nconst right = dfs(node.right);\nreturn Math.max(left, right) + 1;\n};\n}")).toBe([
+      "function solve(arr) {",
+      "  const dfs = (node) => {",
+      "    if (!node) return 0;",
+      "    const left = dfs(node.left);",
+      "    const right = dfs(node.right);",
+      "    return Math.max(left, right) + 1;",
+      "  };",
+      "}",
+      ""
+    ].join("\n"));
+  });
 });

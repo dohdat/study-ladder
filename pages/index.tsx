@@ -19,6 +19,7 @@ import { useStudyTimeTracker } from "../hooks/useStudyBlocker";
 import { usePersistAchievements } from "../hooks/usePersistAchievements";
 import { useStudyNotifications } from "../hooks/useStudyNotifications";
 import { areHintsDisabledByHeat, getHeatRank, isRunCodeDisabledByHeat } from "../lib/campaignCore";
+import { registerCodeTemplateCompletions, setNextCodeTemplateContextWord } from "../lib/codeTemplates";
 import { beautifyCode } from "../lib/codeFormat";
 import { applyEnemyDebuffsToMonsterAttack, applyPassedCombatResult, getElapsedPressureRatio, getMonsterBlockGain, getTimedMonsterAttack, isMonsterEnraged } from "../lib/combatCore";
 import { getTimerDisplay } from "../lib/timerDisplay";
@@ -43,6 +44,7 @@ const DAMAGE_POP_TIMEOUT_MS = 840;
 const PLAYER_IMPACT_TIMEOUT_MS = 2200;
 const COMBAT_ADVANCE_DELAY_MS = 680;
 const QUESTION_VARIANT_RETRY_MS = 5000;
+let codeTemplateCompletionsRegistered = false;
 const QUESTION_VARIANT_STUCK_TIMEOUT_MS = 45000;
 const QUESTION_VARIANT_MAX_RETRIES = 1;
 const QUESTION_VARIANT_CACHE_KEY = "study-ladder-question-variants-v3";
@@ -502,6 +504,8 @@ function useUpdateDraft(params: { currentQuestion: Question | null; setCode: (co
 
 function useEditorMount(beautifyCurrentCode: (source?: string) => void, runCode: () => void, submitCode: () => void): OnMount {
   const beautifyRef = useRef(beautifyCurrentCode);
+  const templateInsertSelectionRef = useRef<unknown>(null);
+  const templateContextWordRef = useRef("");
   const runRef = useRef(runCode);
   const submitRef = useRef(submitCode);
 
@@ -536,6 +540,26 @@ function useEditorMount(beautifyCurrentCode: (source?: string) => void, runCode:
       }
       declare module "*.css";
     `, "file:///study-ladder-frontend-globals.d.ts");
+    if (!codeTemplateCompletionsRegistered) {
+      registerCodeTemplateCompletions(monaco);
+      codeTemplateCompletionsRegistered = true;
+    }
+    editor.onMouseDown((event) => {
+      if (!event.event.rightButton) {
+        templateInsertSelectionRef.current = editor.getSelection();
+        return;
+      }
+      const position = event.target.position;
+      const model = editor.getModel();
+      templateContextWordRef.current = position && model ? model.getWordAtPosition(position)?.word || "" : "";
+    });
+    editor.onContextMenu((event) => {
+      const position = event.target.position;
+      const model = editor.getModel();
+      if (position && model) {
+        templateContextWordRef.current = model.getWordAtPosition(position)?.word || "";
+      }
+    });
     editor.addAction({
       id: "study-ladder-beautify",
       label: "Beautify Code",
@@ -553,6 +577,34 @@ function useEditorMount(beautifyCurrentCode: (source?: string) => void, runCode:
       label: "Submit Solution",
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
       run: () => submitRef.current()
+    });
+    editor.addAction({
+      id: "study-ladder-code-templates",
+      label: "Code Templates",
+      contextMenuGroupId: "1_modification",
+      contextMenuOrder: 1.5,
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.KeyT],
+      run: () => {
+        const insertSelection = templateInsertSelectionRef.current;
+        if (insertSelection) {
+          editor.setSelection(insertSelection as Parameters<typeof editor.setSelection>[0]);
+        }
+        setNextCodeTemplateContextWord(templateContextWordRef.current);
+        editor.trigger("study-ladder", "editor.action.triggerSuggest", {});
+      }
+    });
+    editor.addCommand(monaco.KeyCode.Slash, () => {
+      const position = editor.getPosition();
+      const model = editor.getModel();
+      if (!position || !model) {
+        return;
+      }
+      const range = new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
+      editor.executeEdits("study-ladder-slash-template", [{ range, text: "/", forceMoveMarkers: true }]);
+      const linePrefix = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
+      if (/^\s*$/.test(linePrefix)) {
+        editor.trigger("study-ladder", "editor.action.triggerSuggest", {});
+      }
     });
   }, []);
 }
