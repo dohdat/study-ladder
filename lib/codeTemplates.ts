@@ -69,25 +69,25 @@ export const CODE_TEMPLATES: CodeTemplate[] = [
   },
   {
     detail: RELIC_DETAIL,
-    insertText: "const dfs = (node) => {\n  if (!node) return ${1:0};\n  const left = dfs(node.left);\n  const right = dfs(node.right);\n  return ${2:Math.max(left, right) + 1};\n};\n${0}",
+    insertText: "const dfs = (node) => {\n  if (${1:baseCase}) return ${2:baseValue};\n\n  ${3:// explore child / next state}\n\n  return ${0:result};\n};",
     kind: "relic",
     label: "dfs"
   },
   {
     detail: RELIC_DETAIL,
-    insertText: "const stack = [${1:start}];\nconst seen = new Set([${1:start}]);\nwhile (stack.length) {\n  const node = stack.pop();\n  for (const next of ${2:getNeighbors(node)}) {\n    if (seen.has(next)) continue;\n    seen.add(next);\n    stack.push(next);\n  }\n}\n${0}",
+    insertText: "const stack = [${1:start}];\nconst seen = new Set([${1:start}]);\n\nwhile (${2:stack.length}) {\n  const node = stack.pop();\n\n  ${3:// process node}\n\n  for (const next of ${4:getNeighbors(node)}) {\n    ${0:// decide skip, mark seen, and push}\n  }\n}",
     kind: "relic",
     label: "dfsgraph"
   },
   {
     detail: RELIC_DETAIL,
-    insertText: "const queue = [${1:start}];\nconst seen = new Set([${1:start}]);\nfor (let head = 0; head < queue.length; head++) {\n  const node = queue[head];\n  for (const next of ${2:getNeighbors(node)}) {\n    if (seen.has(next)) continue;\n    seen.add(next);\n    queue.push(next);\n  }\n}\n${0}",
+    insertText: "const queue = [${1:start}];\nconst seen = new Set([${1:start}]);\n\nfor (let head = 0; ${2:head < queue.length}; head++) {\n  const node = queue[head];\n\n  ${3:// process node}\n\n  for (const next of ${4:getNeighbors(node)}) {\n    ${0:// decide skip, mark seen, and enqueue}\n  }\n}",
     kind: "relic",
     label: "bfs"
   },
   {
     detail: RELIC_DETAIL,
-    insertText: "let left = ${1:0};\nlet right = ${2:arr.length - 1};\nwhile (left <= right) {\n  const mid = Math.floor((left + right) / 2);\n  if (${3:condition}) {\n    ${0:return mid;}\n  } else if (${4:goRight}) {\n    left = mid + 1;\n  } else {\n    right = mid - 1;\n  }\n}",
+    insertText: "let left = ${1:0};\nlet right = ${2:arr.length - 1};\n\nwhile (${3:left <= right}) {\n  const mid = Math.floor((left + right) / 2);\n\n  if (${4:found / valid}) {\n    ${5:// handle mid}\n  } else if (${6:go right}) {\n    ${7:// move left bound}\n  } else {\n    ${0:// move right bound}\n  }\n}",
     kind: "relic",
     label: "binarysearch"
   }

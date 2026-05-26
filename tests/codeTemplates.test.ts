@@ -16,10 +16,12 @@ describe("codeTemplates", () => {
     expect(CODE_TEMPLATES.map((template) => template.label)).not.toEqual(expect.arrayContaining(["sortdesc", "forrev", "guard"]));
   });
 
-  it("keeps dfs arrow function terminator on the closing brace line", () => {
+  it("keeps dfs as a learning scaffold instead of a completed tree template", () => {
     const dfs = CODE_TEMPLATES.find((template) => template.label === "dfs");
-    expect(dfs?.insertText).toContain("};\n${0}");
-    expect(dfs?.insertText).not.toContain("${0:return");
+    expect(dfs?.insertText).toContain("${1:baseCase}");
+    expect(dfs?.insertText).toContain("${3:// explore child / next state}");
+    expect(dfs?.insertText).not.toContain("const left = dfs(node.left)");
+    expect(dfs?.insertText).not.toContain("Math.max(left, right) + 1");
   });
 
   it("defines safe row and column counts in the grid template", () => {
@@ -46,6 +48,23 @@ describe("codeTemplates", () => {
     expect(twoPointers?.insertText).toContain("${4:moveLeft}");
     expect(slidingWindow?.insertText).toContain("${4:// add ${1:arr}[right] to the window}");
     expect(slidingWindow?.insertText).toContain("${6:// remove ${1:arr}[left] from the window}");
+  });
+
+  it("keeps graph search and binary search templates scaffolded for practice", () => {
+    const dfsGraph = CODE_TEMPLATES.find((template) => template.label === "dfsgraph");
+    const bfs = CODE_TEMPLATES.find((template) => template.label === "bfs");
+    const binarySearch = CODE_TEMPLATES.find((template) => template.label === "binarysearch");
+
+    expect(dfsGraph?.insertText).toContain("${0:// decide skip, mark seen, and push}");
+    expect(dfsGraph?.insertText).not.toContain("if (seen.has(next)) continue;");
+    expect(dfsGraph?.insertText).not.toContain("stack.push(next);");
+    expect(bfs?.insertText).toContain("${0:// decide skip, mark seen, and enqueue}");
+    expect(bfs?.insertText).not.toContain("if (seen.has(next)) continue;");
+    expect(bfs?.insertText).not.toContain("queue.push(next);");
+    expect(binarySearch?.insertText).toContain("${7:// move left bound}");
+    expect(binarySearch?.insertText).toContain("${0:// move right bound}");
+    expect(binarySearch?.insertText).not.toContain("left = mid + 1;");
+    expect(binarySearch?.insertText).not.toContain("right = mid - 1;");
   });
 
   it("uses the captured right-click word when suggestions run at another cursor position", () => {
