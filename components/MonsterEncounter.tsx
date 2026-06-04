@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge, Box, Group, Paper, Progress, Text, Tooltip } from "@mantine/core";
 type StaticImageData = string;
 
-import { getHeatRank } from "../lib/campaignCore";
+import { getHeatRank, isCorrectSubmitTimePressureEnabled } from "../lib/campaignCore";
 import { getCampaignMonsterMaxHealth, getMonsterCurrentBlock, getMonsterCurrentHealth, isMonsterEnraged } from "../lib/combatCore";
 import { ENEMY_DEBUFF_DEFINITIONS, formatEnemyDebuff, getEnemyDebuffDescription } from "../lib/enemyDebuffCore";
-import { getMonsterAttackType, getUniqueMonsterBonusDescription, getUniqueMonsterBonusesWithExtra, getUniqueMonsterName } from "../lib/monsterCore";
+import { getMonsterAttackType, getMonsterWrongSubmitDebuffThreats, getUniqueMonsterBonusDescription, getUniqueMonsterBonusesWithExtra, getUniqueMonsterName } from "../lib/monsterCore";
+import { PLAYER_DEBUFF_DEFINITIONS, getPlayerDebuffLabel } from "../lib/playerDebuffCore";
 import { getCurrentSpireNode } from "../lib/spireMapCore";
 import { getCard } from "../lib/studyCore";
-import type { DamageType, Difficulty, EnemyDebuff, Question, SpireAct, StudyState } from "../types/study";
+import type { DamageType, Difficulty, EnemyDebuff, PlayerDebuffId, Question, SpireAct, SpireNodeKind, StudyState } from "../types/study";
 import batArt from "../assets/hero_siege_monsters/bat.png";
 import bigEntArt from "../assets/hero_siege_monsters/big-ent.png";
 import bogMushroomArt from "../assets/hero_siege_monsters/bog-mushroom.png";
@@ -184,18 +185,21 @@ export function MonsterEncounter(props: { damagePop?: MonsterDamagePop | null; q
   const maxHealth = getCampaignMonsterMaxHealth(props.state, props.question);
   const currentHealth = getMonsterCurrentHealth(props.state, props.question);
   const block = getMonsterCurrentBlock(props.state, props.question);
+  const currentNode = getCurrentSpireNode(props.state);
   const activeDamage = props.damagePop?.questionId === props.question.id ? props.damagePop : null;
   const health = useAnimatedMonsterHealth({ currentHealth, damagePop: activeDamage, maxHealth });
   const monster = getMonsterDefinition(props.question, props.state);
   const uniqueName = getUniqueMonsterName(props.question);
   const bonuses = getUniqueMonsterBonusesWithExtra(props.question, getHeatRank(props.state.profile.spireRun, "benefitsPackage"));
+  const playerDebuffThreats = getMonsterWrongSubmitDebuffThreats(props.question, getHeatRank(props.state.profile.spireRun, "benefitsPackage"));
   const attackType = getMonsterAttackType(props.question, bonuses);
+  const timePressure = getCorrectSubmitTimePressure(props.state, currentNode?.kind || null);
   const enraged = isMonsterEnraged(props.state, props.question);
   const enemyDebuffs = getCard(props.state, props.question.id).enemyDebuffs || [];
   return (
     <Paper withBorder p="xs" mt="md" bg="dark.7" style={{ overflow: "visible" }}>
       <Group gap="sm" wrap="nowrap" align="center" style={{ overflow: "visible" }}>
-        <MonsterAvatar damagePop={activeDamage} monster={monster} statuses={getEnemyPortraitStatuses(bonuses, attackType, enraged, enemyDebuffs)} />
+        <MonsterAvatar damagePop={activeDamage} monster={monster} statuses={getEnemyPortraitStatuses(bonuses, attackType, enraged, enemyDebuffs, playerDebuffThreats, timePressure)} />
         <Box flex={1} style={{ overflow: "visible" }}>
           <Group justify="space-between" gap="xs" mb={4}>
             <Box>
@@ -207,7 +211,7 @@ export function MonsterEncounter(props: { damagePop?: MonsterDamagePop | null; q
             <Text size="10px" c="dimmed" fw={900} tt="uppercase">Enemy Attack</Text>
             <Badge size="xs" variant="filled" color={getDamageTypeBadgeColor(attackType)}>{formatDamageType(attackType)}</Badge>
           </Group>
-          <UniqueBonusBadges bonuses={bonuses} enemyDebuffs={enemyDebuffs} enraged={enraged} />
+          <UniqueBonusBadges bonuses={bonuses} enemyDebuffs={enemyDebuffs} enraged={enraged} playerDebuffThreats={playerDebuffThreats} timePressure={timePressure} />
           <Group justify="space-between" gap="xs" mb={4}>
             <Text size="xs" c="dimmed" fw={700}>Enemy Health</Text>
             <Group gap={6} wrap="nowrap">
@@ -265,8 +269,8 @@ function useAnimatedMonsterHealth(params: { currentHealth: number; damagePop: Mo
   return health;
 }
 
-function UniqueBonusBadges(props: { bonuses: string[]; enemyDebuffs: EnemyDebuff[]; enraged: boolean }) {
-  if (!props.bonuses.length && !props.enemyDebuffs.length && !props.enraged) {
+function UniqueBonusBadges(props: { bonuses: string[]; enemyDebuffs: EnemyDebuff[]; enraged: boolean; playerDebuffThreats: PlayerDebuffId[]; timePressure: PortraitStatus | null }) {
+  if (!props.bonuses.length && !props.enemyDebuffs.length && !props.enraged && !props.playerDebuffThreats.length && !props.timePressure) {
     return null;
   }
   const effects = [...(props.enraged ? ["Enraged"] : []), ...props.bonuses];
@@ -276,10 +280,35 @@ function UniqueBonusBadges(props: { bonuses: string[]; enemyDebuffs: EnemyDebuff
       {props.enemyDebuffs.map((debuff) => (
         <EnemyDebuffBadge key={debuff.id} debuff={debuff} />
       ))}
+      {props.playerDebuffThreats.map((debuffId) => (
+        <PlayerDebuffThreatBadge key={debuffId} debuffId={debuffId} />
+      ))}
+      {props.timePressure && <MechanicBadge color="yellow" label="Time Pressure" tooltip={props.timePressure.description} />}
       {effects.map((bonus) => (
         <UniqueBonusBadge key={bonus} bonus={bonus} />
       ))}
     </Group>
+  );
+}
+
+function PlayerDebuffThreatBadge(props: { debuffId: PlayerDebuffId }) {
+  const definition = PLAYER_DEBUFF_DEFINITIONS[props.debuffId];
+  return (
+    <Tooltip label={`Wrong submissions can apply ${definition.label}. ${definition.description}`} multiline withArrow withinPortal={false}>
+      <Box component="span" style={{ display: "inline-flex" }} tabIndex={0}>
+        <Badge size="xs" variant="filled" style={{ background: definition.color, color: "#160d0b", cursor: "help" }}>{getPlayerDebuffLabel(props.debuffId)}</Badge>
+      </Box>
+    </Tooltip>
+  );
+}
+
+function MechanicBadge(props: { color: string; label: string; tooltip: string }) {
+  return (
+    <Tooltip label={props.tooltip} multiline withArrow withinPortal={false}>
+      <Box component="span" style={{ display: "inline-flex" }} tabIndex={0}>
+        <Badge color={props.color} size="xs" variant="filled" style={{ cursor: "help" }}>{props.label}</Badge>
+      </Box>
+    </Tooltip>
   );
 }
 
@@ -373,8 +402,9 @@ function getDamageStatusColor(type: DamageType) {
   return "#d7b56d";
 }
 
-function getEnemyPortraitStatuses(bonuses: string[], attackType: DamageType, enraged: boolean, enemyDebuffs: EnemyDebuff[]): PortraitStatus[] {
+function getEnemyPortraitStatuses(bonuses: string[], attackType: DamageType, enraged: boolean, enemyDebuffs: EnemyDebuff[], playerDebuffThreats: PlayerDebuffId[], timePressure: PortraitStatus | null): PortraitStatus[] {
   return [
+    ...(timePressure ? [timePressure] : []),
     ...enemyDebuffs.map((debuff) => ({
       color: ENEMY_DEBUFF_DEFINITIONS[debuff.id].color,
       description: getEnemyDebuffDescription(debuff)
@@ -384,11 +414,36 @@ function getEnemyPortraitStatuses(bonuses: string[], attackType: DamageType, enr
       description: `Enemy attacks deal ${formatDamageType(attackType)} damage.`
     }] : []),
     ...(enraged ? [{ color: getStatusColor("Enraged"), description: "At half health, this enemy hits harder." }] : []),
+    ...playerDebuffThreats.map((debuffId) => ({
+      color: PLAYER_DEBUFF_DEFINITIONS[debuffId].color,
+      description: `Wrong submissions can apply ${PLAYER_DEBUFF_DEFINITIONS[debuffId].label}.`
+    })),
     ...bonuses.map((bonus) => ({
       color: getStatusColor(bonus),
       description: getUniqueMonsterBonusDescription(bonus)
     }))
   ].slice(0, 5);
+}
+
+function getCorrectSubmitTimePressure(state: StudyState, nodeKind: SpireNodeKind | null): PortraitStatus | null {
+  if (!isCorrectSubmitTimePressureEnabled(state.profile.spireRun, nodeKind)) {
+    return null;
+  }
+  return {
+    color: "#f6bf45",
+    description: getCorrectSubmitTimePressureDescription(state, nodeKind)
+  };
+}
+
+function getCorrectSubmitTimePressureDescription(state: StudyState, nodeKind: SpireNodeKind | null) {
+  const tightDeadline = getHeatRank(state.profile.spireRun, "tightDeadline");
+  const forcedOvertime = getHeatRank(state.profile.spireRun, "forcedOvertime");
+  const sources = [
+    ...(tightDeadline > 0 ? [`Tight Deadline ${tightDeadline}`] : []),
+    ...(forcedOvertime > 0 ? [`Forced Overtime ${forcedOvertime}`] : []),
+    ...((nodeKind === "elite" || nodeKind === "boss") ? [nodeKind === "boss" ? "Boss room" : "Elite room"] : [])
+  ];
+  return `${sources.join(" + ")}: correct submits can still take elapsed-time damage.`;
 }
 
 function MonsterAvatar(props: { damagePop?: MonsterDamagePop | null; monster: MonsterDefinition; statuses: PortraitStatus[] }) {

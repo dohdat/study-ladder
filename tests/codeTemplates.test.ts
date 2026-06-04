@@ -83,9 +83,9 @@ describe("codeTemplates", () => {
     setNextCodeTemplateContextWord("nums");
 
     const completions = providers[0].provideCompletionItems({
-      getLineContent: () => "",
+      getLineContent: () => "  /fori",
       getWordUntilPosition: () => ({ endColumn: 5, word: "", startColumn: 5 })
-    }, { column: 5, lineNumber: 3 });
+    }, { column: 8, lineNumber: 3 });
 
     expect(completions.suggestions.find((suggestion) => suggestion.label === "fori")?.insertText).toContain("${2:nums}.length");
   });
@@ -124,6 +124,28 @@ describe("codeTemplates", () => {
     }, { column: 11, lineNumber: 1 });
 
     expect(completions.suggestions.find((suggestion) => suggestion.label === "hashmap")?.filterText).toBe("/hashmap");
+  });
+
+  it("does not show snippet templates while typing a normal identifier", () => {
+    const providers: Array<{ provideCompletionItems: (model: { getLineContent: (lineNumber: number) => string; getWordUntilPosition: () => { endColumn: number; word: string; startColumn: number } }, position: { column: number; lineNumber: number }) => { suggestions: Array<{ label: string }> } }> = [];
+    const monaco = {
+      languages: {
+        CompletionItemInsertTextRule: { InsertAsSnippet: 4 },
+        CompletionItemKind: { Snippet: 27 },
+        registerCompletionItemProvider: (_language: string, provider: (typeof providers)[number]) => {
+          providers.push(provider);
+          return { dispose: () => undefined };
+        }
+      }
+    };
+    registerCodeTemplateCompletions(monaco as never);
+
+    const completions = providers[0].provideCompletionItems({
+      getLineContent: () => "    hashmap",
+      getWordUntilPosition: () => ({ endColumn: 12, word: "hashmap", startColumn: 5 })
+    }, { column: 12, lineNumber: 1 });
+
+    expect(completions.suggestions).toEqual([]);
   });
 
   it("does not show snippet templates during member access suggestions", () => {

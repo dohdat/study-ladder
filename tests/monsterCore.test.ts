@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getMonsterAttackProfile, getMonsterMaxHealth, getMonsterPlayerDamage, getMonsterWrongSubmitDebuffs, getUniqueMonsterBonusCount, getUniqueMonsterBonuses, getUniqueMonsterBonusesWithExtra, getUniqueMonsterName, UNIQUE_MONSTER_BONUSES } from "../lib/monsterCore";
+import { getMonsterAttackProfile, getMonsterMaxHealth, getMonsterPlayerDamage, getMonsterWrongSubmitDebuffs, getMonsterWrongSubmitDebuffThreats, getUniqueMonsterBonusCount, getUniqueMonsterBonuses, getUniqueMonsterBonusesWithExtra, getUniqueMonsterName, UNIQUE_MONSTER_BONUSES } from "../lib/monsterCore";
 import { DAMAGE_TYPES, ELEMENTAL_DAMAGE_TYPES } from "../lib/resistanceCore";
 import type { Difficulty, Question } from "../types/study";
 
@@ -72,6 +72,13 @@ describe("monsterCore", () => {
 
     expect(rolledDebuffs).toContain("hex");
     expect(rolledDebuffs).toContain("confused");
+  });
+
+  it("exposes wrong-submit debuff threats for the enemy UI", () => {
+    expect(getMonsterWrongSubmitDebuffThreats(makeQuestion(1, 1200))).toEqual(["weak", "slimed"]);
+
+    const cursed = findQuestion((bonuses) => bonuses.length === 1 && bonuses.includes("Cursed"), 1, 1200);
+    expect(getMonsterWrongSubmitDebuffThreats(cursed)).toEqual(["hex"]);
   });
 
   it("keeps enemy traits from countering player damage types", () => {

@@ -88,16 +88,11 @@ export function useStudyTimeTracker(active: boolean) {
   }, [active]);
 }
 
-export function getDistractingSitesDraftUpdate(existingSites: string[], draft: string, canRemoveSites: boolean): DistractingSitesDraftUpdate {
-  const existing = normalizeDistractingSites(existingSites);
+export function getDistractingSitesDraftUpdate(existingSites: string[], draft: string): DistractingSitesDraftUpdate {
   const drafted = normalizeDistractingSites(draft);
   const draftedSet = new Set(drafted);
-  const removedExistingSites = existing.some((site) => !draftedSet.has(site));
-  if (canRemoveSites) {
-    return { draft, removedExistingSites, sites: drafted };
-  }
-  const sites = mergeUniqueSites(existing, drafted);
-  return { draft: removedExistingSites ? sites.join("\n") : draft, removedExistingSites, sites };
+  const removedExistingSites = normalizeDistractingSites(existingSites).some((site) => !draftedSet.has(site));
+  return { draft, removedExistingSites, sites: drafted };
 }
 
 export function normalizeDistractingSites(value: string | string[]) {

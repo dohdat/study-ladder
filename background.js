@@ -13,6 +13,8 @@ const BLOCKER_PROGRESS_KEY = "study-ladder-blocker-progress-v1";
 const STUDY_PAGE = "pages/index.html";
 const DEFAULT_BLOCKER_ENABLED = true;
 const MS_PER_MINUTE = 60000;
+const BLOCKER_START_HOUR = 7;
+const BLOCKER_END_HOUR = 21;
 const QUESTION_VARIANT_TIMEOUT_MS = 75000;
 const EXAMPLE_EXPLANATION_TIMEOUT_MS = 45000;
 const SOLUTION_REVEAL_TIMEOUT_MS = 75000;
@@ -480,7 +482,7 @@ function addStudyTime(ms, sendResponse) {
 }
 
 function shouldRedirectUrl(url, settings, progress) {
-  if (!settings.enabled || settings.pausedUntil > Date.now() || settings.dailyMinutes <= 0 || progress.studiedMs >= settings.dailyMinutes * MS_PER_MINUTE) {
+  if (!settings.enabled || !isWithinBlockerWindow() || settings.pausedUntil > Date.now() || settings.dailyMinutes <= 0 || progress.studiedMs >= settings.dailyMinutes * MS_PER_MINUTE) {
     return false;
   }
   let parsed;
@@ -494,6 +496,11 @@ function shouldRedirectUrl(url, settings, progress) {
   }
   const hostname = parsed.hostname.replace(/^www\./, "").toLowerCase();
   return settings.distractingSites.some((site) => hostname === site || hostname.endsWith(`.${site}`));
+}
+
+function isWithinBlockerWindow(now = new Date()) {
+  const hour = now.getHours();
+  return hour >= BLOCKER_START_HOUR && hour < BLOCKER_END_HOUR;
 }
 
 function redirectIfBlocked(tabId, url) {

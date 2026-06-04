@@ -231,6 +231,15 @@ export function getMonsterPlayerDamage(question: Question, damage: number, _dama
   return Math.max(DEFAULT_HIT_COUNT, Math.round(damage * (1 - Math.min(reduction, TELEPORTING_DAMAGE_REDUCTION))));
 }
 
+export function getMonsterWrongSubmitDebuffThreats(question: Question, extraBonusCount = 0): PlayerDebuffId[] {
+  const bonuses = getUniqueMonsterBonusesWithExtra(question, extraBonusCount);
+  const bonusDebuff = bonuses.map(getDebuffForBonus).find(Boolean);
+  if (bonusDebuff) {
+    return [bonusDebuff];
+  }
+  return getFallbackWrongSubmitDebuffPool(question);
+}
+
 export function getMonsterWrongSubmitDebuffs(question: Question, now = Date.now(), extraBonusCount = 0): PlayerDebuffApplication[] {
   const bonuses = getUniqueMonsterBonusesWithExtra(question, extraBonusCount);
   const debuff = bonuses.map(getDebuffForBonus).find(Boolean) || getFallbackWrongSubmitDebuff(question, now);
@@ -283,6 +292,10 @@ function getFallbackWrongSubmitDebuff(question: Question, now: number): PlayerDe
   if (getSeededRoll(`${getMonsterSeed(question)}:${now}:wrong-submit-debuff`) >= chance) {
     return null;
   }
+  return pickSeeded(getFallbackWrongSubmitDebuffPool(question), `${getMonsterSeed(question)}:${now}:wrong-submit-debuff-kind`);
+}
+
+function getFallbackWrongSubmitDebuffPool(question: Question): PlayerDebuffId[] {
   const pools: Record<Question["difficulty"], PlayerDebuffId[]> = {
     1: ["weak", "slimed"],
     2: ["weak", "vulnerable", "frail"],
@@ -290,7 +303,7 @@ function getFallbackWrongSubmitDebuff(question: Question, now: number): PlayerDe
     4: ["vulnerable", "frail", "hex", "constricted", "confused"],
     5: ["vulnerable", "frail", "hex", "constricted", "confused", "parasite"]
   };
-  return pickSeeded(pools[question.difficulty], `${getMonsterSeed(question)}:${now}:wrong-submit-debuff-kind`);
+  return pools[question.difficulty];
 }
 
 function getBonusDamageAmount(bonus: string, question: Question, now: number) {

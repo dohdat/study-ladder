@@ -1392,6 +1392,7 @@ function SettingsPanel(props: { canRetargetActiveRoom?: boolean; closeModal: () 
   const [siteDraft, setSiteDraft] = useState(siteText);
   const [siteDraftFocused, setSiteDraftFocused] = useState(false);
   const redirectPaused = settings.pausedUntil > Date.now();
+  const sitesEditable = redirectPaused;
   const pausedMinutesRemaining = redirectPaused ? Math.max(1, Math.ceil((settings.pausedUntil - Date.now()) / 60000)) : 0;
   const buyRedirectPause = (minutes: typeof REDIRECT_PAUSE_OPTIONS[number]) => {
     const cost = getRedirectPauseCost(minutes);
@@ -1470,25 +1471,35 @@ function SettingsPanel(props: { canRetargetActiveRoom?: boolean; closeModal: () 
         autosize
         minRows={SITE_TEXTAREA_MIN_ROWS}
         label="Distracting sites"
-        description="One domain per line, for example reddit.com or youtube.com."
+        description={sitesEditable ? "One domain per line, for example reddit.com or youtube.com." : "Pause redirects to edit blocked domains."}
+        disabled={!sitesEditable}
+        readOnly={!sitesEditable}
+        styles={!sitesEditable ? { input: { pointerEvents: "none", userSelect: "none" } } : undefined}
         value={siteDraft}
         onBlur={() => {
+          if (!sitesEditable) {
+            return;
+          }
           setSiteDraftFocused(false);
-          const next = getDistractingSitesDraftUpdate(settings.distractingSites, siteDraft, redirectPaused);
+          const next = getDistractingSitesDraftUpdate(settings.distractingSites, siteDraft);
           setSiteDraft(next.sites.join("\n"));
           updateSettings({ ...settings, distractingSites: next.sites });
         }}
         onChange={(event) => {
-          const nextDraft = event.currentTarget.value;
-          const next = getDistractingSitesDraftUpdate(settings.distractingSites, nextDraft, redirectPaused);
-          setSiteDraft(next.draft);
-          updateSettings({ ...settings, distractingSites: next.sites });
+          if (!sitesEditable) {
+            return;
+          }
+          setSiteDraft(event.currentTarget.value);
         }}
-        onFocus={() => setSiteDraftFocused(true)}
+        onFocus={() => {
+          if (sitesEditable) {
+            setSiteDraftFocused(true);
+          }
+        }}
       />
       <Group gap="xs">
         <IconSparkles size={ICON_SIZE} />
-        <Text size="sm" c="dimmed">When unfinished, those sites open Study Ladder instead.</Text>
+        <Text size="sm" c="dimmed">From 7 AM to 9 PM, unfinished days open Study Ladder instead.</Text>
       </Group>
       <Group justify="flex-end">
         <HeroSiegeButton

@@ -1,4 +1,4 @@
-import type { HeatConditionId, HeatConditionRanks, SpireAct, SpireDifficulty, SpireRun } from "../types/study";
+import type { HeatConditionId, HeatConditionRanks, SpireAct, SpireDifficulty, SpireNodeKind, SpireRun } from "../types/study";
 
 const ACTS: Array<{ act: SpireAct; label: string }> = [
   { act: 1, label: "Act I - The Sightless Eye" },
@@ -126,6 +126,10 @@ export function getHeatShopPriceIncreasePercent(run: Pick<SpireRun, "heatConditi
 
 export function getHeatTimerPenaltyPercent(run: Pick<SpireRun, "heatConditions">) {
   return getHeatRank(run, "tightDeadline") * 10 + getHeatRank(run, "forcedOvertime") * 5;
+}
+
+export function isCorrectSubmitTimePressureEnabled(run: Pick<SpireRun, "heatConditions">, nodeKind?: SpireNodeKind | null) {
+  return getHeatRank(run, "tightDeadline") > 0 || getHeatRank(run, "forcedOvertime") > 0 || nodeKind === "elite" || nodeKind === "boss";
 }
 
 export function getHeatRelicChoicePenalty(run: Pick<SpireRun, "heatConditions">, rewardKind: NonNullable<SpireRun["pendingRelicReward"]>["rewardKind"]) {

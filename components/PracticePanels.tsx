@@ -70,6 +70,13 @@ const COMPACT_EXAMPLE_JSON_MAX_LENGTH = 80;
 const CASE_TAB_MIN_WIDTH = 92;
 const RUN_PANEL_MAX_HEIGHT = 720;
 const RUN_BLOCK_BG = "#303030";
+const RUN_CASE_PASS_BG = "linear-gradient(180deg, #186a3a 0%, #0f3f29 100%)";
+const RUN_CASE_PASS_BORDER = "#4ade80";
+const RUN_CASE_PASS_TEXT = "#e7ffe9";
+const RUN_CASE_FAIL_BG = "linear-gradient(180deg, #7a1220 0%, #3c0710 100%)";
+const RUN_CASE_FAIL_BORDER = "#ff5a67";
+const RUN_CASE_FAIL_TEXT = "#ffe1e5";
+const RUN_CASE_SELECTED_BORDER = "#f6bf45";
 const RUN_SECTION_GAP = 14;
 const RUN_VALUE_PADDING = 14;
 const RUN_BLOCK_RADIUS = 8;
@@ -1215,7 +1222,7 @@ function EditorWorkspace(props: {
 }) {
   const editor = (
     <Box h="100%" pos="relative" style={{ minWidth: 0 }}>
-      <MonacoEditor height="100%" language={props.editorLanguage} path={props.editorPath} theme="vs-dark" value={props.editorValue} onChange={(value) => props.updateEditorDraft(value || "")} onMount={props.handleEditorMount} options={{ minimap: { enabled: false }, fontSize: EDITOR_FONT_SIZE, tabSize: TAB_SIZE, wordWrap: "on", scrollBeyondLastLine: false, automaticLayout: true, formatOnPaste: true, formatOnType: true, quickSuggestions: { comments: false, other: true, strings: false }, suggestOnTriggerCharacters: true, snippetSuggestions: "top", tabCompletion: "on", parameterHints: { enabled: true }, readOnly: !props.sessionStarted, readOnlyMessage: EDITOR_READ_ONLY_MESSAGE }} />
+      <MonacoEditor height="100%" language={props.editorLanguage} path={props.editorPath} theme="vs-dark" value={props.editorValue} onChange={(value) => props.updateEditorDraft(value || "")} onMount={props.handleEditorMount} options={{ minimap: { enabled: false }, fontSize: EDITOR_FONT_SIZE, tabSize: TAB_SIZE, wordWrap: "on", scrollBeyondLastLine: false, automaticLayout: true, formatOnPaste: true, formatOnType: true, quickSuggestions: false, suggestOnTriggerCharacters: true, snippetSuggestions: "top", tabCompletion: "on", parameterHints: { enabled: true }, readOnly: !props.sessionStarted, readOnlyMessage: EDITOR_READ_ONLY_MESSAGE }} />
       {!props.sessionStarted && <LockedEditorOverlay questionVariantReady={props.questionVariantReady} />}
     </Box>
   );
@@ -1422,15 +1429,14 @@ function RunCasePanel(props: { code: string; currentQuestion: Question; markSolu
       ) : null}
       <Group gap="sm" mb="md">
         {results.map((result, index) => (
-          <HeroSiegeButton
+          <RunCaseButton
             key={`${result.name}-${index}`}
             active={index === selectedIndex}
-            leftSection={result.pass ? <IconCheck size={ICON_XS} /> : <IconX size={ICON_XS} />}
-            minWidth={CASE_TAB_MIN_WIDTH}
             onClick={() => setActiveIndex(index)}
+            pass={result.pass}
           >
             {result.name}
-          </HeroSiegeButton>
+          </RunCaseButton>
         ))}
       </Group>
       <ScrollArea.Autosize mah={RUN_PANEL_MAX_HEIGHT}>
@@ -1439,6 +1445,52 @@ function RunCasePanel(props: { code: string; currentQuestion: Question; markSolu
       {props.result.hiddenTestCount ? <SolutionRevealPanel code={props.code} currentQuestion={props.currentQuestion} markSolutionRevealed={props.markSolutionRevealed} /> : null}
     </Paper>
   );
+}
+
+function RunCaseButton(props: { active: boolean; children: React.ReactNode; onClick: () => void; pass: boolean }) {
+  const Icon = props.pass ? IconCheck : IconX;
+  return (
+    <Box
+      aria-pressed={props.active}
+      component="button"
+      onClick={props.onClick}
+      type="button"
+      style={getRunCaseButtonStyle(props.pass, props.active)}
+    >
+      <Icon size={ICON_XS} stroke={3} />
+      <Text span inherit fw={900} lh={1}>{props.children}</Text>
+    </Box>
+  );
+}
+
+function getRunCaseButtonStyle(pass: boolean, active: boolean): React.CSSProperties {
+  const borderColor = active ? RUN_CASE_SELECTED_BORDER : pass ? RUN_CASE_PASS_BORDER : RUN_CASE_FAIL_BORDER;
+  const glowColor = active ? RUN_CASE_SELECTED_BORDER : pass ? RUN_CASE_PASS_BORDER : RUN_CASE_FAIL_BORDER;
+  return {
+    alignItems: "center",
+    background: pass ? RUN_CASE_PASS_BG : RUN_CASE_FAIL_BG,
+    border: `2px solid ${borderColor}`,
+    borderRadius: 6,
+    boxShadow: active
+      ? `0 0 0 2px rgba(0, 0, 0, 0.95), 0 0 12px ${glowColor}, inset 0 1px 0 rgba(255, 255, 255, 0.25)`
+      : "inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 3px 8px rgba(0, 0, 0, 0.36)",
+    color: pass ? RUN_CASE_PASS_TEXT : RUN_CASE_FAIL_TEXT,
+    cursor: "pointer",
+    display: "inline-flex",
+    fontFamily: "inherit",
+    fontSize: 12,
+    fontWeight: 900,
+    gap: 6,
+    height: 32,
+    justifyContent: "center",
+    letterSpacing: 0,
+    lineHeight: 1,
+    minWidth: CASE_TAB_MIN_WIDTH,
+    padding: "0 12px",
+    textShadow: "0 2px 0 #000",
+    textTransform: "uppercase",
+    whiteSpace: "nowrap"
+  };
 }
 
 function SolutionRevealPanel(props: { code: string; currentQuestion: Question; markSolutionRevealed: () => void }) {

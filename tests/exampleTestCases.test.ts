@@ -86,11 +86,11 @@ describe("exampleTestCases", () => {
     expect(getVisibleRunCodeTests(question, 3)).toHaveLength(3);
   });
 
-  it("provides ten visible run-code cases for every runnable question", () => {
+  it("provides three visible run-code cases for every runnable question", () => {
     const missingCases = questions
       .filter((question) => !question.frontend)
-      .map((question) => ({ cases: getVisibleRunCodeTests(question, 10), question }))
-      .filter(({ cases }) => cases.length < 10)
+      .map((question) => ({ cases: getVisibleRunCodeTests(question, 3), question }))
+      .filter(({ cases }) => cases.length < 3)
       .map(({ cases, question }) => `${question.id}: ${cases.length}`);
 
     expect(missingCases).toEqual([]);

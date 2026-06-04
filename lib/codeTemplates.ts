@@ -188,36 +188,21 @@ export function registerCodeTemplateCompletions(monaco: typeof Monaco) {
   return languages.flatMap((language) => [
     monaco.languages.registerCompletionItemProvider(language, {
       provideCompletionItems: (model, position) => {
-        const word = model.getWordUntilPosition(position);
         const slashCommandRange = getSlashTemplateCommandRange(model, position);
-        if (!slashCommandRange && getMemberAccessCompletionRange(model, position)) {
+        if (!slashCommandRange) {
           return { suggestions: [] };
         }
         const rightClickContextWord = consumeNextCodeTemplateContextWord();
-        const currentPrefix = word.word.toLowerCase();
-        const shouldReplacePrefix = currentPrefix.length > 0 && CODE_TEMPLATES.some((template) => template.label.startsWith(currentPrefix));
-        const contextWord = shouldReplacePrefix ? "" : rightClickContextWord || word.word;
-        const range = slashCommandRange || (shouldReplacePrefix ? {
-          endColumn: word.endColumn,
-          endLineNumber: position.lineNumber,
-          startColumn: word.startColumn,
-          startLineNumber: position.lineNumber
-        } : {
-          endColumn: position.column,
-          endLineNumber: position.lineNumber,
-          startColumn: position.column,
-          startLineNumber: position.lineNumber
-        });
         return {
           suggestions: CODE_TEMPLATES.map((template, index) => ({
             detail: template.detail,
             documentation: template.kind === "relic" ? "Larger algorithm template for common interview patterns." : "Small JavaScript building block.",
-            filterText: slashCommandRange ? `/${template.label}` : template.label,
-            insertText: applyCodeTemplateContext(template.insertText, contextWord),
+            filterText: `/${template.label}`,
+            insertText: applyCodeTemplateContext(template.insertText, rightClickContextWord),
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             kind: monaco.languages.CompletionItemKind.Snippet,
             label: template.label,
-            range,
+            range: slashCommandRange,
             sortText: `${template.kind === "basic" ? "0" : "1"}-${String(index).padStart(2, "0")}-${template.label}`
           }))
         };

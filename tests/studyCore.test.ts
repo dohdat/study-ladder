@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { questions } from "../data/questions";
+import { isCorrectSubmitTimePressureEnabled } from "../lib/campaignCore";
 import { applyEnemyDebuffsToMonsterAttack, applyPassedCombatResult, getCampaignMonsterMaxHealth, getMonsterBlockGain, getMonsterCurrentBlock, getMonsterCurrentHealth, getMonsterHit, getTimedMonsterAttack } from "../lib/combatCore";
 import { createDropItem, ITEM_BASE_NAME_COUNT } from "../lib/itemCore";
 import { MODIFIER_FORMATTERS } from "../lib/modifierFormat";
@@ -458,6 +459,21 @@ describe("studyCore", () => {
     middleManagement.profile.spireRun.heatConditions.middleManagement = 1;
     expect(getCampaignMonsterMaxHealth(middleManagement, question)).toBeGreaterThan(getCampaignMonsterMaxHealth(elite, question));
     expect(getHealthLoss(middleManagement, 10, "physical")).toBeGreaterThan(getHealthLoss(elite, 10, "physical"));
+  });
+
+  it("limits correct-submit time pressure to deadline pacts and special rooms", () => {
+    const normal = defaultState();
+    expect(isCorrectSubmitTimePressureEnabled(normal.profile.spireRun, "enemy")).toBe(false);
+    expect(isCorrectSubmitTimePressureEnabled(normal.profile.spireRun, "elite")).toBe(true);
+    expect(isCorrectSubmitTimePressureEnabled(normal.profile.spireRun, "boss")).toBe(true);
+
+    const tightDeadline = defaultState();
+    tightDeadline.profile.spireRun.heatConditions.tightDeadline = 1;
+    expect(isCorrectSubmitTimePressureEnabled(tightDeadline.profile.spireRun, "enemy")).toBe(true);
+
+    const forcedOvertime = defaultState();
+    forcedOvertime.profile.spireRun.heatConditions.forcedOvertime = 1;
+    expect(isCorrectSubmitTimePressureEnabled(forcedOvertime.profile.spireRun, "enemy")).toBe(true);
   });
 
   it("picks unseen rating-fit questions and supports next-question navigation", () => {

@@ -26,4 +26,15 @@ describe("localSolutionReveal", () => {
       expect(run(...test.args)).toEqual(test.expected);
     }
   });
+
+  it("uses a real algorithm for balanced vowels instead of a generated answer table", () => {
+    const question = questions.find((candidate) => candidate.functionName === "hasBalancedVowels") || questions[0];
+    const reveal = createLocalSolutionReveal(question, "");
+
+    expect(reveal).toContain("text.slice(0, half)");
+    expect(reveal).toContain("text.slice(text.length - half)");
+    expect(reveal).toContain("countVowels");
+    expect(reveal).not.toContain("const cases =");
+    expect(reveal).not.toContain("No generated answer was stored");
+  });
 });

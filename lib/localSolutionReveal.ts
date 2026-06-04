@@ -4,6 +4,13 @@ export function createLocalSolutionReveal(question: Question, code = "") {
   if (question.frontend || question.tests.length === 0) {
     return "";
   }
+  if (question.solutionReveal?.trim()) {
+    return question.solutionReveal.trim();
+  }
+  const knownReveal = createKnownSolutionReveal(question);
+  if (knownReveal) {
+    return knownReveal;
+  }
   const params = getStarterParams(question);
   if (params.length === 0) {
     return "";
@@ -20,6 +27,43 @@ export function createLocalSolutionReveal(question: Question, code = "") {
     "## Complexity",
     `O(${question.tests.length} * input) time to compare against the generated cases and O(output) space for cloned array/object answers.`
   ].join("\n");
+}
+
+function createKnownSolutionReveal(question: Question) {
+  switch (question.functionName) {
+    case "hasBalancedVowels":
+      return [
+        "## Approach",
+        "- Split the string into the first half and the last half.",
+        "- For odd lengths, both slices skip the middle character.",
+        "- Count vowels in each half and compare the counts.",
+        "## Code",
+        "```js",
+        "function hasBalancedVowels(text) {",
+        "  const vowels = new Set([\"a\", \"e\", \"i\", \"o\", \"u\"]);",
+        "  const half = Math.floor(text.length / 2);",
+        "  const left = text.slice(0, half);",
+        "  const right = text.slice(text.length - half);",
+        "",
+        "  return countVowels(left, vowels) === countVowels(right, vowels);",
+        "}",
+        "",
+        "function countVowels(text, vowels) {",
+        "  let count = 0;",
+        "  for (const char of text.toLowerCase()) {",
+        "    if (vowels.has(char)) {",
+        "      count++;",
+        "    }",
+        "  }",
+        "  return count;",
+        "}",
+        "```",
+        "## Complexity",
+        "O(n) time to scan the string halves and O(1) space for the vowel set."
+      ].join("\n");
+    default:
+      return "";
+  }
 }
 
 function getStarterParams(question: Question) {
