@@ -52,7 +52,11 @@ describe("questionVariant", () => {
       { name: "handles immediate repeat", args: [[7, 7, 1]], expected: 7 },
       { name: "prefers first repeated value", args: [[5, 1, 5, 1]], expected: 5 },
       { name: "handles negative repeats", args: [[-1, 2, -1]], expected: -1 },
-      { name: "handles zero repeats", args: [[0, 4, 0]], expected: 0 }
+      { name: "handles zero repeats", args: [[0, 4, 0]], expected: 0 },
+      { name: "empty list has no repeat", args: [[]], expected: -1 },
+      { name: "single value has no repeat", args: [[9]], expected: -1 },
+      { name: "later duplicate after long prefix", args: [[1, 2, 3, 4, 2]], expected: 2 },
+      { name: "first second occurrence wins", args: [[4, 5, 4, 5]], expected: 4 }
     ];
     const variant = createQuestionVariant(original, JSON.stringify({
       constraints: ["Use the same arguments.", "Return -1 when no value repeats."],
@@ -165,13 +169,18 @@ describe("questionVariant", () => {
         { name: "case 2", inputArgs: [[1, 2, 3]], expected: null },
         { name: "case 3", inputArgs: [[7, 7]], expected: 7 },
         { name: "case 4", inputArgs: [[0, 4, 0]], expected: 0 },
-        { name: "case 5", inputArgs: [[-1, 2, -1]], expected: -1 }
+        { name: "case 5", inputArgs: [[-1, 2, -1]], expected: -1 },
+        { name: "case 6", inputArgs: [[]], expected: null },
+        { name: "case 7", inputArgs: [[8]], expected: null },
+        { name: "case 8", inputArgs: [[4, 5, 4, 5]], expected: 4 },
+        { name: "case 9", inputArgs: [[9, 8, 7, 8]], expected: 8 },
+        { name: "case 10", inputArgs: [[2, 3, 4, 2]], expected: 2 }
       ],
       title: "Repeated Number Signal"
     }));
 
     expect(result.error).toBeUndefined();
-    expect(result.question?.tests).toHaveLength(5);
+    expect(result.question?.tests).toHaveLength(10);
     expect(result.question?.examples).toHaveLength(3);
   });
 
@@ -204,7 +213,12 @@ describe("questionVariant", () => {
         { name: "case 2", args: [[7, 7, 7, 7, 7, 7]], expected: { distinct: 0, removed: 0 } },
         { name: "case 3", args: [[1, 2, 3, 4]], expected: { distinct: 2, removed: 2 } },
         { name: "case 4", args: [[1, 1, 2, 2, 3]], expected: { distinct: 1, removed: 2 } },
-        { name: "case 5", args: [[0, 0, -1, -1, 2]], expected: { distinct: 1, removed: 2 } }
+        { name: "case 5", args: [[0, 0, -1, -1, 2]], expected: { distinct: 1, removed: 2 } },
+        { name: "case 6", args: [[9, 9, 8, 7, 6]], expected: { distinct: 1, removed: 2 } },
+        { name: "case 7", args: [[1, 1, 1, 2]], expected: { distinct: 1, removed: 3 } },
+        { name: "case 8", args: [[1, 2, 2, 3, 3, 3]], expected: { distinct: 1, removed: 3 } },
+        { name: "case 9", args: [[4, 4, 5, 5, 6, 7]], expected: { distinct: 2, removed: 4 } },
+        { name: "case 10", args: [[10, 11, 12]], expected: { distinct: 2, removed: 2 } }
       ],
       title: "Minimum Distinct Deletions with Retained Remainder"
     }));
@@ -236,12 +250,55 @@ describe("questionVariant", () => {
         { name: "case 2", args: [[7, 7, 7, 7, 7, 7]], expected: [7] },
         { name: "case 3", args: [[1, 2, 3, 4]], expected: [1, 2] },
         { name: "case 4", args: [[1, 1, 2, 2, 3, 3]], expected: [1, 2] },
-        { name: "case 5", args: [[0, 0, -1, -1, 2]], expected: [-1, 0] }
+        { name: "case 5", args: [[0, 0, -1, -1, 2]], expected: [-1, 0] },
+        { name: "case 6", args: [[9, 9, 8, 7, 6]], expected: [9] },
+        { name: "case 7", args: [[1, 1, 1, 2]], expected: [1] },
+        { name: "case 8", args: [[1, 2, 2, 3, 3, 3]], expected: [3] },
+        { name: "case 9", args: [[4, 4, 5, 5, 6, 7]], expected: [4, 5] },
+        { name: "case 10", args: [[10, 11, 12]], expected: [10, 11] }
       ],
       title: "Value Set to Halve Array"
     }));
 
     expect(result.question).toBeNull();
     expect(result.error).toBe("Codex changed the answer shape for a low-rated question.");
+  });
+
+  it("rejects weighted scoring drift for balanced vowel variants", () => {
+    const original = questions.find((question) => question.functionName === "hasBalancedVowels") || questions[0];
+    const result = createQuestionVariantResult(original, JSON.stringify({
+      constraints: [
+        "Return true or false.",
+        "Only letters a,e,i,o,u contribute.",
+        "Compare the first half and second half of the string.",
+        "For odd lengths, ignore the middle character."
+      ],
+      estimatedRating: original.rating,
+      examples: [
+        {
+          explanation: "Halves are im and ia; values are left i=3 and right i=3 plus a=1.",
+          input: "text = \"imaia\"",
+          output: "true"
+        }
+      ],
+      prompt: "Return true if the first half and second half of text have the same total vowel value, where a=1, e=2, i=3, o=4, u=5.",
+      solutionReveal: SOLUTION_REVEAL,
+      tests: [
+        { name: "case 1", args: ["imaia"], expected: true },
+        { name: "case 2", args: ["ae"], expected: false },
+        { name: "case 3", args: ["tpccxr"], expected: true },
+        { name: "case 4", args: ["abcba"], expected: true },
+        { name: "case 5", args: ["uo"], expected: false },
+        { name: "case 6", args: ["aabb"], expected: true },
+        { name: "case 7", args: ["aaee"], expected: false },
+        { name: "case 8", args: ["xyzzyx"], expected: true },
+        { name: "case 9", args: ["aeiou"], expected: false },
+        { name: "case 10", args: ["queue"], expected: false }
+      ],
+      title: "Balanced Vowel Sum"
+    }));
+
+    expect(result.question).toBeNull();
+    expect(result.error).toBe("Codex changed balanced vowel counting into weighted vowel scoring.");
   });
 });

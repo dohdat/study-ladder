@@ -39,7 +39,7 @@ import {
   type CodexExampleExplanationStreamMessage
 } from "../lib/hintPrompt";
 import { createLocalSolutionReveal } from "../lib/localSolutionReveal";
-import { difficultyLabels, getVisibleQuestionTopics } from "../lib/studyCore";
+import { QUESTION_TIME_GOLD_REWARD, difficultyLabels, getVisibleQuestionTopics } from "../lib/studyCore";
 import { RUNNER_FRAME } from "../lib/practiceStatus";
 import type { ActiveWarriorSkillId, ConsoleRunResult, Question, RunResult, StudyState } from "../types/study";
 
@@ -157,6 +157,8 @@ type EditorProps = {
   hintText: string;
   runCodeDisabled: boolean;
   timeRemainingMs: number;
+  timeGoldMarkersMs: number[];
+  timeLimitMs: number;
   timerColor: string;
   timerLabel: string;
   timeUsedPercent: number;
@@ -1150,7 +1152,7 @@ function EditorCard(props: EditorProps & { actions: PracticePanelActions; curren
     <Card withBorder p={0}>
       <EditorToolbar {...props} frontend={frontend} />
       {frontendFiles && <FrontendFileTabs activeFile={activeFile} setActiveFile={setActiveFile} />}
-      <Progress value={props.timeUsedPercent} color={props.timerColor} radius={0} />
+      <TimeGoldProgress markersMs={props.sessionStarted ? props.timeGoldMarkersMs : []} timeLimitMs={props.timeLimitMs} timeUsedPercent={props.timeUsedPercent} timerColor={props.timerColor} />
       <EditorWorkspace
         editorLanguage={editorLanguage}
         editorPath={editorPath}
@@ -1169,6 +1171,34 @@ function EditorCard(props: EditorProps & { actions: PracticePanelActions; curren
       <ConsoleOutputPanel code={props.code} currentQuestion={props.currentQuestion} markSolutionRevealed={props.actions.markSolutionRevealed} result={props.consoleRunResult} />
       <TestResults results={props.results} />
     </Card>
+  );
+}
+
+function TimeGoldProgress(props: { markersMs: number[]; timeLimitMs: number; timeUsedPercent: number; timerColor: string }) {
+  return (
+    <Box pos="relative">
+      <Progress value={props.timeUsedPercent} color={props.timerColor} radius={0} />
+      {props.markersMs.map((markerMs) => (
+        <Tooltip key={markerMs} label={`+${QUESTION_TIME_GOLD_REWARD} gold`} withArrow>
+          <Box
+            component="span"
+            aria-label={`Gold reward at ${Math.round(markerMs / 60000)} minutes`}
+            style={{
+              background: "#ffd43b",
+              border: "1px solid #7a4c00",
+              borderRadius: 2,
+              boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.45)",
+              height: 10,
+              left: `${Math.max(0, Math.min(100, props.timeLimitMs > 0 ? markerMs / props.timeLimitMs * 100 : 0))}%`,
+              position: "absolute",
+              top: 1,
+              transform: "translateX(-50%)",
+              width: 4
+            }}
+          />
+        </Tooltip>
+      ))}
+    </Box>
   );
 }
 
@@ -1434,7 +1464,7 @@ function SolutionRevealPanel(props: { code: string; currentQuestion: Question; m
     setLoading(true);
     setError("");
     props.markSolutionRevealed();
-    const instantSolution = (props.currentQuestion.solutionReveal || createLocalSolutionReveal(props.currentQuestion, props.code)).trim();
+    const instantSolution = (createLocalSolutionReveal(props.currentQuestion, props.code) || props.currentQuestion.solutionReveal || "").trim();
     if (instantSolution && !solutionText) {
       setSolutionText(instantSolution);
       setConfirming(false);

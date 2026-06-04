@@ -15,4 +15,15 @@ describe("localSolutionReveal", () => {
     expect(reveal).toContain("## Complexity");
     expect(reveal).not.toContain("## Compare with my code");
   });
+
+  it("builds copied code that passes the stored tests", () => {
+    const question = questions.find((candidate) => candidate.functionName === "hasBalancedVowels") || questions[0];
+    const reveal = createLocalSolutionReveal(question, "");
+    const code = reveal.match(/```js\n([\s\S]*?)\n```/)?.[1] || "";
+    const run = new Function(`${code}; return ${question.functionName};`)() as (...args: unknown[]) => unknown;
+
+    for (const test of question.tests) {
+      expect(run(...test.args)).toEqual(test.expected);
+    }
+  });
 });

@@ -106,6 +106,24 @@ return leftSum === rightSum;
     ].join("\n"));
   });
 
+  it("adds semicolons to inline object literal assignments", () => {
+    expect(beautifyCode(`function hasBalancedVowels(text) {
+const vowels = {"a": 1, "e":2}
+}`)).toBe([
+      "function hasBalancedVowels(text) {",
+      "  const vowels = { \"a\": 1, \"e\": 2 };",
+      "}",
+      ""
+    ].join("\n"));
+  });
+
+  it("normalizes inline object literal spacing", () => {
+    expect(beautifyCode("const vowels ={a:1, e:2,    i:3}")).toBe([
+      "const vowels = { a: 1, e: 2, i: 3 };",
+      ""
+    ].join("\n"));
+  });
+
   it("adds missing closing braces", () => {
     expect(beautifyCode("function test() {\nif (ok) {\nreturn true")).toBe([
       "function test() {",

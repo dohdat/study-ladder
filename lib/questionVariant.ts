@@ -6,7 +6,7 @@ const MAX_PROMPT_TESTS = 10;
 const MAX_CONSTRAINTS = 8;
 const MAX_EXAMPLES = 3;
 const MAX_VARIANT_TESTS = 12;
-const MIN_VARIANT_TESTS = 5;
+const MIN_VARIANT_TESTS = 10;
 const MAX_PROMPT_LENGTH = 360;
 const MAX_EXAMPLE_FIELD_LENGTH = 240;
 const MAX_FRONTEND_CHECKS = 6;
@@ -23,6 +23,7 @@ const HARD_ALGORITHM_PATTERN = /\b(subset|knapsack|reachable|combination|combina
 const EXTRA_FEASIBILITY_PATTERN = /\b(leaving at least one|leave at least one|at least one .*remain|no valid deletion|invalid because .*remain)\b/i;
 const DISTINCT_OBJECTIVE_PATTERN = /\b(smallest|minimize|minimum)[^.]{0,90}\b(distinct|values|value count)\b/i;
 const SECONDARY_REMOVAL_OBJECTIVE_PATTERN = /\b(smallest|minimize|minimum|maximum|maximize)[^.]{0,90}\b(removed|deletion|deletions|remaining|remainder|residue)\b/i;
+const VOWEL_WEIGHT_PATTERN = /\b(vowel value|vowel score|weighted vowel|total vowel value|a\s*=\s*1|e\s*=\s*2|i\s*=\s*3|o\s*=\s*4|u\s*=\s*5)\b/i;
 const LOW_RATING_SHAPE_LABELS: Record<string, string> = { array: "flat array", object: "object", scalar: "scalar value" };
 
 export type QuestionVariantPayload = {
@@ -75,6 +76,7 @@ export function createQuestionVariantPrompt(question: Question) {
     "- Generate new tests for your changed semantics. These tests will grade the answer, not the original expected outputs.",
     "- Also generate solutionReveal: Markdown with exactly these headings: ## Approach, ## Code, ## Complexity.",
     "- solutionReveal Code must contain one complete JavaScript function matching the required function name and arguments.",
+    "- The solutionReveal Code must pass every generated test exactly. Compute expected outputs from that solution, do not guess.",
     "- Do not only rename variables, change numbers, or change the story. The implementation goal must be slightly different.",
     "- Good variations: adjust an edge behavior, return a same-shape count/boolean/string/array result, or add one simple tie-break rule that does not require a second algorithm.",
     "- Prefer a simple return value: number, boolean, string, or flat array. Use a tiny object only if the original answer was already object-shaped or the question is above 1500 rating.",
@@ -86,7 +88,7 @@ export function createQuestionVariantPrompt(question: Question) {
     "- Keep each example input/output on one short line. Avoid long JSON objects in examples.",
     "- Keep all test args compatible with the original function arguments.",
     "- Include exactly 3 examples so the visible Run Code cases match the prompt examples.",
-    "- Include 8 to 10 tests with unique names and edge cases: empty/min input, duplicates, negatives/zero where relevant, ties, no-solution, boundary order, and misleading near misses.",
+    "- Include 10 to 12 tests with unique names and unique args. Cover empty/min input, duplicates, negatives/zero where relevant, ties, no-solution, boundary order, and misleading near misses.",
     "- Do not mention that this is a variant, remix, hidden test, LeetCode, or NeetCode.",
     "",
     "JSON schema:",
@@ -122,7 +124,8 @@ export function createQuestionVariantRepairPrompt(question: Question, draft: str
     "",
     "Hard requirements:",
     `- estimatedRating must be between ${question.rating - RATING_TOLERANCE} and ${question.rating + RATING_TOLERANCE}.`,
-    "- tests must contain at least 5 usable cases.",
+    "- tests must contain at least 10 usable cases with unique names and unique args.",
+    "- expected values must match the included solutionReveal code exactly.",
     "- every test must use args, not inputArgs or arguments.",
     "- examples must contain exactly 3 visible examples.",
     "- solutionReveal must be included and must have ## Approach, ## Code, and ## Complexity sections.",
@@ -458,6 +461,9 @@ function getDifficultyDriftReason(question: Question, prompt: string, constraint
   if (getReturnShape(question.tests) !== getReturnShape(tests)) {
     return "Codex changed the answer shape for a low-rated question.";
   }
+  if (question.functionName === "hasBalancedVowels" && VOWEL_WEIGHT_PATTERN.test(combinedText)) {
+    return "Codex changed balanced vowel counting into weighted vowel scoring.";
+  }
   if (HARD_ALGORITHM_PATTERN.test(combinedText)) {
     return "Codex made the low-rated question require a harder algorithm.";
   }
@@ -489,6 +495,7 @@ function normalizeTests(value: unknown) {
     return [];
   }
   const seenNames = new Set<string>();
+  const seenArgs = new Set<string>();
   const tests: TestCase[] = [];
   for (const test of value) {
     if (!test || typeof test !== "object") {
@@ -497,10 +504,12 @@ function normalizeTests(value: unknown) {
     const record = test as Partial<TestCase> & { inputArgs?: unknown; arguments?: unknown };
     const name = typeof record.name === "string" ? record.name.trim() : "";
     const args = record.args ?? record.inputArgs ?? record.arguments;
-    if (!name || seenNames.has(name) || !Array.isArray(args) || !isJsonSafe(args) || !isJsonSafe(record.expected)) {
+    const argsKey = JSON.stringify(args);
+    if (!name || seenNames.has(name) || seenArgs.has(argsKey) || !Array.isArray(args) || !isJsonSafe(args) || !isJsonSafe(record.expected)) {
       continue;
     }
     seenNames.add(name);
+    seenArgs.add(argsKey);
     tests.push({ name, args, expected: record.expected });
     if (tests.length >= MAX_VARIANT_TESTS) {
       break;

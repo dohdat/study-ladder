@@ -63,6 +63,7 @@ export type CardState = {
   relicFirstHitBlocked?: boolean;
   relicReviveUsed?: boolean;
   solutionRevealedAt?: number;
+  timeGoldRewardCount?: number;
   draft?: string;
 };
 

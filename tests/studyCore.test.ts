@@ -18,8 +18,11 @@ import {
   MAX_CHARACTER_LEVEL,
   MAX_HEALTH,
   MODIFIER_KEYS,
+  QUESTION_TIME_GOLD_INTERVAL_MS,
+  QUESTION_TIME_GOLD_REWARD,
   applyCombatStartRelics,
   applyCodingCompanyProfile,
+  applyQuestionTimeGoldReward,
   clearCodingCompanyProfile,
   applyIncomingDamage,
   applyHealingReceived,
@@ -62,6 +65,7 @@ import {
   getMonsterLevel,
   getProfileStats,
   getQuestionTimeLimitMs,
+  getQuestionTimeGoldMarkers,
   getQuestionDrop,
   getVisibleQuestionTopics,
   getRecommendedDifficulty,
@@ -678,6 +682,23 @@ describe("studyCore", () => {
     expect(state.profile.coins).toBeGreaterThan(firstHit.state.profile.coins);
     expect(state.profile.mana).toBe(3);
     expect(getMonsterCurrentHealth(state, question)).toBeGreaterThan(0);
+  });
+
+  it("rewards active question time with gold before submit", () => {
+    const question = questions.find((candidate) => candidate.difficulty === 3) || questions[0];
+    const state = defaultState();
+    const markers = getQuestionTimeGoldMarkers(question, state);
+    const beforeMarker = applyQuestionTimeGoldReward(state, question, QUESTION_TIME_GOLD_INTERVAL_MS - 1000);
+    const firstMarker = applyQuestionTimeGoldReward(state, question, QUESTION_TIME_GOLD_INTERVAL_MS);
+    const duplicateMarker = applyQuestionTimeGoldReward(firstMarker, question, QUESTION_TIME_GOLD_INTERVAL_MS + 1000);
+    const secondMarker = applyQuestionTimeGoldReward(duplicateMarker, question, QUESTION_TIME_GOLD_INTERVAL_MS * 2);
+
+    expect(markers).toContain(QUESTION_TIME_GOLD_INTERVAL_MS);
+    expect(beforeMarker).toBe(state);
+    expect(firstMarker.profile.coins).toBe(QUESTION_TIME_GOLD_REWARD);
+    expect(getCard(firstMarker, question.id).timeGoldRewardCount).toBe(1);
+    expect(duplicateMarker.profile.coins).toBe(firstMarker.profile.coins);
+    expect(secondMarker.profile.coins).toBe(QUESTION_TIME_GOLD_REWARD * 2);
   });
 
   it("keeps level progress fixed for roguelike runs", () => {

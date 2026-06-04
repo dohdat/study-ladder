@@ -110,8 +110,9 @@ const DAILY_MINUTES_MIN = 0;
 const DAILY_MINUTES_MAX = 720;
 const DAILY_MINUTES_STEP = 5;
 const SITE_TEXTAREA_MIN_ROWS = 4;
-const REDIRECT_PAUSE_MINUTES = 30;
-const REDIRECT_PAUSE_MS = REDIRECT_PAUSE_MINUTES * 60000;
+const REDIRECT_PAUSE_MS_PER_MINUTE = 60000;
+const REDIRECT_PAUSE_OPTIONS = [15, 30, 60] as const;
+const REDIRECT_PAUSE_GOLD_PER_MINUTE = 1;
 const STAT_SHEET_BG = "radial-gradient(circle at 50% 18%, rgba(95, 31, 31, 0.72), rgba(32, 11, 10, 0.98) 46%, #080504 100%)";
 const STAT_SHEET_BORDER = "2px solid #8a1744";
 const STAT_FRAME_BG = "linear-gradient(180deg, rgba(45, 12, 15, 0.94), rgba(8, 6, 8, 0.98))";
@@ -1392,6 +1393,15 @@ function SettingsPanel(props: { canRetargetActiveRoom?: boolean; closeModal: () 
   const [siteDraftFocused, setSiteDraftFocused] = useState(false);
   const redirectPaused = settings.pausedUntil > Date.now();
   const pausedMinutesRemaining = redirectPaused ? Math.max(1, Math.ceil((settings.pausedUntil - Date.now()) / 60000)) : 0;
+  const buyRedirectPause = (minutes: typeof REDIRECT_PAUSE_OPTIONS[number]) => {
+    const cost = getRedirectPauseCost(minutes);
+    if (props.state.profile.coins < cost) {
+      return;
+    }
+    const now = Date.now();
+    updateSettings({ ...settings, enabled: true, pausedUntil: Math.max(now, settings.pausedUntil) + minutes * REDIRECT_PAUSE_MS_PER_MINUTE });
+    props.setState((previous) => previous.profile.coins < cost ? previous : { ...previous, profile: { ...previous.profile, coins: previous.profile.coins - cost } });
+  };
   useEffect(() => {
     if (!siteDraftFocused) {
       setSiteDraft(siteText);
@@ -1404,20 +1414,30 @@ function SettingsPanel(props: { canRetargetActiveRoom?: boolean; closeModal: () 
         <Badge variant="light">{props.state.mode === "leetcode" ? "Coding" : "System Design"}</Badge>
       </Group>
       <Box>
-        <Group justify="space-between" align="center" wrap="nowrap">
+        <Group justify="space-between" align="flex-start" wrap="nowrap">
           <Box>
             <Text size="sm" fw={700}>Distracting site redirects</Text>
             <Text size="xs" c="dimmed">
               {redirectPaused ? `Paused for ${pausedMinutesRemaining} more min.` : "Active until daily study is complete."}
             </Text>
           </Box>
-          <HeroSiegeButton
-            height={28}
-            minWidth={142}
-            onClick={() => updateSettings({ ...settings, enabled: true, pausedUntil: redirectPaused ? 0 : Date.now() + REDIRECT_PAUSE_MS })}
-          >
-            {redirectPaused ? "Resume Now" : `Pause ${REDIRECT_PAUSE_MINUTES} Min`}
-          </HeroSiegeButton>
+          <Stack gap={6} align="flex-end">
+            {redirectPaused ? (
+              <HeroSiegeButton height={28} minWidth={112} onClick={() => updateSettings({ ...settings, enabled: true, pausedUntil: 0 })}>
+                Resume Now
+              </HeroSiegeButton>
+            ) : null}
+            <SimpleGrid cols={3} spacing={6}>
+              {REDIRECT_PAUSE_OPTIONS.map((minutes) => {
+                const cost = getRedirectPauseCost(minutes);
+                return (
+                  <HeroSiegeButton key={minutes} height={28} minWidth={82} disabled={props.state.profile.coins < cost} onClick={() => buyRedirectPause(minutes)}>
+                    {minutes}m / {cost}g
+                  </HeroSiegeButton>
+                );
+              })}
+            </SimpleGrid>
+          </Stack>
         </Group>
       </Box>
       <Switch
@@ -1501,6 +1521,10 @@ function getSpireRatingRangeSummary(minRating: number) {
       return `Act ${act}: ${start}-${end}`;
     })
     .join(" | ");
+}
+
+function getRedirectPauseCost(minutes: typeof REDIRECT_PAUSE_OPTIONS[number]) {
+  return minutes * REDIRECT_PAUSE_GOLD_PER_MINUTE;
 }
 
 function normalizeSpireMinInput(value: string | number) {

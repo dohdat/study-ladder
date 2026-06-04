@@ -16,7 +16,14 @@ const baseQuestion: Question = {
   tests: [
     { args: [[]], expected: -1, name: "hidden empty" },
     { args: [[1]], expected: 1, name: "hidden single" },
-    { args: [[2, 2]], expected: 2, name: "hidden duplicate" }
+    { args: [[2, 2]], expected: 2, name: "hidden duplicate" },
+    { args: [[3, 4, 3]], expected: 3, name: "hidden delayed duplicate" },
+    { args: [[5, 6, 7]], expected: -1, name: "hidden unique values" },
+    { args: [[0, 1, 0]], expected: 0, name: "hidden zero duplicate" },
+    { args: [[-1, 2, -1]], expected: -1, name: "hidden negative duplicate" },
+    { args: [[8, 9, 8, 9]], expected: 8, name: "hidden first repeat wins" },
+    { args: [[10]], expected: -1, name: "hidden other single" },
+    { args: [[4, 5, 6, 4]], expected: 4, name: "hidden long prefix duplicate" }
   ],
   title: "Example Test",
   topics: []
@@ -79,11 +86,11 @@ describe("exampleTestCases", () => {
     expect(getVisibleRunCodeTests(question, 3)).toHaveLength(3);
   });
 
-  it("provides three visible run-code cases for every runnable question", () => {
+  it("provides ten visible run-code cases for every runnable question", () => {
     const missingCases = questions
       .filter((question) => !question.frontend)
-      .map((question) => ({ cases: getVisibleRunCodeTests(question, 3), question }))
-      .filter(({ cases }) => cases.length < 3)
+      .map((question) => ({ cases: getVisibleRunCodeTests(question, 10), question }))
+      .filter(({ cases }) => cases.length < 10)
       .map(({ cases, question }) => `${question.id}: ${cases.length}`);
 
     expect(missingCases).toEqual([]);

@@ -35,8 +35,16 @@ const completeConstructorCall = (line: string) => {
   return line.replace(/\bnew\s+([A-Z][\w.$]*)(?=\s*(?:[;,)}\]]|$))/g, "new $1()");
 };
 
+const normalizeDeclarationAssignmentSpacing = (line: string) => {
+  return line.replace(/^((?:const|let|var)\s+[^=]+?)\s*=\s*/, "$1 = ");
+};
+
 const shouldAddSemicolon = (line: string) => {
   const trimmed = line.trim();
+  if (trimmed.endsWith("}") && isSemicolonStatement(trimmed)) {
+    return true;
+  }
+
   if (isAlreadyTerminated(trimmed)) {
     return false;
   }
@@ -58,11 +66,68 @@ const restoreForHeaderSemicolons = (line: string) => {
   return line.replace(new RegExp(FOR_HEADER_SEMICOLON, "g"), ";");
 };
 
+const splitTopLevel = (source: string, separator: string) => {
+  const parts: string[] = [];
+  let current = "";
+  let quote: string | null = null;
+  let escaped = false;
+  let depth = 0;
+  for (const char of source) {
+    if (quote) {
+      current += char;
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (char === "\"" || char === "'" || char === "`") {
+      quote = char;
+      current += char;
+      continue;
+    }
+    if (char === "(" || char === "[") {
+      depth += 1;
+    } else if (char === ")" || char === "]") {
+      depth = Math.max(0, depth - 1);
+    } else if (char === separator && depth === 0) {
+      parts.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  parts.push(current.trim());
+  return parts;
+};
+
+const formatInlineObjectLiteral = (literal: string) => {
+  const body = literal.slice(1, -1).trim();
+  if (!body) {
+    return "{}";
+  }
+
+  const entries = splitTopLevel(body, ",")
+    .filter(Boolean)
+    .map((entry) => {
+      const colonParts = splitTopLevel(entry, ":");
+      if (colonParts.length < 2) {
+        return entry.trim();
+      }
+      return `${colonParts[0].trim()}: ${colonParts.slice(1).join(":").trim()}`;
+    });
+  return `{ ${entries.join(", ")} }`;
+};
+
 const protectInlineObjectLiterals = (source: string) => {
   const literals: string[] = [];
   const protectedSource = source.replace(/\{[^{}\n]*:[^{}\n]*\}/g, (literal) => {
     const key = `${INLINE_OBJECT_LITERAL_PREFIX}${literals.length}__`;
-    literals.push(literal);
+    literals.push(formatInlineObjectLiteral(literal));
     return key;
   });
   return { literals, protectedSource };
@@ -90,7 +155,7 @@ export const beautifyCode = (source: string) => {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const restoredLine = restoreInlineObjectLiterals(restoreForHeaderSemicolons(line), protectedInlineObjects.literals);
+      const restoredLine = normalizeDeclarationAssignmentSpacing(restoreInlineObjectLiterals(restoreForHeaderSemicolons(line), protectedInlineObjects.literals));
       const closedLine = completeConstructorCall(getInlineClosedLine(restoredLine));
       if (closedLine.startsWith("}") || closedLine.startsWith("]") || closedLine.startsWith(")")) {
         indent = Math.max(0, indent - 1);

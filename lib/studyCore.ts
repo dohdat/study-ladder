@@ -26,6 +26,8 @@ const NEXT_QUESTION_RATING_BUFFER = 350;
 const MISSING_INDEX = -1;
 const PERCENT = 100;
 const COINS_PER_DIFFICULTY = 10;
+export const QUESTION_TIME_GOLD_INTERVAL_MS = 5 * MS_PER_MINUTE;
+export const QUESTION_TIME_GOLD_REWARD = 5;
 const HEALTH_PER_CONSTITUTION = 5;
 const GOLD_BONUS_PER_PERCEPTION = 0.04;
 const DEFENSE_PER_THREE_CONSTITUTION = 1;
@@ -622,7 +624,7 @@ function normalizePartialStats(stats: Partial<CharacterStats> | undefined) {
 }
 
 function normalizeCards(cards: StudyState["cards"] | undefined) {
-  return Object.fromEntries(Object.entries(cards || {}).map(([id, card]) => [id, { ...defaultCard(), ...card, enemyDebuffs: normalizeEnemyDebuffs(card.enemyDebuffs), failedSubmissions: Math.max(0, card.failedSubmissions || 0), hintsBought: Math.max(0, card.hintsBought || 0), monsterBlock: Math.max(0, Math.floor(card.monsterBlock || 0)), playerBlock: Math.max(0, Math.floor(card.playerBlock || 0)), relicCombatStartHealed: Boolean(card.relicCombatStartHealed), relicFirstHitBlocked: Boolean(card.relicFirstHitBlocked), relicFirstHpLossPrevented: Boolean(card.relicFirstHpLossPrevented), relicReviveUsed: Boolean(card.relicReviveUsed), solutionRevealedAt: Math.max(0, card.solutionRevealedAt || 0) || undefined }]));
+  return Object.fromEntries(Object.entries(cards || {}).map(([id, card]) => [id, { ...defaultCard(), ...card, enemyDebuffs: normalizeEnemyDebuffs(card.enemyDebuffs), failedSubmissions: Math.max(0, card.failedSubmissions || 0), hintsBought: Math.max(0, card.hintsBought || 0), monsterBlock: Math.max(0, Math.floor(card.monsterBlock || 0)), playerBlock: Math.max(0, Math.floor(card.playerBlock || 0)), relicCombatStartHealed: Boolean(card.relicCombatStartHealed), relicFirstHitBlocked: Boolean(card.relicFirstHitBlocked), relicFirstHpLossPrevented: Boolean(card.relicFirstHpLossPrevented), relicReviveUsed: Boolean(card.relicReviveUsed), solutionRevealedAt: Math.max(0, card.solutionRevealedAt || 0) || undefined, timeGoldRewardCount: Math.max(0, Math.floor(card.timeGoldRewardCount || 0)) }]));
 }
 
 export const getCard = (state: StudyState, questionId: string): CardState => {
@@ -1012,6 +1014,26 @@ export const getCoinReward = (question: Question, state?: StudyState) => {
   return applyPercentBonus(Math.round(baseReward * difficultyReward * (1 + (stats.perception - FIRST_STAT_LEVEL) * GOLD_BONUS_PER_PERCEPTION)), modifiers.goldFindPercent + skills.goldFindPercent + parasitePenalty);
 };
 
+export function getQuestionTimeGoldMarkers(question: Question, state?: StudyState) {
+  const timeLimitMs = state ? getModifiedQuestionTimeLimitMs(state, question) : getQuestionTimeLimitMs(question);
+  const markerCount = Math.max(0, Math.floor((timeLimitMs - 1) / QUESTION_TIME_GOLD_INTERVAL_MS));
+  return Array.from({ length: markerCount }, (_, index) => (index + 1) * QUESTION_TIME_GOLD_INTERVAL_MS);
+}
+
+export function applyQuestionTimeGoldReward(state: StudyState, question: Question, elapsedMs: number): StudyState {
+  const markerCount = getQuestionTimeGoldMarkers(question, state).length;
+  const earnedCount = Math.min(markerCount, Math.floor(Math.max(0, elapsedMs || 0) / QUESTION_TIME_GOLD_INTERVAL_MS));
+  const claimedCount = Math.max(0, Math.floor(getCard(state, question.id).timeGoldRewardCount || 0));
+  const newCount = Math.max(0, earnedCount - claimedCount);
+  if (newCount <= 0) {
+    return state;
+  }
+  const next = cloneState(state);
+  setCard(next, question.id, { ...getCard(next, question.id), timeGoldRewardCount: claimedCount + newCount });
+  addGoldAndApplyRelicHealing(next, newCount * QUESTION_TIME_GOLD_REWARD);
+  return next;
+}
+
 export const getExperienceReward = (question: Question, state?: StudyState) => {
   return 0;
 };
@@ -1344,6 +1366,15 @@ function getConfusedHintCostPenalty(state: StudyState, questionId: string | unde
 }
 
 export const canBuyHint = (state: StudyState, questionId?: string) => !areHintsDisabledByHeat(state.profile.spireRun) && state.profile.coins >= getHintCost(state, questionId);
+
+export function resetQuestionTimeGoldReward(state: StudyState, questionId: string): StudyState {
+  if (!questionId || !getCard(state, questionId).timeGoldRewardCount) {
+    return state;
+  }
+  const next = cloneState(state);
+  setCard(next, questionId, { ...getCard(next, questionId), timeGoldRewardCount: 0 });
+  return next;
+}
 
 export function applyCombatStartRelics(state: StudyState, questionId: string): StudyState {
   const block = Math.max(0, Math.floor(getRunModifierTotals(state).combatStartBlock || 0));
