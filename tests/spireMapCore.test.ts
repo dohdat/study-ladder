@@ -283,6 +283,18 @@ describe("spireMapCore", () => {
     expect(state.profile.spireRun.roundQuestionIds.length).toBeLessThanOrEqual(3);
   });
 
+  it("uses the selected map node when choosing combat room questions", () => {
+    const run = createSpireRun(1000);
+    const firstQuestionIds = run.availableNodeIds.map((nodeId) => {
+      let state = defaultState();
+      state = { ...state, profile: { ...state.profile, spireRun: run } };
+      state = enterSpireNode(selectSpireNode(state, nodeId), 1000);
+      return state.profile.spireRun.roundQuestionIds[0];
+    });
+
+    expect(new Set(firstQuestionIds).size).toBeGreaterThan(1);
+  });
+
   it("resets stale enemy combat state when entering a combat room", () => {
     let preview = defaultState();
     preview = { ...preview, profile: { ...preview.profile, spireRun: createSpireRun(1000) } };

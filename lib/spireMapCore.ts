@@ -125,6 +125,7 @@ const MAP_ATTEMPT_SEED_STEP = 7919;
 const ELITE_RATING_BOOST = 300;
 const RATING_FIT_BASE = 5000;
 const ELITE_BONUS_SORT_WEIGHT = 1000;
+const QUESTION_VARIETY_WINDOW = 8;
 const MIN_ELITE_ROOM_COUNT = 4;
 const MIN_REST_ROOM_COUNT = 4;
 const UNKNOWN_ROOM_RATIO_CAP = 0.2;
@@ -1476,7 +1477,7 @@ export function enterSpireNode(state: StudyState, now = Date.now()) {
   const enteredNode = getCurrentSpireNode(revealedState);
   const enteredState = enteredNode?.kind === "merchant" ? applyMerchantRoomReward(revealedState, enteredNode, now) : revealedState;
   const healedState = enteredNode?.kind === "boss" ? applyBossEntryHeal(enteredState) : enteredState;
-  const roundQuestionIds = isCombatNode(enteredNode) ? pickRoundQuestions(healedState, enteredNode, state.profile.spireRun.mapSeed + now, state.profile.spireRun.roundQuestionIds, getRoundQuestionCount(healedState.profile.spireRun, enteredNode, now)) : [];
+  const roundQuestionIds = isCombatNode(enteredNode) ? pickRoundQuestions(healedState, enteredNode, getRoundQuestionSeed(state.profile.spireRun, enteredNode, now), state.profile.spireRun.roundQuestionIds, getRoundQuestionCount(healedState.profile.spireRun, enteredNode, now)) : [];
   const readyState = resetQuestionCombatState(healedState, roundQuestionIds);
   return {
     ...readyState,
@@ -1516,7 +1517,7 @@ export function retargetCurrentSpireRoomQuestions(state: StudyState, now = Date.
   if (state.profile.spireRun.mapOpen || !isCombatNode(node) || !state.profile.spireRun.roundQuestionIds.length || state.profile.spireRun.roundSolvedIds.length) {
     return state;
   }
-  const roundQuestionIds = pickRoundQuestions(state, node, state.profile.spireRun.mapSeed + now, [], state.profile.spireRun.roundQuestionIds.length);
+  const roundQuestionIds = pickRoundQuestions(state, node, getRoundQuestionSeed(state.profile.spireRun, node, now), [], state.profile.spireRun.roundQuestionIds.length);
   if (!roundQuestionIds.length || areStringArraysEqual(roundQuestionIds, state.profile.spireRun.roundQuestionIds)) {
     return state;
   }
@@ -2290,7 +2291,11 @@ function getRoundQuestionCount(run: SpireRun, node: SpireMapNode, now: number) {
   return Math.max(MIN_ROUND_QUESTION_COUNT, Math.min(MAX_ROUND_QUESTION_COUNT + 2, baseCount));
 }
 
-function pickRoundQuestions(state: StudyState, node: SpireMapNode, seed: number, previousIds: string[], count: number) {
+function getRoundQuestionSeed(run: SpireRun, node: SpireMapNode, now: number) {
+  return `${run.mapSeed}:${node.id}:${now}`;
+}
+
+function pickRoundQuestions(state: StudyState, node: SpireMapNode, seed: string, previousIds: string[], count: number) {
   const run = state.profile.spireRun;
   const effectiveRating = getEffectiveSpireRating(run, node.rating);
   const targetRating = node.kind === "boss"
@@ -2301,7 +2306,23 @@ function pickRoundQuestions(state: StudyState, node: SpireMapNode, seed: number,
   const ranked = getCodingFilteredQuestions(state)
     .filter((question) => !previousIds.includes(question.id))
     .sort((a, b) => getQuestionSortValue(state, node, b, targetRating, seed) - getQuestionSortValue(state, node, a, targetRating, seed));
-  return ranked.slice(0, count).map((question) => question.id);
+  const varied = rotateQuestionCandidates(ranked, node, seed, count);
+  return varied.slice(0, count).map((question) => question.id);
+}
+
+function rotateQuestionCandidates(ranked: Question[], node: SpireMapNode, seed: string, count: number) {
+  const windowSize = Math.min(ranked.length, Math.max(count, QUESTION_VARIETY_WINDOW));
+  if (windowSize <= 1) {
+    return ranked;
+  }
+  const window = ranked.slice(0, windowSize);
+  const offset = getQuestionVarietyOffset(node, seed, windowSize);
+  return [...window.slice(offset), ...window.slice(0, offset), ...ranked.slice(windowSize)];
+}
+
+function getQuestionVarietyOffset(node: SpireMapNode, seed: string, windowSize: number) {
+  const seedOffset = Math.floor(getRoll(`${seed}:question-offset`) * windowSize);
+  return (seedOffset + node.tierIndex * MAP_COLUMN_COUNT + node.column) % windowSize;
 }
 
 function getCodingFilteredQuestions(state: StudyState) {
@@ -2314,7 +2335,7 @@ function getCodingFilteredQuestions(state: StudyState) {
   return filtered.length ? filtered : tagFiltered.length ? tagFiltered : questions;
 }
 
-function getQuestionSortValue(state: StudyState, node: SpireMapNode, question: Question, targetRating: number, seed: number) { const ratingFit = RATING_FIT_BASE - Math.abs(question.rating - targetRating); const topicWeight = getCodingQuestionWeight(state, question) * 6; const eliteBonus = node.kind === "elite" || node.kind === "boss" ? getUniqueMonsterBonusCount(question) * ELITE_BONUS_SORT_WEIGHT : 0; return ratingFit + topicWeight + eliteBonus + getRoll(`${seed}:${question.id}`); }
+function getQuestionSortValue(state: StudyState, node: SpireMapNode, question: Question, targetRating: number, seed: string) { const ratingFit = RATING_FIT_BASE - Math.abs(question.rating - targetRating); const topicWeight = getCodingQuestionWeight(state, question) * 6; const eliteBonus = node.kind === "elite" || node.kind === "boss" ? getUniqueMonsterBonusCount(question) * ELITE_BONUS_SORT_WEIGHT : 0; return ratingFit + topicWeight + eliteBonus + getRoll(`${seed}:${question.id}`); }
 
 function getEffectiveSpireRating(run: Pick<SpireRun, "act" | "difficulty" | "heatConditions">, rating: number) {
   return rating + getSpireCampaignRatingBonus(run);
