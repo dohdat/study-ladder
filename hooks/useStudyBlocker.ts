@@ -20,6 +20,12 @@ export type StudyBlockerProgress = {
   studiedMs: number;
 };
 
+export type DistractingSitesDraftUpdate = {
+  draft: string;
+  removedExistingSites: boolean;
+  sites: string[];
+};
+
 type BlockerStateResponse = {
   ok: boolean;
   progress?: StudyBlockerProgress;
@@ -80,6 +86,49 @@ export function useStudyTimeTracker(active: boolean) {
     }, TRACK_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [active]);
+}
+
+export function getDistractingSitesDraftUpdate(existingSites: string[], draft: string, canRemoveSites: boolean): DistractingSitesDraftUpdate {
+  const existing = normalizeDistractingSites(existingSites);
+  const drafted = normalizeDistractingSites(draft);
+  const draftedSet = new Set(drafted);
+  const removedExistingSites = existing.some((site) => !draftedSet.has(site));
+  if (canRemoveSites) {
+    return { draft, removedExistingSites, sites: drafted };
+  }
+  const sites = mergeUniqueSites(existing, drafted);
+  return { draft: removedExistingSites ? sites.join("\n") : draft, removedExistingSites, sites };
+}
+
+export function normalizeDistractingSites(value: string | string[]) {
+  const rawSites = Array.isArray(value) ? value.flatMap((site) => site.split(/\r?\n|,/)) : value.split(/\r?\n|,/);
+  return mergeUniqueSites([], rawSites.map((site) => normalizeDomain(site)).filter(Boolean));
+}
+
+function normalizeDomain(value: string) {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) {
+    return "";
+  }
+  try {
+    const parsed = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    return parsed.hostname.replace(/^www\./, "");
+  } catch {
+    return trimmed.replace(/^www\./, "").replace(/\/.*$/, "");
+  }
+}
+
+function mergeUniqueSites(first: string[], second: string[]) {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const site of [...first, ...second]) {
+    if (seen.has(site)) {
+      continue;
+    }
+    seen.add(site);
+    merged.push(site);
+  }
+  return merged;
 }
 
 function sendRuntimeMessage(message: unknown) {

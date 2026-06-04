@@ -63,7 +63,7 @@ import ironSkinArt from "../assets/hero_siege_skills/iron-skin.png";
 import shieldMasteryArt from "../assets/hero_siege_skills/shield-mastery.png";
 import swordMasteryArt from "../assets/hero_siege_skills/sword-mastery.png";
 import { questions } from "../data/questions";
-import { useStudyBlockerSettings } from "../hooks/useStudyBlocker";
+import { getDistractingSitesDraftUpdate, useStudyBlockerSettings } from "../hooks/useStudyBlocker";
 import {
   HERO_SIEGE_WIKI_CATEGORIES,
   HERO_SIEGE_LOW_LEVEL_WIKI_EQUIPMENT,
@@ -1474,12 +1474,15 @@ function SettingsPanel(props: { canRetargetActiveRoom?: boolean; closeModal: () 
         value={siteDraft}
         onBlur={() => {
           setSiteDraftFocused(false);
-          setSiteDraft(normalizeDistractingSites(siteDraft).join("\n"));
+          const next = getDistractingSitesDraftUpdate(settings.distractingSites, siteDraft, redirectPaused);
+          setSiteDraft(next.sites.join("\n"));
+          updateSettings({ ...settings, distractingSites: next.sites });
         }}
         onChange={(event) => {
           const nextDraft = event.currentTarget.value;
-          setSiteDraft(nextDraft);
-          updateSettings({ ...settings, distractingSites: normalizeDistractingSites(nextDraft) });
+          const next = getDistractingSitesDraftUpdate(settings.distractingSites, nextDraft, redirectPaused);
+          setSiteDraft(next.draft);
+          updateSettings({ ...settings, distractingSites: next.sites });
         }}
         onFocus={() => setSiteDraftFocused(true)}
       />
@@ -1538,26 +1541,6 @@ function normalizeDailyMinutes(value: string | number) {
     return DAILY_MINUTES_MIN;
   }
   return Math.min(DAILY_MINUTES_MAX, Math.max(DAILY_MINUTES_MIN, Math.round(numericValue)));
-}
-
-function normalizeDistractingSites(value: string) {
-  return value
-    .split(/\r?\n|,/)
-    .map((site) => normalizeDomain(site))
-    .filter(Boolean);
-}
-
-function normalizeDomain(value: string) {
-  const trimmed = value.trim().toLowerCase();
-  if (!trimmed) {
-    return "";
-  }
-  try {
-    const parsed = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
-    return parsed.hostname.replace(/^www\./, "");
-  } catch {
-    return trimmed.replace(/^www\./, "").replace(/\/.*$/, "");
-  }
 }
 
 function ProgressRow(props: { color: string; label: string; max: number; value: number }) {

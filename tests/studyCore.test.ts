@@ -1501,23 +1501,23 @@ describe("studyCore", () => {
     const question = questions[0];
     state.profile.coins = 100;
 
-    expect(HINT_COST).toBe(10);
-    expect(getHintCost(state, question.id)).toBe(10);
+    expect(HINT_COST).toBe(5);
+    expect(getHintCost(state, question.id)).toBe(5);
     expect(canBuyHint(state, question.id)).toBe(true);
 
     state = buyHint(state, question.id);
 
-    expect(state.profile.coins).toBe(90);
+    expect(state.profile.coins).toBe(95);
     expect(state.profile.hintsBought).toBe(1);
     expect(getCard(state, question.id).hintsBought).toBe(1);
-    expect(getHintCost(state, question.id)).toBe(20);
+    expect(getHintCost(state, question.id)).toBe(10);
 
     state = buyHint(state, question.id);
 
-    expect(state.profile.coins).toBe(70);
+    expect(state.profile.coins).toBe(85);
     expect(state.profile.hintsBought).toBe(2);
     expect(getCard(state, question.id).hintsBought).toBe(2);
-    expect(getHintCost(state, question.id)).toBe(30);
+    expect(getHintCost(state, question.id)).toBe(15);
   });
 
   it("makes the first hint free in each room when a relic grants it", () => {
@@ -1533,7 +1533,7 @@ describe("studyCore", () => {
 
     expect(state.profile.coins).toBe(0);
     expect(state.profile.hintsBought).toBe(1);
-    expect(getHintCost(state, question.id)).toBe(20);
+    expect(getHintCost(state, question.id)).toBe(10);
   });
 
   it("does not spend coins when a state is below the hint threshold", () => {

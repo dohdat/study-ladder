@@ -93,8 +93,8 @@ const TAG_DAMAGE_MODIFIERS: Array<{ key: ItemModifierKey; tag: string }> = [
 ];
 export const MODIFIER_KEYS: ItemModifierKey[] = ALL_MODIFIER_KEYS;
 
-export const HINT_COST = 10;
-export const HINT_COST_INCREMENT = 10;
+export const HINT_COST = 5;
+export const HINT_COST_INCREMENT = 5;
 export const HINT_MAX_COST = 30;
 export const MAX_TRACKED_ACHIEVEMENTS = 5;
 export const MAX_HEALTH = 50;

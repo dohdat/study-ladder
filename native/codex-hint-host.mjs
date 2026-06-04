@@ -21,7 +21,6 @@ const SESSION_REQUEST_TIMEOUT_MS = 20000;
 const TURN_TIMEOUT_MS = 120000;
 const STDERR_LIMIT = 8000;
 const HINT_EFFORT = "low";
-const DEFAULT_HINT_MODEL = "gpt-5.2";
 const DEFAULT_NODE_PATH = "C:\\nvm4w\\nodejs\\node.exe";
 const DEFAULT_CODEX_JS_PATH = "C:\\nvm4w\\nodejs\\node_modules\\@openai\\codex\\bin\\codex.js";
 const CLIENT_INFO = { name: "study-ladder", title: "Study Ladder", version: "0.2.0" };
@@ -465,17 +464,21 @@ function resetTurnState(state) {
 }
 
 async function startCodexThread(ws, state, options = {}) {
-  const result = await withTimeout(sendCodexRequest(ws, state, "thread/start", {
+  const threadParams = {
     approvalPolicy: "never",
     cwd: REPO_ROOT,
     developerInstructions: DEVELOPER_INSTRUCTIONS,
     ephemeral: true,
     experimentalRawEvents: true,
-    model: process.env.CODEX_HINT_MODEL || DEFAULT_HINT_MODEL,
     persistExtendedHistory: false,
     sandbox: "read-only",
     sessionStartSource: "clear"
-  }), SESSION_REQUEST_TIMEOUT_MS, "Timed out starting Codex rewrite thread.");
+  };
+  const configuredModel = process.env.CODEX_HINT_MODEL?.trim();
+  if (configuredModel) {
+    threadParams.model = configuredModel;
+  }
+  const result = await withTimeout(sendCodexRequest(ws, state, "thread/start", threadParams), SESSION_REQUEST_TIMEOUT_MS, "Timed out starting Codex rewrite thread.");
   state.threadId = result?.thread?.id || "";
   if (!state.threadId) {
     throw new Error("Codex app-server did not return a thread id.");
@@ -598,10 +601,24 @@ function getCodexRpcErrorMessage(message) {
   const params = message?.params;
   const messageText = params?.message || params?.error?.message || params?.error || params?.data?.message || params?.data?.error;
   if (typeof messageText === "string" && messageText.trim()) {
-    return messageText.trim();
+    return getReadableErrorMessage(messageText);
   }
   const details = safeJsonStringify(params);
   return details ? `Codex app-server emitted an error: ${details}` : "Codex app-server emitted an error.";
+}
+
+function getReadableErrorMessage(messageText) {
+  const trimmed = messageText.trim();
+  try {
+    const parsed = JSON.parse(trimmed);
+    const nestedMessage = parsed?.error?.message || parsed?.message;
+    if (typeof nestedMessage === "string" && nestedMessage.trim()) {
+      return nestedMessage.trim();
+    }
+  } catch {
+    return trimmed;
+  }
+  return trimmed;
 }
 
 function safeJsonStringify(value) {
